@@ -18,6 +18,7 @@ AllowShortLambdasOnASingleLine: "None"
 AllowShortBlocksOnASingleLine: "Never"
 PenaltyBreakBeforeFirstCallParameter: 0
 ContinuationIndentWidth: 4
+AlignAfterOpenBracket: BlockIndent
 
 IndentCaseLabels: true
 

@@ -113,4 +113,6 @@ namespace p5
     void vertex(float x, float y, float u, float v);
 
     void rect(float left, float top, float width, float height);
+    void ellipse(float centerX, float centerY, float width, float height);
+    void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
 } // namespace p5

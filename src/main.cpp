@@ -13,7 +13,10 @@ public:
     {
         background(21, 21, 21);
         fill(255, 0, 0);
-        rect(100.0f, 100.0f, 300.0f, 300.0f);
+        // rect(100.0f, 100.0f, 300.0f, 300.0f);
+        ellipse(400.0f, 300.0f, 50.0f, 50.0f);
+
+        fill(0, 255, 0);
     }
 
     void destroy() override

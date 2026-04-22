@@ -1,6 +1,7 @@
 #include "p5.hpp"
 #include "geometry.hpp"
 #include "p5_internal.hpp"
+#include <numbers>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -83,16 +84,16 @@ namespace p5
     void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
     void background(color_t color)
     {
-        const GeometryPoint vertices[] = {
-            GeometryPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            GeometryPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-        };
+        renderer->draw({}, [color](GeometryBuilder& builder) {
+            const GeometryPoint vertices[] = {
+                GeometryPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+                GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+                GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+                GeometryPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            };
 
-        GeometryBuilder builder = renderer->getNextBuilder();
-        builder.convex(vertices);
-        renderer->submit(builder, {});
+            builder.convex(vertices);
+        });
     }
 
     void noFill() { peekState().isFillEnabled = false; }
@@ -124,7 +125,6 @@ namespace p5
 
     void beginShape()
     {
-        shapeVertices.clear();
     }
 
     void endShape()
@@ -136,8 +136,11 @@ namespace p5
                 buildDrawSubmission(state),
                 [](GeometryBuilder& builder) {
                     builder.convex(shapeVertices);
-                });
+                }
+            );
         }
+
+        shapeVertices.clear();
     }
 
     void vertex(float x, float y)
@@ -166,6 +169,27 @@ namespace p5
         vertex(left, top + height);
         endShape();
     }
+
+    void ellipse(float centerX, float centerY, float width, float height)
+    {
+        beginShape();
+        for (size_t i = 0; i < 32; ++i) {
+            float angle = 2.0f * std::numbers::pi_v<float> / 32.0f * i;
+            float x = centerX + std::cos(angle) * width * 0.5f;
+            float y = centerY + std::sin(angle) * height * 0.5f;
+            vertex(x, y);
+        }
+        endShape();
+    }
+
+    void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
+    {
+        beginShape();
+        vertex(x1, y1);
+        vertex(x2, y2);
+        vertex(x3, y3);
+        endShape();
+    }
 } // namespace p5
 
 int main()
@@ -177,6 +201,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
     window.windowWidth = 800;
     window.windowHeight = 600;
@@ -196,6 +221,8 @@ int main()
     });
 
     gladLoadGLLoader(reinterpret_cast<GLADloadproc>(&glfwGetProcAddress));
+
+    glEnable(GL_MULTISAMPLE);
 
     std::cout << glGetString(GL_VERSION) << std::endl;
     std::cout << glGetString(GL_VENDOR) << std::endl;
