@@ -1,6 +1,8 @@
 #include "geometry.hpp"
+#include "tesselator.h"
 
 #include <cassert>
+#include <vector>
 
 namespace p5
 {
@@ -50,8 +52,73 @@ namespace p5
         }
     }
 
-    void GeometryBuilder::concave(const std::span<const GeometryPoint>& vertices)
+    void GeometryBuilder::concave(const std::span<const GeometryPoint>& points)
     {
+        std::vector<float> positions;
+
+        for (const GeometryPoint& p : points) {
+            positions.push_back(p.position.x);
+            positions.push_back(p.position.y);
+            positions.push_back(0.0f);
+        }
+
+        TESStesselator* tess = tessNewTess(nullptr);
+        tessAddContour(tess, 3, positions.data(), sizeof(float) * 3, positions.size());
+        tessTesselate(tess, TESS_WINDING_ODD, TESS_POLYGONS, 3, 3, nullptr);
+
+        const float* tessVertices = tessGetVertices(tess);
+        const int* tessIndices = tessGetElements(tess);
+        const int* vertexIndex = tessGetVertexIndices(tess);
+        const int vertexCount = tessGetVertexCount(tess);
+        const int indexCount = tessGetElementCount(tess);
+
+        // tesselator->addContour(positions);
+
+        // if (not tesselator->tesselate()) {
+        //     return;
+        // }
+        //
+        // const auto tessVertices = tesselator->vertices();
+        // const auto tessIndices = tesselator->indices();
+        // const auto vertexCount = tesselator->getVertexCount();
+        // const auto indexCount = tesselator->getElementCount();
+        // const auto vertexIndex = tesselator->getVertexIndices();
+
+        for (int i = 0; i < vertexCount; ++i) {
+            const int srcIdx = vertexIndex[i];
+
+            if (srcIdx == TESS_UNDEF) {
+                float2 pos = {
+                    .x = tessVertices[i * 3 + 0],
+                    .y = tessVertices[i * 3 + 1],
+                };
+
+                append(Vertex {
+                    .position = float3 {.x = pos.x, .y = pos.y, .z = 0.0f},
+                    .texcoord = float2 {.x = 0.0f, .y = 0.0f},
+                    .color = color_to_float4(points[0].fillColor),
+                });
+            } else {
+                const GeometryPoint& src = points[srcIdx];
+
+                append(Vertex {
+                    .position = float3 {.x = src.position.x, .y = src.position.y, .z = 0.0f},
+                    .texcoord = src.texcoord,
+                    .color = color_to_float4(src.fillColor),
+                });
+            }
+        }
+
+        for (int i = 0; i < indexCount; ++i) {
+            const int a = tessIndices[i * 3 + 0];
+            const int b = tessIndices[i * 3 + 1];
+            const int c = tessIndices[i * 3 + 2];
+
+            if (a == TESS_UNDEF or b == TESS_UNDEF or c == TESS_UNDEF) continue;
+            addTriangle(a, b, c);
+        }
+
+        tessDeleteTess(tess);
     }
 
     void GeometryBuilder::stroke(const std::span<const GeometryPoint>& vertices, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, StrokeAlign strokeAlign, bool close)

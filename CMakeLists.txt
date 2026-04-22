@@ -8,7 +8,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(external/glfw)
 add_subdirectory(external/glad)
 
-add_executable(app src/main.cpp src/p5.cpp src/p5_internal.cpp src/geometry.cpp)
+add_executable(app src/main.cpp src/p5.cpp src/p5_internal.cpp src/geometry.cpp
+                   src/tess.cpp)
 
 target_link_libraries(app PRIVATE glfw glad)
-target_include_directories(app PRIVATE ./external/libtess3/Source/)
+
+add_library(
+  libtess2 STATIC
+  ./external/libtess2/Source/bucketalloc.c
+  ./external/libtess2/Source/dict.c
+  ./external/libtess2/Source/geom.c
+  ./external/libtess2/Source/mesh.c
+  ./external/libtess2/Source/priorityq.c
+  ./external/libtess2/Source/sweep.c
+  ./external/libtess2/Source/tess.c)
+
+target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
+
+target_link_libraries(app PRIVATE libtess2)

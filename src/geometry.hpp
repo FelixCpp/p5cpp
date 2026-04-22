@@ -1,6 +1,7 @@
 #pragma once
 
 #include "p5.hpp"
+#include "tess.hpp"
 
 #include <span>
 
@@ -38,6 +39,7 @@ namespace p5
         size_t indexCount;
 
         GeometryBuffer* buffer;
+        Tesselator* tesselator;
 
         void convex(const std::span<const GeometryPoint>& vertices);
         void concave(const std::span<const GeometryPoint>& vertices);

@@ -11,12 +11,13 @@ public:
 
     void draw() override
     {
-        background(21, 21, 21);
-        fill(255, 0, 0);
-        // rect(100.0f, 100.0f, 300.0f, 300.0f);
-        ellipse(400.0f, 300.0f, 50.0f, 50.0f);
-
-        fill(0, 255, 0);
+        background(255, 255, 255);
+        // fill(255, 0, 0);
+        // // rect(100.0f, 100.0f, 300.0f, 300.0f);
+        // ellipse(400.0f, 300.0f, 50.0f, 50.0f);
+        //
+        // fill(0, 255, 0);
+        // triangle(100.0f, 100.0f, 300.0f, 100.0f, 200.0f, 300.0f);
     }
 
     void destroy() override

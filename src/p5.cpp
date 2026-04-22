@@ -87,12 +87,18 @@ namespace p5
         renderer->draw({}, [color](GeometryBuilder& builder) {
             const GeometryPoint vertices[] = {
                 GeometryPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-                GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-                GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
                 GeometryPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+                GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+                GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
             };
+            // const GeometryPoint vertices[] = {
+            //     GeometryPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            //     GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            //     GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            //     GeometryPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            // };
 
-            builder.convex(vertices);
+            builder.concave(vertices);
         });
     }
 

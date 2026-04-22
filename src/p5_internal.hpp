@@ -2,6 +2,7 @@
 
 #include "geometry.hpp"
 #include "p5.hpp"
+#include "tess.hpp"
 
 #include <glad/glad.h>
 #include <memory>
@@ -70,6 +71,7 @@ namespace p5
         size_t m_commandOffset;
 
         GeometryBuffer* m_buffer;
+        std::unique_ptr<Tesselator> m_tesselator;
 
         std::unique_ptr<DrawCommand[]> m_commands;
         uint32_t m_submissionCounter;

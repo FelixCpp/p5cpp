@@ -1,4 +1,5 @@
 #include "p5_internal.hpp"
+#include "tess.hpp"
 
 #include <algorithm>
 
@@ -134,6 +135,7 @@ namespace p5
         renderer->m_indexOffset = 0;
         renderer->m_commandOffset = 0;
         renderer->m_buffer = &buffer;
+        renderer->m_tesselator = Tesselator::create();
         renderer->m_commands = std::make_unique<DrawCommand[]>(maxBatchSize);
         renderer->m_submissionCounter = 0;
 
@@ -151,6 +153,8 @@ namespace p5
 
     void Renderer::beginDraw()
     {
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_BLEND);
         glEnable(GL_TEXTURE_2D);
     }
@@ -204,6 +208,7 @@ namespace p5
             activate(command.key.blendMode);
 
             glDrawElements(GL_TRIANGLES, command.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(command.indexOffset * sizeof(GLuint)));
+            // glDrawElements(GL_LINE_LOOP, command.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(command.indexOffset * sizeof(GLuint)));
         }
 
         m_vertexOffset = 0;
@@ -247,6 +252,7 @@ namespace p5
             .vertexCount = 0,
             .indexCount = 0,
             .buffer = m_buffer,
+            .tesselator = m_tesselator.get(),
         };
     }
 
