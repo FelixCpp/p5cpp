@@ -1,0 +1,30 @@
+ColumnLimit: 0
+IndentWidth: 4
+AccessModifierOffset: -4
+NamespaceIndentation: All
+
+AllowShortFunctionsOnASingleLine: "All"
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
+
+PointerAlignment: "Left"
+ReferenceAlignment: "Pointer"
+SpaceBeforeCpp11BracedList: true
+
+BinPackArguments: false
+AllowAllArgumentsOnNextLine: true
+LambdaBodyIndentation: "Signature"
+AllowShortLambdasOnASingleLine: "None"
+AllowShortBlocksOnASingleLine: "Never"
+PenaltyBreakBeforeFirstCallParameter: 0
+ContinuationIndentWidth: 4
+
+IndentCaseLabels: true
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterNamespace: true
+  SplitEmptyNamespace: true
+  AfterStruct: true
+  AfterClass: true
+  AfterFunction: true
