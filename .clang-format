@@ -8,6 +8,7 @@ SortIncludes:
 AllowShortFunctionsOnASingleLine: "All"
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
 
 PointerAlignment: "Left"
 ReferenceAlignment: "Pointer"

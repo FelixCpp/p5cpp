@@ -1,6 +1,5 @@
 #include "p5.hpp"
-#include "geometry.hpp"
-#include "p5_internal.hpp"
+#include "renderer.hpp"
 #include <numbers>
 
 #define GLFW_INCLUDE_NONE
@@ -49,15 +48,6 @@ namespace p5
         bool isStrokeEnabled = true;
     };
 
-    inline DrawSubmission buildDrawSubmission(const RenderState& state)
-    {
-        return DrawSubmission {
-            .shaderId = std::nullopt,
-            .textureId = std::nullopt,
-            .blendMode = state.blendMode,
-        };
-    }
-
     struct Window
     {
         GLFWwindow* handle;
@@ -68,8 +58,8 @@ namespace p5
     };
 
     inline static std::stack<RenderState> renderStates;
+    inline static std::vector<DrawPoint> points;
     inline static std::unique_ptr<Renderer> renderer;
-    inline static std::vector<GeometryPoint> shapeVertices;
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
@@ -84,21 +74,24 @@ namespace p5
     void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
     void background(color_t color)
     {
-        renderer->draw({}, [color](GeometryBuilder& builder) {
-            const GeometryPoint vertices[] = {
-                GeometryPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-                GeometryPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-                GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-                GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            };
-            // const GeometryPoint vertices[] = {
-            //     GeometryPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            //     GeometryPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            //     GeometryPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            //     GeometryPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
-            // };
+        const DrawPoint points[] = {
+            DrawPoint {.position = {0.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            DrawPoint {.position = {800.0f, 0.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            DrawPoint {.position = {800.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+            DrawPoint {.position = {0.0f, 600.0f}, .texcoord = {0.0f, 0.0f}, .fillColor = color, .strokeColor = p5::color(0, 0, 0, 0)},
+        };
 
-            builder.concave(vertices);
+        const RenderState& state = peekState();
+        const DrawSettings settings = {
+            .shaderId = std::nullopt,
+            .textureId = std::nullopt,
+            .blendMode = state.blendMode,
+            .drawMode = DrawMode::triangles,
+        };
+
+        renderer->draw(settings, [&points](DrawScope& scope) {
+            convex(scope, points);
+            // concave(scope, points);
         });
     }
 
@@ -137,16 +130,19 @@ namespace p5
     {
         const RenderState& state = peekState();
 
-        if (state.isFillEnabled) {
-            renderer->draw(
-                buildDrawSubmission(state),
-                [](GeometryBuilder& builder) {
-                    builder.convex(shapeVertices);
-                }
-            );
-        }
+        DrawSettings settings = {
+            .shaderId = std::nullopt,
+            .textureId = std::nullopt,
+            .blendMode = state.blendMode,
+            .drawMode = DrawMode::triangles,
+        };
 
-        shapeVertices.clear();
+        renderer->draw(settings, [](DrawScope& scope) {
+            // convex(scope, points);
+            concave(scope, points);
+        });
+
+        points.clear();
     }
 
     void vertex(float x, float y)
@@ -158,9 +154,9 @@ namespace p5
     {
         const RenderState& state = peekState();
 
-        shapeVertices.emplace_back(GeometryPoint {
-            .position = {x, y},
-            .texcoord = {u, v},
+        points.emplace_back(DrawPoint {
+            .position = float2 {.x = x, .y = y},
+            .texcoord = float2 {.x = u, .y = v},
             .fillColor = state.fillColor,
             .strokeColor = state.strokeColor,
         });
@@ -176,6 +172,61 @@ namespace p5
         endShape();
     }
 
+    void rect(float left, float top, float width, float height, float cx, float cy)
+    {
+        rect(left, top, width, height, cx, cy, cx, cy, cx, cy, cx, cy);
+    }
+
+    void rect(float left, float top, float width, float height, float topLeftX, float topLeftY, float topRightX, float topRightY, float bottomRightX, float bottomRightY, float bottomLeftX, float bottomLeftY)
+    {
+        // Radien begrenzen damit sie sich nicht überlappen
+        float maxRx = width * 0.5f;
+        float maxRy = height * 0.5f;
+        topLeftX = std::min(topLeftX, maxRx);
+        topLeftY = std::min(topLeftY, maxRy);
+        topRightX = std::min(topRightX, maxRx);
+        topRightY = std::min(topRightY, maxRy);
+        bottomRightX = std::min(bottomRightX, maxRx);
+        bottomRightY = std::min(bottomRightY, maxRy);
+        bottomLeftX = std::min(bottomLeftX, maxRx);
+        bottomLeftY = std::min(bottomLeftY, maxRy);
+
+        struct Corner
+        {
+            float cx, cy;
+            float rx, ry;
+            float startAngle;
+        };
+
+        Corner corners[4] = {
+            {left + width - bottomRightX, top + height - bottomRightY, bottomRightX, bottomRightY, 0.0f},                 // unten rechts
+            {left + bottomLeftX, top + height - bottomLeftY, bottomLeftX, bottomLeftY, std::numbers::pi_v<float> * 0.5f}, // unten links
+            {left + topLeftX, top + topLeftY, topLeftX, topLeftY, std::numbers::pi_v<float>},                             // oben links
+            {left + width - topRightX, top + topRightY, topRightX, topRightY, std::numbers::pi_v<float> * 1.5f},          // oben rechts
+        };
+
+        constexpr size_t cornerSegments = 8;
+
+        beginShape();
+
+        for (const auto& corner : corners) {
+            for (size_t i = 0; i <= cornerSegments; ++i) {
+                float t = static_cast<float>(i) / static_cast<float>(cornerSegments);
+                float angle = corner.startAngle + t * std::numbers::pi_v<float> * 0.5f;
+                float vx = corner.cx + std::cos(angle) * corner.rx;
+                float vy = corner.cy + std::sin(angle) * corner.ry;
+                vertex(vx, vy);
+            }
+        }
+
+        endShape();
+    }
+
+    void square(float left, float top, float size)
+    {
+        rect(left, top, size, size);
+    }
+
     void ellipse(float centerX, float centerY, float width, float height)
     {
         beginShape();
@@ -186,6 +237,11 @@ namespace p5
             vertex(x, y);
         }
         endShape();
+    }
+
+    void circle(float centerX, float centerY, float size)
+    {
+        ellipse(centerX, centerY, size, size);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -235,34 +291,32 @@ int main()
     std::cout << glGetString(GL_RENDERER) << std::endl;
     std::cout << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
-    GeometryBuffer buffer {
-        .vertices = std::make_unique<Vertex[]>(10'000),
-        .vertexCount = 10'000,
-        .indices = std::make_unique<uint32_t[]>(30'000),
-        .indexCount = 30'000,
-    };
-
     renderStates.push(RenderState {});
-    renderer = Renderer::create(buffer, 100);
+    renderer = createRenderer();
 
-    const std::unique_ptr sketch = createSketch();
+    static std::unique_ptr sketch = createSketch();
     sketch->setup();
+
+    glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
+        if (action == GLFW_PRESS) {
+            double mx, my;
+            glfwGetCursorPos(handle, &mx, &my);
+            sketch->mousePressed(mx, my);
+        }
+    });
 
     glfwShowWindow(window.handle);
 
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
-
         renderer->beginDraw();
         sketch->draw();
         renderer->endDraw();
-
         glfwSwapBuffers(window.handle);
     }
 
     sketch->destroy();
-    renderer.reset();
-
+    sketch.reset();
     glfwTerminate();
 
     return 0;

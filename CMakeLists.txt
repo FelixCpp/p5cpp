@@ -8,8 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(external/glfw)
 add_subdirectory(external/glad)
 
-add_executable(app src/main.cpp src/p5.cpp src/p5_internal.cpp src/geometry.cpp
-                   src/tess.cpp)
+add_executable(app src/main.cpp src/p5.cpp src/renderer.cpp)
 
 target_link_libraries(app PRIVATE glfw glad)
 

@@ -39,6 +39,7 @@ namespace p5
         virtual void setup() = 0;
         virtual void draw() = 0;
         virtual void destroy() = 0;
+        virtual void mousePressed(int x, int y) = 0;
     };
 
     extern std::unique_ptr<Sketch> createSketch();
@@ -67,6 +68,7 @@ namespace p5
     };
 
     enum class BlendMode {
+        none,
         alpha,
         additive,
         multiply,
@@ -113,6 +115,10 @@ namespace p5
     void vertex(float x, float y, float u, float v);
 
     void rect(float left, float top, float width, float height);
+    void rect(float left, float top, float width, float height, float cx, float cy);
+    void rect(float left, float top, float width, float height, float topLeftX, float topLeftY, float topRightX, float topRightY, float bottomRightX, float bottomRightY, float bottomLeftX, float bottomLeftY);
+    void square(float left, float top, float size);
     void ellipse(float centerX, float centerY, float width, float height);
+    void circle(float centerX, float centerY, float size);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
 } // namespace p5

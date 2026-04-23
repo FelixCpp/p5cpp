@@ -1,50 +1,64 @@
-#include "p5.hpp"
-#include "geometry.hpp"
+#pragma once
 
+#include "p5.hpp"
+
+#include <span>
 #include <optional>
 #include <functional>
-#include <glad/glad.h>
+#include <memory>
 
 namespace p5
 {
-    struct DrawSubmission
+    struct Vertex
     {
-        std::optional<GLuint> shaderId;
-        std::optional<GLuint> textureId;
-        BlendMode blendMode;
+        float3 position;
+        float2 texcoord;
+        float4 color;
     };
 
-    struct WritableBuffer
+    enum class DrawMode {
+        triangles,
+        lineLoop,
+    };
+
+    struct DrawSettings
+    {
+        std::optional<uint32_t> shaderId;
+        std::optional<uint32_t> textureId;
+        BlendMode blendMode;
+        DrawMode drawMode;
+    };
+
+    struct DrawPoint
+    {
+        float2 position;
+        float2 texcoord;
+        color_t fillColor;
+        color_t strokeColor;
+    };
+
+    struct DrawScope
     {
         std::span<Vertex> vertices;
         std::span<uint32_t> indices;
-    };
 
-    struct BufferWriteResult
-    {
-        size_t indexStart;
-
+        size_t vertexStart;
         size_t vertexCount;
+
+        size_t indexStart;
         size_t indexCount;
     };
 
-    struct GeometryRenderer
-    {
-        WritableBuffer buffer;
-
-        BufferWriteResult convex(const std::span<const GeometryPoint>& points);
-        BufferWriteResult concave(const std::span<const GeometryPoint>& points);
-        BufferWriteResult stroke(const std::span<const GeometryPoint>& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, StrokeAlign strokeAlign, bool closed);
-    };
+    void convex(DrawScope& scope, const std::span<const DrawPoint>& points);
+    void concave(DrawScope& scope, const std::span<const DrawPoint>& points);
 
     struct Renderer
     {
         virtual ~Renderer() = default;
         virtual void beginDraw() = 0;
         virtual void endDraw() = 0;
-        virtual void draw(const DrawSubmission& submission, const std::function<BufferWriteResult(GeometryRenderer&)>& func) = 0;
+        virtual void draw(const DrawSettings& settings, const std::function<void(DrawScope&)>& callback) = 0;
     };
 
     std::unique_ptr<Renderer> createRenderer();
-
 } // namespace p5
