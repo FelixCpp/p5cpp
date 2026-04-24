@@ -19,7 +19,7 @@ namespace p5
     {
         switch (mode) {
             case DrawMode::triangles: return GL_TRIANGLES;
-            case DrawMode::lineLoop: return GL_LINE_LOOP;
+            case DrawMode::lineLoop: return GL_LINE_STRIP;
         }
     }
 
@@ -36,43 +36,46 @@ namespace p5
 
 namespace p5
 {
-    void convex(DrawScope& scope, const std::span<const DrawPoint>& points)
+    void convex(DrawScope& scope, const DrawPoints& points)
     {
-        for (size_t i = 0; i < points.size(); ++i) {
-            const DrawPoint& point = points[i];
+        for (size_t i = 0; i < points.size; ++i) {
+            const auto& position = points.positions[i];
+            const auto& texcoord = points.texcoords[i];
+            const auto& color = points.colors[i];
+
             Vertex& vertex = scope.vertices[scope.vertexStart + i];
-            vertex.position = float3 {point.position.x, point.position.y, 0.0f};
-            vertex.texcoord = point.texcoord;
-            vertex.color = color_to_float4(point.fillColor);
+            vertex.position = float3 {position.x, position.y, 0.0f};
+            vertex.texcoord = texcoord;
+            vertex.color = color_to_float4(color);
         }
 
-        for (size_t i = 0; i < points.size(); ++i) {
-            scope.indices[scope.indexStart + i * 3 + 0] = i;
-            scope.indices[scope.indexStart + i * 3 + 1] = (i + 1) % points.size();
-            scope.indices[scope.indexStart + i * 3 + 2] = (i + 2) % points.size();
+        for (size_t i = 0; i < points.size; ++i) {
+            scope.indices[scope.indexStart + i * 3 + 0] = scope.vertexStart + i;
+            scope.indices[scope.indexStart + i * 3 + 1] = scope.vertexStart + (i + 1) % points.size;
+            scope.indices[scope.indexStart + i * 3 + 2] = scope.vertexStart + (i + 2) % points.size;
         }
 
-        scope.vertexCount += points.size();
-        scope.indexCount += points.size() * 3;
+        scope.vertexCount += points.size;
+        scope.indexCount += points.size * 3;
     }
 
-    void concave(DrawScope& scope, const std::span<const DrawPoint>& points)
+    void concave(DrawScope& scope, const DrawPoints& points)
     {
         TESStesselator* tess = tessNewTess(nullptr);
-        std::unique_ptr<float[]> tessPts = std::make_unique<float[]>(points.size() * 3);
-        for (size_t i = 0; i < points.size(); ++i) {
-            tessPts[i * 3 + 0] = points[i].position.x;
-            tessPts[i * 3 + 1] = points[i].position.y;
+        std::unique_ptr<float[]> tessPts = std::make_unique<float[]>(points.size * 3);
+        for (size_t i = 0; i < points.size; ++i) {
+            tessPts[i * 3 + 0] = points.positions[i].x;
+            tessPts[i * 3 + 1] = points.positions[i].y;
             tessPts[i * 3 + 2] = 0.0f;
         }
 
-        tessAddContour(tess, 3, tessPts.get(), sizeof(float) * 3, points.size());
+        tessAddContour(tess, 3, tessPts.get(), sizeof(float) * 3, points.size);
         // tessTesselate(tess, TESS_WINDING_NONZERO, TESS_POLYGONS, 3, 3, nullptr);
         tessTesselate(tess, TESS_WINDING_ODD, TESS_POLYGONS, 3, 3, nullptr);
 
         const TESSreal* tessVerts = tessGetVertices(tess);
-        const int* tessIdx = tessGetElements(tess);
-        const int* vertexIndex = tessGetVertexIndices(tess);
+        const TESSindex* tessIdx = tessGetElements(tess);
+        const TESSindex* vertexIndex = tessGetVertexIndices(tess);
         const int vertexCount = tessGetVertexCount(tess);
         const int elemCount = tessGetElementCount(tess);
 
@@ -82,28 +85,33 @@ namespace p5
             if (srcIdx == TESS_UNDEF) {
                 scope.vertices[scope.vertexStart + i].position = float3 {tessVerts[i * 3 + 0], tessVerts[i * 3 + 1], 0.0f};
                 scope.vertices[scope.vertexStart + i].texcoord = float2 {0.0f, 0.0f};
-                scope.vertices[scope.vertexStart + i].color = color_to_float4(points[0].fillColor);
+                scope.vertices[scope.vertexStart + i].color = color_to_float4(points.colors[0]);
             } else {
-                const DrawPoint& src = points[srcIdx];
-                scope.vertices[scope.vertexStart + i].position = float3 {src.position.x, src.position.y, 0.0f};
-                scope.vertices[scope.vertexStart + i].texcoord = src.texcoord;
-                scope.vertices[scope.vertexStart + i].color = color_to_float4(src.fillColor);
+                const auto& position = points.positions[srcIdx];
+                const auto& texcoord = points.texcoords[srcIdx];
+                const auto& color = points.colors[srcIdx];
+
+                scope.vertices[scope.vertexStart + i].position = float3 {position.x, position.y, 0.0f};
+                scope.vertices[scope.vertexStart + i].texcoord = texcoord;
+                scope.vertices[scope.vertexStart + i].color = color_to_float4(color);
             }
         }
 
+        int validIndexCount = 0;
         for (int i = 0; i < elemCount; ++i) {
             const int a = tessIdx[i * 3 + 0];
             const int b = tessIdx[i * 3 + 1];
             const int c = tessIdx[i * 3 + 2];
             if (a == TESS_UNDEF || b == TESS_UNDEF || c == TESS_UNDEF) continue;
-            scope.indices[scope.indexStart + i * 3 + 0] = a;
-            scope.indices[scope.indexStart + i * 3 + 1] = b;
-            scope.indices[scope.indexStart + i * 3 + 2] = c;
+            scope.indices[scope.indexStart + i * 3 + 0] = scope.vertexStart + a;
+            scope.indices[scope.indexStart + i * 3 + 1] = scope.vertexStart + b;
+            scope.indices[scope.indexStart + i * 3 + 2] = scope.vertexStart + c;
+            validIndexCount += 3;
         }
 
         tessDeleteTess(tess);
         scope.vertexCount += vertexCount;
-        scope.indexCount += elemCount * 3;
+        scope.indexCount += validIndexCount;
     }
 } // namespace p5
 
@@ -414,7 +422,7 @@ namespace p5
                 glUniform1i(glGetUniformLocation(shaderId, "u_Texture"), 0);
 
                 glBindVertexArray(vao);
-                glDrawElements(GL_TRIANGLES, batch.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(batch.indexStart * sizeof(uint32_t)));
+                glDrawElements(drawModeToGlId(batch.settings.drawMode), batch.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(batch.indexStart * sizeof(uint32_t)));
             }
 
             glBindVertexArray(0);

@@ -29,6 +29,13 @@ namespace p5
     };
 
     typedef value4<float> float4;
+
+    struct matrix4x4
+    {
+        float m[16];
+
+        static const matrix4x4 identity;
+    };
 } // namespace p5
 
 namespace p5
@@ -74,6 +81,11 @@ namespace p5
         multiply,
     };
 
+    enum class AngleMode {
+        radians,
+        degrees,
+    };
+
     typedef uint32_t color_t;
     color_t color(int grey, int alpha = 255);
     color_t color(int red, int green, int blue, int alpha = 255);
@@ -86,6 +98,13 @@ namespace p5
 
     void pushState();
     void popState();
+
+    void pushMatrix();
+    void popMatrix();
+    void translate(float x, float y);
+    void scale(float x, float y);
+    void rotate(float angle);
+    void angleMode(AngleMode angleMode);
 
     void background(int grey, int alpha = 255);
     void background(int red, int green, int blue, int alpha = 255);
@@ -120,5 +139,7 @@ namespace p5
     void square(float left, float top, float size);
     void ellipse(float centerX, float centerY, float width, float height);
     void circle(float centerX, float centerY, float size);
+    void point(float x, float y);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
+    void line(float x1, float y1, float x2, float y2);
 } // namespace p5

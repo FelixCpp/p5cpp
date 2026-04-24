@@ -15,21 +15,18 @@ public:
 
     void draw() override
     {
-        background(255, 255, 255);
+        background(21, 21, 21);
 
-        // fill(255, 0, 0);
-        // rect(100.0f, 100.0f, 200.0f, 200.0f, 25.0f, 15.0f);
+        strokeCap(StrokeCap::round);
+        for (int i = 1; i < points.size(); i += 2) {
+            strokeWeight(15.0f);
+            stroke(255, 0, 255);
+            line(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
 
-        // fill(0, 255, 0);
-        // ellipse(600.0f, 200.0f, 200.0f, 200.0f);
-
-        // fill(0, 0, 255);
-        // triangle(100.0f, 400.0f, 100.0f, 500.0f, 300.0f, 450.0f);
-
-        fill(255, 0, 0);
-        beginShape();
-        for (auto& p : points) vertex(p.x, p.y);
-        endShape();
+            stroke(0, 255, 0);
+            point(points[i - 1].x, points[i - 1].y);
+            point(points[i].x, points[i].y);
+        }
     }
 
     void destroy() override

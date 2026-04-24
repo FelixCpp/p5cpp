@@ -29,12 +29,20 @@ namespace p5
         DrawMode drawMode;
     };
 
-    struct DrawPoint
+    // struct DrawPoint
+    // {
+    //     float2 position;
+    //     float2 texcoord;
+    //     color_t fillColor;
+    //     color_t strokeColor;
+    // };
+
+    struct DrawPoints
     {
-        float2 position;
-        float2 texcoord;
-        color_t fillColor;
-        color_t strokeColor;
+        size_t size;
+        std::span<const float2> positions;
+        std::span<const float2> texcoords;
+        std::span<const color_t> colors;
     };
 
     struct DrawScope
@@ -49,8 +57,8 @@ namespace p5
         size_t indexCount;
     };
 
-    void convex(DrawScope& scope, const std::span<const DrawPoint>& points);
-    void concave(DrawScope& scope, const std::span<const DrawPoint>& points);
+    void convex(DrawScope& scope, const DrawPoints& points);
+    void concave(DrawScope& scope, const DrawPoints& points);
 
     struct Renderer
     {

@@ -9,6 +9,7 @@ AllowShortFunctionsOnASingleLine: "All"
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
 
 PointerAlignment: "Left"
 ReferenceAlignment: "Pointer"
