@@ -1,6 +1,7 @@
 #pragma once
 
 #include "p5.hpp"
+#include "drawscope.hpp"
 
 #include <span>
 #include <optional>
@@ -9,13 +10,6 @@
 
 namespace p5
 {
-    struct Vertex
-    {
-        float3 position;
-        float2 texcoord;
-        float4 color;
-    };
-
     enum class DrawMode {
         triangles,
         lineLoop,
@@ -29,14 +23,6 @@ namespace p5
         DrawMode drawMode;
     };
 
-    // struct DrawPoint
-    // {
-    //     float2 position;
-    //     float2 texcoord;
-    //     color_t fillColor;
-    //     color_t strokeColor;
-    // };
-
     struct DrawPoints
     {
         size_t size;
@@ -44,21 +30,6 @@ namespace p5
         std::span<const float2> texcoords;
         std::span<const color_t> colors;
     };
-
-    struct DrawScope
-    {
-        std::span<Vertex> vertices;
-        std::span<uint32_t> indices;
-
-        size_t vertexStart;
-        size_t vertexCount;
-
-        size_t indexStart;
-        size_t indexCount;
-    };
-
-    void convex(DrawScope& scope, const DrawPoints& points);
-    void concave(DrawScope& scope, const DrawPoints& points);
 
     struct Renderer
     {

@@ -1,5 +1,6 @@
 #include "p5.hpp"
 #include "renderer.hpp"
+#include "tess.hpp"
 #include <numbers>
 #include <algorithm>
 
@@ -45,7 +46,6 @@ namespace p5
         float miterLimit = 10.0f;
 
         BlendMode blendMode = BlendMode::alpha;
-        AngleMode angleMode = AngleMode::degrees;
 
         bool isFillEnabled = true;
         bool isStrokeEnabled = true;
@@ -67,6 +67,7 @@ namespace p5
     inline static std::vector<color_t> drawPointFillColors;
     inline static std::vector<color_t> drawPointStrokeColors;
     inline static std::unique_ptr<Renderer> renderer;
+    inline static std::unique_ptr<Tesselator> tesselator;
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
@@ -106,12 +107,12 @@ namespace p5
 
             std::array<color_t, 4> colors = {color, color, color, color};
 
-            concave(
+            tesselator->fill(
                 scope,
                 DrawPoints {
-                    .size = 4,
-                    .positions = positions,
-                    .texcoords = texcoords,
+                    .size = drawPointCount,
+                    .positions = drawPointPositions,
+                    .texcoords = drawPointTexCoords,
                     .colors = colors,
                 }
             );
@@ -157,8 +158,28 @@ namespace p5
 
     void endShape()
     {
-        // TODO(Felix): handle endShape gracefully
-        endShapeFillOnly(FillStyle::fill);
+        const RenderState& state = peekState();
+
+        DrawSettings settings = {
+            .shaderId = std::nullopt,
+            .textureId = std::nullopt,
+            .blendMode = state.blendMode,
+            .drawMode = DrawMode::triangles,
+        };
+
+        renderer->draw(settings, [&state](DrawScope& scope) {
+            tesselator->fill(
+                scope,
+                DrawPoints {
+                    .size = drawPointCount,
+                    .positions = drawPointPositions,
+                    .texcoords = drawPointTexCoords,
+                    .colors = drawPointFillColors
+                }
+            );
+        });
+
+        drawPointCount = 0;
     }
 
     void endShapeFillOnly(FillStyle style)
@@ -173,7 +194,7 @@ namespace p5
         };
 
         renderer->draw(settings, [style](DrawScope& scope) {
-            concave(
+            tesselator->fill(
                 scope,
                 DrawPoints {
                     .size = drawPointCount,
@@ -412,6 +433,7 @@ int main()
 
     renderStates.push(RenderState {});
     renderer = createRenderer();
+    tesselator = createTesselator();
 
     static std::unique_ptr sketch = createSketch();
     sketch->setup();

@@ -15,14 +15,6 @@ namespace p5
     typedef value2<float> float2;
 
     template <typename T>
-    struct value3
-    {
-        T x, y, z;
-    };
-
-    typedef value3<float> float3;
-
-    template <typename T>
     struct value4
     {
         T x, y, z, w;

@@ -16,6 +16,8 @@ public:
     void draw() override
     {
         background(21, 21, 21);
+        fill(255, 0, 0);
+        rect(100.0f, 100.0f, 300.0f, 300.0f);
 
         strokeCap(StrokeCap::round);
         for (int i = 1; i < points.size(); i += 2) {
