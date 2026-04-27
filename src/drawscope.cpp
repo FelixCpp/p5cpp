@@ -22,13 +22,13 @@ namespace p5
 
     void DrawScope::push(Vertex&& vertex)
     {
-        assert(vertexStart + vertexCount + 1 < vertices.size() && "Vertices overflow");
+        assert((vertexStart + vertexCount < vertices.size()) && "Vertices overflow");
         vertices[vertexStart + vertexCount++] = std::move(vertex);
     }
 
     void DrawScope::push(uint32_t index)
     {
-        assert(vertexStart + vertexCount + 1 < vertices.size() && "Indices overflow");
+        assert((indexStart + indexCount < indices.size()) && "Indices overflow");
         indices[indexStart + indexCount++] = vertexStart + index;
     }
 } // namespace p5

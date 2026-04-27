@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string_view>
@@ -13,6 +14,35 @@ namespace p5
     };
 
     typedef value2<float> float2;
+
+    template <typename T> inline constexpr value2<T> operator-(value2<T> value) { return {-value.x, -value.y}; }
+
+    template <typename T> inline constexpr value2<T> operator+(value2<T> lhs, value2<T> rhs) { return {lhs.x + rhs.x, lhs.y + rhs.y}; }
+    template <typename T> inline constexpr value2<T> operator-(value2<T> lhs, value2<T> rhs) { return {lhs.x - rhs.x, lhs.y - rhs.y}; }
+    template <typename T> inline constexpr value2<T> operator*(value2<T> lhs, value2<T> rhs) { return {lhs.x * rhs.x, lhs.y * rhs.y}; }
+    template <typename T> inline constexpr value2<T> operator/(value2<T> lhs, value2<T> rhs) { return {lhs.x / rhs.x, lhs.y / rhs.y}; }
+
+    template <typename T> inline constexpr value2<T> operator+(value2<T> lhs, T rhs) { return {lhs.x + rhs, lhs.y + rhs}; }
+    template <typename T> inline constexpr value2<T> operator-(value2<T> lhs, T rhs) { return {lhs.x - rhs, lhs.y - rhs}; }
+    template <typename T> inline constexpr value2<T> operator*(value2<T> lhs, T rhs) { return {lhs.x * rhs, lhs.y * rhs}; }
+    template <typename T> inline constexpr value2<T> operator/(value2<T> lhs, T rhs) { return {lhs.x / rhs, lhs.y / rhs}; }
+
+    template <typename T> inline constexpr value2<T> perp(value2<T> value) { return {-value.y, value.x}; }
+    template <typename T> inline constexpr T lengthSquared(value2<T> value) { return value.x * value.x + value.y * value.y; }
+    template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
+    template <typename T> inline value2<T> normalized(value2<T> value)
+    {
+        const T len = length(value);
+        if (static_cast<double>(len) == 0.0) {
+            return value;
+        }
+
+        const double inv = static_cast<double>(1.0 / len);
+        const double x = static_cast<double>(value.x) * inv;
+        const double y = static_cast<double>(value.y) * inv;
+
+        return {static_cast<T>(x), static_cast<T>(y)};
+    }
 
     template <typename T>
     struct value4
@@ -121,7 +151,7 @@ namespace p5
     void blendMode(BlendMode blendMode);
 
     void beginShape();
-    void endShape();
+    void endShape(bool close = true);
     void vertex(float x, float y);
     void vertex(float x, float y, float u, float v);
 

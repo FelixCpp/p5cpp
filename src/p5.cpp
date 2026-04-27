@@ -154,9 +154,8 @@ namespace p5
         fill,
         stroke
     };
-    void endShapeFillOnly(FillStyle style);
 
-    void endShape()
+    void endShape(bool close)
     {
         const RenderState& state = peekState();
 
@@ -167,7 +166,7 @@ namespace p5
             .drawMode = DrawMode::triangles,
         };
 
-        renderer->draw(settings, [&state](DrawScope& scope) {
+        renderer->draw(settings, [close, &state](DrawScope& scope) {
             tesselator->fill(
                 scope,
                 DrawPoints {
@@ -176,6 +175,22 @@ namespace p5
                     .texcoords = drawPointTexCoords,
                     .colors = drawPointFillColors
                 }
+            );
+
+            tesselator->stroke(
+                scope,
+                DrawPoints {
+                    .size = drawPointCount,
+                    .positions = drawPointPositions,
+                    .texcoords = drawPointTexCoords,
+                    .colors = drawPointStrokeColors,
+                },
+                state.strokeWeight,
+                state.strokeCap,
+                state.strokeJoin,
+                state.strokeAlign,
+                state.miterLimit,
+                close
             );
         });
 

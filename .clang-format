@@ -10,6 +10,7 @@ AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
+AlwaysBreakTemplateDeclarations: "Leave"
 
 PointerAlignment: "Left"
 ReferenceAlignment: "Pointer"
