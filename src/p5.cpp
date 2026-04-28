@@ -229,23 +229,23 @@ namespace p5
                 );
             }
 
-            // if (not state.isStrokeDisabled) {
-            //     tesselator->stroke(
-            //         scope,
-            //         DrawPoints {
-            //             .size = drawPointCount,
-            //             .positions = drawPointPositions,
-            //             .texcoords = drawPointTexCoords,
-            //             .colors = drawPointStrokeColors,
-            //         },
-            //         state.strokeWeight,
-            //         state.strokeCap,
-            //         state.strokeJoin,
-            //         state.strokeAlign,
-            //         state.miterLimit,
-            //         close
-            //     );
-            // }
+            if (not state.isStrokeDisabled) {
+                tesselator->stroke(
+                    scope,
+                    DrawPoints {
+                        .size = drawPointCount,
+                        .positions = drawPointPositions,
+                        .texcoords = drawPointTexCoords,
+                        .colors = drawPointStrokeColors,
+                    },
+                    state.strokeWeight,
+                    state.strokeCap,
+                    state.strokeJoin,
+                    state.strokeAlign,
+                    state.miterLimit,
+                    close
+                );
+            }
         });
 
         drawPointCount = 0;

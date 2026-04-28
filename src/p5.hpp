@@ -29,6 +29,7 @@ namespace p5
 
     template <typename T> inline constexpr value2<T> perp(value2<T> value) { return {-value.y, value.x}; }
     template <typename T> inline constexpr T dot(value2<T> a, value2<T> b) { return a.x * b.x + a.y * b.y; }
+    template <typename T> inline constexpr T cross(value2<T> a, value2<T> b) { return a.x * b.y - a.y * b.x; }
     template <typename T> inline constexpr T lengthSquared(value2<T> value) { return value.x * value.x + value.y * value.y; }
     template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
     template <typename T> inline value2<T> normalized(value2<T> value)
