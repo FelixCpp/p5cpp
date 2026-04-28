@@ -68,7 +68,8 @@ namespace p5
 
         BatchRenderer()
             : m_vertices(std::make_unique<Vertex[]>(MAX_VERTICES)),
-              m_indices(std::make_unique<uint32_t[]>(MAX_INDICES))
+              m_indices(std::make_unique<uint32_t[]>(MAX_INDICES)),
+              m_projectionMatrix(matrix4x4::identity)
         {
             glGenVertexArrays(1, &vao);
             glBindVertexArray(vao);
@@ -127,8 +128,10 @@ namespace p5
             glDeleteProgram(defaultShader);
         }
 
-        void beginDraw() override
+        void beginDraw(const Camera& camera) override
         {
+            m_projectionMatrix = camera.projection;
+
             m_vertexCursor = 0;
             m_indexCursor = 0;
             m_batches.clear();
@@ -166,23 +169,13 @@ namespace p5
 
             glBindVertexArray(vao);
 
-            // clang-format off
-            float l = 0, r = 800, t = 0, b = 600;
-            float projectionMatrix[] = {
-                 2/(r-l),      0,       0,  0,
-                 0,       2/(t-b),      0,  0,
-                 0,            0,      -1,  0,
-                -(r+l)/(r-l), -(t+b)/(t-b), 0,  1,
-            };
-            // clang-format on
-
             for (const auto& batch : m_batches) {
 
                 GLuint shaderId = batch.settings.shaderId.value_or(defaultShader);
                 GLuint textureId = batch.settings.textureId.value_or(whiteTexture);
 
                 glUseProgram(shaderId);
-                glUniformMatrix4fv(glGetUniformLocation(shaderId, "u_ProjectionMatrix"), 1, GL_FALSE, projectionMatrix);
+                glUniformMatrix4fv(glGetUniformLocation(shaderId, "u_ProjectionMatrix"), 1, GL_FALSE, m_projectionMatrix.m);
 
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, textureId);
@@ -216,6 +209,8 @@ namespace p5
         size_t m_vertexCursor = 0;
         size_t m_indexCursor = 0;
         std::vector<Batch> m_batches;
+
+        matrix4x4 m_projectionMatrix;
     };
 } // namespace p5
 

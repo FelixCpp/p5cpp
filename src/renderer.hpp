@@ -31,10 +31,15 @@ namespace p5
         std::span<const color_t> colors;
     };
 
+    struct Camera
+    {
+        matrix4x4 projection;
+    };
+
     struct Renderer
     {
         virtual ~Renderer() = default;
-        virtual void beginDraw() = 0;
+        virtual void beginDraw(const Camera& camera) = 0;
         virtual void endDraw() = 0;
         virtual void draw(const DrawSettings& settings, const std::function<void(DrawScope&)>& callback) = 0;
     };

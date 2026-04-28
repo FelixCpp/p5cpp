@@ -28,16 +28,17 @@ namespace p5
     template <typename T> inline constexpr value2<T> operator/(value2<T> lhs, T rhs) { return {lhs.x / rhs, lhs.y / rhs}; }
 
     template <typename T> inline constexpr value2<T> perp(value2<T> value) { return {-value.y, value.x}; }
+    template <typename T> inline constexpr T dot(value2<T> a, value2<T> b) { return a.x * b.x + a.y * b.y; }
     template <typename T> inline constexpr T lengthSquared(value2<T> value) { return value.x * value.x + value.y * value.y; }
     template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
     template <typename T> inline value2<T> normalized(value2<T> value)
     {
-        const T len = length(value);
-        if (static_cast<double>(len) == 0.0) {
-            return value;
+        const double len = static_cast<double>(length(value));
+        if (len == 0.0) {
+            return value2 {static_cast<T>(0), static_cast<T>(0)};
         }
 
-        const double inv = static_cast<double>(1.0 / len);
+        const double inv = 1.0 / len;
         const double x = static_cast<double>(value.x) * inv;
         const double y = static_cast<double>(value.y) * inv;
 
@@ -58,6 +59,15 @@ namespace p5
 
         static const matrix4x4 identity;
     };
+
+    matrix4x4 combine(const matrix4x4& a, const matrix4x4& b);
+    matrix4x4 translation(float x, float y);
+    matrix4x4 scaling(float x, float y);
+    matrix4x4 rotation(float angle);
+    matrix4x4 ortho(float left, float right, float top, float bottom, float near, float far);
+    matrix4x4 perspective(float fovY, float aspect, float near, float far);
+    matrix4x4 lookAt(float2 eye, float2 center, float2 up);
+    float2 transformPoint(const matrix4x4& matrix, float2 point);
 } // namespace p5
 
 namespace p5
@@ -72,6 +82,9 @@ namespace p5
     };
 
     extern std::unique_ptr<Sketch> createSketch();
+
+    extern int mouseX;
+    extern int mouseY;
 
     void info(std::string_view message);
     void debug(std::string_view message);
@@ -103,14 +116,10 @@ namespace p5
         multiply,
     };
 
-    enum class AngleMode {
-        radians,
-        degrees,
-    };
-
     typedef uint32_t color_t;
     color_t color(int grey, int alpha = 255);
     color_t color(int red, int green, int blue, int alpha = 255);
+    color_t lerp(color_t a, color_t b, float t);
 
     int red(color_t color);
     int green(color_t color);
@@ -123,10 +132,13 @@ namespace p5
 
     void pushMatrix();
     void popMatrix();
+    void resetMatrix();
+    void applyMatrix(const matrix4x4& matrix);
+    void setMatrix(const matrix4x4& matrix);
+    matrix4x4& peekMatrix();
     void translate(float x, float y);
     void scale(float x, float y);
     void rotate(float angle);
-    void angleMode(AngleMode angleMode);
 
     void background(int grey, int alpha = 255);
     void background(int red, int green, int blue, int alpha = 255);

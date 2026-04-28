@@ -12,11 +12,21 @@
 #include <stack>
 #include <vector>
 #include <array>
+#include <stack>
 
 namespace p5
 {
     color_t color(int grey, int alpha) { return color(grey, grey, grey, alpha); }
     color_t color(int red, int green, int blue, int alpha) { return (red << 24) | (green << 16) | (blue << 8) | alpha; } // TODO(Felix): Clamp values to 0 .. 255
+    color_t lerp(color_t a, color_t b, float t)
+    {
+        return color(
+            static_cast<int>(red(a) + t * (red(b) - red(a))),
+            static_cast<int>(green(a) + t * (green(b) - green(a))),
+            static_cast<int>(blue(a) + t * (blue(b) - blue(a))),
+            static_cast<int>(alpha(a) + t * (alpha(b) - alpha(a)))
+        );
+    }
 
     int red(color_t color) { return (color & 0xFF000000) >> 24; }
     int green(color_t color) { return (color & 0x00FF0000) >> 16; }
@@ -47,8 +57,10 @@ namespace p5
 
         BlendMode blendMode = BlendMode::alpha;
 
-        bool isFillEnabled = true;
-        bool isStrokeEnabled = true;
+        std::stack<matrix4x4> metrics = std::stack<matrix4x4>({matrix4x4::identity});
+
+        bool isFillDisabled = false;
+        bool isStrokeDisabled = false;
     };
 
     struct Window
@@ -78,7 +90,45 @@ namespace p5
         if (renderStates.size() > 1) renderStates.pop();
     }
 
-    void background(int grey, int alpha) { background(grey, grey, grey, alpha); }
+    void pushMatrix()
+    {
+        RenderState& state = peekState();
+        state.metrics.push(state.metrics.top());
+    }
+
+    void popMatrix()
+    {
+        RenderState& state = peekState();
+        if (state.metrics.size() > 1) {
+            state.metrics.pop();
+        }
+    }
+
+    void resetMatrix()
+    {
+        RenderState& state = peekState();
+        state.metrics.top() = matrix4x4::identity;
+    }
+
+    void applyMatrix(const matrix4x4& matrix)
+    {
+        RenderState& state = peekState();
+        state.metrics.top() = combine(state.metrics.top(), matrix);
+    }
+
+    void setMatrix(const matrix4x4& matrix)
+    {
+        RenderState& state = peekState();
+        state.metrics.top() = matrix;
+    }
+
+    matrix4x4& peekMatrix() { return peekState().metrics.top(); }
+
+    void translate(float x, float y) { applyMatrix(translation(x, y)); }
+    void scale(float x, float y) { applyMatrix(scaling(x, y)); }
+    void rotate(float angle) { applyMatrix(rotation(angle)); }
+
+    void background(int grey, int alpha) { background(color(grey, grey, grey, alpha)); }
     void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
     void background(color_t color)
     {
@@ -91,52 +141,52 @@ namespace p5
         };
 
         renderer->draw(settings, [color](DrawScope& scope) {
-            std::array<float2, 4> positions = {
+            const std::array<float2, 4> positions = {
                 float2 {0.0f, 0.0f},
                 float2 {800.0f, 0.0f},
                 float2 {800.0f, 600.0f},
                 float2 {0.0f, 600.0f}
             };
 
-            std::array<float2, 4> texcoords = {
+            const std::array<float2, 4> texcoords = {
                 float2 {0.0f, 0.0f},
                 float2 {0.0f, 0.0f},
                 float2 {0.0f, 0.0f},
                 float2 {0.0f, 0.0f}
             };
 
-            std::array<color_t, 4> colors = {color, color, color, color};
+            const std::array<color_t, 4> colors = {color, color, color, color};
 
             tesselator->fill(
                 scope,
                 DrawPoints {
-                    .size = drawPointCount,
-                    .positions = drawPointPositions,
-                    .texcoords = drawPointTexCoords,
+                    .size = 4,
+                    .positions = positions,
+                    .texcoords = texcoords,
                     .colors = colors,
                 }
             );
         });
     }
 
-    void noFill() { peekState().isFillEnabled = false; }
-    void fill(int grey, int alpha) { fill(grey, grey, grey, alpha); }
+    void noFill() { peekState().isFillDisabled = true; }
+    void fill(int grey, int alpha) { fill(color(grey, grey, grey, alpha)); }
     void fill(int red, int green, int blue, int alpha) { fill(color(red, green, blue, alpha)); }
     void fill(color_t color)
     {
         RenderState& state = peekState();
         state.fillColor = color;
-        state.isFillEnabled = true;
+        state.isFillDisabled = false;
     }
 
-    void noStroke() { peekState().isStrokeEnabled = false; }
-    void stroke(int grey, int alpha) { stroke(grey, grey, grey, alpha); }
+    void noStroke() { peekState().isStrokeDisabled = true; }
+    void stroke(int grey, int alpha) { stroke(color(grey, grey, grey, alpha)); }
     void stroke(int red, int green, int blue, int alpha) { stroke(color(red, green, blue, alpha)); }
     void stroke(color_t color)
     {
         RenderState& state = peekState();
         state.strokeColor = color;
-        state.isStrokeEnabled = true;
+        state.isStrokeDisabled = false;
     }
 
     void strokeWeight(float strokeWeight) { peekState().strokeWeight = strokeWeight; }
@@ -167,31 +217,35 @@ namespace p5
         };
 
         renderer->draw(settings, [close, &state](DrawScope& scope) {
-            tesselator->fill(
-                scope,
-                DrawPoints {
-                    .size = drawPointCount,
-                    .positions = drawPointPositions,
-                    .texcoords = drawPointTexCoords,
-                    .colors = drawPointFillColors
-                }
-            );
+            if (not state.isFillDisabled) {
+                tesselator->fill(
+                    scope,
+                    DrawPoints {
+                        .size = drawPointCount,
+                        .positions = drawPointPositions,
+                        .texcoords = drawPointTexCoords,
+                        .colors = drawPointFillColors
+                    }
+                );
+            }
 
-            tesselator->stroke(
-                scope,
-                DrawPoints {
-                    .size = drawPointCount,
-                    .positions = drawPointPositions,
-                    .texcoords = drawPointTexCoords,
-                    .colors = drawPointStrokeColors,
-                },
-                state.strokeWeight,
-                state.strokeCap,
-                state.strokeJoin,
-                state.strokeAlign,
-                state.miterLimit,
-                close
-            );
+            // if (not state.isStrokeDisabled) {
+            //     tesselator->stroke(
+            //         scope,
+            //         DrawPoints {
+            //             .size = drawPointCount,
+            //             .positions = drawPointPositions,
+            //             .texcoords = drawPointTexCoords,
+            //             .colors = drawPointStrokeColors,
+            //         },
+            //         state.strokeWeight,
+            //         state.strokeCap,
+            //         state.strokeJoin,
+            //         state.strokeAlign,
+            //         state.miterLimit,
+            //         close
+            //     );
+            // }
         });
 
         drawPointCount = 0;
@@ -236,7 +290,7 @@ namespace p5
         if (drawPointCount >= drawPointStrokeColors.size()) drawPointStrokeColors.resize(std::max(drawPointStrokeColors.size() * 2, 1uz));
 
         const RenderState& state = peekState();
-        drawPointPositions[drawPointCount] = {x, y};
+        drawPointPositions[drawPointCount] = transformPoint(state.metrics.top(), {x, y});
         drawPointTexCoords[drawPointCount] = {u, v};
         drawPointFillColors[drawPointCount] = state.fillColor;
         drawPointStrokeColors[drawPointCount] = state.strokeColor;
@@ -379,7 +433,6 @@ namespace p5
             vertex(x2 + ox, y2 + oy);
             vertex(x2 - ox, y2 - oy);
             vertex(x1 - ox, y1 - oy);
-
         } else {
             const size_t segments = 8;
             float baseAngle = std::atan2(dy, dx);
@@ -409,6 +462,14 @@ namespace p5
     }
 } // namespace p5
 
+namespace p5
+{
+    int mouseX = 0;
+    int mouseY = 0;
+
+    matrix4x4 projectionMatrix;
+} // namespace p5
+
 int main()
 {
     using namespace p5;
@@ -422,6 +483,7 @@ int main()
 
     window.windowWidth = 800;
     window.windowHeight = 600;
+    projectionMatrix = ortho(0.0f, static_cast<float>(window.windowWidth), static_cast<float>(window.windowHeight), 0.0f, -1.0f, 1.0f);
 
     window.handle = glfwCreateWindow(window.windowWidth, window.windowHeight, "p5", nullptr, nullptr);
     glfwMakeContextCurrent(window.handle);
@@ -430,11 +492,17 @@ int main()
     glfwSetWindowSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
         window.windowWidth = width;
         window.windowHeight = height;
+        projectionMatrix = ortho(0.0f, static_cast<float>(window.windowWidth), static_cast<float>(window.windowHeight), 0.0f, -1.0f, 1.0f);
     });
 
     glfwSetFramebufferSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
         window.framebufferWidth = width;
         window.framebufferHeight = height;
+    });
+
+    glfwSetCursorPosCallback(window.handle, [](GLFWwindow* handle, double x, double y) {
+        mouseX = static_cast<int>(x);
+        mouseY = static_cast<int>(y);
     });
 
     gladLoadGLLoader(reinterpret_cast<GLADloadproc>(&glfwGetProcAddress));
@@ -465,7 +533,7 @@ int main()
 
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
-        renderer->beginDraw();
+        renderer->beginDraw(Camera {.projection = projectionMatrix});
         sketch->draw();
         renderer->endDraw();
         glfwSwapBuffers(window.handle);
