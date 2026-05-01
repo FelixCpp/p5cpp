@@ -13,6 +13,27 @@ namespace p5
         }
     }
 
+    static void enableBlendMode(BlendMode mode)
+    {
+        switch (mode) {
+            case BlendMode::alpha:
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                break;
+            case BlendMode::additive:
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+                break;
+            case BlendMode::multiply:
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+                break;
+            case BlendMode::none:
+                glDisable(GL_BLEND);
+                break;
+        }
+    }
+
     static bool operator==(const DrawSettings& lhs, const DrawSettings& rhs)
     {
         if (lhs.shaderId != rhs.shaderId) return false;
@@ -180,6 +201,8 @@ namespace p5
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, textureId);
                 glUniform1i(glGetUniformLocation(shaderId, "u_Texture"), 0);
+
+                enableBlendMode(batch.settings.blendMode);
 
                 glBindVertexArray(vao);
                 glDrawElements(drawModeToGlId(batch.settings.drawMode), batch.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(batch.indexStart * sizeof(uint32_t)));

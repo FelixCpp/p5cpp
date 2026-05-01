@@ -1,7 +1,5 @@
 #include "tess.hpp"
-#include <numbers>
 #include <tesselator.h>
-#include <algorithm>
 
 namespace p5
 {
@@ -12,69 +10,6 @@ namespace p5
             .y = static_cast<float>(green(color)) / 255.0f,
             .z = static_cast<float>(blue(color)) / 255.0f,
             .w = static_cast<float>(alpha(color)) / 255.0f,
-        };
-    }
-} // namespace p5
-
-namespace p5
-{
-
-    struct StrokeVertex
-    {
-        uint32_t index;
-        float2 position;
-        color_t color;
-    };
-
-    struct StrokeEdge
-    {
-        StrokeVertex inside;
-        StrokeVertex outside;
-    };
-
-    class StrokeScope
-    {
-    public:
-        explicit StrokeScope(DrawScope& scope) : scope(scope) {}
-
-        StrokeVertex emit(float2 position, color_t color)
-        {
-            uint32_t idx = static_cast<uint32_t>(scope.getVertexCount());
-            scope.push(Vertex {.position = position, .texcoord = {0.0f, 0.0f}, .color = color_to_float4(color)});
-            return {idx, position, color};
-        }
-
-        // Gibt ein Quad aus zwei Edges aus (= ein Segment-Rechteck)
-        void emitQuad(const StrokeEdge& a, const StrokeEdge& b)
-        {
-            //  a.outside --- b.outside
-            //     |         /   |
-            //  a.inside --- b.inside
-            scope.push(a.outside.index);
-            scope.push(a.inside.index);
-            scope.push(b.outside.index);
-            scope.push(a.inside.index);
-            scope.push(b.inside.index);
-            scope.push(b.outside.index);
-        }
-
-        // Gibt ein einzelnes Dreieck aus
-        void emitTriangle(const StrokeVertex& a, const StrokeVertex& b, const StrokeVertex& c)
-        {
-            scope.push(a.index);
-            scope.push(b.index);
-            scope.push(c.index);
-        }
-
-    private:
-        DrawScope& scope;
-    };
-
-    static StrokeEdge makeEdge(StrokeScope& ss, float2 point, float2 normal, float halfStroke, color_t color)
-    {
-        return {
-            .inside = ss.emit(point - normal * halfStroke, color),
-            .outside = ss.emit(point + normal * halfStroke, color),
         };
     }
 } // namespace p5

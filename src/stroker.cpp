@@ -1,5 +1,7 @@
 #include "stroker.hpp"
 
+#include <algorithm>
+
 namespace p5
 {
     class DefaultStroker : public Stroker
@@ -8,74 +10,171 @@ namespace p5
         void stroke(DrawScope& scope, const DrawPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, StrokeAlign strokeAlign, float miterLimit, bool close) override
         {
             const size_t n = points.size;
-
-            // Early out if there are too few points to form a stroke.
             if (n < 2) return;
 
-            // Determine the number of segments to process. If the path is closed, we need to process all n segments (including the one that connects the last point back to the first).
-            // If it's open, we only process n-1 segments.
-            const size_t segmentCount = close ? n : n - 1;
+            const size_t segmentCount = close ? n : (n - 1);
+            const float half = strokeWeight * 0.5f;
+
+            StrokeCorner prevCorner = stroke_corner_create(points.positions[(n - 2) % n], points.positions[points.size - 1], points.positions[0 % n], strokeWeight, miterLimit);
 
             for (size_t i = 0; i < segmentCount; ++i) {
-                const float2& prev = points.positions[(i + n - 1) % n]; // Previous point (wrap around for closed paths)
-                const float2& curr = points.positions[i];
-                const float2& next = points.positions[(i + 1) % n]; // Wrap around for closed paths
+                const size_t prevIndex = (i + n - 1) % n;
+                const size_t currIndex = i;
+                const size_t nextIndex = (i + 1) % n;
 
-                {
-                    const float2 dir = normalized(next - curr);
-                    const float2 normal = perp(dir);
-                    const float2 halfStroke = normal * (strokeWeight / 2.0f);
+                const float2& prevPos = points.positions[prevIndex];
+                const float2& currPos = points.positions[currIndex];
+                const float2& nextPos = points.positions[nextIndex];
 
-                    const uint32_t vertexBase = scope.getVertexCount();
-                    scope.push(Vertex {.position = curr + halfStroke, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(Vertex {.position = curr - halfStroke, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(Vertex {.position = next - halfStroke, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(Vertex {.position = next + halfStroke, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(vertexBase + 0);
-                    scope.push(vertexBase + 1);
-                    scope.push(vertexBase + 2);
-                    scope.push(vertexBase + 0);
-                    scope.push(vertexBase + 2);
-                    scope.push(vertexBase + 3);
+                StrokeCorner currCorner = stroke_corner_create(prevPos, currPos, nextPos, strokeWeight, miterLimit);
+
+                const color_t prevColor = points.colors[prevIndex];
+                const color_t currColor = points.colors[currIndex];
+
+                { // Insert segment
+                    const uint32_t baseVertexIndex = scope.getVertexCount();
+
+                    push(scope, prevCorner.joinEnd, prevColor);
+                    push(scope, prevCorner.innerIntersection, prevColor);
+                    push(scope, currCorner.innerIntersection, currColor);
+                    push(scope, currCorner.joinStart, currColor);
+
+                    push(scope, baseVertexIndex + 0);
+                    push(scope, baseVertexIndex + 1);
+                    push(scope, baseVertexIndex + 2);
+                    push(scope, baseVertexIndex + 2);
+                    push(scope, baseVertexIndex + 3);
+                    push(scope, baseVertexIndex + 0);
                 }
 
-                {
-                    StrokeCorner corner = stroke_corner_create(prev, curr, next, strokeWeight, miterLimit);
-                    const uint32_t vertexBase = scope.getVertexCount();
-                    scope.push(Vertex {.position = corner.innerHit, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(Vertex {.position = corner.outerHitIn, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(Vertex {.position = corner.outerHitOut, .texcoord = {}, .color = {1.0f, 1.0f, 1.0f, 1.0f}});
-                    scope.push(vertexBase + 0);
-                    scope.push(vertexBase + 1);
-                    scope.push(vertexBase + 2);
+                { // Join
+                    if ((strokeJoin == StrokeJoin::bevel) or (strokeJoin == StrokeJoin::miter and currCorner.miterLimitExceeded)) {
+                        const uint32_t baseVertexIndex = scope.getVertexCount();
+                        push(scope, currCorner.innerIntersection, currColor);
+                        push(scope, currCorner.joinStart, currColor);
+                        push(scope, currCorner.joinEnd, currColor);
+
+                        push(scope, baseVertexIndex + 0);
+                        push(scope, baseVertexIndex + 1);
+                        push(scope, baseVertexIndex + 2);
+                    } else if (strokeJoin == StrokeJoin::miter) {
+                        const uint32_t baseVertexIndex = scope.getVertexCount();
+                        push(scope, currCorner.innerIntersection, currColor);
+                        push(scope, currCorner.joinStart, currColor);
+                        push(scope, currCorner.outerIntersection, currColor);
+                        push(scope, currCorner.joinEnd, currColor);
+
+                        push(scope, baseVertexIndex + 0);
+                        push(scope, baseVertexIndex + 1);
+                        push(scope, baseVertexIndex + 2);
+                        push(scope, baseVertexIndex + 2);
+                        push(scope, baseVertexIndex + 3);
+                        push(scope, baseVertexIndex + 0);
+                    } else if (strokeJoin == StrokeJoin::round) {
+                        const uint32_t baseVertexIndex = scope.getVertexCount();
+                        constexpr size_t segmentCount = 16; // TODO: adapt based on angle
+
+                        float angleStart = std::atan2(currCorner.joinStart.y - currCorner.origin.y, currCorner.joinStart.x - currCorner.origin.x);
+                        float angleEnd = std::atan2(currCorner.joinEnd.y - currCorner.origin.y, currCorner.joinEnd.x - currCorner.origin.x);
+
+                        // Differenz auf (-π, π] normalisieren → immer der kurze Bogen
+                        float delta = angleEnd - angleStart;
+                        if (delta > M_PI) delta -= 2.0f * M_PI;
+                        if (delta < -M_PI) delta += 2.0f * M_PI;
+
+                        // Segmentanzahl dynamisch nach Winkelgröße (optional aber sinnvoll)
+                        // const size_t segmentCount = std::max(1, (int)std::ceil(std::abs(delta) / (10.0f * M_PI / 180.0f)));
+
+                        // const uint32_t baseVertexIndex = scope.getVertexCount();
+                        push(scope, currCorner.innerIntersection, currColor);
+                        for (size_t j = 0; j <= segmentCount; ++j) {
+                            float t = static_cast<float>(j) / static_cast<float>(segmentCount);
+                            float angle = angleStart + t * delta; // funktioniert für CW und CCW
+                            push(scope, float2 {currCorner.origin.x + std::cos(angle) * half, currCorner.origin.y + std::sin(angle) * half}, currColor);
+                        }
+                        for (size_t j = 0; j < segmentCount; ++j) {
+                            push(scope, baseVertexIndex + 0);
+                            push(scope, baseVertexIndex + j + 1);
+                            push(scope, baseVertexIndex + j + 2);
+                        }
+                    }
                 }
+
+                prevCorner = currCorner;
             }
         }
 
     private:
+        inline static void push(DrawScope& scope, const float2& position, const color_t& color)
+        {
+            float4 colorVec = float4 {
+                .x = static_cast<float>(red(color)) / 255.0f,
+                .y = static_cast<float>(green(color)) / 255.0f,
+                .z = static_cast<float>(blue(color)) / 255.0f,
+                .w = static_cast<float>(alpha(color)) / 255.0f,
+            };
+
+            scope.push(Vertex {.position = position, .texcoord = {0.0f, 0.0f}, .color = colorVec});
+        }
+
+        inline static void push(DrawScope& scope, uint32_t index)
+        {
+            scope.push(index);
+        }
+
         struct StrokeCorner
         {
-            float2 origin;      // Origin point where two segments meet
-            float2 innerHit;    // Intersection point of the inner edges of the stroke.
-            float2 outerHitIn;  // Intersection point of the outer edges of the stroke, calculated using the incoming segment.
-            float2 outerHitOut; // Intersection point of the outer edges of the stroke, calculated using the outgoing segment.
+            float2 origin;            // Origin point where two segments meet
+            float2 innerIntersection; // Intersection point of the inner edges of the stroke.
+            float2 outerIntersection; // Intersection point of the outer edges of the stroke, calculated using the incoming segment.
+            float2 joinStart;         // The point on the outer edge of the incoming segment where the join starts.
+            float2 joinEnd;           // Same as joinStart, but from the perspective of the outgoing segment.
+            bool miterLimitExceeded;  // Indicates whether the miter is valid (i.e., within the miter limit)
         };
 
-        StrokeCorner stroke_corner_create(const float2& prev, const float2& curr, const float2& next, float strokeWeight, float miterLimit)
+        static StrokeCorner stroke_corner_create(const float2& prev, const float2& curr, const float2& next, float strokeWeight, float miterLimit)
         {
-            const float2 dirIn = normalized(curr - prev);
-            const float2 dirOut = normalized(next - curr);
-            const float2 normalIn = perp(dirIn);
-            const float2 normalOut = perp(dirOut);
-            const float2 halfStrokeIn = normalIn * (strokeWeight / 2.0f);
-            const float2 halfStrokeOut = normalOut * (strokeWeight / 2.0f);
+            const float half = strokeWeight * 0.5f;
+
+            const float2 dIn = normalized(curr - prev);
+            const float2 dOut = normalized(next - curr);
+            const float2 nIn = perp(dIn);
+            const float2 nOut = perp(dOut);
+
+            const float crossVal = p5::cross(dIn, dOut);
+            const bool leftTurn = (crossVal >= 0.0f);
+            const float outerSign = leftTurn ? -1.0f : 1.0f;
+            const float innerSign = -outerSign;
+
+            const float2 joinStart = curr + nIn * (half * outerSign);
+            const float2 joinEnd = curr + nOut * (half * outerSign);
+            const float2 innerBase = curr + nIn * (half * innerSign);
+
+            const float2 innerIntersection = line_intersect(innerBase, dIn, curr + nOut * (half * innerSign), dOut)
+                                                 .value_or(innerBase);
+
+            float2 outerIntersection = line_intersect(joinStart, dIn, joinEnd, dOut)
+                                           .value_or(joinStart);
+
+            const bool miterLimitExceeded = lengthSquared(outerIntersection - curr) > (miterLimit * half) * (miterLimit * half);
+            if (miterLimitExceeded) outerIntersection = curr;
 
             return StrokeCorner {
                 .origin = curr,
-                .innerHit = curr + halfStrokeIn + halfStrokeOut, // Intersection of inner edges
-                .outerHitIn = curr - halfStrokeIn,               // Outer edge based on incoming segment
-                .outerHitOut = curr - halfStrokeOut,             // Outer edge based on outgoing segment
+                .innerIntersection = innerIntersection,
+                .outerIntersection = outerIntersection,
+                .joinStart = joinStart,
+                .joinEnd = joinEnd,
+                .miterLimitExceeded = miterLimitExceeded
             };
+        }
+
+        inline static std::optional<float2> line_intersect(float2 p, float2 Da, float2 Q, float2 Db)
+        {
+            const float denom = cross(Da, Db);
+            if (std::abs(denom) < 1e-6f) return std::nullopt; // parallel
+            const float t = cross(Q - p, Db) / denom;
+            return p + Da * t;
         }
     };
 } // namespace p5
