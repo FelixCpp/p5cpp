@@ -1,8 +1,7 @@
 #include "p5.hpp"
 #include "renderer.hpp"
 #include "tess.hpp"
-#include <numbers>
-#include <algorithm>
+#include "stroker.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -13,6 +12,8 @@
 #include <vector>
 #include <array>
 #include <stack>
+#include <numbers>
+#include <algorithm>
 
 namespace p5
 {
@@ -80,6 +81,7 @@ namespace p5
     inline static std::vector<color_t> drawPointStrokeColors;
     inline static std::unique_ptr<Renderer> renderer;
     inline static std::unique_ptr<Tesselator> tesselator;
+    inline static std::unique_ptr<Stroker> stroker;
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
@@ -157,7 +159,7 @@ namespace p5
 
             const std::array<color_t, 4> colors = {color, color, color, color};
 
-            tesselator->fill(
+            tesselator->tesselate(
                 scope,
                 DrawPoints {
                     .size = 4,
@@ -218,7 +220,7 @@ namespace p5
 
         renderer->draw(settings, [close, &state](DrawScope& scope) {
             if (not state.isFillDisabled) {
-                tesselator->fill(
+                tesselator->tesselate(
                     scope,
                     DrawPoints {
                         .size = drawPointCount,
@@ -230,7 +232,7 @@ namespace p5
             }
 
             if (not state.isStrokeDisabled) {
-                tesselator->stroke(
+                stroker->stroke(
                     scope,
                     DrawPoints {
                         .size = drawPointCount,
@@ -263,7 +265,7 @@ namespace p5
         };
 
         renderer->draw(settings, [style](DrawScope& scope) {
-            tesselator->fill(
+            tesselator->tesselate(
                 scope,
                 DrawPoints {
                     .size = drawPointCount,
@@ -517,6 +519,7 @@ int main()
     renderStates.push(RenderState {});
     renderer = createRenderer();
     tesselator = createTesselator();
+    stroker = createStroker();
 
     static std::unique_ptr sketch = createSketch();
     sketch->setup();

@@ -5,6 +5,8 @@ NamespaceIndentation: All
 SortIncludes:
   Enabled: false
 
+AlignTrailingComments: true
+
 AllowShortFunctionsOnASingleLine: "All"
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true

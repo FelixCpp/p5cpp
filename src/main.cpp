@@ -15,17 +15,25 @@ public:
     void draw() override
     {
         background(21, 21, 21);
-        noFill();
-        strokeWeight(25.0f);
-        stroke(255, 0, 0);
+        // noFill();
+        // strokeWeight(25.0f);
+        // stroke(255, 0, 0);
+        // strokeJoin(StrokeJoin::miter);
+        //
+        // beginShape();
+        // for (float2& p : points) vertex(p.x, p.y);
+        // endShape();
+
         strokeJoin(StrokeJoin::miter);
-
+        noFill();
+        stroke(255);
+        strokeWeight(35.0f);
         beginShape();
-        for (float2& p : points) vertex(p.x, p.y);
+        vertex(100.0f, 100.0f);
+        vertex(mouseX, mouseY);
+        vertex(300.0f, 300.0f);
+        vertex(100.0f, 300.0f);
         endShape();
-
-        // miterLimit(10.0f);
-        // strokeJoin(StrokeJoin::round);
         // rect(100.0f, 100.0f, 300.0f, 300.0f);
     }
 
