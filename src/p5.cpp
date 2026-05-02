@@ -406,6 +406,7 @@ namespace p5
     void line(float x1, float y1, float x2, float y2)
     {
         const RenderState& state = peekState();
+        float halfStrokeWeight = state.strokeWeight * 0.5f;
 
         const float dx = x2 - x1;
         const float dy = y2 - y1;
@@ -417,17 +418,17 @@ namespace p5
         const float ndy = dy / len;
 
         if (state.strokeCap == StrokeCap::square) {
-            x1 -= ndx * state.strokeWeight * 0.5f;
-            y1 -= ndy * state.strokeWeight * 0.5f;
-            x2 += ndx * state.strokeWeight * 0.5f;
-            y2 += ndy * state.strokeWeight * 0.5f;
+            x1 -= ndx * halfStrokeWeight;
+            y1 -= ndy * halfStrokeWeight;
+            x2 += ndx * halfStrokeWeight;
+            y2 += ndy * halfStrokeWeight;
         }
 
         const float px = -ndy;
         const float py = ndx;
 
-        const float ox = px * state.strokeWeight * 0.5f;
-        const float oy = py * state.strokeWeight * 0.5f;
+        const float ox = px * halfStrokeWeight;
+        const float oy = py * halfStrokeWeight;
 
         beginShape();
         if (state.strokeCap != StrokeCap::round) {
@@ -438,14 +439,13 @@ namespace p5
         } else {
             const size_t segments = 8;
             float baseAngle = std::atan2(dy, dx);
-            float radius = state.strokeWeight * 0.5f;
 
             for (size_t i = 0; i <= segments; ++i) {
                 float t = static_cast<float>(i) / segments;
                 float a = baseAngle + std::numbers::pi_v<float> * 0.5f + t * std::numbers::pi_v<float>;
 
-                float x = x1 + std::cos(a) * radius;
-                float y = y1 + std::sin(a) * radius;
+                float x = x1 + std::cos(a) * halfStrokeWeight;
+                float y = y1 + std::sin(a) * halfStrokeWeight;
 
                 vertex(x, y);
             }
@@ -454,8 +454,8 @@ namespace p5
                 float t = static_cast<float>(i) / segments;
                 float a = baseAngle - std::numbers::pi_v<float> * 0.5f + t * std::numbers::pi_v<float>;
 
-                float x = x2 + std::cos(a) * radius;
-                float y = y2 + std::sin(a) * radius;
+                float x = x2 + std::cos(a) * halfStrokeWeight;
+                float y = y2 + std::sin(a) * halfStrokeWeight;
 
                 vertex(x, y);
             }

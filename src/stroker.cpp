@@ -1,6 +1,7 @@
 #include "stroker.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace p5
 {
@@ -32,12 +33,33 @@ namespace p5
                 const color_t currColor = points.colors[currIndex];
 
                 { // Insert segment
-                    const uint32_t baseVertexIndex = scope.getVertexCount();
+                    // const uint32_t baseVertexIndex = scope.getVertexCount();
+                    //
+                    // push(scope, cornerOuter(prevCorner, true), prevColor);
+                    // push(scope, cornerInner(prevCorner, true), prevColor);
+                    // push(scope, cornerInner(currCorner, false), currColor);
+                    // push(scope, cornerOuter(currCorner, false), currColor);
+                    //
+                    // push(scope, baseVertexIndex + 0);
+                    // push(scope, baseVertexIndex + 1);
+                    // push(scope, baseVertexIndex + 2);
+                    // push(scope, baseVertexIndex + 2);
+                    // push(scope, baseVertexIndex + 3);
+                    // push(scope, baseVertexIndex + 0);
 
-                    push(scope, prevCorner.joinEnd, prevColor);
-                    push(scope, prevCorner.innerIntersection, prevColor);
-                    push(scope, currCorner.innerIntersection, currColor);
-                    push(scope, currCorner.joinStart, currColor);
+                    // Build a segment
+                    float2 dir = normalized(nextPos - currPos);
+                    float2 normal = perp(dir);
+                    float2 segStartOuter = currPos + normal * half;
+                    float2 segStartInner = currPos - normal * half;
+                    float2 segEndOuter = nextPos + normal * half;
+                    float2 segEndInner = nextPos - normal * half;
+
+                    const uint32_t baseVertexIndex = scope.getVertexCount();
+                    push(scope, segStartOuter, prevColor);
+                    push(scope, segStartInner, prevColor);
+                    push(scope, segEndInner, currColor);
+                    push(scope, segEndOuter, currColor);
 
                     push(scope, baseVertexIndex + 0);
                     push(scope, baseVertexIndex + 1);
@@ -47,7 +69,7 @@ namespace p5
                     push(scope, baseVertexIndex + 0);
                 }
 
-                { // Join
+                if (true) { // Join
                     if ((strokeJoin == StrokeJoin::bevel) or (strokeJoin == StrokeJoin::miter and currCorner.miterLimitExceeded)) {
                         const uint32_t baseVertexIndex = scope.getVertexCount();
                         push(scope, currCorner.innerIntersection, currColor);
@@ -81,6 +103,11 @@ namespace p5
                         float delta = angleEnd - angleStart;
                         if (delta > M_PI) delta -= 2.0f * M_PI;
                         if (delta < -M_PI) delta += 2.0f * M_PI;
+
+                        // if (delta == 0.0f) {
+                        std::fprintf(stdout, "Hello %.2f\n", delta);
+                        std::fflush(stdout);
+                        // }
 
                         // Segmentanzahl dynamisch nach Winkelgröße (optional aber sinnvoll)
                         // const size_t segmentCount = std::max(1, (int)std::ceil(std::abs(delta) / (10.0f * M_PI / 180.0f)));
@@ -130,7 +157,20 @@ namespace p5
             float2 joinStart;         // The point on the outer edge of the incoming segment where the join starts.
             float2 joinEnd;           // Same as joinStart, but from the perspective of the outgoing segment.
             bool miterLimitExceeded;  // Indicates whether the miter is valid (i.e., within the miter limit)
+            bool isConcave;           // Indicates whether the corner is a concave turn (used for bevel joins)
         };
+
+        inline static const float2& cornerOuter(const StrokeCorner& corner, bool isStart)
+        {
+            if (isStart) return corner.isConcave ? corner.innerIntersection : corner.joinEnd;
+            else return corner.isConcave ? corner.innerIntersection : corner.joinStart;
+        }
+
+        inline static const float2& cornerInner(const StrokeCorner& corner, bool isStart)
+        {
+            if (isStart) return corner.isConcave ? corner.joinEnd : corner.innerIntersection;
+            else return corner.isConcave ? corner.joinStart : corner.innerIntersection;
+        }
 
         static StrokeCorner stroke_corner_create(const float2& prev, const float2& curr, const float2& next, float strokeWeight, float miterLimit)
         {
@@ -146,12 +186,38 @@ namespace p5
             const float outerSign = leftTurn ? -1.0f : 1.0f;
             const float innerSign = -outerSign;
 
-            const float2 joinStart = curr + nIn * (half * outerSign);
-            const float2 joinEnd = curr + nOut * (half * outerSign);
+            float2 joinStart = curr + nIn * (half * outerSign);
+            float2 joinEnd = curr + nOut * (half * outerSign);
             const float2 innerBase = curr + nIn * (half * innerSign);
 
             const float2 innerIntersection = line_intersect(innerBase, dIn, curr + nOut * (half * innerSign), dOut)
+                                                 .transform([&curr, miterLimit, half](const float2& intersection) {
+                                                     float2 toInner = intersection - curr;
+                                                     float dist = length(toInner);
+                                                     if (dist > miterLimit * half)
+                                                         return curr + (toInner / dist) * (miterLimit * half);
+                                                     return intersection;
+                                                 })
                                                  .value_or(innerBase);
+
+            //                                    if (std::optional unlimitedInnerIntersection = line_intersect(
+            //                                            innerBase,
+            //                                            dIn,
+            //                                            curr + nOut * (half * innerSign),
+            //                                            dOut
+            //                                        ))
+            // {
+            //     float2 toInner = unlimitedInnerIntersection.value() - curr;
+            //     float dist = length(toInner);
+            //     if (dist > miterLimit * half)
+            //         innerIntersection = curr + (toInner / dist) * (miterLimit * half);
+            //     else
+            //         innerIntersection = unlimitedInnerIntersection.value(); // <-- fehlte
+            // }
+            // else
+            // {
+            //     innerIntersection = innerBase;
+            // }
 
             float2 outerIntersection = line_intersect(joinStart, dIn, joinEnd, dOut)
                                            .value_or(joinStart);
@@ -159,13 +225,21 @@ namespace p5
             const bool miterLimitExceeded = lengthSquared(outerIntersection - curr) > (miterLimit * half) * (miterLimit * half);
             if (miterLimitExceeded) outerIntersection = curr;
 
+            // if (!leftTurn) // konkav
+            // {
+            //     // Rollen tauschen damit das Quad immer gleich aufgebaut werden kann
+            //     std::swap(innerIntersection, outerIntersection);
+            //     std::swap(joinStart, joinEnd);
+            // }
+
             return StrokeCorner {
                 .origin = curr,
                 .innerIntersection = innerIntersection,
                 .outerIntersection = outerIntersection,
                 .joinStart = joinStart,
                 .joinEnd = joinEnd,
-                .miterLimitExceeded = miterLimitExceeded
+                .miterLimitExceeded = miterLimitExceeded,
+                .isConcave = (crossVal < 0.0f)
             };
         }
 
