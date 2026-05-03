@@ -104,12 +104,6 @@ namespace p5
         round
     };
 
-    enum class StrokeAlign {
-        inside,
-        center,
-        outside,
-    };
-
     enum class BlendMode {
         none,
         alpha,
@@ -121,6 +115,8 @@ namespace p5
     color_t color(int grey, int alpha = 255);
     color_t color(int red, int green, int blue, int alpha = 255);
     color_t lerp(color_t a, color_t b, float t);
+
+    size_t computeCircleSegmentCount(float angle, float radius);
 
     int red(color_t color);
     int green(color_t color);
@@ -158,7 +154,6 @@ namespace p5
     void strokeWeight(float strokeWeight);
     void strokeCap(StrokeCap strokeCap);
     void strokeJoin(StrokeJoin strokeJoin);
-    void strokeAlign(StrokeAlign strokeAlign);
     void miterLimit(float miterLimit);
 
     void blendMode(BlendMode blendMode);

@@ -29,6 +29,13 @@ namespace p5
         );
     }
 
+    size_t computeCircleSegmentCount(float angle, float radius)
+    {
+        const float arcLength = std::abs(angle) * radius;
+        const size_t segmentCount = static_cast<size_t>(std::ceil(arcLength / 4.0f)); // 4.0f is the desired maximum segment length
+        return std::max(segmentCount, static_cast<size_t>(4));                        // Minimum of 4 segments for a full circle
+    }
+
     int red(color_t color) { return (color & 0xFF000000) >> 24; }
     int green(color_t color) { return (color & 0x00FF0000) >> 16; }
     int blue(color_t color) { return (color & 0x0000FF00) >> 8; }
@@ -53,7 +60,6 @@ namespace p5
         float strokeWeight = 1.0f;
         StrokeCap strokeCap = StrokeCap::round;
         StrokeJoin strokeJoin = StrokeJoin::round;
-        StrokeAlign strokeAlign = StrokeAlign::center;
         float miterLimit = 10.0f;
 
         BlendMode blendMode = BlendMode::alpha;
@@ -194,7 +200,6 @@ namespace p5
     void strokeWeight(float strokeWeight) { peekState().strokeWeight = strokeWeight; }
     void strokeCap(StrokeCap strokeCap) { peekState().strokeCap = strokeCap; }
     void strokeJoin(StrokeJoin strokeJoin) { peekState().strokeJoin = strokeJoin; }
-    void strokeAlign(StrokeAlign strokeAlign) { peekState().strokeAlign = strokeAlign; }
     void miterLimit(float miterLimit) { peekState().miterLimit = miterLimit; }
     void blendMode(BlendMode blendMode) { peekState().blendMode = blendMode; }
 
@@ -243,7 +248,6 @@ namespace p5
                     state.strokeWeight,
                     state.strokeCap,
                     state.strokeJoin,
-                    state.strokeAlign,
                     state.miterLimit,
                     close
                 );
@@ -365,9 +369,11 @@ namespace p5
 
     void ellipse(float centerX, float centerY, float width, float height)
     {
+        const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, std::max(width, height) * 0.5f);
+
         beginShape();
-        for (size_t i = 0; i < 32; ++i) {
-            float angle = 2.0f * std::numbers::pi_v<float> / 32.0f * i;
+        for (size_t i = 0; i < segmentCount; ++i) {
+            float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
             float x = centerX + std::cos(angle) * width * 0.5f;
             float y = centerY + std::sin(angle) * height * 0.5f;
             vertex(x, y);
@@ -383,10 +389,11 @@ namespace p5
     void point(float x, float y)
     {
         const RenderState& state = peekState();
+        const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, state.strokeWeight * 0.5f);
 
         beginShape();
-        for (size_t i = 0; i < 32; ++i) {
-            float angle = 2.0f * std::numbers::pi_v<float> / 32.0f * i;
+        for (size_t i = 0; i < segmentCount; ++i) {
+            float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
             float px = x + std::cos(angle) * state.strokeWeight * 0.5f;
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
@@ -500,6 +507,7 @@ int main()
     glfwSetFramebufferSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
         window.framebufferWidth = width;
         window.framebufferHeight = height;
+        glViewport(0, 0, width, height);
     });
 
     glfwSetCursorPosCallback(window.handle, [](GLFWwindow* handle, double x, double y) {
