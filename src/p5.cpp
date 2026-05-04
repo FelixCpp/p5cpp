@@ -17,6 +17,12 @@
 
 namespace p5
 {
+    radians_t radians(float radians) { return radians; }
+    radians_t degrees(float degrees) { return degrees * (std::numbers::pi_v<float> / 180.0f); }
+} // namespace p5
+
+namespace p5
+{
     color_t color(int grey, int alpha) { return color(grey, grey, grey, alpha); }
     color_t color(int red, int green, int blue, int alpha) { return (red << 24) | (green << 16) | (blue << 8) | alpha; } // TODO(Felix): Clamp values to 0 .. 255
     color_t lerp(color_t a, color_t b, float t)
@@ -29,17 +35,40 @@ namespace p5
         );
     }
 
-    size_t computeCircleSegmentCount(float angle, float radius)
-    {
-        const float arcLength = std::abs(angle) * radius;
-        const size_t segmentCount = static_cast<size_t>(std::ceil(arcLength / 4.0f)); // 4.0f is the desired maximum segment length
-        return std::max(segmentCount, static_cast<size_t>(4));                        // Minimum of 4 segments for a full circle
-    }
-
     int red(color_t color) { return (color & 0xFF000000) >> 24; }
     int green(color_t color) { return (color & 0x00FF0000) >> 16; }
     int blue(color_t color) { return (color & 0x0000FF00) >> 8; }
     int alpha(color_t color) { return (color & 0x000000FF) >> 0; }
+    int brightness(color_t color)
+    {
+        const int r = red(color);
+        const int g = green(color);
+        const int b = blue(color);
+
+        return static_cast<int>(0.299f * r + 0.587f * g + 0.114f * b);
+    }
+
+    size_t computeCircleSegmentCount(radians_t angle, float radius)
+    {
+        const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
+
+        if (radius <= 0.0f)
+            return 0;
+
+        // Clamp, um numerische Probleme zu vermeiden
+        const float cosValue = 1.0f - (error / radius);
+        const float clamped = std::clamp(cosValue, -1.0f, 1.0f);
+
+        const float step = std::acos(clamped);
+
+        if (step <= 0.0f)
+            return 4;
+
+        const size_t segments = static_cast<size_t>(std::ceil(std::abs(angle) / step));
+
+        return std::max<size_t>(segments, 4);
+    }
+
 } // namespace p5
 
 namespace p5
@@ -134,7 +163,7 @@ namespace p5
 
     void translate(float x, float y) { applyMatrix(translation(x, y)); }
     void scale(float x, float y) { applyMatrix(scaling(x, y)); }
-    void rotate(float angle) { applyMatrix(rotation(angle)); }
+    void rotate(radians_t angle) { applyMatrix(rotation(angle)); }
 
     void background(int grey, int alpha) { background(color(grey, grey, grey, alpha)); }
     void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
@@ -220,7 +249,7 @@ namespace p5
             .shaderId = std::nullopt,
             .textureId = std::nullopt,
             .blendMode = state.blendMode,
-            .drawMode = DrawMode::triangles,
+            .drawMode = DrawMode::lineLoop,
         };
 
         renderer->draw(settings, [close, &state](DrawScope& scope) {
@@ -468,6 +497,29 @@ namespace p5
             }
         }
         endShapeFillOnly(FillStyle::stroke);
+    }
+
+    void arc(float centerX, float centerY, float width, float height, radians_t startAngle, radians_t sweepAngle, ArcMode arcMode)
+    {
+        const bool clockwise = sweepAngle < 0.0f;
+        const float radius = std::max(width, height) * 0.5f;
+        const size_t segmentCount = computeCircleSegmentCount(sweepAngle, radius);
+
+        beginShape();
+
+        if (arcMode == ArcMode::pie) {
+            vertex(centerX, centerY);
+        }
+
+        for (size_t i = 0; i <= segmentCount; ++i) {
+            float t = static_cast<float>(i) / static_cast<float>(segmentCount);
+            float angle = startAngle + (clockwise ? -1.0f : 1.0f) * t * sweepAngle;
+            float x = centerX + std::cos(angle) * width * 0.5f;
+            float y = centerY + std::sin(angle) * height * 0.5f;
+            vertex(x, y);
+        }
+
+        endShape(arcMode != ArcMode::open);
     }
 } // namespace p5
 

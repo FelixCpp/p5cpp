@@ -7,6 +7,13 @@
 
 namespace p5
 {
+    typedef float radians_t;
+    radians_t radians(float radians);
+    radians_t degrees(float degrees);
+} // namespace p5
+
+namespace p5
+{
     template <typename T>
     struct value2
     {
@@ -64,7 +71,7 @@ namespace p5
     matrix4x4 combine(const matrix4x4& a, const matrix4x4& b);
     matrix4x4 translation(float x, float y);
     matrix4x4 scaling(float x, float y);
-    matrix4x4 rotation(float angle);
+    matrix4x4 rotation(radians_t angle);
     matrix4x4 ortho(float left, float right, float top, float bottom, float near, float far);
     matrix4x4 perspective(float fovY, float aspect, float near, float far);
     matrix4x4 lookAt(float2 eye, float2 center, float2 up);
@@ -111,18 +118,24 @@ namespace p5
         multiply,
     };
 
+    enum class ArcMode {
+        open,
+        chord,
+        pie,
+    };
+
     typedef uint32_t color_t;
     color_t color(int grey, int alpha = 255);
     color_t color(int red, int green, int blue, int alpha = 255);
     color_t lerp(color_t a, color_t b, float t);
-
-    size_t computeCircleSegmentCount(float angle, float radius);
 
     int red(color_t color);
     int green(color_t color);
     int blue(color_t color);
     int alpha(color_t color);
     int brightness(color_t color);
+
+    size_t computeCircleSegmentCount(radians_t angle, float radius);
 
     void pushState();
     void popState();
@@ -135,7 +148,7 @@ namespace p5
     matrix4x4& peekMatrix();
     void translate(float x, float y);
     void scale(float x, float y);
-    void rotate(float angle);
+    void rotate(radians_t angle);
 
     void background(int grey, int alpha = 255);
     void background(int red, int green, int blue, int alpha = 255);
@@ -172,4 +185,5 @@ namespace p5
     void point(float x, float y);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
     void line(float x1, float y1, float x2, float y2);
+    void arc(float centerX, float centerY, float width, float height, radians_t startAngle, radians_t sweepAngle, ArcMode arcMode);
 } // namespace p5

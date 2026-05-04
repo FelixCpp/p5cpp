@@ -23,17 +23,11 @@ public:
 
         background(21, 21, 21);
 
-        strokeCap(StrokeCap::round);
-        strokeJoin(StrokeJoin::round);
-        strokeWeight(35.0f);
         stroke(255, 0, 0);
+        strokeWeight(5.0f);
         fill(0, 255, 0);
-        noFill();
-
-        beginShape();
-        for (auto& p : points)
-            vertex(p.x, p.y);
-        endShape();
+        noStroke();
+        arc(400.0f, 300.0f, 200.0f, 200.0f, degrees(0.0f), degrees(180.0f), ArcMode::open);
     }
 
     void destroy() override

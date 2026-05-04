@@ -16,6 +16,26 @@ namespace p5
 
 namespace p5
 {
+    class ConvexTesselator : public Tesselator
+    {
+        void tesselate(DrawScope& scope, const DrawPoints& points) override
+        {
+            for (size_t i = 0; i < points.size; ++i) {
+                scope.push(Vertex {
+                    .position = points.positions[i],
+                    .texcoord = points.texcoords[i],
+                    .color = color_to_float4(points.colors[i]),
+                });
+            }
+
+            for (size_t i = 2; i < points.size; ++i) {
+                scope.push(0);
+                scope.push(i - 1);
+                scope.push(i);
+            }
+        }
+    };
+
     class LibTessTesselator : public Tesselator
     {
     public:
@@ -93,6 +113,7 @@ namespace p5
 {
     std::unique_ptr<Tesselator> createTesselator()
     {
-        return std::make_unique<LibTessTesselator>();
+        return std::make_unique<ConvexTesselator>();
+        // return std::make_unique<LibTessTesselator>();
     }
 } // namespace p5
