@@ -9,7 +9,7 @@ namespace p5
     class DefaultStroker : public Stroker
     {
     public:
-        void stroke(DrawScope& scope, const DrawPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, bool close) override
+        void stroke(DrawScope& scope, const DrawPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThresold, bool close) override
         {
             const size_t n = points.size;
             if (n < 2) return; // NOTE: There's nothing to stroke if there are less than 2 points
@@ -38,7 +38,7 @@ namespace p5
                     const StrokeSegment nextSegment = computeStrokeSegment(nextIndex, (nextIndex + 1) % n, points, halfStrokeWeight);
                     const StrokeCorner corner = computeStrokeCorner(previousSegment, segment, nextSegment, points, halfStrokeWeight, miterLimit);
 
-                    emitStrokeJoin(scope, corner, points, halfStrokeWeight, strokeJoin);
+                    emitStrokeJoin(scope, corner, points, halfStrokeWeight, roundJoinAngleThresold, strokeJoin);
                 }
 
                 // Insert stroke caps at the start and end of the stroke if needed
@@ -258,19 +258,12 @@ namespace p5
             }
         }
 
-        void emitStrokeJoin(DrawScope& scope, const StrokeCorner& corner, const DrawPoints& points, float halfStrokeWeight, StrokeJoin strokeJoin)
+        void emitStrokeJoin(DrawScope& scope, const StrokeCorner& corner, const DrawPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, StrokeJoin strokeJoin)
         {
-            if ((strokeJoin == StrokeJoin::bevel) or (strokeJoin == StrokeJoin::miter and corner.exceedsMiterLimit)) {
-                // Fallback to bevel join if miter limit is exceeded
-                return emitBevelJoin(scope, corner, points);
-            }
-
-            if (strokeJoin == StrokeJoin::miter) {
-                return emitMiterJoin(scope, corner, points);
-            }
-
-            if (strokeJoin == StrokeJoin::round) {
-                return emitRoundJoin(scope, corner, points, halfStrokeWeight);
+            switch (strokeJoin) {
+                case StrokeJoin::bevel: emitBevelJoin(scope, corner, points); break;
+                case StrokeJoin::miter: emitMiterJoin(scope, corner, points); break;
+                case StrokeJoin::round: emitRoundJoin(scope, corner, points, halfStrokeWeight, roundJoinAngleThreshold); break;
             }
         }
 
@@ -290,6 +283,11 @@ namespace p5
 
         void emitMiterJoin(DrawScope& scope, const StrokeCorner& corner, const DrawPoints& points)
         {
+            if (corner.exceedsMiterLimit) {
+                // Fallback to bevel join if miter limit is exceeded
+                return emitBevelJoin(scope, corner, points);
+            }
+
             const size_t vertexBase = scope.getVertexCount();
             const color_t color = points.colors[corner.index];
 
@@ -306,7 +304,7 @@ namespace p5
             push(scope, vertexBase + 0);
         }
 
-        void emitRoundJoin(DrawScope& scope, const StrokeCorner& corner, const DrawPoints& points, float halfStrokeWeight)
+        void emitRoundJoin(DrawScope& scope, const StrokeCorner& corner, const DrawPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold)
         {
             const color_t color = points.colors[corner.index];
             const float2 cornerPos = points.positions[corner.index];
@@ -322,6 +320,11 @@ namespace p5
             float angleDiff = angleEnd - angleStart;
             if (angleDiff > M_PI) angleDiff -= 2.0f * M_PI;
             else if (angleDiff < -M_PI) angleDiff += 2.0f * M_PI;
+
+            if (std::abs(angleDiff) < roundJoinAngleThreshold) {
+                // Wenn der Winkel sehr klein ist, können wir den Join auch als Bevel-Join rendern
+                return emitBevelJoin(scope, corner, points);
+            }
 
             // Anzahl Segmente je nach Bogengröße und Radius
             // ~1 Segment pro 5° ist ein guter Kompromiss zwischen Qualität und Performance

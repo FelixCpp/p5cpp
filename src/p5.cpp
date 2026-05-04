@@ -17,8 +17,8 @@
 
 namespace p5
 {
-    radians_t radians(float radians) { return radians; }
-    radians_t degrees(float degrees) { return degrees * (std::numbers::pi_v<float> / 180.0f); }
+    float radians(float degrees) { return degrees * (std::numbers::pi_v<float> / 180.0f); }
+    float degrees(float radians) { return radians * (180.0f / std::numbers::pi_v<float>); }
 } // namespace p5
 
 namespace p5
@@ -48,7 +48,7 @@ namespace p5
         return static_cast<int>(0.299f * r + 0.587f * g + 0.114f * b);
     }
 
-    size_t computeCircleSegmentCount(radians_t angle, float radius)
+    size_t computeCircleSegmentCount(float angle, float radius)
     {
         const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
 
@@ -90,6 +90,7 @@ namespace p5
         StrokeCap strokeCap = StrokeCap::round;
         StrokeJoin strokeJoin = StrokeJoin::round;
         float miterLimit = 10.0f;
+        float roundJoinThreshold = 0.44f; // 25°
 
         BlendMode blendMode = BlendMode::alpha;
 
@@ -97,6 +98,13 @@ namespace p5
 
         bool isFillDisabled = false;
         bool isStrokeDisabled = false;
+
+        uint32_t bezierDetail = 20;
+        float invBezierDetail = 1.0f / 20.0f;
+
+        float curveTightness = 0.0f;
+        uint32_t curveDetail = 20;
+        float invCurveDetail = 1.0f / 20.0f;
     };
 
     struct Window
@@ -109,6 +117,10 @@ namespace p5
     };
 
     inline static std::stack<RenderState> renderStates;
+
+    inline static size_t curveVertexCount;
+    inline static std::array<float2, 4> curveVertexPositions;
+
     inline static size_t drawPointCount;
     inline static std::vector<float2> drawPointPositions;
     inline static std::vector<float2> drawPointTexCoords;
@@ -163,7 +175,7 @@ namespace p5
 
     void translate(float x, float y) { applyMatrix(translation(x, y)); }
     void scale(float x, float y) { applyMatrix(scaling(x, y)); }
-    void rotate(radians_t angle) { applyMatrix(rotation(angle)); }
+    void rotate(float angle) { applyMatrix(rotation(angle)); }
 
     void background(int grey, int alpha) { background(color(grey, grey, grey, alpha)); }
     void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
@@ -230,7 +242,27 @@ namespace p5
     void strokeCap(StrokeCap strokeCap) { peekState().strokeCap = strokeCap; }
     void strokeJoin(StrokeJoin strokeJoin) { peekState().strokeJoin = strokeJoin; }
     void miterLimit(float miterLimit) { peekState().miterLimit = miterLimit; }
+    void roundJoinThreshold(float angleThreshold) { peekState().roundJoinThreshold = angleThreshold; }
     void blendMode(BlendMode blendMode) { peekState().blendMode = blendMode; }
+    void curveTightness(float tightness) { peekState().curveTightness = tightness; }
+
+    void curveDetail(uint32_t detail)
+    {
+        detail = std::max(detail, 1u);
+
+        RenderState& state = peekState();
+        state.curveDetail = detail;
+        state.invCurveDetail = 1.0f / static_cast<float>(detail);
+    }
+
+    void bezierDetail(uint32_t detail)
+    {
+        detail = std::max(detail, 1u);
+
+        RenderState& state = peekState();
+        state.bezierDetail = detail;
+        state.invBezierDetail = 1.0f / static_cast<float>(detail);
+    }
 
     void beginShape()
     {
@@ -241,52 +273,7 @@ namespace p5
         stroke
     };
 
-    void endShape(bool close)
-    {
-        const RenderState& state = peekState();
-
-        DrawSettings settings = {
-            .shaderId = std::nullopt,
-            .textureId = std::nullopt,
-            .blendMode = state.blendMode,
-            .drawMode = DrawMode::lineLoop,
-        };
-
-        renderer->draw(settings, [close, &state](DrawScope& scope) {
-            if (not state.isFillDisabled) {
-                tesselator->tesselate(
-                    scope,
-                    DrawPoints {
-                        .size = drawPointCount,
-                        .positions = drawPointPositions,
-                        .texcoords = drawPointTexCoords,
-                        .colors = drawPointFillColors
-                    }
-                );
-            }
-
-            if (not state.isStrokeDisabled) {
-                stroker->stroke(
-                    scope,
-                    DrawPoints {
-                        .size = drawPointCount,
-                        .positions = drawPointPositions,
-                        .texcoords = drawPointTexCoords,
-                        .colors = drawPointStrokeColors,
-                    },
-                    state.strokeWeight,
-                    state.strokeCap,
-                    state.strokeJoin,
-                    state.miterLimit,
-                    close
-                );
-            }
-        });
-
-        drawPointCount = 0;
-    }
-
-    void endShapeFillOnly(FillStyle style)
+    void endShapeImpl(bool shouldClose, const std::optional<FillStyle>& fillStyle, const std::optional<FillStyle>& strokeStyle)
     {
         const RenderState& state = peekState();
 
@@ -297,19 +284,48 @@ namespace p5
             .drawMode = DrawMode::triangles,
         };
 
-        renderer->draw(settings, [style](DrawScope& scope) {
-            tesselator->tesselate(
-                scope,
-                DrawPoints {
-                    .size = drawPointCount,
-                    .positions = drawPointPositions,
-                    .texcoords = drawPointTexCoords,
-                    .colors = style == FillStyle::fill ? drawPointFillColors : drawPointStrokeColors,
-                }
-            );
+        renderer->draw(settings, [&state, &fillStyle, &strokeStyle](DrawScope& scope) {
+            if (const auto style = fillStyle) {
+                tesselator->tesselate(
+                    scope,
+                    DrawPoints {
+                        .size = drawPointCount,
+                        .positions = drawPointPositions,
+                        .texcoords = drawPointTexCoords,
+                        .colors = style == FillStyle::fill ? drawPointFillColors : drawPointStrokeColors,
+                    }
+                );
+            }
+
+            if (const auto style = strokeStyle) {
+                stroker->stroke(
+                    scope,
+                    DrawPoints {
+                        .size = drawPointCount,
+                        .positions = drawPointPositions,
+                        .texcoords = drawPointTexCoords,
+                        .colors = style == FillStyle::fill ? drawPointFillColors : drawPointStrokeColors,
+                    },
+                    state.strokeWeight,
+                    state.strokeCap,
+                    state.strokeJoin,
+                    state.miterLimit,
+                    state.roundJoinThreshold,
+                    false
+                );
+            }
         });
 
         drawPointCount = 0;
+        curveVertexCount = 0;
+    }
+
+    void endShape(bool close)
+    {
+        const RenderState& state = peekState();
+        const std::optional fillStyle = state.isFillDisabled ? std::nullopt : std::optional(FillStyle::fill);
+        const std::optional strokeStyle = peekState().isStrokeDisabled ? std::nullopt : std::optional(FillStyle::stroke);
+        endShapeImpl(close, fillStyle, strokeStyle);
     }
 
     void vertex(float x, float y)
@@ -330,6 +346,36 @@ namespace p5
         drawPointFillColors[drawPointCount] = state.fillColor;
         drawPointStrokeColors[drawPointCount] = state.strokeColor;
         ++drawPointCount;
+    }
+
+    void curveVertex(float x, float y)
+    {
+        curveVertexPositions[curveVertexCount++] = {x, y};
+
+        if (curveVertexCount >= 4) {
+            const RenderState& state = peekState();
+            float alpha = (1.0f - state.curveTightness) * 0.5f;
+
+            for (size_t i = 0; i < curveVertexPositions.size() - 3; ++i) {
+                auto [x1, y1] = curveVertexPositions[i];
+                auto [x2, y2] = curveVertexPositions[i + 1];
+                auto [x3, y3] = curveVertexPositions[i + 2];
+                auto [x4, y4] = curveVertexPositions[i + 3];
+
+                for (size_t j = 0; j <= state.curveDetail; ++j) {
+                    float t = static_cast<float>(j) * state.invCurveDetail;
+                    float t2 = t * t;
+                    float t3 = t2 * t;
+
+                    float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
+                    float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
+
+                    vertex(bx, by);
+                }
+            }
+
+            curveVertexCount = 0;
+        }
     }
 
     void rect(float left, float top, float width, float height)
@@ -427,7 +473,7 @@ namespace p5
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
         }
-        endShapeFillOnly(FillStyle::stroke);
+        endShapeImpl(false, FillStyle::stroke, std::nullopt);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -496,10 +542,10 @@ namespace p5
                 vertex(x, y);
             }
         }
-        endShapeFillOnly(FillStyle::stroke);
+        endShapeImpl(false, FillStyle::stroke, std::nullopt);
     }
 
-    void arc(float centerX, float centerY, float width, float height, radians_t startAngle, radians_t sweepAngle, ArcMode arcMode)
+    void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
     {
         const bool clockwise = sweepAngle < 0.0f;
         const float radius = std::max(width, height) * 0.5f;
@@ -520,6 +566,48 @@ namespace p5
         }
 
         endShape(arcMode != ArcMode::open);
+    }
+
+    void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        const RenderState& state = peekState();
+
+        beginShape();
+        for (size_t i = 0; i <= state.bezierDetail; ++i) {
+            float t = static_cast<float>(i) * state.invBezierDetail;
+
+            float mt = 1.0f - t;
+            float mt2 = mt * mt;
+            float mt3 = mt2 * mt;
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
+            float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
+
+            vertex(bx, by);
+        }
+        endShapeImpl(false, std::nullopt, FillStyle::stroke);
+    }
+
+    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        const RenderState& state = peekState();
+
+        float alpha = (1.0f - state.curveTightness) * 0.5f;
+
+        beginShape();
+        for (size_t i = 0; i <= state.curveDetail; ++i) {
+            float t = static_cast<float>(i) * state.invCurveDetail;
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
+            float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
+
+            vertex(bx, by);
+        }
+        endShapeImpl(false, std::nullopt, FillStyle::stroke);
     }
 } // namespace p5
 

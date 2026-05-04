@@ -7,9 +7,8 @@
 
 namespace p5
 {
-    typedef float radians_t;
-    radians_t radians(float radians);
-    radians_t degrees(float degrees);
+    float radians(float degrees);
+    float degrees(float radians);
 } // namespace p5
 
 namespace p5
@@ -71,7 +70,7 @@ namespace p5
     matrix4x4 combine(const matrix4x4& a, const matrix4x4& b);
     matrix4x4 translation(float x, float y);
     matrix4x4 scaling(float x, float y);
-    matrix4x4 rotation(radians_t angle);
+    matrix4x4 rotation(float angle);
     matrix4x4 ortho(float left, float right, float top, float bottom, float near, float far);
     matrix4x4 perspective(float fovY, float aspect, float near, float far);
     matrix4x4 lookAt(float2 eye, float2 center, float2 up);
@@ -135,7 +134,7 @@ namespace p5
     int alpha(color_t color);
     int brightness(color_t color);
 
-    size_t computeCircleSegmentCount(radians_t angle, float radius);
+    size_t computeCircleSegmentCount(float angle, float radius);
 
     void pushState();
     void popState();
@@ -148,7 +147,7 @@ namespace p5
     matrix4x4& peekMatrix();
     void translate(float x, float y);
     void scale(float x, float y);
-    void rotate(radians_t angle);
+    void rotate(float angle);
 
     void background(int grey, int alpha = 255);
     void background(int red, int green, int blue, int alpha = 255);
@@ -168,13 +167,18 @@ namespace p5
     void strokeCap(StrokeCap strokeCap);
     void strokeJoin(StrokeJoin strokeJoin);
     void miterLimit(float miterLimit);
+    void roundJoinThreshold(float angleThreshold);
 
     void blendMode(BlendMode blendMode);
+    void curveTightness(float tightness);
+    void curveDetail(uint32_t detail);
+    void bezierDetail(uint32_t detail);
 
     void beginShape();
     void endShape(bool close = true);
     void vertex(float x, float y);
     void vertex(float x, float y, float u, float v);
+    void curveVertex(float x, float y);
 
     void rect(float left, float top, float width, float height);
     void rect(float left, float top, float width, float height, float cx, float cy);
@@ -185,5 +189,7 @@ namespace p5
     void point(float x, float y);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
     void line(float x1, float y1, float x2, float y2);
-    void arc(float centerX, float centerY, float width, float height, radians_t startAngle, radians_t sweepAngle, ArcMode arcMode);
+    void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
+    void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
 } // namespace p5

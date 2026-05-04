@@ -63,7 +63,7 @@ namespace p5
         // clang-format on
     }
 
-    matrix4x4 rotation(radians_t angle)
+    matrix4x4 rotation(float angle)
     {
         const float c = std::cos(angle);
         const float s = std::sin(angle);

@@ -12,22 +12,34 @@ public:
     {
     }
 
+    float angle = 0.0f;
+
     void draw() override
     {
-        const std::vector<float2> points = {
-            {100.0f + 100.0f, 100.0f},
-            {(float)mouseX, (float)mouseY},
-            {100.0f + 300.0f, 300.0f},
-            {100.0f + 100.0f, 300.0f},
-        };
+        angle += 0.01f;
 
-        background(21, 21, 21);
-
-        stroke(255, 0, 0);
+        curveDetail(50);
         strokeWeight(5.0f);
-        fill(0, 255, 0);
-        noStroke();
-        arc(400.0f, 300.0f, 200.0f, 200.0f, degrees(0.0f), degrees(180.0f), ArcMode::open);
+        background(21);
+
+        noFill();
+
+        if (not points.empty()) {
+            beginShape();
+            curveVertex(points[0].x, points[0].y);
+            for (size_t i = 0; i < points.size(); ++i) {
+                stroke(255, 102, 0);
+                strokeWeight(5.0f);
+                curveVertex(points[i].x, points[i].y);
+            }
+            curveVertex(points[points.size() - 1].x, points[points.size() - 1].y);
+            endShape();
+        }
+
+        for (size_t i = 0; i < points.size(); ++i) {
+            stroke(255);
+            point(points[i].x, points[i].y);
+        }
     }
 
     void destroy() override
