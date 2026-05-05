@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string_view>
+#include <span>
 
 namespace p5
 {
@@ -20,6 +21,7 @@ namespace p5
     };
 
     typedef value2<float> float2;
+    typedef value2<uint32_t> uint2;
 
     template <typename T> inline constexpr value2<T> operator-(value2<T> value) { return {-value.x, -value.y}; }
 
@@ -36,6 +38,7 @@ namespace p5
     template <typename T> inline constexpr value2<T> perp(value2<T> value) { return {-value.y, value.x}; }
     template <typename T> inline constexpr T dot(value2<T> a, value2<T> b) { return a.x * b.x + a.y * b.y; }
     template <typename T> inline constexpr T cross(value2<T> a, value2<T> b) { return a.x * b.y - a.y * b.x; }
+    template <typename T> inline constexpr value2<T> lerp(value2<T> a, value2<T> b, T t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
     template <typename T> inline constexpr T lengthSquared(value2<T> value) { return value.x * value.x + value.y * value.y; }
     template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
     template <typename T> inline value2<T> normalized(value2<T> value)
@@ -59,6 +62,14 @@ namespace p5
     };
 
     typedef value4<float> float4;
+
+    template <typename T>
+    struct rect2
+    {
+        T left, top, width, height;
+    };
+
+    typedef rect2<float> rect2f;
 
     struct matrix4x4
     {
@@ -166,6 +177,8 @@ namespace p5
     void strokeWeight(float strokeWeight);
     void strokeCap(StrokeCap strokeCap);
     void strokeJoin(StrokeJoin strokeJoin);
+    void strokePattern(std::span<const float> pattern);
+    void strokePatternOffset(float offset);
     void miterLimit(float miterLimit);
     void roundJoinThreshold(float angleThreshold);
 
@@ -192,4 +205,5 @@ namespace p5
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+    void text(std::string_view text, float x, float y);
 } // namespace p5

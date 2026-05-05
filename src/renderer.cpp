@@ -7,7 +7,6 @@ namespace p5
 {
     static GLenum drawModeToGlId(DrawMode mode)
     {
-        // return GL_LINE_STRIP;
         switch (mode) {
             case DrawMode::triangles: return GL_TRIANGLES;
             case DrawMode::lineLoop: return GL_LINE_LOOP;

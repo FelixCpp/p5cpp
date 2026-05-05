@@ -1,7 +1,9 @@
 #include "p5.hpp"
 #include "renderer.hpp"
+#include "linepath.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
+#include "font.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -9,7 +11,6 @@
 
 #include <iostream>
 #include <stack>
-#include <vector>
 #include <array>
 #include <stack>
 #include <numbers>
@@ -92,6 +93,7 @@ namespace p5
         float miterLimit = 10.0f;
         float roundJoinThreshold = 0.44f; // 25°
 
+        std::shared_ptr<Font> font;
         BlendMode blendMode = BlendMode::alpha;
 
         std::stack<matrix4x4> metrics = std::stack<matrix4x4>({matrix4x4::identity});
@@ -105,6 +107,9 @@ namespace p5
         float curveTightness = 0.0f;
         uint32_t curveDetail = 20;
         float invCurveDetail = 1.0f / 20.0f;
+
+        std::vector<float> strokePatternSegments;
+        float strokePatternOffset = 0.0f;
     };
 
     struct Window
@@ -121,14 +126,9 @@ namespace p5
     inline static size_t curveVertexCount;
     inline static std::array<float2, 4> curveVertexPositions;
 
-    inline static size_t drawPointCount;
-    inline static std::vector<float2> drawPointPositions;
-    inline static std::vector<float2> drawPointTexCoords;
-    inline static std::vector<color_t> drawPointFillColors;
-    inline static std::vector<color_t> drawPointStrokeColors;
+    inline static std::unique_ptr<LinePathBuilder> linepath;
     inline static std::unique_ptr<Renderer> renderer;
     inline static std::unique_ptr<Tesselator> tesselator;
-    inline static std::unique_ptr<Stroker> stroker;
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
@@ -241,6 +241,8 @@ namespace p5
     void strokeWeight(float strokeWeight) { peekState().strokeWeight = strokeWeight; }
     void strokeCap(StrokeCap strokeCap) { peekState().strokeCap = strokeCap; }
     void strokeJoin(StrokeJoin strokeJoin) { peekState().strokeJoin = strokeJoin; }
+    void strokePattern(std::span<const float> pattern) { peekState().strokePatternSegments = std::vector<float>(pattern.begin(), pattern.end()); }
+    void strokePatternOffset(float offset) { peekState().strokePatternOffset = offset; }
     void miterLimit(float miterLimit) { peekState().miterLimit = miterLimit; }
     void roundJoinThreshold(float angleThreshold) { peekState().roundJoinThreshold = angleThreshold; }
     void blendMode(BlendMode blendMode) { peekState().blendMode = blendMode; }
@@ -268,11 +270,6 @@ namespace p5
     {
     }
 
-    enum class FillStyle {
-        fill,
-        stroke
-    };
-
     void endShapeImpl(bool shouldClose, const std::optional<FillStyle>& fillStyle, const std::optional<FillStyle>& strokeStyle)
     {
         const RenderState& state = peekState();
@@ -284,39 +281,30 @@ namespace p5
             .drawMode = DrawMode::triangles,
         };
 
-        renderer->draw(settings, [&state, &fillStyle, &strokeStyle](DrawScope& scope) {
+        renderer->draw(settings, [shouldClose, &state, &fillStyle, &strokeStyle](DrawScope& scope) {
             if (const auto style = fillStyle) {
-                tesselator->tesselate(
-                    scope,
-                    DrawPoints {
-                        .size = drawPointCount,
-                        .positions = drawPointPositions,
-                        .texcoords = drawPointTexCoords,
-                        .colors = style == FillStyle::fill ? drawPointFillColors : drawPointStrokeColors,
-                    }
-                );
+                tesselator->tesselate(scope, linepath->buildDrawPoints(style.value()));
             }
 
             if (const auto style = strokeStyle) {
-                stroker->stroke(
+                generateDashedStroke(
                     scope,
-                    DrawPoints {
-                        .size = drawPointCount,
-                        .positions = drawPointPositions,
-                        .texcoords = drawPointTexCoords,
-                        .colors = style == FillStyle::fill ? drawPointFillColors : drawPointStrokeColors,
+                    linepath->buildDrawPoints(style.value()),
+                    StrokePattern {
+                        .segments = state.strokePatternSegments,
+                        .offset = state.strokePatternOffset,
                     },
                     state.strokeWeight,
                     state.strokeCap,
                     state.strokeJoin,
                     state.miterLimit,
                     state.roundJoinThreshold,
-                    false
+                    shouldClose
                 );
             }
         });
 
-        drawPointCount = 0;
+        linepath->clear();
         curveVertexCount = 0;
     }
 
@@ -324,7 +312,7 @@ namespace p5
     {
         const RenderState& state = peekState();
         const std::optional fillStyle = state.isFillDisabled ? std::nullopt : std::optional(FillStyle::fill);
-        const std::optional strokeStyle = peekState().isStrokeDisabled ? std::nullopt : std::optional(FillStyle::stroke);
+        const std::optional strokeStyle = state.isStrokeDisabled ? std::nullopt : std::optional(FillStyle::stroke);
         endShapeImpl(close, fillStyle, strokeStyle);
     }
 
@@ -335,22 +323,15 @@ namespace p5
 
     void vertex(float x, float y, float u, float v)
     {
-        if (drawPointCount >= drawPointPositions.size()) drawPointPositions.resize(std::max(drawPointPositions.size() * 2, 1uz));
-        if (drawPointCount >= drawPointTexCoords.size()) drawPointTexCoords.resize(std::max(drawPointTexCoords.size() * 2, 1uz));
-        if (drawPointCount >= drawPointFillColors.size()) drawPointFillColors.resize(std::max(drawPointFillColors.size() * 2, 1uz));
-        if (drawPointCount >= drawPointStrokeColors.size()) drawPointStrokeColors.resize(std::max(drawPointStrokeColors.size() * 2, 1uz));
-
         const RenderState& state = peekState();
-        drawPointPositions[drawPointCount] = transformPoint(state.metrics.top(), {x, y});
-        drawPointTexCoords[drawPointCount] = {u, v};
-        drawPointFillColors[drawPointCount] = state.fillColor;
-        drawPointStrokeColors[drawPointCount] = state.strokeColor;
-        ++drawPointCount;
+        const float2 transformed = transformPoint(state.metrics.top(), {x, y});
+        linepath->vertex(transformed.x, transformed.y, u, v, state.fillColor, state.strokeColor);
     }
 
     void curveVertex(float x, float y)
     {
-        curveVertexPositions[curveVertexCount++] = {x, y};
+        const RenderState& state = peekState();
+        curveVertexPositions[curveVertexCount++] = transformPoint(state.metrics.top(), {x, y});
 
         if (curveVertexCount >= 4) {
             const RenderState& state = peekState();
@@ -609,6 +590,117 @@ namespace p5
         }
         endShapeImpl(false, std::nullopt, FillStyle::stroke);
     }
+
+    void text(std::string_view text, float x, float y)
+    {
+        RenderState& state = peekState();
+
+        if (state.font == nullptr) {
+            state.font = loadFont("Arial.ttf", 64);
+        }
+
+        const Glyph& glyph = state.font->getGlyph('?');
+
+        for (int i = 0; i < 128; ++i) {
+            state.font->getGlyph(static_cast<char>(i));
+        }
+
+        // For each character we need to form a quad with the glyph texture.
+        DrawSettings settings = {
+            .shaderId = std::nullopt,
+            .textureId = state.font->getGlyphPageTextureId(glyph.pageIndex),
+            .blendMode = state.blendMode,
+            .drawMode = DrawMode::triangles,
+        };
+
+        renderer->draw(settings, [&, x, y](DrawScope& scope) {
+            const float left = 200.0f;
+            const float top = 200.0f;
+            const float right = 500.0f;
+            const float bottom = 500.0f;
+
+            const std::array<float2, 4> positions = {
+                float2 {left, top},
+                float2 {right, top},
+                float2 {right, bottom},
+                float2 {left, bottom}
+            };
+
+            rect2f uvRect = rect2f {0.0f, 0.0f, 1.0f, 1.0f};
+
+            const std::array<float2, 4> texcoords = {
+                float2 {uvRect.left, uvRect.top},
+                float2 {uvRect.left + uvRect.width, uvRect.top},
+                float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
+                float2 {uvRect.left, uvRect.top + uvRect.height}
+            };
+
+            const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
+
+            tesselator->tesselate(
+                scope,
+                DrawPoints {
+                    .size = 4,
+                    .positions = positions,
+                    .texcoords = texcoords,
+                    .colors = colors,
+                }
+            );
+        });
+
+        return;
+
+        float px = x;
+        for (size_t i = 0; i < text.length(); ++i) {
+            const char ch = text[i];
+            const Glyph& glyph = state.font->getGlyph(ch);
+
+            // For each character we need to form a quad with the glyph texture.
+            DrawSettings settings = {
+                .shaderId = std::nullopt,
+                .textureId = state.font->getGlyphPageTextureId(glyph.pageIndex),
+                .blendMode = state.blendMode,
+                .drawMode = DrawMode::triangles,
+            };
+
+            renderer->draw(settings, [&, x, y, glyph](DrawScope& scope) {
+                const float left = px + glyph.bearing.x;
+                const float top = y - glyph.bearing.y;
+                const float right = left + glyph.size.x;
+                const float bottom = top + glyph.size.y;
+
+                const std::array<float2, 4> positions = {
+                    float2 {left, top},
+                    float2 {right, top},
+                    float2 {right, bottom},
+                    float2 {left, bottom}
+                };
+
+                rect2f uvRect = glyph.uvRect;
+
+                const std::array<float2, 4> texcoords = {
+                    float2 {uvRect.left, uvRect.top},
+                    float2 {uvRect.left + uvRect.width, uvRect.top},
+                    float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
+                    float2 {uvRect.left, uvRect.top + uvRect.height}
+                };
+
+                const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
+
+                tesselator->tesselate(
+                    scope,
+                    DrawPoints {
+                        .size = 4,
+                        .positions = positions,
+                        .texcoords = texcoords,
+                        .colors = colors,
+                    }
+                );
+            });
+
+            px += glyph.advance;
+        }
+    }
 } // namespace p5
 
 namespace p5
@@ -667,7 +759,7 @@ int main()
     renderStates.push(RenderState {});
     renderer = createRenderer();
     tesselator = createTesselator();
-    stroker = createStroker();
+    linepath = std::make_unique<LinePathBuilder>();
 
     static std::unique_ptr sketch = createSketch();
     sketch->setup();

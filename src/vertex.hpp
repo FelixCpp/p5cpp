@@ -10,4 +10,15 @@ namespace p5
         float2 texcoord;
         float4 color;
     };
+
+    enum class FillStyle {
+        fill,
+        stroke,
+    };
+
+    struct StrokePattern
+    {
+        std::span<const float> segments;
+        float offset;
+    };
 } // namespace p5

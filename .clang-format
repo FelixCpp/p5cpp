@@ -6,6 +6,7 @@ SortIncludes:
   Enabled: false
 
 AlignTrailingComments: true
+AllowAllConstructorInitializersOnNextLine: true
 
 AllowShortFunctionsOnASingleLine: "All"
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
