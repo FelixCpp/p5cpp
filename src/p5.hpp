@@ -134,6 +134,32 @@ namespace p5
         pie,
     };
 
+    typedef size_t GlyphPageIndex;
+
+    struct Glyph
+    {
+        float2 size;
+        float2 bearing;
+        rect2f uvRect;
+        float2 advance;
+        GlyphPageIndex pageIndex;
+    };
+
+    struct Font
+    {
+        virtual ~Font() = default;
+        virtual uint32_t getGlyphPageTextureId(GlyphPageIndex index) = 0;
+        virtual const Glyph* getGlyph(char32_t codepoint) = 0;
+        virtual int getTextSize() const = 0;
+        virtual float getLineHeight() const = 0;
+    };
+
+    struct Shader
+    {
+        virtual ~Shader() = default;
+        virtual uint32_t getRendererId() const = 0;
+    };
+
     typedef uint32_t color_t;
     color_t color(int grey, int alpha = 255);
     color_t color(int red, int green, int blue, int alpha = 255);
@@ -193,6 +219,9 @@ namespace p5
     void vertex(float x, float y, float u, float v);
     void curveVertex(float x, float y);
 
+    void shader(std::shared_ptr<Shader> shader);
+    void noShader();
+
     void rect(float left, float top, float width, float height);
     void rect(float left, float top, float width, float height, float cx, float cy);
     void rect(float left, float top, float width, float height, float topLeftX, float topLeftY, float topRightX, float topRightY, float bottomRightX, float bottomRightY, float bottomLeftX, float bottomLeftY);
@@ -205,5 +234,11 @@ namespace p5
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+    void tint(color_t color);
+    void noTint();
+    void image(uint32_t textureId, float left, float top, float width, float height);
+    void textFont(std::shared_ptr<Font> font);
+    void noTextFont();
+    void textSize(float size);
     void text(std::string_view text, float x, float y);
 } // namespace p5

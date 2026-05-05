@@ -15,7 +15,9 @@ public:
     void draw() override
     {
         background(21);
-        text("Hello, world!", 30.0f, 300.0f);
+        textSize(mouseX / 800.0f * 64.0f);
+        fill(255, 0, 0);
+        text("Hello,\tworld!\nTestSketch", 30.0f, 300.0f);
     }
 
     void destroy() override

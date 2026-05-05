@@ -6,4 +6,4 @@
 	url = git@github.com:memononen/libtess2.git
 [submodule "external/freetype"]
 	path = external/freetype
-	url = https://github.com/freetype/freetype.git
+	url = git@github.com:freetype/freetype.git

@@ -1,6 +1,7 @@
 #include "p5.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
+#include "shader.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
 #include "font.hpp"
@@ -86,6 +87,7 @@ namespace p5
     {
         color_t fillColor = color(255, 255, 255);
         color_t strokeColor = color(255, 255, 255);
+        color_t tintColor = color(255, 255, 255);
 
         float strokeWeight = 1.0f;
         StrokeCap strokeCap = StrokeCap::round;
@@ -93,7 +95,6 @@ namespace p5
         float miterLimit = 10.0f;
         float roundJoinThreshold = 0.44f; // 25°
 
-        std::shared_ptr<Font> font;
         BlendMode blendMode = BlendMode::alpha;
 
         std::stack<matrix4x4> metrics = std::stack<matrix4x4>({matrix4x4::identity});
@@ -110,6 +111,11 @@ namespace p5
 
         std::vector<float> strokePatternSegments;
         float strokePatternOffset = 0.0f;
+
+        std::shared_ptr<Font> font;
+        float textSize = 12.0f;
+
+        std::shared_ptr<Shader> shader;
     };
 
     struct Window
@@ -129,6 +135,9 @@ namespace p5
     inline static std::unique_ptr<LinePathBuilder> linepath;
     inline static std::unique_ptr<Renderer> renderer;
     inline static std::unique_ptr<Tesselator> tesselator;
+    inline static std::unique_ptr<Shader> defaultShader;
+    inline static std::unique_ptr<Shader> textShader;
+    inline static std::unique_ptr<Font> defaultFont;
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
@@ -183,7 +192,7 @@ namespace p5
     {
         const RenderState& state = peekState();
         const DrawSettings settings = {
-            .shaderId = std::nullopt,
+            .shaderId = defaultShader->getRendererId(),
             .textureId = std::nullopt,
             .blendMode = state.blendMode,
             .drawMode = DrawMode::triangles,
@@ -275,7 +284,7 @@ namespace p5
         const RenderState& state = peekState();
 
         DrawSettings settings = {
-            .shaderId = std::nullopt,
+            .shaderId = defaultShader->getRendererId(),
             .textureId = std::nullopt,
             .blendMode = state.blendMode,
             .drawMode = DrawMode::triangles,
@@ -358,6 +367,9 @@ namespace p5
             curveVertexCount = 0;
         }
     }
+
+    void shader(std::shared_ptr<Shader> shader) { peekState().shader = shader; }
+    void noShader() { peekState().shader.reset(); }
 
     void rect(float left, float top, float width, float height)
     {
@@ -591,51 +603,35 @@ namespace p5
         endShapeImpl(false, std::nullopt, FillStyle::stroke);
     }
 
-    void text(std::string_view text, float x, float y)
+    void tint(color_t color) { peekState().tintColor = color; }
+    void noTint() { peekState().tintColor = color(255, 255, 255); }
+    void image(uint32_t textureId, float left, float top, float width, float height)
     {
-        RenderState& state = peekState();
+        const RenderState& state = peekState();
 
-        if (state.font == nullptr) {
-            state.font = loadFont("Arial.ttf", 64);
-        }
-
-        const Glyph& glyph = state.font->getGlyph('?');
-
-        for (int i = 0; i < 128; ++i) {
-            state.font->getGlyph(static_cast<char>(i));
-        }
-
-        // For each character we need to form a quad with the glyph texture.
         DrawSettings settings = {
-            .shaderId = std::nullopt,
-            .textureId = state.font->getGlyphPageTextureId(glyph.pageIndex),
+            .shaderId = defaultShader->getRendererId(),
+            .textureId = textureId,
             .blendMode = state.blendMode,
             .drawMode = DrawMode::triangles,
         };
 
-        renderer->draw(settings, [&, x, y](DrawScope& scope) {
-            const float left = 200.0f;
-            const float top = 200.0f;
-            const float right = 500.0f;
-            const float bottom = 500.0f;
-
+        renderer->draw(settings, [&, left, top, width, height](DrawScope& scope) {
             const std::array<float2, 4> positions = {
                 float2 {left, top},
-                float2 {right, top},
-                float2 {right, bottom},
-                float2 {left, bottom}
+                float2 {left + width, top},
+                float2 {left + width, top + height},
+                float2 {left, top + height}
             };
-
-            rect2f uvRect = rect2f {0.0f, 0.0f, 1.0f, 1.0f};
 
             const std::array<float2, 4> texcoords = {
-                float2 {uvRect.left, uvRect.top},
-                float2 {uvRect.left + uvRect.width, uvRect.top},
-                float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
-                float2 {uvRect.left, uvRect.top + uvRect.height}
+                float2 {0.0f, 0.0f},
+                float2 {1.0f, 0.0f},
+                float2 {1.0f, 1.0f},
+                float2 {0.0f, 1.0f}
             };
 
-            const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
+            const std::array<color_t, 4> colors = {state.tintColor, state.tintColor, state.tintColor, state.tintColor};
 
             tesselator->tesselate(
                 scope,
@@ -647,27 +643,65 @@ namespace p5
                 }
             );
         });
+    }
 
-        return;
+    void textFont(std::shared_ptr<Font> font) { peekState().font = font; }
+    void noTextFont() { peekState().font.reset(); }
+    void textSize(float size) { peekState().textSize = size; }
+    void text(std::string_view text, float x, float y)
+    {
+        const RenderState& state = peekState();
+        Font* font = (state.font.get() != nullptr) ? state.font.get() : defaultFont.get();
+        const float fontScale = state.textSize / static_cast<float>(font->getTextSize());
 
         float px = x;
-        for (size_t i = 0; i < text.length(); ++i) {
-            const char ch = text[i];
-            const Glyph& glyph = state.font->getGlyph(ch);
+        float py = y;
 
-            // For each character we need to form a quad with the glyph texture.
-            DrawSettings settings = {
-                .shaderId = std::nullopt,
-                .textureId = state.font->getGlyphPageTextureId(glyph.pageIndex),
+        const Glyph* spaceGlyph = font->getGlyph(U' ');
+
+        for (size_t i = 0; i < text.length(); ++i) {
+            const char32_t ch = text[i];
+            const Glyph* glyph = font->getGlyph(ch);
+
+            if (ch == U' ') {
+                px += glyph->advance.x * fontScale;
+                py += glyph->advance.y * fontScale;
+                continue;
+            }
+
+            if (ch == U'\n') {
+                px = x;
+                py += font->getTextSize() * fontScale;
+                continue;
+            }
+
+            if (ch == U'\t' && (spaceGlyph != nullptr)) {
+                const float tabSize = 4.0f; // TODO: Make configurable
+                px += tabSize * spaceGlyph->advance.x * fontScale;
+                py += spaceGlyph->advance.y * fontScale;
+                continue;
+            }
+
+            if (glyph == nullptr) {
+                glyph = font->getGlyph(U'?');
+
+                if (glyph == nullptr) {
+                    continue;
+                }
+            }
+
+            const auto settings = DrawSettings {
+                .shaderId = textShader->getRendererId(),
+                .textureId = font->getGlyphPageTextureId(glyph->pageIndex),
                 .blendMode = state.blendMode,
                 .drawMode = DrawMode::triangles,
             };
 
-            renderer->draw(settings, [&, x, y, glyph](DrawScope& scope) {
-                const float left = px + glyph.bearing.x;
-                const float top = y - glyph.bearing.y;
-                const float right = left + glyph.size.x;
-                const float bottom = top + glyph.size.y;
+            renderer->draw(settings, [&, glyph](DrawScope& scope) {
+                const float left = px + glyph->bearing.x * fontScale;
+                const float top = py - glyph->bearing.y * fontScale;
+                const float right = left + glyph->size.x * fontScale;
+                const float bottom = top + glyph->size.y * fontScale;
 
                 const std::array<float2, 4> positions = {
                     float2 {left, top},
@@ -676,7 +710,7 @@ namespace p5
                     float2 {left, bottom}
                 };
 
-                rect2f uvRect = glyph.uvRect;
+                rect2f uvRect = glyph->uvRect;
 
                 const std::array<float2, 4> texcoords = {
                     float2 {uvRect.left, uvRect.top},
@@ -698,7 +732,8 @@ namespace p5
                 );
             });
 
-            px += glyph.advance;
+            px += glyph->advance.x * fontScale;
+            py += glyph->advance.y * fontScale;
         }
     }
 } // namespace p5
@@ -756,10 +791,13 @@ int main()
     std::cout << glGetString(GL_RENDERER) << std::endl;
     std::cout << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
-    renderStates.push(RenderState {});
     renderer = createRenderer();
     tesselator = createTesselator();
     linepath = std::make_unique<LinePathBuilder>();
+    defaultShader = createDefaultShader();
+    textShader = createTextShader();
+    defaultFont = loadFont("Arial.ttf", 32);
+    renderStates.push(RenderState {});
 
     static std::unique_ptr sketch = createSketch();
     sketch->setup();

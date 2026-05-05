@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 #include <tesselator.h>
+#include <string>
 
 #include <glad/glad.h>
 
@@ -45,40 +46,6 @@ namespace p5
     }
 } // namespace p5
 
-inline static constexpr const char* vSource = R"(
-  #version 330 core
-
-  layout (location = 0) in vec2 a_Position;
-  layout (location = 1) in vec2 a_TexCoord;
-  layout (location = 2) in vec4 a_Color;
-
-  out vec2 v_TexCoord;
-  out vec4 v_Color;
-
-  uniform mat4 u_ProjectionMatrix;
-
-  void main() {
-    gl_Position = u_ProjectionMatrix * vec4(a_Position, 0.0, 1.0);
-    v_TexCoord = a_TexCoord;
-    v_Color = a_Color;
-  }
-)";
-
-inline static constexpr const char* fSource = R"(
-  #version 330 core
-
-  layout (location = 0) out vec4 o_Color;
-
-  in vec2 v_TexCoord;
-  in vec4 v_Color;
-
-  uniform sampler2D u_Texture;
-
-  void main() {
-    o_Color = texture(u_Texture, v_TexCoord) * v_Color;
-  }
-)";
-
 namespace p5
 {
     class BatchRenderer : public Renderer
@@ -121,23 +88,6 @@ namespace p5
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, whitePixel);
-
-            GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
-            glShaderSource(vShader, 1, &vSource, nullptr);
-            glCompileShader(vShader);
-
-            GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
-            glShaderSource(fShader, 1, &fSource, nullptr);
-            glCompileShader(fShader);
-
-            defaultShader = glCreateProgram();
-            glAttachShader(defaultShader, vShader);
-            glAttachShader(defaultShader, fShader);
-            glLinkProgram(defaultShader);
-            glDetachShader(defaultShader, vShader);
-            glDetachShader(defaultShader, fShader);
-            glDeleteShader(vShader);
-            glDeleteShader(fShader);
         }
 
         ~BatchRenderer() override
@@ -146,7 +96,6 @@ namespace p5
             glDeleteBuffers(1, &vbo);
             glDeleteBuffers(1, &ebo);
             glDeleteTextures(1, &whiteTexture);
-            glDeleteProgram(defaultShader);
         }
 
         void beginDraw(const Camera& camera) override
@@ -172,7 +121,13 @@ namespace p5
             if (scope.getVertexCount() == 0 or scope.getIndexCount() == 0)
                 return;
 
-            m_batches.push_back({settings, m_indexCursor, scope.getIndexCount()});
+            // Check if the settings of the current batch match the previous one, if so, we can merge them into a single draw call
+            if (not m_batches.empty() and m_batches.back().settings == settings) {
+                m_batches.back().indexCount += scope.getIndexCount();
+            } else {
+                m_batches.push_back({settings, m_indexCursor, scope.getIndexCount()});
+            }
+
             m_vertexCursor += scope.getVertexCount();
             m_indexCursor += scope.getIndexCount();
         }
@@ -181,6 +136,8 @@ namespace p5
         {
             if (m_batches.empty())
                 return;
+
+            info("Flushing " + std::to_string(m_batches.size()) + " batches with total " + std::to_string(m_vertexCursor) + " vertices and " + std::to_string(m_indexCursor) + " indices");
 
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferSubData(GL_ARRAY_BUFFER, 0, m_vertexCursor * sizeof(Vertex), m_vertices.get());
@@ -191,8 +148,7 @@ namespace p5
             glBindVertexArray(vao);
 
             for (const auto& batch : m_batches) {
-
-                GLuint shaderId = batch.settings.shaderId.value_or(defaultShader);
+                GLuint shaderId = batch.settings.shaderId;
                 GLuint textureId = batch.settings.textureId.value_or(whiteTexture);
 
                 glUseProgram(shaderId);
@@ -222,7 +178,7 @@ namespace p5
         // GPU Buffer
         GLuint vao, vbo, ebo;
         GLuint whiteTexture;
-        GLuint defaultShader;
+        // GLuint defaultShader;
 
         // CPU Staging Buffer
         std::unique_ptr<Vertex[]> m_vertices;

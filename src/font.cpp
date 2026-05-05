@@ -33,11 +33,13 @@ namespace p5
             }
 
             FT_Set_Pixel_Sizes(face.get(), 0, size);
+        }
 
-            // TODO(Felix): Load glyphs and create texture atlas
-
-            // FT_Done_Face(face.get());
-            // FT_Done_FreeType(library.get());
+        ~FreeTypeFont() override
+        {
+            for (const GlyphPage& page : glyphPages) {
+                glDeleteTextures(1, &page.textureId);
+            }
         }
 
         uint32_t getGlyphPageTextureId(GlyphPageIndex index) override
@@ -49,43 +51,38 @@ namespace p5
             return glyphPages[index].textureId;
         }
 
-        const Glyph& getGlyph(char32_t codepoint) override
+        const Glyph* getGlyph(char32_t codepoint) override
         {
             const auto itr = glyphs.find(codepoint);
             if (itr != glyphs.end()) {
-                return itr->second;
+                return &itr->second;
             }
 
             // At this point, we need to load the glyph for the given codepoint, we need to load its metadata and bitmap from FreeType,
             // add it to the current glyph page (or create a new page if the current one is full) and upload the bitmap to the GPU, then we can return the Glyph metadata.
             const FT_UInt glyphIndex = FT_Get_Char_Index(face.get(), codepoint);
-            const FT_Error error = FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_RENDER);
+            if (glyphIndex == 0) {
+                return nullptr;
+            }
+
+            const FT_Error loadError = FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_DEFAULT);
+            if (loadError) {
+                return nullptr;
+            }
+
+            const FT_Error renderError = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+            if (renderError) {
+                return nullptr;
+            }
+
             const FT_GlyphSlot slot = face->glyph;
             const FT_Bitmap& bitmap = slot->bitmap;
 
             const uint2 glyphSize = {static_cast<uint32_t>(bitmap.width), static_cast<uint32_t>(bitmap.rows)};
             const uint2 bearing = {static_cast<uint32_t>(slot->bitmap_left), static_cast<uint32_t>(slot->bitmap_top)};
-            const float advance = static_cast<float>(slot->advance.x) / 64.0f; // FreeType uses 1/64th of a pixel as its unit for advance
+            const float2 advance = {static_cast<float>(slot->advance.x) / 64.0f, static_cast<float>(slot->advance.y) / 64.0f}; // FreeType uses 1/64th of a pixel as its unit for advance
 
-            GlyphPage& glyphPage = std::invoke([&]() -> GlyphPage& {
-                if (glyphPages.empty() or not canFitGlyphInPage(glyphSize, glyphPages.back())) {
-                    static const uint2 glyphPageSize = {512, 512}; // TODO(Felix): Make this configurable and maybe support multiple page sizes
-
-                    // Create a new glyph page
-                    GlyphPage newPage {
-                        .size = glyphPageSize,
-                        .glyphPadding = {2, 2},
-                        .cursorX = 0,
-                        .cursorY = 0,
-                        .lastRowHeight = 0,
-                        .textureId = createNewGlyphPageTexture(glyphPageSize),
-                    };
-
-                    return glyphPages.emplace_back(newPage);
-                }
-
-                return glyphPages.back();
-            });
+            GlyphPage& glyphPage = getOrCreateGlyphPageForGlyph(glyphSize);
 
             const rect2f uvRect = putGlyphBitmapInPage(bitmap.buffer, glyphSize, glyphPage);
             const Glyph glyph = Glyph {
@@ -96,10 +93,41 @@ namespace p5
                 .pageIndex = static_cast<GlyphPageIndex>(glyphPages.size() - 1),
             };
 
-            return glyphs.insert({codepoint, glyph}).first->second;
+            return &glyphs.insert({codepoint, glyph}).first->second;
+        }
+
+        int getTextSize() const override
+        {
+            return face->size->metrics.y_ppem;
+        }
+
+        float getLineHeight() const override
+        {
+            return static_cast<float>(face->size->metrics.height) / 64.0f; // FreeType uses 1/64th of a pixel as its unit for line height
         }
 
     private:
+        GlyphPage& getOrCreateGlyphPageForGlyph(const uint2& glyphSize)
+        {
+            if (glyphPages.empty() or not canFitGlyphInPage(glyphSize, glyphPages.back())) {
+                static const uint2 glyphPageSize = {512, 512}; // TODO(Felix): Make this configurable and maybe support multiple page sizes
+
+                // Create a new glyph page
+                GlyphPage newPage {
+                    .size = glyphPageSize,
+                    .glyphPadding = {2, 2},
+                    .cursorX = 0,
+                    .cursorY = 0,
+                    .lastRowHeight = 0,
+                    .textureId = createNewGlyphPageTexture(glyphPageSize),
+                };
+
+                return glyphPages.emplace_back(newPage);
+            }
+
+            return glyphPages.back();
+        }
+
         static GLuint createNewGlyphPageTexture(const uint2& size)
         {
             GLuint textureId;
@@ -137,9 +165,6 @@ namespace p5
             const uint32_t paddedWidth = static_cast<uint32_t>(glyphSize.x) + page.glyphPadding.x * 2;
             const uint32_t paddedHeight = static_cast<uint32_t>(glyphSize.y) + page.glyphPadding.y * 2;
 
-            const uint32_t x = page.cursorX + page.glyphPadding.x;
-            const uint32_t y = page.cursorY + page.glyphPadding.y;
-
             if (page.cursorX + paddedWidth > page.size.x) {
                 // Move to the next row
                 page.cursorX = 0;
@@ -147,8 +172,12 @@ namespace p5
                 page.lastRowHeight = 0;
             }
 
+            const uint32_t x = page.cursorX + page.glyphPadding.x;
+            const uint32_t y = page.cursorY + page.glyphPadding.y;
+
             // Upload the glyph bitmap to the GPU at the calculated position
             glBindTexture(GL_TEXTURE_2D, page.textureId);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, static_cast<GLsizei>(glyphSize.x), static_cast<GLsizei>(glyphSize.y), GL_RED, GL_UNSIGNED_BYTE, glyphBitmapData);
 
             // Update the glyph page cursor and last row height
@@ -166,7 +195,7 @@ namespace p5
             };
         }
 
-        struct FT_LibraryDeleter
+        struct FT_Deleter
         {
             void operator()(FT_Library library) const
             {
@@ -174,10 +203,6 @@ namespace p5
                     FT_Done_FreeType(library);
                 }
             }
-        };
-
-        struct FT_FaceDeleter
-        {
             void operator()(FT_Face face) const
             {
                 if (face) {
@@ -186,28 +211,28 @@ namespace p5
             }
         };
 
-        static std::unique_ptr<FT_LibraryRec_, FT_LibraryDeleter> createLibrary()
+        static std::unique_ptr<FT_LibraryRec_, FT_Deleter> createLibrary()
         {
             FT_Library library;
             if (FT_Init_FreeType(&library)) {
                 return nullptr;
             }
 
-            return std::unique_ptr<FT_LibraryRec_, FT_LibraryDeleter>(library);
+            return std::unique_ptr<FT_LibraryRec_, FT_Deleter>(library);
         }
 
-        static std::unique_ptr<FT_FaceRec_, FT_FaceDeleter> createFace(FT_Library library, const std::filesystem::path& fontFilePath)
+        static std::unique_ptr<FT_FaceRec_, FT_Deleter> createFace(FT_Library library, const std::filesystem::path& fontFilePath)
         {
             FT_Face face;
             if (FT_New_Face(library, fontFilePath.string().c_str(), 0, &face)) {
                 return nullptr;
             }
 
-            return std::unique_ptr<FT_FaceRec_, FT_FaceDeleter>(face);
+            return std::unique_ptr<FT_FaceRec_, FT_Deleter>(face);
         }
 
-        std::unique_ptr<FT_LibraryRec_, FT_LibraryDeleter> library;
-        std::unique_ptr<FT_FaceRec_, FT_FaceDeleter> face;
+        std::unique_ptr<FT_LibraryRec_, FT_Deleter> library;
+        std::unique_ptr<FT_FaceRec_, FT_Deleter> face;
         std::vector<GlyphPage> glyphPages;
         std::unordered_map<char32_t, Glyph> glyphs;
     };

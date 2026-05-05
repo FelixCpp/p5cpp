@@ -19,7 +19,8 @@ add_executable(
   src/drawscope.cpp
   src/stroker.cpp
   src/linepath.cpp
-  src/font.cpp)
+  src/font.cpp
+  src/shader.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 
