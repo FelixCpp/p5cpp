@@ -17,7 +17,7 @@ namespace p5
 
     struct DrawSettings
     {
-        uint32_t shaderId;
+        std::shared_ptr<Shader> shaderId;
         std::optional<uint32_t> textureId;
         BlendMode blendMode;
         DrawMode drawMode;

@@ -1,6 +1,5 @@
 #include "renderer.hpp"
 #include <tesselator.h>
-#include <string>
 
 #include <glad/glad.h>
 
@@ -137,7 +136,7 @@ namespace p5
             if (m_batches.empty())
                 return;
 
-            info("Flushing " + std::to_string(m_batches.size()) + " batches with total " + std::to_string(m_vertexCursor) + " vertices and " + std::to_string(m_indexCursor) + " indices");
+            // info("Flushing " + std::to_string(m_batches.size()) + " batches with total " + std::to_string(m_vertexCursor) + " vertices and " + std::to_string(m_indexCursor) + " indices");
 
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferSubData(GL_ARRAY_BUFFER, 0, m_vertexCursor * sizeof(Vertex), m_vertices.get());
@@ -147,24 +146,36 @@ namespace p5
 
             glBindVertexArray(vao);
 
-            for (const auto& batch : m_batches) {
-                GLuint shaderId = batch.settings.shaderId;
+            std::optional<GLuint> currentTexture;
+            Shader* currentShader = nullptr;
+            std::optional<BlendMode> currentBlendMode;
+
+            for (const Batch& batch : m_batches) {
+                Shader* shader = batch.settings.shaderId.get();
                 GLuint textureId = batch.settings.textureId.value_or(whiteTexture);
+                BlendMode blendMode = batch.settings.blendMode;
 
-                glUseProgram(shaderId);
-                glUniformMatrix4fv(glGetUniformLocation(shaderId, "u_ProjectionMatrix"), 1, GL_FALSE, m_projectionMatrix.m);
+                if (currentBlendMode != blendMode) {
+                    enableBlendMode(blendMode);
+                    currentBlendMode = blendMode;
+                }
 
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, textureId);
-                glUniform1i(glGetUniformLocation(shaderId, "u_Texture"), 0);
+                if (currentTexture != textureId) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, textureId);
+                    currentTexture = textureId;
+                }
 
-                enableBlendMode(batch.settings.blendMode);
+                if (currentShader != shader) {
+                    glUseProgram(shader->getRendererId());
+                    shader->uploadMatrix("u_ProjectionMatrix", m_projectionMatrix);
+                    shader->uploadTexture("u_Texture", 0);
 
-                glBindVertexArray(vao);
+                    currentShader = shader;
+                }
+
                 glDrawElements(drawModeToGlId(batch.settings.drawMode), batch.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(batch.indexStart * sizeof(uint32_t)));
             }
-
-            glBindVertexArray(0);
         }
 
     private:

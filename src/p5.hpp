@@ -5,11 +5,16 @@
 #include <memory>
 #include <string_view>
 #include <span>
+#include <filesystem>
 
 namespace p5
 {
     float radians(float degrees);
     float degrees(float radians);
+    float remap(float value, float fromLow, float fromHigh, float toLow, float toHigh);
+    void randomSeed(uint64_t seed);
+    float random(float max);
+    float random(float min, float max);
 } // namespace p5
 
 namespace p5
@@ -134,6 +139,19 @@ namespace p5
         pie,
     };
 
+    enum class VerticalTextAlign {
+        top,
+        center,
+        baseline,
+        bottom
+    };
+
+    enum class HorizontalTextAlign {
+        left,
+        center,
+        right,
+    };
+
     typedef size_t GlyphPageIndex;
 
     struct Glyph
@@ -149,14 +167,34 @@ namespace p5
     {
         virtual ~Font() = default;
         virtual uint32_t getGlyphPageTextureId(GlyphPageIndex index) = 0;
-        virtual const Glyph* getGlyph(char32_t codepoint) = 0;
-        virtual int getTextSize() const = 0;
-        virtual float getLineHeight() const = 0;
+        virtual const Glyph* getFilledGlyph(char32_t codepoint, int textSize) = 0;
+        virtual const Glyph* getStrokedGlyph(char32_t codepoint, int textSize, int strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit) = 0;
+        virtual float getLineHeight(int textSize) const = 0;
+        virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
+    };
+
+    struct TextMetrics
+    {
+        float width;
+        float totalHeight;
+        float ascender;
+        float descender;
+        uint32_t lineCount;
     };
 
     struct Shader
     {
         virtual ~Shader() = default;
+        virtual void uploadMatrix(std::string_view name, const matrix4x4& matrix) = 0;
+        virtual void uploadTexture(std::string_view name, uint32_t textureId) = 0;
+        virtual void uploadInt1(std::string_view name, int x) = 0;
+        virtual void uploadInt2(std::string_view name, int x, int y) = 0;
+        virtual void uploadInt3(std::string_view name, int x, int y, int z) = 0;
+        virtual void uploadInt4(std::string_view name, int x, int y, int z, int w) = 0;
+        virtual void uploadFloat1(std::string_view name, float x) = 0;
+        virtual void uploadFloat2(std::string_view name, float x, float y) = 0;
+        virtual void uploadFloat3(std::string_view name, float x, float y, float z) = 0;
+        virtual void uploadFloat4(std::string_view name, float x, float y, float z, float w) = 0;
         virtual uint32_t getRendererId() const = 0;
     };
 
@@ -221,6 +259,11 @@ namespace p5
 
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
+
+    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
+    TextMetrics measureText(std::string_view text);
+    TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale);
+    void textAlign(HorizontalTextAlign horizontalAlign, VerticalTextAlign verticalAlign);
 
     void rect(float left, float top, float width, float height);
     void rect(float left, float top, float width, float height, float cx, float cy);

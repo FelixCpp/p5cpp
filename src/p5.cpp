@@ -4,7 +4,6 @@
 #include "shader.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
-#include "font.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -16,11 +15,104 @@
 #include <stack>
 #include <numbers>
 #include <algorithm>
+#include <random>
 
 namespace p5
 {
     float radians(float degrees) { return degrees * (std::numbers::pi_v<float> / 180.0f); }
     float degrees(float radians) { return radians * (180.0f / std::numbers::pi_v<float>); }
+    float remap(float value, float fromLow, float fromHigh, float toLow, float toHigh)
+    {
+        const float t = (value - fromLow) / (fromHigh - fromLow);
+        return std::lerp(toLow, toHigh, t);
+    }
+
+} // namespace p5
+
+namespace p5
+{
+    class XShiro256Random
+    {
+    public:
+        explicit XShiro256Random(uint64_t seed = std::random_device {}())
+        {
+            // Seed mit SplitMix64 initialisieren – xoshiro braucht einen
+            // guten initialen Zustand, ein einfacher Seed-Wert reicht nicht
+            setSeed(seed);
+        }
+
+        void setSeed(uint64_t seed)
+        {
+            state[0] = splitMix64(seed);
+            state[1] = splitMix64(state[0]);
+            state[2] = splitMix64(state[1]);
+            state[3] = splitMix64(state[2]);
+        }
+
+        // Rohes uint64 [0, 2^64)
+        uint64_t next()
+        {
+            const uint64_t result = rotl(state[0] + state[3], 23) + state[0];
+
+            const uint64_t t = state[1] << 17;
+            state[2] ^= state[0];
+            state[3] ^= state[1];
+            state[1] ^= state[2];
+            state[0] ^= state[3];
+            state[2] ^= t;
+            state[3] = rotl(state[3], 45);
+
+            return result;
+        }
+
+        // Float [0.0f, 1.0f)
+        float nextFloat()
+        {
+            // Obere 23 Bits als Mantisse nutzen
+            return (next() >> 41) * (1.0f / (1ull << 23));
+        }
+
+        // Float [min, max)
+        float nextFloat(float min, float max)
+        {
+            return min + nextFloat() * (max - min);
+        }
+
+        // Int [min, max]
+        int32_t nextInt(int32_t min, int32_t max)
+        {
+            // Debiased Modulo – vermeidet den klassischen Modulo-Bias
+            const uint64_t range = static_cast<uint64_t>(max - min) + 1;
+            const uint64_t threshold = (UINT64_MAX - range + 1) % range;
+            uint64_t r;
+            do {
+                r = next();
+            } while (r < threshold);
+            return static_cast<int32_t>(r % range) + min;
+        }
+
+    private:
+        uint64_t state[4];
+
+        static uint64_t rotl(uint64_t x, int k)
+        {
+            return (x << k) | (x >> (64 - k));
+        }
+
+        static uint64_t splitMix64(uint64_t x)
+        {
+            x += 0x9e3779b97f4a7c15ull;
+            x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+            x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+            return x ^ (x >> 31);
+        }
+    };
+
+    inline static XShiro256Random randomGenerator;
+
+    void randomSeed(uint64_t seed) { randomGenerator = XShiro256Random(seed); }
+    float random(float max) { return randomGenerator.nextFloat(0.0f, max); }
+    float random(float min, float max) { return randomGenerator.nextFloat(min, max); }
 } // namespace p5
 
 namespace p5
@@ -116,6 +208,9 @@ namespace p5
         float textSize = 12.0f;
 
         std::shared_ptr<Shader> shader;
+
+        HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
+        VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
     };
 
     struct Window
@@ -135,8 +230,8 @@ namespace p5
     inline static std::unique_ptr<LinePathBuilder> linepath;
     inline static std::unique_ptr<Renderer> renderer;
     inline static std::unique_ptr<Tesselator> tesselator;
-    inline static std::unique_ptr<Shader> defaultShader;
-    inline static std::unique_ptr<Shader> textShader;
+    inline static std::shared_ptr<Shader> defaultShader;
+    inline static std::shared_ptr<Shader> textShader;
     inline static std::unique_ptr<Font> defaultFont;
     inline Window window;
 
@@ -192,7 +287,7 @@ namespace p5
     {
         const RenderState& state = peekState();
         const DrawSettings settings = {
-            .shaderId = defaultShader->getRendererId(),
+            .shaderId = defaultShader,
             .textureId = std::nullopt,
             .blendMode = state.blendMode,
             .drawMode = DrawMode::triangles,
@@ -284,7 +379,7 @@ namespace p5
         const RenderState& state = peekState();
 
         DrawSettings settings = {
-            .shaderId = defaultShader->getRendererId(),
+            .shaderId = defaultShader,
             .textureId = std::nullopt,
             .blendMode = state.blendMode,
             .drawMode = DrawMode::triangles,
@@ -370,6 +465,84 @@ namespace p5
 
     void shader(std::shared_ptr<Shader> shader) { peekState().shader = shader; }
     void noShader() { peekState().shader.reset(); }
+
+    TextMetrics measureText(std::string_view text)
+    {
+        return measureText(text, peekState().font.get() != nullptr ? peekState().font.get() : defaultFont.get(), peekState().textSize, 1.0f);
+    }
+
+    TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale)
+    {
+        if (text.empty()) {
+            return TextMetrics {
+                .width = 0.0f,
+                .totalHeight = 0.0f,
+                .ascender = 0.0f,
+                .descender = 0.0f,
+                .lineCount = 0,
+            };
+        }
+
+        const float lineHeight = font->getLineHeight(static_cast<int>(textSize)) * scale;
+
+        float maxWidth = 0.0f;
+        float lineWidth = 0.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        uint32_t lineCount = 1;
+
+        for (size_t i = 0; i < text.length(); ++i) {
+            const char32_t codepoint = static_cast<char32_t>(text[i]);
+
+            if (codepoint == U'\n') {
+                maxWidth = std::max(maxWidth, lineWidth);
+                lineWidth = 0.0f;
+                lineCount++;
+                continue;
+            }
+
+            if (codepoint == U' ') {
+                if (const Glyph* spaceGlyph = font->getFilledGlyph(U' ', static_cast<int>(textSize))) {
+                    lineWidth += spaceGlyph->advance.x * scale;
+                }
+
+                continue;
+            }
+
+            const bool hasPrevious = i > 0 && text[i - 1] != '\n';
+            if (hasPrevious) {
+                const char32_t previousCodepoint = static_cast<char32_t>(text[i - 1]);
+                lineWidth += font->getKerning(previousCodepoint, codepoint, static_cast<int>(textSize)) * scale;
+            }
+
+            if (const Glyph* glyph = font->getFilledGlyph(codepoint, static_cast<int>(textSize))) {
+                lineWidth += glyph->advance.x * scale;
+                if (lineCount == 1) {
+                    ascender = std::max(ascender, glyph->bearing.y * scale);
+                }
+
+                descender = std::min(descender, (glyph->size.y - glyph->bearing.y) * scale);
+            }
+        }
+
+        maxWidth = std::max(maxWidth, lineWidth);
+        const float totalHeight = ascender + (lineHeight * (lineCount - 1)) + descender;
+
+        return TextMetrics {
+            .width = maxWidth,
+            .totalHeight = totalHeight,
+            .ascender = ascender,
+            .descender = descender,
+            .lineCount = lineCount,
+        };
+    }
+
+    void textAlign(HorizontalTextAlign horizontalAlign, VerticalTextAlign verticalAlign)
+    {
+        RenderState& state = peekState();
+        state.horizontalTextAlign = horizontalAlign;
+        state.verticalTextAlign = verticalAlign;
+    }
 
     void rect(float left, float top, float width, float height)
     {
@@ -610,7 +783,7 @@ namespace p5
         const RenderState& state = peekState();
 
         DrawSettings settings = {
-            .shaderId = defaultShader->getRendererId(),
+            .shaderId = defaultShader,
             .textureId = textureId,
             .blendMode = state.blendMode,
             .drawMode = DrawMode::triangles,
@@ -648,79 +821,93 @@ namespace p5
     void textFont(std::shared_ptr<Font> font) { peekState().font = font; }
     void noTextFont() { peekState().font.reset(); }
     void textSize(float size) { peekState().textSize = size; }
+
     void text(std::string_view text, float x, float y)
     {
+        if (text.empty()) return;
+
         const RenderState& state = peekState();
         Font* font = (state.font.get() != nullptr) ? state.font.get() : defaultFont.get();
-        const float fontScale = state.textSize / static_cast<float>(font->getTextSize());
 
-        float px = x;
-        float py = y;
+        TextMetrics metrics = measureText(text, font, state.textSize, 1.0f);
 
-        const Glyph* spaceGlyph = font->getGlyph(U' ');
+        float px;
+        switch (state.horizontalTextAlign) {
+            case HorizontalTextAlign::left: px = x; break;
+            case HorizontalTextAlign::center: px = x - metrics.width * 0.5f; break;
+            case HorizontalTextAlign::right: px = x - metrics.width; break;
+        }
 
+        float py;
+        switch (state.verticalTextAlign) {
+            case VerticalTextAlign::top: py = y + metrics.ascender; break;
+            case VerticalTextAlign::center: py = y + metrics.ascender * 0.5f; break;
+            case VerticalTextAlign::baseline: py = y; break;
+            case VerticalTextAlign::bottom: py = y - metrics.descender; break;
+        }
+
+        if (const Glyph* firstGlyph = font->getFilledGlyph(text.front(), state.textSize)) {
+            px -= firstGlyph->bearing.x;
+        }
+
+        const Glyph* spaceGlyph = font->getFilledGlyph(U' ', static_cast<int>(state.textSize));
         for (size_t i = 0; i < text.length(); ++i) {
             const char32_t ch = text[i];
-            const Glyph* glyph = font->getGlyph(ch);
-
-            if (ch == U' ') {
-                px += glyph->advance.x * fontScale;
-                py += glyph->advance.y * fontScale;
-                continue;
-            }
 
             if (ch == U'\n') {
                 px = x;
-                py += font->getTextSize() * fontScale;
+                py += font->getLineHeight(state.textSize);
                 continue;
             }
 
-            if (ch == U'\t' && (spaceGlyph != nullptr)) {
-                const float tabSize = 4.0f; // TODO: Make configurable
-                px += tabSize * spaceGlyph->advance.x * fontScale;
-                py += spaceGlyph->advance.y * fontScale;
+            if (ch == U' ') {
+                px += spaceGlyph->advance.x;
+                py += spaceGlyph->advance.y;
                 continue;
             }
 
+            const Glyph* glyph = font->getFilledGlyph(ch, static_cast<int>(state.textSize));
             if (glyph == nullptr) {
-                glyph = font->getGlyph(U'?');
-
-                if (glyph == nullptr) {
-                    continue;
-                }
+                continue;
             }
 
-            const auto settings = DrawSettings {
-                .shaderId = textShader->getRendererId(),
+            const bool hasPrevious = i > 0 && text[i - 1] != '\n';
+            if (hasPrevious) {
+                const char32_t previousCh = text[i - 1];
+                px += font->getKerning(previousCh, ch, static_cast<int>(state.textSize));
+            }
+
+            const DrawSettings settings = {
+                .shaderId = textShader,
                 .textureId = font->getGlyphPageTextureId(glyph->pageIndex),
                 .blendMode = state.blendMode,
                 .drawMode = DrawMode::triangles,
             };
 
-            renderer->draw(settings, [&, glyph](DrawScope& scope) {
-                const float left = px + glyph->bearing.x * fontScale;
-                const float top = py - glyph->bearing.y * fontScale;
-                const float right = left + glyph->size.x * fontScale;
-                const float bottom = top + glyph->size.y * fontScale;
+            const float left = px + glyph->bearing.x;
+            const float top = py - glyph->bearing.y;
+            const float right = left + glyph->size.x;
+            const float bottom = top + glyph->size.y;
 
-                const std::array<float2, 4> positions = {
-                    float2 {left, top},
-                    float2 {right, top},
-                    float2 {right, bottom},
-                    float2 {left, bottom}
-                };
+            const std::array<float2, 4> positions = {
+                transformPoint(state.metrics.top(), {left, top}),
+                transformPoint(state.metrics.top(), {right, top}),
+                transformPoint(state.metrics.top(), {right, bottom}),
+                transformPoint(state.metrics.top(), {left, bottom}),
+            };
 
-                rect2f uvRect = glyph->uvRect;
+            const rect2f uvRect = glyph->uvRect;
 
-                const std::array<float2, 4> texcoords = {
-                    float2 {uvRect.left, uvRect.top},
-                    float2 {uvRect.left + uvRect.width, uvRect.top},
-                    float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
-                    float2 {uvRect.left, uvRect.top + uvRect.height}
-                };
+            const std::array<float2, 4> texcoords = {
+                float2 {uvRect.left, uvRect.top},
+                float2 {uvRect.left + uvRect.width, uvRect.top},
+                float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
+                float2 {uvRect.left, uvRect.top + uvRect.height}
+            };
 
-                const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
+            const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
 
+            renderer->draw(settings, [&positions, &texcoords, &colors](DrawScope& scope) {
                 tesselator->tesselate(
                     scope,
                     DrawPoints {
@@ -732,8 +919,8 @@ namespace p5
                 );
             });
 
-            px += glyph->advance.x * fontScale;
-            py += glyph->advance.y * fontScale;
+            px += glyph->advance.x;
+            py += glyph->advance.y;
         }
     }
 } // namespace p5
@@ -796,7 +983,7 @@ int main()
     linepath = std::make_unique<LinePathBuilder>();
     defaultShader = createDefaultShader();
     textShader = createTextShader();
-    defaultFont = loadFont("Arial.ttf", 32);
+    defaultFont = loadFont("Arial.ttf");
     renderStates.push(RenderState {});
 
     static std::unique_ptr sketch = createSketch();
@@ -818,6 +1005,9 @@ int main()
         sketch->draw();
         renderer->endDraw();
         glfwSwapBuffers(window.handle);
+
+        while (not renderStates.empty()) renderStates.pop();
+        renderStates.push(RenderState {});
     }
 
     sketch->destroy();

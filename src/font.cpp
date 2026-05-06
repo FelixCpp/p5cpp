@@ -1,11 +1,54 @@
-#include "font.hpp"
+#include "p5.hpp"
 #include <freetype/freetype.h>
+#include <freetype/ftstroke.h>
 #include <unordered_map>
 #include <vector>
 #include <glad/glad.h>
 
 namespace p5
 {
+    struct GlyphCacheEntry
+    {
+        char32_t codepoint; // Unicode codepoint of the glyph
+        int textSize;       // Text size in pixels for which the glyph was loaded
+        int strokeWeight;   // Stroke weight in pixels for which the glyph was loaded
+
+        constexpr bool operator==(const GlyphCacheEntry& other) const = default;
+        constexpr bool operator!=(const GlyphCacheEntry& other) const = default;
+    };
+
+    struct GlyphCacheEntryHasher
+    {
+        size_t operator()(const GlyphCacheEntry& entry) const
+        {
+            size_t hash = std::hash<char32_t> {}(entry.codepoint);
+            hash ^= std::hash<int> {}(entry.textSize) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= std::hash<int> {}(entry.strokeWeight) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            return hash;
+        }
+    };
+
+    struct KerningCacheEntry
+    {
+        char32_t leftCodepoint;
+        char32_t rightCodepoint;
+        int textSize;
+
+        constexpr bool operator==(const KerningCacheEntry& other) const = default;
+        constexpr bool operator!=(const KerningCacheEntry& other) const = default;
+    };
+
+    struct KerningCacheEntryHasher
+    {
+        size_t operator()(const KerningCacheEntry& entry) const
+        {
+            size_t hash = std::hash<char32_t> {}(entry.leftCodepoint);
+            hash ^= std::hash<char32_t> {}(entry.rightCodepoint) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= std::hash<int> {}(entry.textSize) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            return hash;
+        }
+    };
+
     class FreeTypeFont : public Font
     {
     public:
@@ -20,19 +63,24 @@ namespace p5
             GLuint textureId; // OpenGL texture ID of the page
         };
 
-        explicit FreeTypeFont(const std::filesystem::path& fontFilePath, int size)
+        static std::unique_ptr<Font> create(const std::filesystem::path& fontFilePath)
         {
-            library = createLibrary();
+            auto library = createLibrary();
             if (library == nullptr) {
-                throw std::runtime_error("Failed to initialize FreeType library");
+                return nullptr;
             }
 
-            face = createFace(library.get(), fontFilePath);
+            auto face = createFace(library.get(), fontFilePath);
             if (face == nullptr) {
-                throw std::runtime_error("Failed to load font: " + fontFilePath.string());
+                return nullptr;
             }
 
-            FT_Set_Pixel_Sizes(face.get(), 0, size);
+            auto stroker = createStroker(library.get());
+            if (stroker == nullptr) {
+                return nullptr;
+            }
+
+            return std::unique_ptr<FreeTypeFont>(new FreeTypeFont(std::move(library), std::move(face), std::move(stroker)));
         }
 
         ~FreeTypeFont() override
@@ -51,62 +99,165 @@ namespace p5
             return glyphPages[index].textureId;
         }
 
-        const Glyph* getGlyph(char32_t codepoint) override
+        const Glyph* getFilledGlyph(char32_t codepoint, int textSize) override
         {
-            const auto itr = glyphs.find(codepoint);
+            const auto cacheEntry = GlyphCacheEntry {
+                .codepoint = codepoint,
+                .textSize = textSize,
+                .strokeWeight = 0,
+            };
+
+            const auto itr = glyphs.find(cacheEntry);
             if (itr != glyphs.end()) {
                 return &itr->second;
             }
 
-            // At this point, we need to load the glyph for the given codepoint, we need to load its metadata and bitmap from FreeType,
-            // add it to the current glyph page (or create a new page if the current one is full) and upload the bitmap to the GPU, then we can return the Glyph metadata.
+            if (FT_Set_Pixel_Sizes(face.get(), 0, textSize)) {
+                return nullptr;
+            }
+
             const FT_UInt glyphIndex = FT_Get_Char_Index(face.get(), codepoint);
             if (glyphIndex == 0) {
                 return nullptr;
             }
 
-            const FT_Error loadError = FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_DEFAULT);
+            const FT_Error loadError = FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_NO_BITMAP);
             if (loadError) {
                 return nullptr;
             }
 
-            const FT_Error renderError = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
-            if (renderError) {
+            if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL) != 0) {
                 return nullptr;
             }
 
-            const FT_GlyphSlot slot = face->glyph;
-            const FT_Bitmap& bitmap = slot->bitmap;
+            return storeGlyphInCache(
+                cacheEntry,
+                face->glyph->bitmap,
+                face->glyph->bitmap_left,
+                face->glyph->bitmap_top,
+                face->glyph->advance.x
+            );
+        }
 
-            const uint2 glyphSize = {static_cast<uint32_t>(bitmap.width), static_cast<uint32_t>(bitmap.rows)};
-            const uint2 bearing = {static_cast<uint32_t>(slot->bitmap_left), static_cast<uint32_t>(slot->bitmap_top)};
-            const float2 advance = {static_cast<float>(slot->advance.x) / 64.0f, static_cast<float>(slot->advance.y) / 64.0f}; // FreeType uses 1/64th of a pixel as its unit for advance
+        const Glyph* getStrokedGlyph(char32_t codepoint, int textSize, int strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit) override
+        {
+            if (strokeWeight <= 0) {
+                return nullptr;
+            }
 
-            GlyphPage& glyphPage = getOrCreateGlyphPageForGlyph(glyphSize);
-
-            const rect2f uvRect = putGlyphBitmapInPage(bitmap.buffer, glyphSize, glyphPage);
-            const Glyph glyph = Glyph {
-                .size = {static_cast<float>(glyphSize.x), static_cast<float>(glyphSize.y)},
-                .bearing = {static_cast<float>(bearing.x), static_cast<float>(bearing.y)},
-                .uvRect = uvRect,
-                .advance = advance,
-                .pageIndex = static_cast<GlyphPageIndex>(glyphPages.size() - 1),
+            const auto cacheEntry = GlyphCacheEntry {
+                .codepoint = codepoint,
+                .textSize = textSize,
+                .strokeWeight = strokeWeight,
             };
 
-            return &glyphs.insert({codepoint, glyph}).first->second;
+            const auto itr = glyphs.find(cacheEntry);
+            if (itr != glyphs.end()) {
+                return &itr->second;
+            }
+
+            if (FT_Set_Pixel_Sizes(face.get(), 0, textSize)) {
+                return nullptr;
+            }
+
+            const FT_UInt glyphIndex = FT_Get_Char_Index(face.get(), codepoint);
+            if (glyphIndex == 0) {
+                return nullptr;
+            }
+
+            const FT_Error loadError = FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_NO_BITMAP);
+            if (loadError) {
+                return nullptr;
+            }
+
+            FT_Glyph ftGlyph;
+            if (FT_Get_Glyph(face->glyph, &ftGlyph) != 0) {
+                return nullptr;
+            }
+
+            // std::unique_ptr<FT_GlyphRec_, FT_Deleter> ftGlyphPtr(ftGlyph);
+
+            FT_Stroker_LineCap ftLineCap;
+            switch (strokeCap) {
+                case StrokeCap::butt: ftLineCap = FT_STROKER_LINECAP_BUTT; break;
+                case StrokeCap::square: ftLineCap = FT_STROKER_LINECAP_SQUARE; break;
+                case StrokeCap::round: ftLineCap = FT_STROKER_LINECAP_ROUND; break;
+            }
+
+            FT_Stroker_LineJoin ftLineJoin;
+            switch (strokeJoin) {
+                case StrokeJoin::miter: ftLineJoin = FT_STROKER_LINEJOIN_MITER; break;
+                case StrokeJoin::bevel: ftLineJoin = FT_STROKER_LINEJOIN_BEVEL; break;
+                case StrokeJoin::round: ftLineJoin = FT_STROKER_LINEJOIN_ROUND; break;
+            }
+
+            auto glyphGuard = ftGlyph;
+            FT_Stroker_Set(stroker.get(), static_cast<FT_Fixed>((strokeWeight / 2) * 64), ftLineCap, ftLineJoin, static_cast<FT_Fixed>(miterLimit * 64));
+
+            if (FT_Glyph_Stroke(&ftGlyph, stroker.get(), 1) != 0) {
+                return nullptr;
+            }
+
+            if (FT_Glyph_To_Bitmap(&ftGlyph, FT_RENDER_MODE_NORMAL, nullptr, 1) != 0) {
+                return nullptr;
+            }
+
+            const FT_BitmapGlyph bitmapGlyph = reinterpret_cast<FT_BitmapGlyph>(ftGlyph);
+
+            return storeGlyphInCache(
+                cacheEntry,
+                bitmapGlyph->bitmap,
+                bitmapGlyph->left,
+                bitmapGlyph->top,
+                face->glyph->advance.x
+            );
         }
 
-        int getTextSize() const override
+        float getLineHeight(int textSize) const override
         {
-            return face->size->metrics.y_ppem;
-        }
-
-        float getLineHeight() const override
-        {
+            FT_Set_Pixel_Sizes(face.get(), 0, textSize);
             return static_cast<float>(face->size->metrics.height) / 64.0f; // FreeType uses 1/64th of a pixel as its unit for line height
         }
 
+        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override
+        {
+            if (FT_HAS_KERNING(face.get()) == 0) {
+                return 0.0f;
+            }
+
+            const KerningCacheEntry cacheEntry {
+                .leftCodepoint = leftCodepoint,
+                .rightCodepoint = rightCodepoint,
+                .textSize = textSize,
+            };
+
+            const auto itr = kerningCache.find(cacheEntry);
+            if (itr != kerningCache.end()) {
+                return itr->second;
+            }
+
+            const float kerningValue = queryKerningFromFreeType(leftCodepoint, rightCodepoint, textSize);
+            kerningCache.insert(std::make_pair(cacheEntry, kerningValue));
+            return kerningValue;
+        }
+
     private:
+        float queryKerningFromFreeType(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const
+        {
+            const FT_UInt leftGlyphIndex = FT_Get_Char_Index(face.get(), leftCodepoint);
+            const FT_UInt rightGlyphIndex = FT_Get_Char_Index(face.get(), rightCodepoint);
+            if (leftGlyphIndex == 0 || rightGlyphIndex == 0) {
+                return 0.0f;
+            }
+
+            FT_Vector kerning;
+            if (FT_Get_Kerning(face.get(), leftGlyphIndex, rightGlyphIndex, FT_KERNING_DEFAULT, &kerning) != 0) {
+                return 0.0f;
+            }
+
+            return static_cast<float>(kerning.x) / 64.0f; // FreeType uses 1/64th of a pixel as its unit for kerning
+        }
+
         GlyphPage& getOrCreateGlyphPageForGlyph(const uint2& glyphSize)
         {
             if (glyphPages.empty() or not canFitGlyphInPage(glyphSize, glyphPages.back())) {
@@ -126,19 +277,6 @@ namespace p5
             }
 
             return glyphPages.back();
-        }
-
-        static GLuint createNewGlyphPageTexture(const uint2& size)
-        {
-            GLuint textureId;
-            glGenTextures(1, &textureId);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, size.x, size.y, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            return textureId;
         }
 
         bool canFitGlyphInPage(const uint2 glyphSize, const GlyphPage& page) const
@@ -195,6 +333,23 @@ namespace p5
             };
         }
 
+        const Glyph* storeGlyphInCache(const GlyphCacheEntry& cacheEntry, const FT_Bitmap& bitmap, int bitmapLeft, int bitmapTop, FT_Pos advanceX)
+        {
+            const uint2 glyphSize = {static_cast<uint32_t>(bitmap.width), static_cast<uint32_t>(bitmap.rows)};
+            GlyphPage& glyphPage = getOrCreateGlyphPageForGlyph(glyphSize);
+            const rect2f uvRect = putGlyphBitmapInPage(bitmap.buffer, glyphSize, glyphPage);
+
+            const Glyph glyph = Glyph {
+                .size = {static_cast<float>(glyphSize.x), static_cast<float>(glyphSize.y)},
+                .bearing = {static_cast<float>(bitmapLeft), static_cast<float>(bitmapTop)},
+                .uvRect = uvRect,
+                .advance = {static_cast<float>(advanceX) / 64.0f, 0.0f}, // FreeType uses 1/64th of a pixel as its unit for advance
+                .pageIndex = static_cast<GlyphPageIndex>(glyphPages.size() - 1),
+            };
+
+            return &glyphs.insert({cacheEntry, glyph}).first->second;
+        }
+
         struct FT_Deleter
         {
             void operator()(FT_Library library) const
@@ -209,7 +364,37 @@ namespace p5
                     FT_Done_Face(face);
                 }
             }
+            void operator()(FT_Stroker stroker) const
+            {
+                if (stroker) {
+                    FT_Stroker_Done(stroker);
+                }
+            }
+            void operator()(FT_Glyph glyph) const
+            {
+                if (glyph) {
+                    FT_Done_Glyph(glyph);
+                }
+            }
         };
+
+        explicit FreeTypeFont(std::unique_ptr<FT_LibraryRec_, FT_Deleter> library, std::unique_ptr<FT_FaceRec_, FT_Deleter> face, std::unique_ptr<FT_StrokerRec_, FT_Deleter> stroker)
+            : library(std::move(library)), face(std::move(face)), stroker(std::move(stroker))
+        {
+        }
+
+        static GLuint createNewGlyphPageTexture(const uint2& size)
+        {
+            GLuint textureId;
+            glGenTextures(1, &textureId);
+            glBindTexture(GL_TEXTURE_2D, textureId);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, size.x, size.y, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            return textureId;
+        }
 
         static std::unique_ptr<FT_LibraryRec_, FT_Deleter> createLibrary()
         {
@@ -231,17 +416,29 @@ namespace p5
             return std::unique_ptr<FT_FaceRec_, FT_Deleter>(face);
         }
 
+        static std::unique_ptr<FT_StrokerRec_, FT_Deleter> createStroker(FT_Library library)
+        {
+            FT_Stroker stroker;
+            if (FT_Stroker_New(library, &stroker)) {
+                return nullptr;
+            }
+
+            return std::unique_ptr<FT_StrokerRec_, FT_Deleter>(stroker);
+        }
+
         std::unique_ptr<FT_LibraryRec_, FT_Deleter> library;
         std::unique_ptr<FT_FaceRec_, FT_Deleter> face;
+        std::unique_ptr<FT_StrokerRec_, FT_Deleter> stroker;
         std::vector<GlyphPage> glyphPages;
-        std::unordered_map<char32_t, Glyph> glyphs;
+        std::unordered_map<GlyphCacheEntry, Glyph, GlyphCacheEntryHasher> glyphs;
+        std::unordered_map<KerningCacheEntry, float, KerningCacheEntryHasher> kerningCache;
     };
 } // namespace p5
 
 namespace p5
 {
-    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath, int size)
+    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath)
     {
-        return std::make_unique<FreeTypeFont>(fontFilePath, size);
+        return FreeTypeFont::create(fontFilePath);
     }
 } // namespace p5
