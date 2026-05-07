@@ -21,10 +21,15 @@ namespace p5
 
 namespace p5
 {
-    class ConvexTesselator : public Tesselator
+    class FanTesselator : public Tesselator
     {
+    public:
         void tesselate(MeshWriter& scope, const PathPoints& points) override
         {
+            if (points.size < 3) {
+                return;
+            }
+
             for (size_t i = 0; i < points.size; ++i) {
                 scope.pushVertex(
                     points.positions[i],
@@ -112,9 +117,13 @@ namespace p5
 
 namespace p5
 {
-    std::unique_ptr<Tesselator> createTesselator()
+    std::unique_ptr<Tesselator> createFanTesselator()
     {
-        return std::make_unique<ConvexTesselator>();
-        // return std::make_unique<LibTessTesselator>();
+        return std::make_unique<FanTesselator>();
+    }
+
+    std::unique_ptr<Tesselator> createConcaveTesselator()
+    {
+        return std::make_unique<LibTessTesselator>();
     }
 } // namespace p5

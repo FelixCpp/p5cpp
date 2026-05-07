@@ -1,9 +1,11 @@
 #include "p5.hpp"
+#include "canvas.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "shader.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
+#include "dejavusans.hpp"
 #include <cassert>
 
 #define GLFW_INCLUDE_NONE
@@ -209,6 +211,7 @@ namespace p5
         float textSize = 12.0f;
 
         std::shared_ptr<Shader> shader;
+        std::shared_ptr<Canvas> canvas;
 
         HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
         VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
@@ -230,10 +233,14 @@ namespace p5
 
     inline static std::unique_ptr<LinePathBuilder> linepath;
     inline static std::unique_ptr<Renderer> renderer;
-    inline static std::unique_ptr<Tesselator> tesselator;
+    inline static std::unique_ptr<Tesselator> fanTesselator;
+    inline static std::unique_ptr<Tesselator> concaveTesselator;
     inline static std::shared_ptr<Shader> defaultShader;
     inline static std::shared_ptr<Shader> textShader;
     inline static std::shared_ptr<Font> defaultFont;
+    inline static std::shared_ptr<Canvas> defaultCanvas;
+    inline static std::unique_ptr<RenderPassStack> renderPasses;
+
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
@@ -254,7 +261,24 @@ namespace p5
     void pushState() { renderStates.push(peekState()); }
     void popState()
     {
-        if (renderStates.size() > 1) renderStates.pop();
+        if (renderStates.size() > 1) {
+            renderStates.pop();
+
+            const RenderState& state = peekState();
+            renderPasses->activate(state.canvas);
+        }
+    }
+
+    void canvas(std::shared_ptr<Canvas> canvas)
+    {
+        RenderState& state = peekState();
+        state.canvas = canvas;
+        renderPasses->activate(canvas);
+    }
+
+    void noCanvas()
+    {
+        renderPasses->clear();
     }
 
     void pushMatrix()
@@ -316,7 +340,7 @@ namespace p5
 
         {
             MeshWriter writer = renderer->aquireMeshWriter();
-            tesselator->tesselate(
+            fanTesselator->tesselate(
                 writer,
                 PathPoints {
                     .size = 4,
@@ -325,7 +349,8 @@ namespace p5
                     .colors = colors,
                 }
             );
-            renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+
+            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
         }
     }
 
@@ -381,14 +406,24 @@ namespace p5
     {
     }
 
-    void endShapeImpl(bool shouldClose, FillStyle fillStyle, FillStyle strokeStyle)
+    enum class ShapeType {
+        convex,
+        concave,
+    };
+
+    void endShapeImpl(bool shouldClose, FillStyle fillStyle, FillStyle strokeStyle, ShapeType type)
     {
         const RenderState& state = peekState();
 
         if (fillStyle != FillStyle::none) {
             MeshWriter writer = renderer->aquireMeshWriter();
-            tesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle));
-            renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+
+            switch (type) {
+                case ShapeType::convex: fanTesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle)); break;
+                case ShapeType::concave: concaveTesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle)); break;
+            }
+
+            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         if (strokeStyle != FillStyle::none) {
@@ -408,19 +443,20 @@ namespace p5
                 shouldClose
             );
 
-            renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            // renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
         }
 
         linepath->clear();
         curveVertexCount = 0;
     }
 
-    void endShape(const bool close)
+    void endShape(const bool close, ShapeType type)
     {
         const RenderState& state = peekState();
         const FillStyle fillStyle = state.isFillDisabled ? FillStyle::none : FillStyle::fill;
         const FillStyle strokeStyle = state.isStrokeDisabled ? FillStyle::none : FillStyle::stroke;
-        endShapeImpl(close, fillStyle, strokeStyle);
+        endShapeImpl(close, fillStyle, strokeStyle, type);
     }
 
     void vertex(float x, float y)
@@ -554,7 +590,7 @@ namespace p5
         vertex(left + width, top);
         vertex(left + width, top + height);
         vertex(left, top + height);
-        endShape();
+        endShape(true, ShapeType::convex);
     }
 
     void rect(float left, float top, float width, float height, float cx, float cy)
@@ -603,7 +639,7 @@ namespace p5
             }
         }
 
-        endShape();
+        endShape(true, ShapeType::convex);
     }
 
     void square(float left, float top, float size)
@@ -622,7 +658,7 @@ namespace p5
             float y = centerY + std::sin(angle) * height * 0.5f;
             vertex(x, y);
         }
-        endShape();
+        endShape(true, ShapeType::convex);
     }
 
     void circle(float centerX, float centerY, float size)
@@ -642,7 +678,7 @@ namespace p5
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
         }
-        endShapeImpl(false, FillStyle::stroke, FillStyle::none);
+        endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::convex);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -651,7 +687,7 @@ namespace p5
         vertex(x1, y1);
         vertex(x2, y2);
         vertex(x3, y3);
-        endShape();
+        endShape(true, ShapeType::convex);
     }
 
     void line(float x1, float y1, float x2, float y2)
@@ -711,7 +747,7 @@ namespace p5
                 vertex(x, y);
             }
         }
-        endShapeImpl(false, FillStyle::stroke, FillStyle::none);
+        endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::convex); // TODO: Is the ShapeType correct?
     }
 
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
@@ -734,7 +770,7 @@ namespace p5
             vertex(x, y);
         }
 
-        endShape(arcMode != ArcMode::open);
+        endShape(arcMode != ArcMode::open, ShapeType::convex);
     }
 
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -756,7 +792,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, FillStyle::none, FillStyle::stroke);
+        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::convex);
     }
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -776,19 +812,21 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, FillStyle::none, FillStyle::stroke);
+        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::convex);
     }
 
+    void tint(int grey, int alpha) { tint(color(grey, grey, grey, alpha)); }
+    void tint(int red, int green, int blue, int alpha) { tint(color(red, green, blue, alpha)); }
     void tint(color_t color) { peekState().tintColor = color; }
     void noTint() { peekState().tintColor = color(255, 255, 255); }
     void image(uint32_t textureId, float left, float top, float width, float height)
     {
         const RenderState& state = peekState();
         const std::array<float2, 4> positions = {
-            float2 {left, top},
-            float2 {left + width, top},
-            float2 {left + width, top + height},
-            float2 {left, top + height}
+            transformPoint(state.metrics.top(), {left, top}),
+            transformPoint(state.metrics.top(), {left + width, top}),
+            transformPoint(state.metrics.top(), {left + width, top + height}),
+            transformPoint(state.metrics.top(), {left, top + height}),
         };
         const std::array<float2, 4> texcoords = {
             float2 {0.0f, 0.0f},
@@ -806,7 +844,7 @@ namespace p5
         {
             MeshWriter writer = renderer->aquireMeshWriter();
 
-            tesselator->tesselate(
+            fanTesselator->tesselate(
                 writer,
                 PathPoints {
                     .size = 4,
@@ -816,11 +854,15 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
+            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, textureId, getCurrentShader(state), state.blendMode);
+            // renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
         }
     }
 
-    void textFont(std::shared_ptr<Font> font) { peekState().font = font; }
+    void textFont(std::shared_ptr<Font> font)
+    {
+        peekState().font = font;
+    }
     void noTextFont() { peekState().font.reset(); }
     void textSize(float size) { peekState().textSize = size; }
 
@@ -829,7 +871,7 @@ namespace p5
         if (text.empty()) return;
 
         const RenderState& state = peekState();
-        Font* font = (state.font.get() != nullptr) ? state.font.get() : defaultFont.get();
+        Font* font = getCurrentFont(state).get();
 
         TextMetrics metrics = measureText(text, font, state.textSize, 1.0f);
 
@@ -890,22 +932,24 @@ namespace p5
                 transformPoint(state.metrics.top(), {right, bottom}),
                 transformPoint(state.metrics.top(), {left, bottom}),
             };
-
             const rect2f uvRect = glyph->uvRect;
-
             const std::array<float2, 4> texcoords = {
                 float2 {uvRect.left, uvRect.top},
                 float2 {uvRect.left + uvRect.width, uvRect.top},
                 float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
                 float2 {uvRect.left, uvRect.top + uvRect.height}
             };
-
-            const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
+            const std::array<color_t, 4> colors = {
+                state.fillColor,
+                state.fillColor,
+                state.fillColor,
+                state.fillColor
+            };
 
             {
                 MeshWriter writer = renderer->aquireMeshWriter();
 
-                tesselator->tesselate(
+                fanTesselator->tesselate(
                     writer,
                     PathPoints {
                         .size = 4,
@@ -916,7 +960,8 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderer->submitMesh(writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                // renderer->submitMesh(writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
             }
 
             px += glyph->advance.x;
@@ -979,15 +1024,21 @@ int main()
     std::cout << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
     renderer = Renderer::create();
-    tesselator = createTesselator();
+    fanTesselator = createFanTesselator();
+    concaveTesselator = createConcaveTesselator();
     linepath = std::make_unique<LinePathBuilder>();
     defaultShader = createDefaultShader();
     textShader = createTextShader();
-    defaultFont = loadFont("Arial.ttf");
+    defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
+    defaultCanvas = createCanvas(window.windowWidth, window.windowHeight);
     renderStates.push(RenderState {});
+    renderPasses = std::make_unique<RenderPassStack>(defaultCanvas);
 
     static std::unique_ptr sketch = createSketch();
+    renderer->beginFrame(projectionMatrix);
     sketch->setup();
+    renderer->endFrame(renderPasses->getRenderPasses());
+    renderPasses->clear();
 
     glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
         if (action == GLFW_PRESS) {
@@ -999,11 +1050,16 @@ int main()
 
     glfwShowWindow(window.handle);
 
+    bool first = true;
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
+
         renderer->beginFrame(projectionMatrix);
         sketch->draw();
-        renderer->endFrame();
+        renderer->endFrame(renderPasses->getRenderPasses());
+        renderPasses->clear();
+
+        blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);
 
         while (not renderStates.empty()) renderStates.pop();

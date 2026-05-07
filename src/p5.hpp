@@ -181,6 +181,16 @@ namespace p5
         uint32_t lineCount;
     };
 
+    struct Canvas
+    {
+        virtual ~Canvas() = default;
+        virtual uint32_t getTextureId() const = 0;
+        virtual uint32_t getRendererId() const = 0;
+        virtual uint2 getSize() const = 0;
+    };
+
+    std::unique_ptr<Canvas> createCanvas(int width, int height);
+
     struct Shader
     {
         virtual ~Shader() = default;
@@ -213,6 +223,9 @@ namespace p5
 
     void pushState();
     void popState();
+
+    void canvas(std::shared_ptr<Canvas> canvas);
+    void noCanvas();
 
     void pushMatrix();
     void popMatrix();
@@ -261,6 +274,7 @@ namespace p5
     void noShader();
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
+    std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
     TextMetrics measureText(std::string_view text);
     TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale);
     void textAlign(HorizontalTextAlign horizontalAlign, VerticalTextAlign verticalAlign);
@@ -277,6 +291,8 @@ namespace p5
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+    void tint(int grey, int alpha = 255);
+    void tint(int red, int green, int blue, int alpha = 255);
     void tint(color_t color);
     void noTint();
     void image(uint32_t textureId, float left, float top, float width, float height);

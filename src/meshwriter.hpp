@@ -14,6 +14,7 @@ namespace p5
 
         void pushVertex(const float2& position, const float2& texcoord, const float4& color);
         void pushTriangle(uint32_t a, uint32_t b, uint32_t c);
+        void setTextureIndex(float textureIndex);
 
         uint32_t getBaseVertex() const;
         uint32_t getVertexCount() const;

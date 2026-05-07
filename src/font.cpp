@@ -78,6 +78,21 @@ namespace p5
             return std::unique_ptr<FreeTypeFont>(new FreeTypeFont(std::move(library), std::move(face)));
         }
 
+        static std::unique_ptr<Font> create(std::span<const uint8_t> fontData)
+        {
+            auto library = createLibrary();
+            if (library == nullptr) {
+                return nullptr;
+            }
+
+            auto face = createFace(library.get(), fontData);
+            if (face == nullptr) {
+                return nullptr;
+            }
+
+            return std::unique_ptr<FreeTypeFont>(new FreeTypeFont(std::move(library), std::move(face)));
+        }
+
         ~FreeTypeFont() override
         {
             for (const GlyphPage& page : glyphPages) {
@@ -337,6 +352,16 @@ namespace p5
             return std::unique_ptr<FT_FaceRec_, FT_Deleter>(face);
         }
 
+        static std::unique_ptr<FT_FaceRec_, FT_Deleter> createFace(FT_Library library, std::span<const uint8_t> fontData)
+        {
+            FT_Face face;
+            if (FT_New_Memory_Face(library, fontData.data(), static_cast<FT_Long>(fontData.size()), 0, &face)) {
+                return nullptr;
+            }
+
+            return std::unique_ptr<FT_FaceRec_, FT_Deleter>(face);
+        }
+
         std::unique_ptr<FT_LibraryRec_, FT_Deleter> library;
         std::unique_ptr<FT_FaceRec_, FT_Deleter> face;
         std::vector<GlyphPage> glyphPages;
@@ -350,5 +375,10 @@ namespace p5
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath)
     {
         return FreeTypeFont::create(fontFilePath);
+    }
+
+    std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData)
+    {
+        return FreeTypeFont::create(fontData);
     }
 } // namespace p5

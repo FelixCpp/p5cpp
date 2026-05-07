@@ -31,6 +31,13 @@ namespace p5
         m_indices[m_indexCursor++] = m_baseVertex + c;
     }
 
+    void MeshWriter::setTextureIndex(float textureIndex)
+    {
+        for (uint32_t i = 0; i < getVertexCount(); ++i) {
+            m_vertices[m_baseVertex + i].texIndex = textureIndex;
+        }
+    }
+
     uint32_t MeshWriter::getBaseVertex() const
     {
         return m_baseVertex;

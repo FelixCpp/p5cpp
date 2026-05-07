@@ -11,5 +11,6 @@ namespace p5
         virtual void tesselate(MeshWriter& scope, const PathPoints& points) = 0;
     };
 
-    std::unique_ptr<Tesselator> createTesselator();
+    std::unique_ptr<Tesselator> createFanTesselator();
+    std::unique_ptr<Tesselator> createConcaveTesselator();
 } // namespace p5

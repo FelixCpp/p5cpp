@@ -20,7 +20,9 @@ add_executable(
   src/linepath.cpp
   src/font.cpp
   src/shader.cpp
-  src/meshwriter.cpp)
+  src/meshwriter.cpp
+  src/canvas.cpp
+  src/renderpass.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 
