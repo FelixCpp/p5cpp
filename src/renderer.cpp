@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 
 #include <cassert>
+#include <optional>
 
 inline static constexpr size_t MAX_VERTICES = 65536;
 inline static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
@@ -83,9 +84,9 @@ namespace p5
         m_indexCursor = 0;
     }
 
-    void Renderer::endFrame(const std::span<const RenderPass> renderPasses)
+    void Renderer::endFrame()
     {
-        if (renderPasses.empty()) {
+        if (m_drawCalls.empty()) {
             return;
         }
 
@@ -97,36 +98,90 @@ namespace p5
 
         glBindVertexArray(m_vao);
 
-        for (const RenderPass& renderPass : renderPasses) {
-            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
+        for (const DrawCall& drawCall : m_drawCalls) {
+            glUseProgram(drawCall.shader->getRendererId());
+            setBlendMode(drawCall.blendMode);
 
-            for (const DrawCall& drawCall : renderPass.drawCalls) {
-                glUseProgram(drawCall.shader->getRendererId());
-                setBlendMode(drawCall.blendMode);
+            for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+                glActiveTexture(GL_TEXTURE0 + i);
+                glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+            }
 
+            static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
+            if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
+                glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
+            }
+
+            if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
+                glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
+            }
+
+            glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
+        }
+    }
+
+    void Renderer::submitMesh(MeshWriter& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
+    {
+        if (m_drawCalls.empty()) {
+            DrawCall drawCall = {
+                .indexOffset = writer.getBaseIndex(),
+                .indexCount = 0,
+                .blendMode = blendMode,
+                .shader = shader,
+                .textureUnits = {},
+                .textureUnitCount = 0,
+            };
+
+            m_drawCalls.push_back(drawCall);
+        } else {
+            DrawCall& drawCall = m_drawCalls.back();
+            const bool hasShaderChange = drawCall.shader != shader;
+            const bool hasBlendModeChange = drawCall.blendMode != blendMode;
+            const bool hasTextureChange = std::invoke([&]() {
                 for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
-                    glActiveTexture(GL_TEXTURE0 + i);
-                    glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+                    if (drawCall.textureUnits[i] == texture) {
+                        return false;
+                    }
                 }
 
-                static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-                if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
-                    glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
-                }
+                return true;
+            });
+            const bool textureSlotAvailable = drawCall.textureUnitCount < drawCall.textureUnits.size();
+            const bool canBatch = not hasShaderChange and not hasBlendModeChange and (not hasTextureChange or textureSlotAvailable);
 
-                if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
-                    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
-                }
+            if (not canBatch) {
+                DrawCall newDrawCall = {
+                    .indexOffset = writer.getBaseIndex(),
+                    .indexCount = 0,
+                    .blendMode = blendMode,
+                    .shader = shader,
+                    .textureUnits = {},
+                    .textureUnitCount = 0,
+                };
 
-                glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
+                m_drawCalls.push_back(newDrawCall);
             }
         }
 
-        // Blit the framebuffer's color attachment to the default framebuffer
-        // glBindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo);
-        // glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        // glBlitFramebuffer(0, 0, 800, 600, 0, 0, 800, 600, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-        // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        DrawCall& drawCall = m_drawCalls.back();
+        drawCall.indexCount += writer.getIndexCount();
+
+        std::optional<size_t> foundTextureUnitIndex;
+        for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+            if (drawCall.textureUnits[i] == texture) {
+                foundTextureUnitIndex = i;
+                break;
+            }
+        }
+
+        const size_t textureUnitIndex = foundTextureUnitIndex.value_or(drawCall.textureUnitCount);
+
+        if (not foundTextureUnitIndex.has_value()) {
+            drawCall.textureUnits[textureUnitIndex] = texture;
+            drawCall.textureUnitCount++;
+        }
+
+        writer.setTextureIndex(static_cast<float>(textureUnitIndex));
     }
 
     Renderer::Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture)

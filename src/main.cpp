@@ -1,6 +1,5 @@
 #include "p5.hpp"
 
-#include <algorithm>
 #include <memory>
 
 using namespace p5;
@@ -8,11 +7,8 @@ using namespace p5;
 struct Starfield : p5::Sketch
 {
 public:
-    std::shared_ptr<Canvas> layer;
-
     void setup() override
     {
-        layer = createCanvas(400, 400);
     }
 
     void draw() override
@@ -20,12 +16,6 @@ public:
         background(51);
         fill(255, 0, 0);
         rect(100.0f, 100.0f, 200.0f, 200.0f);
-
-        canvas(layer);
-        background(0, 255, 0);
-        noCanvas();
-
-        image(layer->getTextureId(), 400.0f, 400.0f, 100.0f, 100.0f);
 
         // canvas(layer);
         // background(255);

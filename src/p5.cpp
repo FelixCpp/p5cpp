@@ -1,5 +1,4 @@
 #include "p5.hpp"
-#include "canvas.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "shader.hpp"
@@ -211,7 +210,6 @@ namespace p5
         float textSize = 12.0f;
 
         std::shared_ptr<Shader> shader;
-        std::shared_ptr<Canvas> canvas;
 
         HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
         VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
@@ -238,8 +236,6 @@ namespace p5
     inline static std::shared_ptr<Shader> defaultShader;
     inline static std::shared_ptr<Shader> textShader;
     inline static std::shared_ptr<Font> defaultFont;
-    inline static std::shared_ptr<Canvas> defaultCanvas;
-    inline static std::unique_ptr<RenderPassStack> renderPasses;
 
     inline Window window;
 
@@ -263,22 +259,7 @@ namespace p5
     {
         if (renderStates.size() > 1) {
             renderStates.pop();
-
-            const RenderState& state = peekState();
-            renderPasses->activate(state.canvas);
         }
-    }
-
-    void canvas(std::shared_ptr<Canvas> canvas)
-    {
-        RenderState& state = peekState();
-        state.canvas = canvas;
-        renderPasses->activate(canvas);
-    }
-
-    void noCanvas()
-    {
-        renderPasses->clear();
     }
 
     void pushMatrix()
@@ -324,11 +305,12 @@ namespace p5
     void background(color_t color)
     {
         const RenderState& state = peekState();
+        const uint2 size = uint2 {800, 600}; // TODO: This should be matching the current canvas size, not the window size
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
-            float2 {800.0f, 0.0f},
-            float2 {800.0f, 600.0f},
-            float2 {0.0f, 600.0f}
+            float2 {static_cast<float>(size.x), 0.0f},
+            float2 {static_cast<float>(size.x), static_cast<float>(size.y)},
+            float2 {0.0f, static_cast<float>(size.y)},
         };
         const std::array<float2, 4> texcoords = {
             float2 {0.0f, 0.0f},
@@ -350,7 +332,7 @@ namespace p5
                 }
             );
 
-            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
+            renderer->submitMesh(writer, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
         }
     }
 
@@ -423,7 +405,7 @@ namespace p5
                 case ShapeType::concave: concaveTesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle)); break;
             }
 
-            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         if (strokeStyle != FillStyle::none) {
@@ -443,8 +425,7 @@ namespace p5
                 shouldClose
             );
 
-            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
-            // renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         linepath->clear();
@@ -854,7 +835,7 @@ namespace p5
                 }
             );
 
-            renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, textureId, getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
             // renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
         }
     }
@@ -960,8 +941,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderpass_submit(*renderPasses->getCurrentRenderPass(), writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
-                // renderer->submitMesh(writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderer->submitMesh(writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
             }
 
             px += glyph->advance.x;
@@ -1030,15 +1010,12 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    defaultCanvas = createCanvas(window.windowWidth, window.windowHeight);
     renderStates.push(RenderState {});
-    renderPasses = std::make_unique<RenderPassStack>(defaultCanvas);
 
     static std::unique_ptr sketch = createSketch();
     renderer->beginFrame(projectionMatrix);
     sketch->setup();
-    renderer->endFrame(renderPasses->getRenderPasses());
-    renderPasses->clear();
+    renderer->endFrame();
 
     glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
         if (action == GLFW_PRESS) {
@@ -1056,10 +1033,9 @@ int main()
 
         renderer->beginFrame(projectionMatrix);
         sketch->draw();
-        renderer->endFrame(renderPasses->getRenderPasses());
-        renderPasses->clear();
+        renderer->endFrame();
 
-        blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
+        // blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);
 
         while (not renderStates.empty()) renderStates.pop();

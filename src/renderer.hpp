@@ -19,8 +19,10 @@ namespace p5
         MeshWriter aquireMeshWriter();
 
         void beginFrame(const matrix4x4& projectionMatrix);
-        void endFrame(std::span<const RenderPass> renderPasses);
+        void endFrame();
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
+
+        void submitMesh(MeshWriter& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
 
     private:
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture);
@@ -31,6 +33,8 @@ namespace p5
         uint32_t m_indexCursor;
 
         matrix4x4 m_projectionMatrix;
+
+        std::vector<DrawCall> m_drawCalls;
 
         GLuint m_vao;
         GLuint m_vbo;
