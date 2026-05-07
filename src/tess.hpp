@@ -1,14 +1,14 @@
 #pragma once
 
 #include "linepath.hpp"
-#include "meshwriter.hpp"
+#include "drawscope.hpp"
 
 namespace p5
 {
     struct Tesselator
     {
         virtual ~Tesselator() = default;
-        virtual void tesselate(MeshWriter& scope, const PathPoints& points) = 0;
+        virtual DrawScopeResult tesselate(DrawScope& scope, const PathPoints& points) = 0;
     };
 
     std::unique_ptr<Tesselator> createFanTesselator();

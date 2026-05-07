@@ -17,6 +17,10 @@ public:
         fill(255, 0, 0);
         rect(100.0f, 100.0f, 200.0f, 200.0f);
 
+        textSize(48.0f);
+        fill(255);
+        text("Hello, World!", 150.0f, 150.0f);
+
         // canvas(layer);
         // background(255);
         // fill(255, 0, 0);

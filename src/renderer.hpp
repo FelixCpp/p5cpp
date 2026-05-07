@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vertex.hpp"
-#include "meshwriter.hpp"
+#include "drawscope.hpp"
 #include "renderpass.hpp"
 
 #include <glad/glad.h>
@@ -16,13 +16,13 @@ namespace p5
     public:
         static std::unique_ptr<Renderer> create();
 
-        MeshWriter aquireMeshWriter();
+        DrawScope aquireDrawScope();
 
         void beginFrame(const matrix4x4& projectionMatrix);
         void endFrame();
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
 
-        void submitMesh(MeshWriter& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
+        void submitMesh(const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
 
     private:
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture);

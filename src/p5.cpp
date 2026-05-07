@@ -321,9 +321,9 @@ namespace p5
         const std::array<color_t, 4> colors = {color, color, color, color};
 
         {
-            MeshWriter writer = renderer->aquireMeshWriter();
-            fanTesselator->tesselate(
-                writer,
+            DrawScope scope = renderer->aquireDrawScope();
+            DrawScopeResult drawResult = fanTesselator->tesselate(
+                scope,
                 PathPoints {
                     .size = 4,
                     .positions = positions,
@@ -332,7 +332,7 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(writer, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
+            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
         }
     }
 
@@ -398,20 +398,21 @@ namespace p5
         const RenderState& state = peekState();
 
         if (fillStyle != FillStyle::none) {
-            MeshWriter writer = renderer->aquireMeshWriter();
+            DrawScope scope = renderer->aquireDrawScope();
 
+            DrawScopeResult drawResult;
             switch (type) {
-                case ShapeType::convex: fanTesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle)); break;
-                case ShapeType::concave: concaveTesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle)); break;
+                case ShapeType::convex: drawResult = fanTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
+                case ShapeType::concave: drawResult = concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
             }
 
-            renderer->submitMesh(writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         if (strokeStyle != FillStyle::none) {
-            MeshWriter writer = renderer->aquireMeshWriter();
-            generateDashedStroke(
-                writer,
+            DrawScope scope = renderer->aquireDrawScope();
+            DrawScopeResult drawResult = generateDashedStroke(
+                scope,
                 linepath->buildDrawPoints(strokeStyle),
                 StrokePattern {
                     .segments = state.strokePatternSegments,
@@ -425,7 +426,7 @@ namespace p5
                 shouldClose
             );
 
-            renderer->submitMesh(writer, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         linepath->clear();
@@ -823,10 +824,9 @@ namespace p5
         };
 
         {
-            MeshWriter writer = renderer->aquireMeshWriter();
-
-            fanTesselator->tesselate(
-                writer,
+            DrawScope scope = renderer->aquireDrawScope();
+            DrawScopeResult drawResult = fanTesselator->tesselate(
+                scope,
                 PathPoints {
                     .size = 4,
                     .positions = positions,
@@ -835,8 +835,7 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
-            // renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(drawResult, textureId, getCurrentShader(state), state.blendMode);
         }
     }
 
@@ -928,10 +927,9 @@ namespace p5
             };
 
             {
-                MeshWriter writer = renderer->aquireMeshWriter();
-
-                fanTesselator->tesselate(
-                    writer,
+                DrawScope scope = renderer->aquireDrawScope();
+                DrawScopeResult drawResult = fanTesselator->tesselate(
+                    scope,
                     PathPoints {
                         .size = 4,
                         .positions = positions,
@@ -941,7 +939,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderer->submitMesh(writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderer->submitMesh(drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
             }
 
             px += glyph->advance.x;

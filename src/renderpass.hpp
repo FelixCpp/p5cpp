@@ -10,8 +10,8 @@ namespace p5
 {
     struct DrawCall
     {
-        uint32_t indexOffset;
-        uint32_t indexCount;
+        size_t indexOffset;
+        size_t indexCount;
 
         BlendMode blendMode;
 

@@ -20,7 +20,7 @@ add_executable(
   src/linepath.cpp
   src/font.cpp
   src/shader.cpp
-  src/meshwriter.cpp
+  src/drawscope.cpp
   src/canvas.cpp
   src/renderpass.cpp)
 

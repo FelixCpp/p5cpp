@@ -67,9 +67,9 @@ namespace p5
         return std::unique_ptr<Renderer>(new Renderer(vao, vbo, ebo, whiteTexture));
     }
 
-    MeshWriter Renderer::aquireMeshWriter()
+    DrawScope Renderer::aquireDrawScope()
     {
-        return MeshWriter(
+        return DrawScope(
             std::span {m_vertices.get(), MAX_VERTICES},
             std::span {m_indices.get(), MAX_INDICES},
             m_vertexCursor,
@@ -120,11 +120,11 @@ namespace p5
         }
     }
 
-    void Renderer::submitMesh(MeshWriter& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
+    void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
     {
         if (m_drawCalls.empty()) {
             DrawCall drawCall = {
-                .indexOffset = writer.getBaseIndex(),
+                .indexOffset = result.baseIndex,
                 .indexCount = 0,
                 .blendMode = blendMode,
                 .shader = shader,
@@ -151,7 +151,7 @@ namespace p5
 
             if (not canBatch) {
                 DrawCall newDrawCall = {
-                    .indexOffset = writer.getBaseIndex(),
+                    .indexOffset = result.baseIndex,
                     .indexCount = 0,
                     .blendMode = blendMode,
                     .shader = shader,
@@ -164,7 +164,7 @@ namespace p5
         }
 
         DrawCall& drawCall = m_drawCalls.back();
-        drawCall.indexCount += writer.getIndexCount();
+        drawCall.indexCount += result.indexCount;
 
         std::optional<size_t> foundTextureUnitIndex;
         for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
@@ -181,7 +181,12 @@ namespace p5
             drawCall.textureUnitCount++;
         }
 
-        writer.setTextureIndex(static_cast<float>(textureUnitIndex));
+        for (size_t i = 0; i < result.vertexCount; ++i) {
+            m_vertices[result.baseVertex + i].texIndex = static_cast<float>(textureUnitIndex);
+        }
+
+        m_vertexCursor += result.vertexCount;
+        m_indexCursor += result.indexCount;
     }
 
     Renderer::Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture)
