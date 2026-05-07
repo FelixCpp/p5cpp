@@ -75,12 +75,7 @@ namespace p5
                 return nullptr;
             }
 
-            auto stroker = createStroker(library.get());
-            if (stroker == nullptr) {
-                return nullptr;
-            }
-
-            return std::unique_ptr<FreeTypeFont>(new FreeTypeFont(std::move(library), std::move(face), std::move(stroker)));
+            return std::unique_ptr<FreeTypeFont>(new FreeTypeFont(std::move(library), std::move(face)));
         }
 
         ~FreeTypeFont() override
@@ -99,7 +94,7 @@ namespace p5
             return glyphPages[index].textureId;
         }
 
-        const Glyph* getFilledGlyph(char32_t codepoint, int textSize) override
+        const Glyph* getGlyph(char32_t codepoint, int textSize) override
         {
             const auto cacheEntry = GlyphCacheEntry {
                 .codepoint = codepoint,
@@ -135,80 +130,6 @@ namespace p5
                 face->glyph->bitmap,
                 face->glyph->bitmap_left,
                 face->glyph->bitmap_top,
-                face->glyph->advance.x
-            );
-        }
-
-        const Glyph* getStrokedGlyph(char32_t codepoint, int textSize, int strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit) override
-        {
-            if (strokeWeight <= 0) {
-                return nullptr;
-            }
-
-            const auto cacheEntry = GlyphCacheEntry {
-                .codepoint = codepoint,
-                .textSize = textSize,
-                .strokeWeight = strokeWeight,
-            };
-
-            const auto itr = glyphs.find(cacheEntry);
-            if (itr != glyphs.end()) {
-                return &itr->second;
-            }
-
-            if (FT_Set_Pixel_Sizes(face.get(), 0, textSize)) {
-                return nullptr;
-            }
-
-            const FT_UInt glyphIndex = FT_Get_Char_Index(face.get(), codepoint);
-            if (glyphIndex == 0) {
-                return nullptr;
-            }
-
-            const FT_Error loadError = FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_NO_BITMAP);
-            if (loadError) {
-                return nullptr;
-            }
-
-            FT_Glyph ftGlyph;
-            if (FT_Get_Glyph(face->glyph, &ftGlyph) != 0) {
-                return nullptr;
-            }
-
-            // std::unique_ptr<FT_GlyphRec_, FT_Deleter> ftGlyphPtr(ftGlyph);
-
-            FT_Stroker_LineCap ftLineCap;
-            switch (strokeCap) {
-                case StrokeCap::butt: ftLineCap = FT_STROKER_LINECAP_BUTT; break;
-                case StrokeCap::square: ftLineCap = FT_STROKER_LINECAP_SQUARE; break;
-                case StrokeCap::round: ftLineCap = FT_STROKER_LINECAP_ROUND; break;
-            }
-
-            FT_Stroker_LineJoin ftLineJoin;
-            switch (strokeJoin) {
-                case StrokeJoin::miter: ftLineJoin = FT_STROKER_LINEJOIN_MITER; break;
-                case StrokeJoin::bevel: ftLineJoin = FT_STROKER_LINEJOIN_BEVEL; break;
-                case StrokeJoin::round: ftLineJoin = FT_STROKER_LINEJOIN_ROUND; break;
-            }
-
-            auto glyphGuard = ftGlyph;
-            FT_Stroker_Set(stroker.get(), static_cast<FT_Fixed>((strokeWeight / 2) * 64), ftLineCap, ftLineJoin, static_cast<FT_Fixed>(miterLimit * 64));
-
-            if (FT_Glyph_Stroke(&ftGlyph, stroker.get(), 1) != 0) {
-                return nullptr;
-            }
-
-            if (FT_Glyph_To_Bitmap(&ftGlyph, FT_RENDER_MODE_NORMAL, nullptr, 1) != 0) {
-                return nullptr;
-            }
-
-            const FT_BitmapGlyph bitmapGlyph = reinterpret_cast<FT_BitmapGlyph>(ftGlyph);
-
-            return storeGlyphInCache(
-                cacheEntry,
-                bitmapGlyph->bitmap,
-                bitmapGlyph->left,
-                bitmapGlyph->top,
                 face->glyph->advance.x
             );
         }
@@ -378,8 +299,8 @@ namespace p5
             }
         };
 
-        explicit FreeTypeFont(std::unique_ptr<FT_LibraryRec_, FT_Deleter> library, std::unique_ptr<FT_FaceRec_, FT_Deleter> face, std::unique_ptr<FT_StrokerRec_, FT_Deleter> stroker)
-            : library(std::move(library)), face(std::move(face)), stroker(std::move(stroker))
+        explicit FreeTypeFont(std::unique_ptr<FT_LibraryRec_, FT_Deleter> library, std::unique_ptr<FT_FaceRec_, FT_Deleter> face)
+            : library(std::move(library)), face(std::move(face))
         {
         }
 
@@ -416,19 +337,8 @@ namespace p5
             return std::unique_ptr<FT_FaceRec_, FT_Deleter>(face);
         }
 
-        static std::unique_ptr<FT_StrokerRec_, FT_Deleter> createStroker(FT_Library library)
-        {
-            FT_Stroker stroker;
-            if (FT_Stroker_New(library, &stroker)) {
-                return nullptr;
-            }
-
-            return std::unique_ptr<FT_StrokerRec_, FT_Deleter>(stroker);
-        }
-
         std::unique_ptr<FT_LibraryRec_, FT_Deleter> library;
         std::unique_ptr<FT_FaceRec_, FT_Deleter> face;
-        std::unique_ptr<FT_StrokerRec_, FT_Deleter> stroker;
         std::vector<GlyphPage> glyphPages;
         std::unordered_map<GlyphCacheEntry, Glyph, GlyphCacheEntryHasher> glyphs;
         std::unordered_map<KerningCacheEntry, float, KerningCacheEntryHasher> kerningCache;

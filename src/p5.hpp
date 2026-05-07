@@ -167,8 +167,7 @@ namespace p5
     {
         virtual ~Font() = default;
         virtual uint32_t getGlyphPageTextureId(GlyphPageIndex index) = 0;
-        virtual const Glyph* getFilledGlyph(char32_t codepoint, int textSize) = 0;
-        virtual const Glyph* getStrokedGlyph(char32_t codepoint, int textSize, int strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit) = 0;
+        virtual const Glyph* getGlyph(char32_t codepoint, int textSize) = 0;
         virtual float getLineHeight(int textSize) const = 0;
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
     };
@@ -195,6 +194,7 @@ namespace p5
         virtual void uploadFloat2(std::string_view name, float x, float y) = 0;
         virtual void uploadFloat3(std::string_view name, float x, float y, float z) = 0;
         virtual void uploadFloat4(std::string_view name, float x, float y, float z, float w) = 0;
+        virtual int getUniformLocation(std::string_view name) = 0;
         virtual uint32_t getRendererId() const = 0;
     };
 

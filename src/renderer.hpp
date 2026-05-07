@@ -1,48 +1,72 @@
 #pragma once
 
-#include "p5.hpp"
-#include "drawscope.hpp"
+#include "vertex.hpp"
+#include "meshwriter.hpp"
 
-#include <span>
-#include <optional>
-#include <functional>
+#include <glad/glad.h>
+
 #include <memory>
+#include <vector>
+#include <array>
 
 namespace p5
 {
-    enum class DrawMode {
-        triangles,
-        lineLoop,
-    };
 
-    struct DrawSettings
+    struct DrawCall
     {
-        std::shared_ptr<Shader> shaderId;
-        std::optional<uint32_t> textureId;
+        uint32_t indexOffset;
+        uint32_t indexCount;
+
         BlendMode blendMode;
-        DrawMode drawMode;
+
+        std::shared_ptr<Shader> shader;
+
+        std::array<GLuint, 8> textureUnits;
+        size_t textureUnitCount;
     };
 
-    struct DrawPoints
+    struct BatchState
     {
-        size_t size;
-        std::span<const float2> positions;
-        std::span<const float2> texcoords;
-        std::span<const color_t> colors;
+        BlendMode blendMode;
+        std::shared_ptr<Shader> shader;
+
+        std::array<GLuint, 8> textureUnits;
+        uint8_t textureUnitCount;
+
+        int getOrAssignSlot(GLuint texture);
+        bool wouldNeedBreak(GLuint texture);
+        bool breaksWith(BlendMode blendMode, Shader* shader);
     };
 
-    struct Camera
+    class Renderer
     {
-        matrix4x4 projection;
-    };
+    public:
+        static std::unique_ptr<Renderer> create();
 
-    struct Renderer
-    {
-        virtual ~Renderer() = default;
-        virtual void beginDraw(const Camera& camera) = 0;
-        virtual void endDraw() = 0;
-        virtual void draw(const DrawSettings& settings, const std::function<void(DrawScope&)>& callback) = 0;
-    };
+        MeshWriter aquireMeshWriter();
 
-    std::unique_ptr<Renderer> createRenderer();
+        void beginFrame(const matrix4x4& projectionMatrix);
+        void endFrame();
+
+        void submitMesh(MeshWriter& meshWriter, GLuint texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
+
+    private:
+        explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture);
+
+        std::unique_ptr<Vertex[]> m_vertices;
+        std::unique_ptr<uint32_t[]> m_indices;
+        uint32_t m_vertexCursor;
+        uint32_t m_indexCursor;
+
+        std::vector<DrawCall> m_drawCalls;
+        BatchState m_currentBatchState;
+
+        matrix4x4 m_projectionMatrix;
+
+        GLuint m_vao;
+        GLuint m_vbo;
+        GLuint m_ebo;
+
+        GLuint m_whiteTexture;
+    };
 } // namespace p5

@@ -1,5 +1,10 @@
 #include "tess.hpp"
+#include "linepath.hpp"
+#include "meshwriter.hpp"
+
 #include <tesselator.h>
+
+#include <vector>
 
 namespace p5
 {
@@ -18,20 +23,18 @@ namespace p5
 {
     class ConvexTesselator : public Tesselator
     {
-        void tesselate(DrawScope& scope, const DrawPoints& points) override
+        void tesselate(MeshWriter& scope, const PathPoints& points) override
         {
             for (size_t i = 0; i < points.size; ++i) {
-                scope.push(Vertex {
-                    .position = points.positions[i],
-                    .texcoord = points.texcoords[i],
-                    .color = color_to_float4(points.colors[i]),
-                });
+                scope.pushVertex(
+                    points.positions[i],
+                    points.texcoords[i],
+                    color_to_float4(points.colors[i])
+                );
             }
 
             for (size_t i = 2; i < points.size; ++i) {
-                scope.push(0);
-                scope.push(i - 1);
-                scope.push(i);
+                scope.pushTriangle(0, i - 1, i);
             }
         }
     };
@@ -49,7 +52,7 @@ namespace p5
             tessDeleteTess(m_tess);
         }
 
-        void tesselate(DrawScope& scope, const DrawPoints& points) override
+        void tesselate(MeshWriter& scope, const PathPoints& points) override
         {
             if (m_tessPoints.size() < points.size * 3) {
                 m_tessPoints.resize(points.size * 3);
@@ -76,17 +79,17 @@ namespace p5
                 const int srcIdx = vertexIndex[i];
 
                 if (srcIdx == TESS_UNDEF) {
-                    scope.push(Vertex {
-                        .position = float2 {tessVerts[i * 3 + 0], tessVerts[i * 3 + 1]},
-                        .texcoord = float2 {0.0f, 0.0f},
-                        .color = color_to_float4(points.colors[0]),
-                    });
+                    scope.pushVertex(
+                        float2 {tessVerts[i * 3 + 0], tessVerts[i * 3 + 1]},
+                        float2 {0.0f, 0.0f},
+                        color_to_float4(points.colors[0])
+                    );
                 } else {
-                    scope.push(Vertex {
-                        .position = points.positions[srcIdx],
-                        .texcoord = points.texcoords[srcIdx],
-                        .color = color_to_float4(points.colors[srcIdx]),
-                    });
+                    scope.pushVertex(
+                        points.positions[srcIdx],
+                        points.texcoords[srcIdx],
+                        color_to_float4(points.colors[srcIdx])
+                    );
                 }
             }
 
@@ -97,9 +100,7 @@ namespace p5
                 const int c = tessIdx[i * 3 + 2];
                 if (a == TESS_UNDEF || b == TESS_UNDEF || c == TESS_UNDEF) continue;
 
-                scope.push(a);
-                scope.push(b);
-                scope.push(c);
+                scope.pushTriangle(a, b, c);
             }
         }
 

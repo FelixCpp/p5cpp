@@ -3,16 +3,24 @@
 #include <memory>
 
 #include "p5.hpp"
-#include "renderer.hpp"
+#include "vertex.hpp"
 
 namespace p5
 {
+    struct PathPoints
+    {
+        size_t size;
+        std::span<const float2> positions;
+        std::span<const float2> texcoords;
+        std::span<const color_t> colors;
+    };
+
     class LinePathBuilder
     {
     public:
         LinePathBuilder();
 
-        DrawPoints buildDrawPoints(FillStyle type);
+        PathPoints buildDrawPoints(FillStyle type);
         void vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor);
         void clear();
 

@@ -1,214 +1,210 @@
 #include "renderer.hpp"
-#include <tesselator.h>
 
-#include <glad/glad.h>
+#include <cassert>
+
+inline static constexpr size_t MAX_VERTICES = 65536;
+inline static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
 
 namespace p5
 {
-    static GLenum drawModeToGlId(DrawMode mode)
+    void setBlendMode(BlendMode mode)
     {
+        // clang-format off
         switch (mode) {
-            case DrawMode::triangles: return GL_TRIANGLES;
-            case DrawMode::lineLoop: return GL_LINE_LOOP;
+            case BlendMode::none: glDisable(GL_BLEND); break;
+            case BlendMode::alpha: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); break;
+            case BlendMode::additive: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE); break;
+            case BlendMode::multiply: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); break;
         }
-    }
-
-    static void enableBlendMode(BlendMode mode)
-    {
-        switch (mode) {
-            case BlendMode::alpha:
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                break;
-            case BlendMode::additive:
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-                break;
-            case BlendMode::multiply:
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_DST_COLOR, GL_ZERO);
-                break;
-            case BlendMode::none:
-                glDisable(GL_BLEND);
-                break;
-        }
-    }
-
-    static bool operator==(const DrawSettings& lhs, const DrawSettings& rhs)
-    {
-        if (lhs.shaderId != rhs.shaderId) return false;
-        if (lhs.textureId != rhs.textureId) return false;
-        if (lhs.drawMode != rhs.drawMode) return false;
-        if (lhs.blendMode != rhs.blendMode) return false;
-
-        return true;
+        // clang-format on
     }
 } // namespace p5
 
 namespace p5
 {
-    class BatchRenderer : public Renderer
+
+    int BatchState::getOrAssignSlot(GLuint texture)
     {
-    public:
-        static constexpr size_t MAX_VERTICES = 65536;
-        static constexpr size_t MAX_INDICES = 131072;
+        if (texture == 0) return 0;
 
-        BatchRenderer()
-            : m_vertices(std::make_unique<Vertex[]>(MAX_VERTICES)),
-              m_indices(std::make_unique<uint32_t[]>(MAX_INDICES)),
-              m_projectionMatrix(matrix4x4::identity)
-        {
-            glGenVertexArrays(1, &vao);
-            glBindVertexArray(vao);
-
-            glGenBuffers(1, &vbo);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferData(GL_ARRAY_BUFFER, MAX_VERTICES * sizeof(Vertex), nullptr, GL_DYNAMIC_DRAW);
-
-            glGenBuffers(1, &ebo);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_INDICES * sizeof(uint32_t), nullptr, GL_DYNAMIC_DRAW);
-
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<const GLvoid*>(offsetof(Vertex, position)));
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<const GLvoid*>(offsetof(Vertex, texcoord)));
-            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<const GLvoid*>(offsetof(Vertex, color)));
-
-            glEnableVertexAttribArray(0);
-            glEnableVertexAttribArray(1);
-            glEnableVertexAttribArray(2);
-
-            glBindVertexArray(0);
-
-            uint8_t whitePixel[] = {255, 255, 255, 255};
-            glGenTextures(1, &whiteTexture);
-            glBindTexture(GL_TEXTURE_2D, whiteTexture);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, whitePixel);
+        for (size_t i = 0; i < textureUnitCount; ++i) {
+            if (textureUnits[i] == texture) {
+                return static_cast<int>(i);
+            }
         }
 
-        ~BatchRenderer() override
-        {
-            glDeleteVertexArrays(1, &vao);
-            glDeleteBuffers(1, &vbo);
-            glDeleteBuffers(1, &ebo);
-            glDeleteTextures(1, &whiteTexture);
+        if (textureUnitCount < textureUnits.size()) {
+            textureUnits[textureUnitCount] = texture;
+            return static_cast<int>(textureUnitCount++);
         }
 
-        void beginDraw(const Camera& camera) override
-        {
-            m_projectionMatrix = camera.projection;
+        return -1;
+    }
 
-            m_vertexCursor = 0;
-            m_indexCursor = 0;
-            m_batches.clear();
+    bool BatchState::wouldNeedBreak(GLuint texture)
+    {
+        for (size_t i = 0; i < textureUnitCount; ++i) {
+            if (textureUnits[i] == texture) {
+                return false;
+            }
         }
 
-        void draw(const DrawSettings& settings, const std::function<void(DrawScope&)>& callback) override
-        {
-            auto scope = DrawScope {
-                {m_vertices.get(), MAX_VERTICES},
-                {m_indices.get(), MAX_INDICES},
-                m_vertexCursor,
-                m_indexCursor,
+        return textureUnitCount >= textureUnits.size();
+    }
+
+    bool BatchState::breaksWith(BlendMode blendMode, Shader* shader)
+    {
+        if (this->shader.get() != shader) return true;
+        if (this->blendMode != blendMode) return true;
+        return false;
+    }
+} // namespace p5
+
+namespace p5
+{
+    std::unique_ptr<Renderer> Renderer::create()
+    {
+        GLuint vao = 0;
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+
+        GLuint vbo = 0;
+        glGenBuffers(1, &vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, MAX_VERTICES * sizeof(Vertex), nullptr, GL_DYNAMIC_DRAW);
+
+        GLuint ebo = 0;
+        glGenBuffers(1, &ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_INDICES * sizeof(uint32_t), nullptr, GL_DYNAMIC_DRAW);
+
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texcoord));
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texIndex));
+
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        glEnableVertexAttribArray(3);
+
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        static constexpr uint8_t whitePixel[] = {255, 255, 255, 255};
+        GLuint whiteTexture = 0;
+        glGenTextures(1, &whiteTexture);
+        glBindTexture(GL_TEXTURE_2D, whiteTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, whitePixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        return std::unique_ptr<Renderer>(new Renderer(vao, vbo, ebo, whiteTexture));
+    }
+
+    MeshWriter Renderer::aquireMeshWriter()
+    {
+        return MeshWriter(
+            std::span {m_vertices.get(), MAX_VERTICES},
+            std::span {m_indices.get(), MAX_INDICES},
+            m_vertexCursor,
+            m_indexCursor
+        );
+    }
+
+    void Renderer::beginFrame(const matrix4x4& projectionMatrix)
+    {
+        m_projectionMatrix = projectionMatrix;
+        m_vertexCursor = 0;
+        m_indexCursor = 0;
+        m_drawCalls.clear();
+    }
+
+    void Renderer::endFrame()
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, m_vertexCursor * sizeof(Vertex), m_vertices.get());
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, m_indexCursor * sizeof(uint32_t), m_indices.get());
+
+        glBindVertexArray(m_vao);
+
+        for (const DrawCall& drawCall : m_drawCalls) {
+            glUseProgram(drawCall.shader->getRendererId());
+            setBlendMode(drawCall.blendMode);
+
+            for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+                glActiveTexture(GL_TEXTURE0 + i);
+                glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+            }
+
+            static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
+            if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Texture"); samplersLocation != -1) {
+                glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
+            }
+
+            if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
+                glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
+            }
+
+            glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
+        }
+    }
+
+    void Renderer::submitMesh(MeshWriter& meshWriter, GLuint texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
+    {
+        assert(shader != nullptr && "Shader cannot be null");
+        const GLuint textureToBind = (texture != 0) ? texture : m_whiteTexture;
+        const bool needsBreak = m_drawCalls.empty() or m_currentBatchState.breaksWith(blendMode, shader.get()) or m_currentBatchState.wouldNeedBreak(textureToBind);
+
+        if (needsBreak) {
+            m_currentBatchState = {
+                .blendMode = blendMode,
+                .shader = shader,
+                .textureUnits = {},
+                .textureUnitCount = 0
             };
 
-            callback(scope);
+            DrawCall drawCall = {
+                .indexOffset = meshWriter.getBaseIndex(),
+                .indexCount = 0,
+                .blendMode = blendMode,
+                .shader = shader,
+                .textureUnits = {},
+                .textureUnitCount = 0
+            };
 
-            if (scope.getVertexCount() == 0 or scope.getIndexCount() == 0)
-                return;
-
-            // Check if the settings of the current batch match the previous one, if so, we can merge them into a single draw call
-            if (not m_batches.empty() and m_batches.back().settings == settings) {
-                m_batches.back().indexCount += scope.getIndexCount();
-            } else {
-                m_batches.push_back({settings, m_indexCursor, scope.getIndexCount()});
-            }
-
-            m_vertexCursor += scope.getVertexCount();
-            m_indexCursor += scope.getIndexCount();
+            m_drawCalls.push_back(drawCall);
         }
 
-        void endDraw() override
-        {
-            if (m_batches.empty())
-                return;
+        int slot = m_currentBatchState.getOrAssignSlot(textureToBind);
+        uint32_t base = meshWriter.getBaseVertex();
+        uint32_t count = meshWriter.getVertexCount();
+        for (uint32_t i = base; i < base + count; i++)
+            m_vertices[i].texIndex = (float)slot;
 
-            // info("Flushing " + std::to_string(m_batches.size()) + " batches with total " + std::to_string(m_vertexCursor) + " vertices and " + std::to_string(m_indexCursor) + " indices");
+        m_drawCalls.back().textureUnits[slot] = textureToBind;
+        m_drawCalls.back().textureUnitCount = m_currentBatchState.textureUnitCount;
+        m_drawCalls.back().indexCount += meshWriter.getIndexCount();
+    }
 
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, m_vertexCursor * sizeof(Vertex), m_vertices.get());
-
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, m_indexCursor * sizeof(uint32_t), m_indices.get());
-
-            glBindVertexArray(vao);
-
-            std::optional<GLuint> currentTexture;
-            Shader* currentShader = nullptr;
-            std::optional<BlendMode> currentBlendMode;
-
-            for (const Batch& batch : m_batches) {
-                Shader* shader = batch.settings.shaderId.get();
-                GLuint textureId = batch.settings.textureId.value_or(whiteTexture);
-                BlendMode blendMode = batch.settings.blendMode;
-
-                if (currentBlendMode != blendMode) {
-                    enableBlendMode(blendMode);
-                    currentBlendMode = blendMode;
-                }
-
-                if (currentTexture != textureId) {
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, textureId);
-                    currentTexture = textureId;
-                }
-
-                if (currentShader != shader) {
-                    glUseProgram(shader->getRendererId());
-                    shader->uploadMatrix("u_ProjectionMatrix", m_projectionMatrix);
-                    shader->uploadTexture("u_Texture", 0);
-
-                    currentShader = shader;
-                }
-
-                glDrawElements(drawModeToGlId(batch.settings.drawMode), batch.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(batch.indexStart * sizeof(uint32_t)));
-            }
-        }
-
-    private:
-        struct Batch
-        {
-            DrawSettings settings;
-            size_t indexStart;
-            size_t indexCount;
-        };
-
-        // GPU Buffer
-        GLuint vao, vbo, ebo;
-        GLuint whiteTexture;
-        // GLuint defaultShader;
-
-        // CPU Staging Buffer
-        std::unique_ptr<Vertex[]> m_vertices;
-        std::unique_ptr<uint32_t[]> m_indices;
-
-        // Frame State
-        size_t m_vertexCursor = 0;
-        size_t m_indexCursor = 0;
-        std::vector<Batch> m_batches;
-
-        matrix4x4 m_projectionMatrix;
-    };
-} // namespace p5
-
-namespace p5
-{
-    std::unique_ptr<Renderer> createRenderer()
+    Renderer::Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture)
+        : m_vertices(std::make_unique<Vertex[]>(MAX_VERTICES)),
+          m_indices(std::make_unique<uint32_t[]>(MAX_INDICES)),
+          m_vertexCursor(0),
+          m_indexCursor(0),
+          m_drawCalls(),
+          m_currentBatchState(),
+          m_projectionMatrix(),
+          m_vao(vao),
+          m_vbo(vbo),
+          m_ebo(ebo),
+          m_whiteTexture(whiteTexture)
     {
-        // return std::make_unique<DefaultRenderer>(10'000, 30'000);
-        return std::make_unique<BatchRenderer>();
     }
 } // namespace p5

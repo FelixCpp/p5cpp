@@ -16,11 +16,11 @@ add_executable(
   src/renderer.cpp
   src/math.cpp
   src/tess.cpp
-  src/drawscope.cpp
   src/stroker.cpp
   src/linepath.cpp
   src/font.cpp
-  src/shader.cpp)
+  src/shader.cpp
+  src/meshwriter.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 

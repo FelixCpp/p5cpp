@@ -4,6 +4,7 @@
 #include "shader.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
+#include <cassert>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -232,10 +233,23 @@ namespace p5
     inline static std::unique_ptr<Tesselator> tesselator;
     inline static std::shared_ptr<Shader> defaultShader;
     inline static std::shared_ptr<Shader> textShader;
-    inline static std::unique_ptr<Font> defaultFont;
+    inline static std::shared_ptr<Font> defaultFont;
     inline Window window;
 
     inline RenderState& peekState() { return renderStates.top(); }
+    inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
+    {
+        auto result = (state.shader != nullptr) ? state.shader : defaultShader;
+        assert(result != nullptr && "Current shader cannot be null");
+        return result;
+    }
+
+    inline std::shared_ptr<Font> getCurrentFont(const RenderState& state)
+    {
+        auto result = (state.font != nullptr) ? state.font : defaultFont;
+        assert(result != nullptr && "Current font cannot be null");
+        return result;
+    }
 
     void pushState() { renderStates.push(peekState()); }
     void popState()
@@ -286,40 +300,33 @@ namespace p5
     void background(color_t color)
     {
         const RenderState& state = peekState();
-        const DrawSettings settings = {
-            .shaderId = defaultShader,
-            .textureId = std::nullopt,
-            .blendMode = state.blendMode,
-            .drawMode = DrawMode::triangles,
+        const std::array<float2, 4> positions = {
+            float2 {0.0f, 0.0f},
+            float2 {800.0f, 0.0f},
+            float2 {800.0f, 600.0f},
+            float2 {0.0f, 600.0f}
         };
+        const std::array<float2, 4> texcoords = {
+            float2 {0.0f, 0.0f},
+            float2 {0.0f, 0.0f},
+            float2 {0.0f, 0.0f},
+            float2 {0.0f, 0.0f},
+        };
+        const std::array<color_t, 4> colors = {color, color, color, color};
 
-        renderer->draw(settings, [color](DrawScope& scope) {
-            const std::array<float2, 4> positions = {
-                float2 {0.0f, 0.0f},
-                float2 {800.0f, 0.0f},
-                float2 {800.0f, 600.0f},
-                float2 {0.0f, 600.0f}
-            };
-
-            const std::array<float2, 4> texcoords = {
-                float2 {0.0f, 0.0f},
-                float2 {0.0f, 0.0f},
-                float2 {0.0f, 0.0f},
-                float2 {0.0f, 0.0f}
-            };
-
-            const std::array<color_t, 4> colors = {color, color, color, color};
-
+        {
+            MeshWriter writer = renderer->aquireMeshWriter();
             tesselator->tesselate(
-                scope,
-                DrawPoints {
+                writer,
+                PathPoints {
                     .size = 4,
                     .positions = positions,
                     .texcoords = texcoords,
                     .colors = colors,
                 }
             );
-        });
+            renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+        }
     }
 
     void noFill() { peekState().isFillDisabled = true; }
@@ -374,49 +381,45 @@ namespace p5
     {
     }
 
-    void endShapeImpl(bool shouldClose, const std::optional<FillStyle>& fillStyle, const std::optional<FillStyle>& strokeStyle)
+    void endShapeImpl(bool shouldClose, FillStyle fillStyle, FillStyle strokeStyle)
     {
         const RenderState& state = peekState();
 
-        DrawSettings settings = {
-            .shaderId = defaultShader,
-            .textureId = std::nullopt,
-            .blendMode = state.blendMode,
-            .drawMode = DrawMode::triangles,
-        };
+        if (fillStyle != FillStyle::none) {
+            MeshWriter writer = renderer->aquireMeshWriter();
+            tesselator->tesselate(writer, linepath->buildDrawPoints(fillStyle));
+            renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+        }
 
-        renderer->draw(settings, [shouldClose, &state, &fillStyle, &strokeStyle](DrawScope& scope) {
-            if (const auto style = fillStyle) {
-                tesselator->tesselate(scope, linepath->buildDrawPoints(style.value()));
-            }
+        if (strokeStyle != FillStyle::none) {
+            MeshWriter writer = renderer->aquireMeshWriter();
+            generateDashedStroke(
+                writer,
+                linepath->buildDrawPoints(strokeStyle),
+                StrokePattern {
+                    .segments = state.strokePatternSegments,
+                    .offset = state.strokePatternOffset,
+                },
+                state.strokeWeight,
+                state.strokeCap,
+                state.strokeJoin,
+                state.miterLimit,
+                state.roundJoinThreshold,
+                shouldClose
+            );
 
-            if (const auto style = strokeStyle) {
-                generateDashedStroke(
-                    scope,
-                    linepath->buildDrawPoints(style.value()),
-                    StrokePattern {
-                        .segments = state.strokePatternSegments,
-                        .offset = state.strokePatternOffset,
-                    },
-                    state.strokeWeight,
-                    state.strokeCap,
-                    state.strokeJoin,
-                    state.miterLimit,
-                    state.roundJoinThreshold,
-                    shouldClose
-                );
-            }
-        });
+            renderer->submitMesh(writer, 0, getCurrentShader(state), state.blendMode);
+        }
 
         linepath->clear();
         curveVertexCount = 0;
     }
 
-    void endShape(bool close)
+    void endShape(const bool close)
     {
         const RenderState& state = peekState();
-        const std::optional fillStyle = state.isFillDisabled ? std::nullopt : std::optional(FillStyle::fill);
-        const std::optional strokeStyle = state.isStrokeDisabled ? std::nullopt : std::optional(FillStyle::stroke);
+        const FillStyle fillStyle = state.isFillDisabled ? FillStyle::none : FillStyle::fill;
+        const FillStyle strokeStyle = state.isStrokeDisabled ? FillStyle::none : FillStyle::stroke;
         endShapeImpl(close, fillStyle, strokeStyle);
     }
 
@@ -468,7 +471,7 @@ namespace p5
 
     TextMetrics measureText(std::string_view text)
     {
-        return measureText(text, peekState().font.get() != nullptr ? peekState().font.get() : defaultFont.get(), peekState().textSize, 1.0f);
+        return measureText(text, getCurrentFont(peekState()).get(), peekState().textSize, 1.0f);
     }
 
     TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale)
@@ -502,7 +505,7 @@ namespace p5
             }
 
             if (codepoint == U' ') {
-                if (const Glyph* spaceGlyph = font->getFilledGlyph(U' ', static_cast<int>(textSize))) {
+                if (const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(textSize))) {
                     lineWidth += spaceGlyph->advance.x * scale;
                 }
 
@@ -515,7 +518,7 @@ namespace p5
                 lineWidth += font->getKerning(previousCodepoint, codepoint, static_cast<int>(textSize)) * scale;
             }
 
-            if (const Glyph* glyph = font->getFilledGlyph(codepoint, static_cast<int>(textSize))) {
+            if (const Glyph* glyph = font->getGlyph(codepoint, static_cast<int>(textSize))) {
                 lineWidth += glyph->advance.x * scale;
                 if (lineCount == 1) {
                     ascender = std::max(ascender, glyph->bearing.y * scale);
@@ -639,7 +642,7 @@ namespace p5
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
         }
-        endShapeImpl(false, FillStyle::stroke, std::nullopt);
+        endShapeImpl(false, FillStyle::stroke, FillStyle::none);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -708,7 +711,7 @@ namespace p5
                 vertex(x, y);
             }
         }
-        endShapeImpl(false, FillStyle::stroke, std::nullopt);
+        endShapeImpl(false, FillStyle::stroke, FillStyle::none);
     }
 
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
@@ -753,7 +756,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, std::nullopt, FillStyle::stroke);
+        endShapeImpl(false, FillStyle::none, FillStyle::stroke);
     }
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -773,7 +776,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, std::nullopt, FillStyle::stroke);
+        endShapeImpl(false, FillStyle::none, FillStyle::stroke);
     }
 
     void tint(color_t color) { peekState().tintColor = color; }
@@ -781,41 +784,40 @@ namespace p5
     void image(uint32_t textureId, float left, float top, float width, float height)
     {
         const RenderState& state = peekState();
-
-        DrawSettings settings = {
-            .shaderId = defaultShader,
-            .textureId = textureId,
-            .blendMode = state.blendMode,
-            .drawMode = DrawMode::triangles,
+        const std::array<float2, 4> positions = {
+            float2 {left, top},
+            float2 {left + width, top},
+            float2 {left + width, top + height},
+            float2 {left, top + height}
+        };
+        const std::array<float2, 4> texcoords = {
+            float2 {0.0f, 0.0f},
+            float2 {1.0f, 0.0f},
+            float2 {1.0f, 1.0f},
+            float2 {0.0f, 1.0f}
+        };
+        const std::array<color_t, 4> colors = {
+            state.tintColor,
+            state.tintColor,
+            state.tintColor,
+            state.tintColor
         };
 
-        renderer->draw(settings, [&, left, top, width, height](DrawScope& scope) {
-            const std::array<float2, 4> positions = {
-                float2 {left, top},
-                float2 {left + width, top},
-                float2 {left + width, top + height},
-                float2 {left, top + height}
-            };
-
-            const std::array<float2, 4> texcoords = {
-                float2 {0.0f, 0.0f},
-                float2 {1.0f, 0.0f},
-                float2 {1.0f, 1.0f},
-                float2 {0.0f, 1.0f}
-            };
-
-            const std::array<color_t, 4> colors = {state.tintColor, state.tintColor, state.tintColor, state.tintColor};
+        {
+            MeshWriter writer = renderer->aquireMeshWriter();
 
             tesselator->tesselate(
-                scope,
-                DrawPoints {
+                writer,
+                PathPoints {
                     .size = 4,
                     .positions = positions,
                     .texcoords = texcoords,
                     .colors = colors,
                 }
             );
-        });
+
+            renderer->submitMesh(writer, textureId, getCurrentShader(state), state.blendMode);
+        }
     }
 
     void textFont(std::shared_ptr<Font> font) { peekState().font = font; }
@@ -846,11 +848,11 @@ namespace p5
             case VerticalTextAlign::bottom: py = y - metrics.descender; break;
         }
 
-        if (const Glyph* firstGlyph = font->getFilledGlyph(text.front(), state.textSize)) {
+        if (const Glyph* firstGlyph = font->getGlyph(text.front(), state.textSize)) {
             px -= firstGlyph->bearing.x;
         }
 
-        const Glyph* spaceGlyph = font->getFilledGlyph(U' ', static_cast<int>(state.textSize));
+        const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(state.textSize));
         for (size_t i = 0; i < text.length(); ++i) {
             const char32_t ch = text[i];
 
@@ -866,7 +868,7 @@ namespace p5
                 continue;
             }
 
-            const Glyph* glyph = font->getFilledGlyph(ch, static_cast<int>(state.textSize));
+            const Glyph* glyph = font->getGlyph(ch, static_cast<int>(state.textSize));
             if (glyph == nullptr) {
                 continue;
             }
@@ -876,13 +878,6 @@ namespace p5
                 const char32_t previousCh = text[i - 1];
                 px += font->getKerning(previousCh, ch, static_cast<int>(state.textSize));
             }
-
-            const DrawSettings settings = {
-                .shaderId = textShader,
-                .textureId = font->getGlyphPageTextureId(glyph->pageIndex),
-                .blendMode = state.blendMode,
-                .drawMode = DrawMode::triangles,
-            };
 
             const float left = px + glyph->bearing.x;
             const float top = py - glyph->bearing.y;
@@ -907,17 +902,22 @@ namespace p5
 
             const std::array<color_t, 4> colors = {state.fillColor, state.fillColor, state.fillColor, state.fillColor};
 
-            renderer->draw(settings, [&positions, &texcoords, &colors](DrawScope& scope) {
+            {
+                MeshWriter writer = renderer->aquireMeshWriter();
+
                 tesselator->tesselate(
-                    scope,
-                    DrawPoints {
+                    writer,
+                    PathPoints {
                         .size = 4,
                         .positions = positions,
                         .texcoords = texcoords,
                         .colors = colors,
                     }
                 );
-            });
+
+                std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
+                renderer->submitMesh(writer, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+            }
 
             px += glyph->advance.x;
             py += glyph->advance.y;
@@ -978,7 +978,7 @@ int main()
     std::cout << glGetString(GL_RENDERER) << std::endl;
     std::cout << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
-    renderer = createRenderer();
+    renderer = Renderer::create();
     tesselator = createTesselator();
     linepath = std::make_unique<LinePathBuilder>();
     defaultShader = createDefaultShader();
@@ -1001,9 +1001,9 @@ int main()
 
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
-        renderer->beginDraw(Camera {.projection = projectionMatrix});
+        renderer->beginFrame(projectionMatrix);
         sketch->draw();
-        renderer->endDraw();
+        renderer->endFrame();
         glfwSwapBuffers(window.handle);
 
         while (not renderStates.empty()) renderStates.pop();

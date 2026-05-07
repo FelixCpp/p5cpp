@@ -26,6 +26,7 @@ namespace p5
                     glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &logLength);
                     std::string log(logLength, '\0');
                     glGetShaderInfoLog(vertexShader, logLength, nullptr, log.data());
+                    error("Failed to compile shader:\n" + log);
                     glDeleteShader(vertexShader);
                     return nullptr;
                 }
@@ -43,6 +44,7 @@ namespace p5
                     glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &logLength);
                     std::string log(logLength, '\0');
                     glGetShaderInfoLog(fragmentShader, logLength, nullptr, log.data());
+                    error("Failed to compile shader:\n" + log);
                     glDeleteShader(vertexShader);
                     glDeleteShader(fragmentShader);
                     return nullptr;
@@ -62,6 +64,7 @@ namespace p5
                     glGetProgramiv(programId, GL_INFO_LOG_LENGTH, &logLength);
                     std::string log(logLength, '\0');
                     glGetProgramInfoLog(programId, logLength, nullptr, log.data());
+                    error("Failed to link shader program:\n" + log);
                     glDeleteShader(vertexShader);
                     glDeleteShader(fragmentShader);
                     glDeleteProgram(programId);
@@ -141,18 +144,7 @@ namespace p5
             }
         }
 
-        uint32_t getRendererId() const override
-        {
-            return programId;
-        }
-
-    private:
-        explicit OpenGLShader(uint32_t programId)
-            : programId(programId)
-        {
-        }
-
-        GLint getUniformLocation(std::string_view name)
+        GLint getUniformLocation(std::string_view name) override
         {
             const auto itr = uniformLocationCache.find(std::string(name));
             if (itr != uniformLocationCache.end()) {
@@ -168,6 +160,17 @@ namespace p5
             return location;
         }
 
+        uint32_t getRendererId() const override
+        {
+            return programId;
+        }
+
+    private:
+        explicit OpenGLShader(uint32_t programId)
+            : programId(programId)
+        {
+        }
+
         uint32_t programId;
         std::unordered_map<std::string, int> uniformLocationCache;
     };
@@ -180,80 +183,115 @@ namespace p5
 
 namespace p5
 {
+    inline static constexpr const char* defaultVSource = R"(
+        #version 410 core
 
-    inline static constexpr const char* vSource = R"(
-  #version 330 core
+        layout (location = 0) in vec2 a_Position;
+        layout (location = 1) in vec2 a_TexCoord;
+        layout (location = 2) in vec4 a_Color;
+        layout (location = 3) in float a_TexIndex;
 
-  layout (location = 0) in vec2 a_Position;
-  layout (location = 1) in vec2 a_TexCoord;
-  layout (location = 2) in vec4 a_Color;
+        out vec2 v_TexCoord;
+        out vec4 v_Color;
+        out float v_TexIndex;
 
-  out vec2 v_TexCoord;
-  out vec4 v_Color;
+        uniform mat4 u_ProjectionMatrix;
 
-  uniform mat4 u_ProjectionMatrix;
+        void main() {
+            gl_Position = u_ProjectionMatrix * vec4(a_Position, 0.0, 1.0);
 
-  void main() {
-    gl_Position = u_ProjectionMatrix * vec4(a_Position, 0.0, 1.0);
-    v_TexCoord = a_TexCoord;
-    v_Color = a_Color;
-  }
-)";
+            v_TexCoord = a_TexCoord;
+            v_Color = a_Color;
+            v_TexIndex = a_TexIndex;
+        }
+    )";
 
-    inline static constexpr const char* fSource = R"(
-  #version 330 core
+    inline static constexpr const char* defaultFSource = R"(
+        #version 410 core
 
-  layout (location = 0) out vec4 o_Color;
+        layout (location = 0) out vec4 o_Color;
 
-  in vec2 v_TexCoord;
-  in vec4 v_Color;
+        in vec2 v_TexCoord;
+        in vec4 v_Color;
+        in float v_TexIndex;
 
-  uniform sampler2D u_Texture;
+        uniform sampler2D u_Textures[8];
 
-  void main() {
-    o_Color = texture(u_Texture, v_TexCoord) * v_Color;
-  }
-)";
+        void main() {
+            vec4 texColor = vec4(1.0);
+            switch(int(v_TexIndex)) {
+                case 0: texColor = texture(u_Textures[0], v_TexCoord); break;
+                case 1: texColor = texture(u_Textures[1], v_TexCoord); break;
+                case 2: texColor = texture(u_Textures[2], v_TexCoord); break;
+                case 3: texColor = texture(u_Textures[3], v_TexCoord); break;
+                case 4: texColor = texture(u_Textures[4], v_TexCoord); break;
+                case 5: texColor = texture(u_Textures[5], v_TexCoord); break;
+                case 6: texColor = texture(u_Textures[6], v_TexCoord); break;
+                case 7: texColor = texture(u_Textures[7], v_TexCoord); break;
+                default: break;
+            }
+
+            o_Color = v_Color * texColor;
+        }
+    )";
 
     std::unique_ptr<Shader> createDefaultShader()
     {
-        return loadShader(vSource, fSource);
+        return loadShader(defaultVSource, defaultFSource);
     }
 } // namespace p5
 
 namespace p5
 {
     inline static constexpr const char* textVSource = R"(
-        #version 330 core
+        #version 410 core
 
         layout (location = 0) in vec2 a_Position;
         layout (location = 1) in vec2 a_TexCoord;
         layout (location = 2) in vec4 a_Color;
+        layout (location = 3) in float a_TexIndex;
 
         out vec2 v_TexCoord;
         out vec4 v_Color;
+        out float v_TexIndex;
 
         uniform mat4 u_ProjectionMatrix;
 
         void main() {
             gl_Position = u_ProjectionMatrix * vec4(a_Position, 0.0, 1.0);
+
             v_TexCoord = a_TexCoord;
             v_Color = a_Color;
+            v_TexIndex = a_TexIndex;
         }
     )";
 
     inline static constexpr const char* textFSource = R"(
-        #version 330 core
+        #version 410 core
 
         layout (location = 0) out vec4 o_Color;
 
         in vec2 v_TexCoord;
         in vec4 v_Color;
+        in float v_TexIndex;
 
-        uniform sampler2D u_Texture;
+        uniform sampler2D u_Textures[8];
 
         void main() {
-            float alpha = texture(u_Texture, v_TexCoord).r;
+            vec4 texColor = vec4(1.0);
+            switch(int(v_TexIndex)) {
+                case 0: texColor = texture(u_Textures[0], v_TexCoord); break;
+                case 1: texColor = texture(u_Textures[1], v_TexCoord); break;
+                case 2: texColor = texture(u_Textures[2], v_TexCoord); break;
+                case 3: texColor = texture(u_Textures[3], v_TexCoord); break;
+                case 4: texColor = texture(u_Textures[4], v_TexCoord); break;
+                case 5: texColor = texture(u_Textures[5], v_TexCoord); break;
+                case 6: texColor = texture(u_Textures[6], v_TexCoord); break;
+                case 7: texColor = texture(u_Textures[7], v_TexCoord); break;
+                default: break;
+            }
+
+            float alpha = texColor.r;
             o_Color = vec4(v_Color.rgb, v_Color.a * alpha);
         }
     )";

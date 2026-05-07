@@ -1,5 +1,4 @@
 #include "linepath.hpp"
-#include "renderer.hpp"
 
 #include <algorithm>
 
@@ -15,9 +14,9 @@ namespace p5
     {
     }
 
-    DrawPoints LinePathBuilder::buildDrawPoints(FillStyle type)
+    PathPoints LinePathBuilder::buildDrawPoints(FillStyle type)
     {
-        return DrawPoints {
+        return PathPoints {
             .size = drawPointCount,
             .positions = {drawPointPositions.get(), drawPointCount},
             .texcoords = {drawPointTexCoords.get(), drawPointCount},
