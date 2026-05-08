@@ -181,15 +181,15 @@ namespace p5
         uint32_t lineCount;
     };
 
-    // struct Canvas
-    // {
-    //     virtual ~Canvas() = default;
-    //     virtual uint32_t getTextureId() const = 0;
-    //     virtual uint32_t getRendererId() const = 0;
-    //     virtual uint2 getSize() const = 0;
-    // };
+    struct Canvas
+    {
+        virtual ~Canvas() = default;
+        virtual uint32_t getTextureId() const = 0;
+        virtual uint32_t getRendererId() const = 0;
+        virtual uint2 getSize() const = 0;
+    };
 
-    // std::unique_ptr<Canvas> createCanvas(int width, int height);
+    std::unique_ptr<Canvas> createCanvas(int width, int height);
 
     struct Shader
     {
@@ -224,8 +224,8 @@ namespace p5
     void pushState();
     void popState();
 
-    // void canvas(std::shared_ptr<Canvas> canvas);
-    // void noCanvas();
+    void canvas(std::shared_ptr<Canvas> canvas);
+    void noCanvas();
 
     void pushMatrix();
     void popMatrix();

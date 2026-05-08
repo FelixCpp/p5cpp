@@ -7,8 +7,11 @@ using namespace p5;
 struct Starfield : p5::Sketch
 {
 public:
+    std::shared_ptr<Canvas> layer;
+
     void setup() override
     {
+        layer = createCanvas(400, 400);
     }
 
     void draw() override
@@ -21,6 +24,10 @@ public:
         fill(255);
         text("Hello, World!", 150.0f, 150.0f);
 
+        canvas(layer);
+        background(100);
+        noCanvas();
+
         // canvas(layer);
         // background(255);
         // fill(255, 0, 0);
@@ -29,7 +36,7 @@ public:
         // rect(200.0f, 50.0f, 150.0f, 150.0f);
         // noCanvas();
 
-        // image(layer->getTextureId(), mouseX, mouseY, 400.0f, 400.0f);
+        image(layer->getTextureId(), mouseX, mouseY, 400.0f, 400.0f);
     }
 
     void destroy() override

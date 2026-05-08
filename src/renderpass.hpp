@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace p5
 {
@@ -19,5 +20,11 @@ namespace p5
 
         std::array<uint32_t, 8> textureUnits;
         size_t textureUnitCount;
+    };
+
+    struct RenderPass
+    {
+        std::shared_ptr<Canvas> canvas;
+        std::vector<DrawCall> drawCalls;
     };
 } // namespace p5

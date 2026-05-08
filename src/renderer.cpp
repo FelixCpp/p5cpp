@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "canvas.hpp"
 
 #include <cassert>
 #include <optional>
@@ -86,7 +87,7 @@ namespace p5
 
     void Renderer::endFrame()
     {
-        if (m_drawCalls.empty()) {
+        if (m_renderPasses.empty()) {
             return;
         }
 
@@ -98,31 +99,57 @@ namespace p5
 
         glBindVertexArray(m_vao);
 
-        for (const DrawCall& drawCall : m_drawCalls) {
-            glUseProgram(drawCall.shader->getRendererId());
-            setBlendMode(drawCall.blendMode);
+        for (const RenderPass& renderPass : m_renderPasses) {
+            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
+            glViewport(0, 0, renderPass.canvas->getSize().x, renderPass.canvas->getSize().y);
 
-            for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
-                glActiveTexture(GL_TEXTURE0 + i);
-                glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+            for (const DrawCall& drawCall : renderPass.drawCalls) {
+                glUseProgram(drawCall.shader->getRendererId());
+                setBlendMode(drawCall.blendMode);
+
+                for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+                    glActiveTexture(GL_TEXTURE0 + i);
+                    glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+                }
+
+                static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
+                if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
+                    glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
+                }
+
+                if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
+                    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
+                }
+
+                glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
             }
-
-            static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-            if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
-                glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
-            }
-
-            if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
-                glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
-            }
-
-            glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
         }
+
+        m_renderPasses.clear();
+    }
+
+    void Renderer::push(std::shared_ptr<Canvas> canvas)
+    {
+        for (size_t i = 0; i < m_renderPasses.size(); ++i) {
+            if (m_renderPasses[i].canvas->getRendererId() == canvas->getRendererId()) {
+                m_activeRenderPassIndex = i;
+                return;
+            }
+        }
+
+        m_renderPasses.push_back(RenderPass {
+            .canvas = std::move(canvas),
+            .drawCalls = {},
+        });
+        m_activeRenderPassIndex = m_renderPasses.size() - 1;
     }
 
     void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
     {
-        if (m_drawCalls.empty()) {
+        RenderPass& activeRenderPass = m_renderPasses[m_activeRenderPassIndex];
+        std::vector<DrawCall>& drawCalls = activeRenderPass.drawCalls;
+
+        if (drawCalls.empty()) {
             DrawCall drawCall = {
                 .indexOffset = result.baseIndex,
                 .indexCount = 0,
@@ -132,9 +159,9 @@ namespace p5
                 .textureUnitCount = 0,
             };
 
-            m_drawCalls.push_back(drawCall);
+            drawCalls.push_back(drawCall);
         } else {
-            DrawCall& drawCall = m_drawCalls.back();
+            DrawCall& drawCall = drawCalls.back();
             const bool hasShaderChange = drawCall.shader != shader;
             const bool hasBlendModeChange = drawCall.blendMode != blendMode;
             const bool hasTextureChange = std::invoke([&]() {
@@ -159,11 +186,11 @@ namespace p5
                     .textureUnitCount = 0,
                 };
 
-                m_drawCalls.push_back(newDrawCall);
+                drawCalls.push_back(newDrawCall);
             }
         }
 
-        DrawCall& drawCall = m_drawCalls.back();
+        DrawCall& drawCall = drawCalls.back();
         drawCall.indexCount += result.indexCount;
 
         std::optional<size_t> foundTextureUnitIndex;

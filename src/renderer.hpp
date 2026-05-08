@@ -22,6 +22,8 @@ namespace p5
         void endFrame();
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
 
+        void push(std::shared_ptr<Canvas> canvas);
+
         void submitMesh(const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
 
     private:
@@ -34,7 +36,8 @@ namespace p5
 
         matrix4x4 m_projectionMatrix;
 
-        std::vector<DrawCall> m_drawCalls;
+        std::vector<RenderPass> m_renderPasses;
+        size_t m_activeRenderPassIndex;
 
         GLuint m_vao;
         GLuint m_vbo;
