@@ -18,105 +18,6 @@
 #include <stack>
 #include <numbers>
 #include <algorithm>
-#include <random>
-
-namespace p5
-{
-    float radians(float degrees) { return degrees * (std::numbers::pi_v<float> / 180.0f); }
-    float degrees(float radians) { return radians * (180.0f / std::numbers::pi_v<float>); }
-    float remap(float value, float fromLow, float fromHigh, float toLow, float toHigh)
-    {
-        const float t = (value - fromLow) / (fromHigh - fromLow);
-        return std::lerp(toLow, toHigh, t);
-    }
-
-} // namespace p5
-
-namespace p5
-{
-    class XShiro256Random
-    {
-    public:
-        explicit XShiro256Random(uint64_t seed = std::random_device {}())
-        {
-            // Seed mit SplitMix64 initialisieren – xoshiro braucht einen
-            // guten initialen Zustand, ein einfacher Seed-Wert reicht nicht
-            setSeed(seed);
-        }
-
-        void setSeed(uint64_t seed)
-        {
-            state[0] = splitMix64(seed);
-            state[1] = splitMix64(state[0]);
-            state[2] = splitMix64(state[1]);
-            state[3] = splitMix64(state[2]);
-        }
-
-        // Rohes uint64 [0, 2^64)
-        uint64_t next()
-        {
-            const uint64_t result = rotl(state[0] + state[3], 23) + state[0];
-
-            const uint64_t t = state[1] << 17;
-            state[2] ^= state[0];
-            state[3] ^= state[1];
-            state[1] ^= state[2];
-            state[0] ^= state[3];
-            state[2] ^= t;
-            state[3] = rotl(state[3], 45);
-
-            return result;
-        }
-
-        // Float [0.0f, 1.0f)
-        float nextFloat()
-        {
-            // Obere 23 Bits als Mantisse nutzen
-            return (next() >> 41) * (1.0f / (1ull << 23));
-        }
-
-        // Float [min, max)
-        float nextFloat(float min, float max)
-        {
-            return min + nextFloat() * (max - min);
-        }
-
-        // Int [min, max]
-        int32_t nextInt(int32_t min, int32_t max)
-        {
-            // Debiased Modulo – vermeidet den klassischen Modulo-Bias
-            const uint64_t range = static_cast<uint64_t>(max - min) + 1;
-            const uint64_t threshold = (UINT64_MAX - range + 1) % range;
-            uint64_t r;
-            do {
-                r = next();
-            } while (r < threshold);
-            return static_cast<int32_t>(r % range) + min;
-        }
-
-    private:
-        uint64_t state[4];
-
-        static uint64_t rotl(uint64_t x, int k)
-        {
-            return (x << k) | (x >> (64 - k));
-        }
-
-        static uint64_t splitMix64(uint64_t x)
-        {
-            x += 0x9e3779b97f4a7c15ull;
-            x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
-            x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
-            return x ^ (x >> 31);
-        }
-    };
-
-    inline static XShiro256Random randomGenerator;
-
-    void randomSeed(uint64_t seed) { randomGenerator = XShiro256Random(seed); }
-    float random(float max) { return randomGenerator.nextFloat(0.0f, max); }
-    float random(float min, float max) { return randomGenerator.nextFloat(min, max); }
-} // namespace p5
 
 namespace p5
 {
@@ -211,9 +112,16 @@ namespace p5
         float textSize = 12.0f;
 
         std::shared_ptr<Shader> shader;
+        std::stack<std::shared_ptr<Canvas>> canvases;
 
         HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
         VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
+    };
+
+    struct RenderLayer
+    {
+        RenderPass renderPass;
+        std::stack<RenderState> renderStates;
     };
 
     struct Window
@@ -225,8 +133,7 @@ namespace p5
         int windowHeight;
     };
 
-    inline static std::stack<RenderState> renderStates;
-
+    inline static std::stack<RenderLayer> renderLayers;
     inline static size_t curveVertexCount;
     inline static std::array<float2, 4> curveVertexPositions;
 
@@ -238,11 +145,11 @@ namespace p5
     inline static std::shared_ptr<Shader> textShader;
     inline static std::shared_ptr<Font> defaultFont;
     inline static std::shared_ptr<Canvas> defaultCanvas;
-    inline static std::shared_ptr<Canvas> activeCanvas;
 
     inline Window window;
 
-    inline RenderState& peekState() { return renderStates.top(); }
+    inline RenderLayer& peekLayer() { return renderLayers.top(); }
+    inline RenderState& peekState() { return peekLayer().renderStates.top(); }
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
@@ -257,35 +164,32 @@ namespace p5
         return result;
     }
 
-    // inline std::shared_ptr<Canvas> getCurrentCanvas()
-    // {
-    //     auto result = (activeCanvas != nullptr) ? activeCanvas : defaultCanvas;
-    //     assert(result != nullptr && "Current canvas cannot be null");
-    //     return result;
-    // }
-
-    void pushState() { renderStates.push(peekState()); }
-    void popState()
+    inline std::shared_ptr<Canvas> getCurrentCanvas(const RenderState& state)
     {
-        if (renderStates.size() > 1) {
-            renderStates.pop();
+        if (state.canvases.empty()) {
+            return defaultCanvas;
         }
 
-        // const RenderState& state = peekState();
-        //
-        // renderer->push(activeCanvas);
+        auto result = state.canvases.top();
+        assert(result != nullptr && "Current canvas cannot be null");
+        return result;
     }
 
-    void canvas(std::shared_ptr<Canvas> canvas)
+    void pushCanvas(std::shared_ptr<Canvas> canvas)
     {
-        activeCanvas = std::move(canvas);
-        renderer->push(activeCanvas);
     }
 
-    void noCanvas()
+    void popCanvas()
     {
-        activeCanvas = defaultCanvas;
-        renderer->push(activeCanvas);
+    }
+
+    void pushState() { peekLayer().renderStates.push(peekState()); }
+    void popState()
+    {
+        RenderLayer& layer = peekLayer();
+        if (layer.renderStates.size() > 1) {
+            layer.renderStates.pop();
+        }
     }
 
     void pushMatrix()
@@ -358,7 +262,7 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
+            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
         }
     }
 
@@ -432,7 +336,7 @@ namespace p5
                 case ShapeType::concave: drawResult = concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
             }
 
-            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         if (strokeStyle != FillStyle::none) {
@@ -452,7 +356,7 @@ namespace p5
                 shouldClose
             );
 
-            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         linepath->clear();
@@ -861,7 +765,7 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(drawResult, textureId, getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, textureId, getCurrentShader(state), state.blendMode);
         }
     }
 
@@ -965,7 +869,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderer->submitMesh(drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
             }
 
             px += glyph->advance.x;
@@ -1035,12 +939,19 @@ int main()
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     defaultCanvas = createCanvas(window.windowWidth, window.windowHeight);
-    activeCanvas = defaultCanvas;
-    renderStates.push(RenderState {});
+
+    RenderLayer defaultLayer {
+        .renderPass = RenderPass {
+            .canvas = defaultCanvas,
+            .drawCalls = {},
+        },
+        .renderStates = std::stack<RenderState> {},
+    };
+
+    renderLayers.push(defaultLayer);
 
     static std::unique_ptr sketch = createSketch();
     renderer->beginFrame(projectionMatrix);
-    renderer->push(defaultCanvas);
     sketch->setup();
     renderer->endFrame();
 
@@ -1059,15 +970,14 @@ int main()
         glfwPollEvents();
 
         renderer->beginFrame(projectionMatrix);
-        renderer->push(defaultCanvas);
         sketch->draw();
         renderer->endFrame();
 
         blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);
 
-        while (not renderStates.empty()) renderStates.pop();
-        renderStates.push(RenderState {});
+        while (not renderLayers.empty()) renderLayers.pop();
+        renderLayers.push(defaultLayer);
     }
 
     sketch->destroy();

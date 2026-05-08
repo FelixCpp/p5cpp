@@ -1,5 +1,4 @@
 #include "renderer.hpp"
-#include "canvas.hpp"
 
 #include <cassert>
 #include <optional>
@@ -85,11 +84,16 @@ namespace p5
         m_indexCursor = 0;
     }
 
-    void Renderer::endFrame()
+    void Renderer::endFrame(std::span<std::shared_ptr<Canvas>> canvases, std::span<std::vector<DrawCall>> drawCalls)
     {
-        if (m_renderPasses.empty()) {
+        assert(canvases.size() == drawCalls.size() && "Mismatched canvases and draw call batches");
+        const size_t size = canvases.size();
+        if (size == 0) {
             return;
         }
+
+        std::fprintf(stdout, "Renderer: %zu render passes, %u vertices, %u indices\n", size, m_vertexCursor, m_indexCursor);
+        std::fflush(stdout);
 
         glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, m_vertexCursor * sizeof(Vertex), m_vertices.get());
@@ -99,11 +103,13 @@ namespace p5
 
         glBindVertexArray(m_vao);
 
-        for (const RenderPass& renderPass : m_renderPasses) {
-            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
-            glViewport(0, 0, renderPass.canvas->getSize().x, renderPass.canvas->getSize().y);
+        for (size_t i = 0; i < size; ++i) {
+            std::shared_ptr<Canvas>& canvas = canvases[i];
 
-            for (const DrawCall& drawCall : renderPass.drawCalls) {
+            glBindFramebuffer(GL_FRAMEBUFFER, canvas->getRendererId());
+            glViewport(0, 0, canvas->getSize().x, canvas->getSize().y);
+
+            for (const DrawCall& drawCall : drawCalls[i]) {
                 glUseProgram(drawCall.shader->getRendererId());
                 setBlendMode(drawCall.blendMode);
 
@@ -124,31 +130,10 @@ namespace p5
                 glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
             }
         }
-
-        m_renderPasses.clear();
     }
 
-    void Renderer::push(std::shared_ptr<Canvas> canvas)
+    void Renderer::submitMesh(std::vector<DrawCall>& drawCalls, const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
     {
-        for (size_t i = 0; i < m_renderPasses.size(); ++i) {
-            if (m_renderPasses[i].canvas->getRendererId() == canvas->getRendererId()) {
-                m_activeRenderPassIndex = i;
-                return;
-            }
-        }
-
-        m_renderPasses.push_back(RenderPass {
-            .canvas = std::move(canvas),
-            .drawCalls = {},
-        });
-        m_activeRenderPassIndex = m_renderPasses.size() - 1;
-    }
-
-    void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
-    {
-        RenderPass& activeRenderPass = m_renderPasses[m_activeRenderPassIndex];
-        std::vector<DrawCall>& drawCalls = activeRenderPass.drawCalls;
-
         if (drawCalls.empty()) {
             DrawCall drawCall = {
                 .indexOffset = result.baseIndex,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "p5.hpp"
 #include "vertex.hpp"
 #include "drawscope.hpp"
 #include "renderpass.hpp"
@@ -7,6 +8,7 @@
 #include <glad/glad.h>
 
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace p5
@@ -19,12 +21,10 @@ namespace p5
         DrawScope aquireDrawScope();
 
         void beginFrame(const matrix4x4& projectionMatrix);
-        void endFrame();
+        void endFrame(std::span<RenderPass*> renderPasses);
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
 
-        void push(std::shared_ptr<Canvas> canvas);
-
-        void submitMesh(const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
+        void submitMesh(std::vector<DrawCall>& drawCalls, const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
 
     private:
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture);
@@ -35,9 +35,6 @@ namespace p5
         uint32_t m_indexCursor;
 
         matrix4x4 m_projectionMatrix;
-
-        std::vector<RenderPass> m_renderPasses;
-        size_t m_activeRenderPassIndex;
 
         GLuint m_vao;
         GLuint m_vbo;

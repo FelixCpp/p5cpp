@@ -8,10 +8,12 @@ struct Starfield : p5::Sketch
 {
 public:
     std::shared_ptr<Canvas> layer;
+    std::shared_ptr<Canvas> layer2;
 
     void setup() override
     {
         layer = createCanvas(400, 400);
+        layer2 = createCanvas(200, 200);
     }
 
     void draw() override
@@ -24,9 +26,16 @@ public:
         fill(255);
         text("Hello, World!", 150.0f, 150.0f);
 
-        canvas(layer);
+        pushCanvas(layer);
         background(100);
-        noCanvas();
+
+        // pushCanvas(layer2);
+        // background(0, 255, 0);
+        // popCanvas();
+
+        fill(0, 0, 255);
+        rect(50.0f, 50.0f, 150.0f, 150.0f);
+        popCanvas();
 
         // canvas(layer);
         // background(255);
@@ -36,6 +45,7 @@ public:
         // rect(200.0f, 50.0f, 150.0f, 150.0f);
         // noCanvas();
 
+        image(layer2->getTextureId(), 50.0f, 50.0f, 150.0f, 150.0f);
         image(layer->getTextureId(), mouseX, mouseY, 400.0f, 400.0f);
     }
 
