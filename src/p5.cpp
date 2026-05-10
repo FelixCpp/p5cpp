@@ -79,51 +79,6 @@ namespace p5
 
 namespace p5
 {
-    struct RenderState
-    {
-        color_t fillColor = color(255, 255, 255);
-        color_t strokeColor = color(255, 255, 255);
-        color_t tintColor = color(255, 255, 255);
-
-        float strokeWeight = 1.0f;
-        StrokeCap strokeCap = StrokeCap::round;
-        StrokeJoin strokeJoin = StrokeJoin::round;
-        float miterLimit = 10.0f;
-        float roundJoinThreshold = 0.44f; // 25°
-
-        BlendMode blendMode = BlendMode::alpha;
-
-        std::stack<matrix4x4> metrics = std::stack<matrix4x4>({matrix4x4::identity});
-
-        bool isFillDisabled = false;
-        bool isStrokeDisabled = false;
-
-        uint32_t bezierDetail = 20;
-        float invBezierDetail = 1.0f / 20.0f;
-
-        float curveTightness = 0.0f;
-        uint32_t curveDetail = 20;
-        float invCurveDetail = 1.0f / 20.0f;
-
-        std::vector<float> strokePatternSegments;
-        float strokePatternOffset = 0.0f;
-
-        std::shared_ptr<Font> font;
-        float textSize = 12.0f;
-
-        std::shared_ptr<Shader> shader;
-        std::stack<std::shared_ptr<Canvas>> canvases;
-
-        HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
-        VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
-    };
-
-    struct RenderLayer
-    {
-        RenderPass renderPass;
-        std::stack<RenderState> renderStates;
-    };
-
     struct Window
     {
         GLFWwindow* handle;
@@ -133,7 +88,9 @@ namespace p5
         int windowHeight;
     };
 
-    inline static std::stack<RenderLayer> renderLayers;
+    inline static std::unique_ptr<RenderPassStack> renderPasses;
+    inline static size_t activeRenderLayerIndex;
+
     inline static size_t curveVertexCount;
     inline static std::array<float2, 4> curveVertexPositions;
 
@@ -148,8 +105,8 @@ namespace p5
 
     inline Window window;
 
-    inline RenderLayer& peekLayer() { return renderLayers.top(); }
-    inline RenderState& peekState() { return peekLayer().renderStates.top(); }
+    inline RenderPass& peekPass() { return renderPasses->peek(); }
+    inline RenderState& peekState() { return peekPass().renderStates.peek(); }
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
@@ -175,22 +132,17 @@ namespace p5
         return result;
     }
 
-    void pushCanvas(std::shared_ptr<Canvas> canvas)
+    inline std::vector<DrawCall>& getDrawCalls()
     {
+        return peekPass().drawCalls;
     }
 
-    void popCanvas()
-    {
-    }
+    void pushCanvas(std::shared_ptr<Canvas> canvas) { renderPasses->push(canvas); }
+    void popCanvas() { renderPasses->pop(); }
+    void resetCanvas() { renderPasses->reset(); }
 
-    void pushState() { peekLayer().renderStates.push(peekState()); }
-    void popState()
-    {
-        RenderLayer& layer = peekLayer();
-        if (layer.renderStates.size() > 1) {
-            layer.renderStates.pop();
-        }
-    }
+    void pushState() { peekPass().renderStates.push(); }
+    void popState() { peekPass().renderStates.pop(); }
 
     void pushMatrix()
     {
@@ -235,7 +187,7 @@ namespace p5
     void background(color_t color)
     {
         const RenderState& state = peekState();
-        const uint2 size = uint2 {800, 600}; // TODO: This should be matching the current canvas size, not the window size
+        const uint2 size = peekPass().canvas->getSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -262,7 +214,9 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::none);
+            std::fprintf(stdout, "Current Layer: %zu\n", activeRenderLayerIndex);
+            std::fflush(stdout);
+            renderer->submitMesh(getDrawCalls(), drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::alpha);
         }
     }
 
@@ -336,7 +290,7 @@ namespace p5
                 case ShapeType::concave: drawResult = concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
             }
 
-            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(getDrawCalls(), drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         if (strokeStyle != FillStyle::none) {
@@ -356,7 +310,7 @@ namespace p5
                 shouldClose
             );
 
-            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(getDrawCalls(), drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         linepath->clear();
@@ -740,6 +694,13 @@ namespace p5
             transformPoint(state.metrics.top(), {left + width, top + height}),
             transformPoint(state.metrics.top(), {left, top + height}),
         };
+
+        // const std::array<float2, 4> positions = {
+        //     float2 {left, top},
+        //     float2 {left + width, top},
+        //     float2 {left + width, top + height},
+        //     float2 {left, top + height}
+        // };
         const std::array<float2, 4> texcoords = {
             float2 {0.0f, 0.0f},
             float2 {1.0f, 0.0f},
@@ -765,7 +726,9 @@ namespace p5
                 }
             );
 
-            renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, textureId, getCurrentShader(state), state.blendMode);
+            std::fprintf(stdout, "Current Layer: %zu\n", activeRenderLayerIndex);
+            std::fflush(stdout);
+            renderer->submitMesh(getDrawCalls(), drawResult, textureId, getCurrentShader(state), state.blendMode);
         }
     }
 
@@ -869,7 +832,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderer->submitMesh(peekLayer().renderPass.drawCalls, drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderer->submitMesh(getDrawCalls(), drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
             }
 
             px += glyph->advance.x;
@@ -914,7 +877,6 @@ int main()
     glfwSetFramebufferSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
         window.framebufferWidth = width;
         window.framebufferHeight = height;
-        glViewport(0, 0, width, height);
     });
 
     glfwSetCursorPosCallback(window.handle, [](GLFWwindow* handle, double x, double y) {
@@ -939,21 +901,12 @@ int main()
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     defaultCanvas = createCanvas(window.windowWidth, window.windowHeight);
-
-    RenderLayer defaultLayer {
-        .renderPass = RenderPass {
-            .canvas = defaultCanvas,
-            .drawCalls = {},
-        },
-        .renderStates = std::stack<RenderState> {},
-    };
-
-    renderLayers.push(defaultLayer);
+    renderPasses = std::make_unique<RenderPassStack>(defaultCanvas);
 
     static std::unique_ptr sketch = createSketch();
     renderer->beginFrame(projectionMatrix);
     sketch->setup();
-    renderer->endFrame();
+    renderer->endFrame(renderPasses->getRenderPasses());
 
     glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
         if (action == GLFW_PRESS) {
@@ -971,13 +924,14 @@ int main()
 
         renderer->beginFrame(projectionMatrix);
         sketch->draw();
-        renderer->endFrame();
+        renderer->endFrame(renderPasses->getRenderPasses());
 
+        if (first) {
+            resetCanvas();
+            first = false;
+        }
         blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);
-
-        while (not renderLayers.empty()) renderLayers.pop();
-        renderLayers.push(defaultLayer);
     }
 
     sketch->destroy();

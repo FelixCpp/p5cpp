@@ -8,34 +8,27 @@ struct Starfield : p5::Sketch
 {
 public:
     std::shared_ptr<Canvas> layer;
-    std::shared_ptr<Canvas> layer2;
+    // std::shared_ptr<Canvas> layer2;
 
     void setup() override
     {
         layer = createCanvas(400, 400);
-        layer2 = createCanvas(200, 200);
+        // layer2 = createCanvas(200, 200);
+
+        pushCanvas(layer);
+        background(100);
+        popCanvas();
     }
 
     void draw() override
     {
         background(51);
-        fill(255, 0, 0);
-        rect(100.0f, 100.0f, 200.0f, 200.0f);
+        // fill(255, 0, 0);
+        // rect(100.0f, 100.0f, 200.0f, 200.0f);
 
-        textSize(48.0f);
-        fill(255);
-        text("Hello, World!", 150.0f, 150.0f);
-
-        pushCanvas(layer);
-        background(100);
-
-        // pushCanvas(layer2);
-        // background(0, 255, 0);
-        // popCanvas();
-
-        fill(0, 0, 255);
-        rect(50.0f, 50.0f, 150.0f, 150.0f);
-        popCanvas();
+        // textSize(48.0f);
+        // fill(255);
+        // text("Hello, World!", 150.0f, 150.0f);
 
         // canvas(layer);
         // background(255);
@@ -45,8 +38,9 @@ public:
         // rect(200.0f, 50.0f, 150.0f, 150.0f);
         // noCanvas();
 
-        image(layer2->getTextureId(), 50.0f, 50.0f, 150.0f, 150.0f);
-        image(layer->getTextureId(), mouseX, mouseY, 400.0f, 400.0f);
+        // image(layer2->getTextureId(), 50.0f, 50.0f, 150.0f, 150.0f);
+        // background(255, 0, 0);
+        image(layer->getTextureId(), 150.0f, mouseY, 400.0f, 400.0f);
     }
 
     void destroy() override

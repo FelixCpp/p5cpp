@@ -21,7 +21,7 @@ namespace p5
         DrawScope aquireDrawScope();
 
         void beginFrame(const matrix4x4& projectionMatrix);
-        void endFrame(std::span<RenderPass*> renderPasses);
+        void endFrame(std::span<RenderPass> renderPasses);
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
 
         void submitMesh(std::vector<DrawCall>& drawCalls, const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);

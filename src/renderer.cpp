@@ -84,10 +84,9 @@ namespace p5
         m_indexCursor = 0;
     }
 
-    void Renderer::endFrame(std::span<std::shared_ptr<Canvas>> canvases, std::span<std::vector<DrawCall>> drawCalls)
+    void Renderer::endFrame(std::span<RenderPass> renderPasses)
     {
-        assert(canvases.size() == drawCalls.size() && "Mismatched canvases and draw call batches");
-        const size_t size = canvases.size();
+        const size_t size = renderPasses.size();
         if (size == 0) {
             return;
         }
@@ -104,12 +103,12 @@ namespace p5
         glBindVertexArray(m_vao);
 
         for (size_t i = 0; i < size; ++i) {
-            std::shared_ptr<Canvas>& canvas = canvases[i];
+            std::shared_ptr<Canvas>& canvas = renderPasses[i].canvas;
 
             glBindFramebuffer(GL_FRAMEBUFFER, canvas->getRendererId());
             glViewport(0, 0, canvas->getSize().x, canvas->getSize().y);
 
-            for (const DrawCall& drawCall : drawCalls[i]) {
+            for (const DrawCall& drawCall : renderPasses[i].drawCalls) {
                 glUseProgram(drawCall.shader->getRendererId());
                 setBlendMode(drawCall.blendMode);
 
