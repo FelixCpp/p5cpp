@@ -81,7 +81,7 @@ namespace p5
         // clang-format on
     }
 
-    matrix4x4 ortho(float left, float right, float top, float bottom, float near, float far)
+    matrix4x4 ortho(float left, float top, float right, float bottom, float near, float far)
     {
         const float rcpWidth = 1.0f / (right - left);
         const float rcpHeight = 1.0f / (bottom - top);

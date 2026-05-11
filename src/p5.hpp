@@ -87,7 +87,7 @@ namespace p5
     matrix4x4 translation(float x, float y);
     matrix4x4 scaling(float x, float y);
     matrix4x4 rotation(float angle);
-    matrix4x4 ortho(float left, float right, float top, float bottom, float near, float far);
+    matrix4x4 ortho(float left, float top, float right, float bottom, float near, float far);
     matrix4x4 perspective(float fovY, float aspect, float near, float far);
     matrix4x4 lookAt(float2 eye, float2 center, float2 up);
     float2 transformPoint(const matrix4x4& matrix, float2 point);

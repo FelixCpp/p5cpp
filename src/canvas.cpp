@@ -20,6 +20,9 @@ namespace p5
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glBindTexture(GL_TEXTURE_2D, 0);
 
+            std::fprintf(stdout, "Created texture with ID %u for canvas\n", textureId);
+            std::fflush(stdout);
+
             GLuint rboId = 0;
             glGenRenderbuffers(1, &rboId);
             glBindRenderbuffer(GL_RENDERBUFFER, rboId);
@@ -90,6 +93,6 @@ namespace p5
     {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, width, height, 0, height, width, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
 } // namespace p5

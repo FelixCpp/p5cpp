@@ -121,7 +121,7 @@ namespace p5
     void popState() { renderStates->pop(); }
 
     void pushCanvas(std::shared_ptr<Canvas> canvas) { renderer->beginPass(std::move(canvas)); }
-    void popCanvas() { renderer->beginPass(defaultCanvas); }
+    void popCanvas() { renderer->endPass(); }
 
     void pushMatrix() { peekState().metrics.push(); }
     void popMatrix() { peekState().metrics.pop(); }
@@ -643,7 +643,6 @@ namespace p5
             transformPoint(peekMatrix(), {left + width, top + height}),
             transformPoint(peekMatrix(), {left, top + height}),
         };
-
         const std::array<float2, 4> texcoords = {
             float2 {0.0f, 1.0f},
             float2 {1.0f, 1.0f},
@@ -812,7 +811,7 @@ int main()
     glfwSetWindowSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
         window.windowWidth = width;
         window.windowHeight = height;
-        projectionMatrix = ortho(0.0f, static_cast<float>(window.windowWidth), static_cast<float>(window.windowHeight), 0.0f, -1.0f, 1.0f);
+        projectionMatrix = ortho(0.0f, 0.0f, static_cast<float>(window.windowWidth), static_cast<float>(window.windowHeight), -1.0f, 1.0f);
     });
 
     glfwSetFramebufferSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
@@ -841,6 +840,8 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
+    std::fprintf(stdout, "Creating default canvas\n");
+    std::fflush(stdout);
     defaultCanvas = createCanvas(800, 600);
     renderStates = std::make_unique<RenderStateStack>();
 
@@ -860,15 +861,19 @@ int main()
 
     glfwShowWindow(window.handle);
 
+    bool first = true;
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
 
-        renderer->beginPass(defaultCanvas);
-        renderer->beginFrame(projectionMatrix);
-        sketch->draw();
-        renderer->endFrame();
+        if (first) {
+            renderer->beginPass(defaultCanvas);
+            renderer->beginFrame(projectionMatrix);
+            sketch->draw();
+            renderer->endFrame();
+            renderStates->clear();
 
-        renderStates->clear();
+            first = false;
+        }
 
         blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);

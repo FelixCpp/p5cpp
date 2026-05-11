@@ -35,6 +35,7 @@ namespace p5
         void endFrame();
 
         void beginPass(std::shared_ptr<Canvas> canvas);
+        void endPass();
 
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
         uint2 getCanvasSize() const;
@@ -66,5 +67,6 @@ namespace p5
         GLuint m_whiteTexture;
 
         std::vector<RenderPass> m_renderPasses;
+        size_t m_currentRenderPassIndex;
     };
 } // namespace p5

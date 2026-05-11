@@ -102,12 +102,26 @@ namespace p5
         glBindVertexArray(m_vao);
 
         for (const RenderPass& renderPass : m_renderPasses) {
+            const auto [width, height] = renderPass.canvas->getSize();
+            const matrix4x4 orthoProjection = ortho(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), -1.0f, 1.0f);
+
             glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
-            glViewport(0, 0, renderPass.canvas->getSize().x, renderPass.canvas->getSize().y);
+            glViewport(0, 0, width, height);
+            glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            for (const DrawCall& drawCall : renderPass.drawCalls) {
+                std::fprintf(stdout, "Executing DrawCall: indexCount: %zu, indexOffset: %zu\n", drawCall.indexCount, drawCall.indexOffset);
+            }
 
             for (const DrawCall& drawCall : renderPass.drawCalls) {
                 glUseProgram(drawCall.shader->getRendererId());
                 setBlendMode(drawCall.blendMode);
+
+                // Print all texture units used in this draw call
+                for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+                    std::fprintf(stdout, "DrawCall: Texture unit %zu: %u\n", i, drawCall.textureUnits[i]);
+                }
 
                 for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
                     glActiveTexture(GL_TEXTURE0 + i);
@@ -120,14 +134,17 @@ namespace p5
                 }
 
                 if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
-                    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
+                    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, orthoProjection.m);
                 }
+
+                std::fprintf(stdout, "RenderPass canvas textureId: %u, fboId: %u\n", renderPass.canvas->getTextureId(), renderPass.canvas->getRendererId());
 
                 glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.indexOffset * sizeof(uint32_t)));
             }
         }
 
         m_renderPasses.clear();
+        m_currentRenderPassIndex = 0;
     }
 
     void Renderer::beginPass(std::shared_ptr<Canvas> canvas)
@@ -136,6 +153,19 @@ namespace p5
             .canvas = std::move(canvas),
             .drawCalls = {},
         });
+
+        m_currentRenderPassIndex = m_renderPasses.size() - 1;
+        // std::fprintf(stdout, "Beginning render pass %zu\n", m_currentRenderPassIndex);
+        // std::fflush(stdout);
+    }
+
+    void Renderer::endPass()
+    {
+        // if (m_currentRenderPassIndex > 0) {
+        // std::fprintf(stdout, "Ending render pass %zu\n", m_currentRenderPassIndex);
+        // std::fflush(stdout);
+        --m_currentRenderPassIndex;
+        // }
     }
 
     uint2 Renderer::getCanvasSize() const
@@ -144,12 +174,12 @@ namespace p5
             return {0, 0};
         }
 
-        return m_renderPasses.back().canvas->getSize();
+        return m_renderPasses[m_currentRenderPassIndex].canvas->getSize();
     }
 
     void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
     {
-        RenderPass& currentPass = m_renderPasses.back();
+        RenderPass& currentPass = m_renderPasses[m_currentRenderPassIndex];
         auto& drawCalls = currentPass.drawCalls;
 
         if (drawCalls.empty()) {
@@ -196,6 +226,7 @@ namespace p5
 
         DrawCall& drawCall = drawCalls.back();
         drawCall.indexCount += result.indexCount;
+        std::fprintf(stdout, "DrawCall updated: passIndex: %zu, indexOffset: %zu, indexCount: %zu\n", m_currentRenderPassIndex, drawCall.indexOffset, drawCall.indexCount);
 
         std::optional<size_t> foundTextureUnitIndex;
         for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
@@ -218,6 +249,9 @@ namespace p5
 
         m_vertexCursor += result.vertexCount;
         m_indexCursor += result.indexCount;
+
+        std::fprintf(stdout, "submitMesh → baseIndex: %zu, indexCount: %zu\n", result.baseIndex, result.indexCount);
+        std::fprintf(stdout, "submitMesh → currentPassIndex: %zu, fboId: %u, indexCount: %zu\n", m_currentRenderPassIndex, m_renderPasses[m_currentRenderPassIndex].canvas->getRendererId(), result.indexCount);
     }
 
     Renderer::Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture)
