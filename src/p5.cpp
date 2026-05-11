@@ -2,6 +2,7 @@
 #include "canvas.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
+#include "renderstate.hpp"
 #include "shader.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
@@ -13,9 +14,7 @@
 #include <glad/glad.h>
 
 #include <iostream>
-#include <stack>
 #include <array>
-#include <stack>
 #include <numbers>
 #include <algorithm>
 
@@ -88,9 +87,6 @@ namespace p5
         int windowHeight;
     };
 
-    inline static std::unique_ptr<RenderPassStack> renderPasses;
-    inline static size_t activeRenderLayerIndex;
-
     inline static size_t curveVertexCount;
     inline static std::array<float2, 4> curveVertexPositions;
 
@@ -102,11 +98,11 @@ namespace p5
     inline static std::shared_ptr<Shader> textShader;
     inline static std::shared_ptr<Font> defaultFont;
     inline static std::shared_ptr<Canvas> defaultCanvas;
+    inline static std::unique_ptr<RenderStateStack> renderStates;
 
     inline Window window;
 
-    inline RenderPass& peekPass() { return renderPasses->peek(); }
-    inline RenderState& peekState() { return peekPass().renderStates.peek(); }
+    inline RenderState& peekState() { return renderStates->peek(); }
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
@@ -121,63 +117,18 @@ namespace p5
         return result;
     }
 
-    inline std::shared_ptr<Canvas> getCurrentCanvas(const RenderState& state)
-    {
-        if (state.canvases.empty()) {
-            return defaultCanvas;
-        }
+    void pushState() { renderStates->push(); }
+    void popState() { renderStates->pop(); }
 
-        auto result = state.canvases.top();
-        assert(result != nullptr && "Current canvas cannot be null");
-        return result;
-    }
+    void pushCanvas(std::shared_ptr<Canvas> canvas) { renderer->beginPass(std::move(canvas)); }
+    void popCanvas() { renderer->beginPass(defaultCanvas); }
 
-    inline std::vector<DrawCall>& getDrawCalls()
-    {
-        return peekPass().drawCalls;
-    }
-
-    void pushCanvas(std::shared_ptr<Canvas> canvas) { renderPasses->push(canvas); }
-    void popCanvas() { renderPasses->pop(); }
-    void resetCanvas() { renderPasses->reset(); }
-
-    void pushState() { peekPass().renderStates.push(); }
-    void popState() { peekPass().renderStates.pop(); }
-
-    void pushMatrix()
-    {
-        RenderState& state = peekState();
-        state.metrics.push(state.metrics.top());
-    }
-
-    void popMatrix()
-    {
-        RenderState& state = peekState();
-        if (state.metrics.size() > 1) {
-            state.metrics.pop();
-        }
-    }
-
-    void resetMatrix()
-    {
-        RenderState& state = peekState();
-        state.metrics.top() = matrix4x4::identity;
-    }
-
-    void applyMatrix(const matrix4x4& matrix)
-    {
-        RenderState& state = peekState();
-        state.metrics.top() = combine(state.metrics.top(), matrix);
-    }
-
-    void setMatrix(const matrix4x4& matrix)
-    {
-        RenderState& state = peekState();
-        state.metrics.top() = matrix;
-    }
-
-    matrix4x4& peekMatrix() { return peekState().metrics.top(); }
-
+    void pushMatrix() { peekState().metrics.push(); }
+    void popMatrix() { peekState().metrics.pop(); }
+    void resetMatrix() { peekState().metrics.peek() = matrix4x4::identity; }
+    void applyMatrix(const matrix4x4& matrix) { peekState().metrics.peek() = combine(peekState().metrics.peek(), matrix); }
+    void setMatrix(const matrix4x4& matrix) { peekState().metrics.peek() = matrix; }
+    matrix4x4& peekMatrix() { return peekState().metrics.peek(); }
     void translate(float x, float y) { applyMatrix(translation(x, y)); }
     void scale(float x, float y) { applyMatrix(scaling(x, y)); }
     void rotate(float angle) { applyMatrix(rotation(angle)); }
@@ -187,7 +138,7 @@ namespace p5
     void background(color_t color)
     {
         const RenderState& state = peekState();
-        const uint2 size = peekPass().canvas->getSize();
+        const uint2 size = renderer->getCanvasSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -214,9 +165,7 @@ namespace p5
                 }
             );
 
-            std::fprintf(stdout, "Current Layer: %zu\n", activeRenderLayerIndex);
-            std::fflush(stdout);
-            renderer->submitMesh(getDrawCalls(), drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::alpha);
+            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::alpha);
         }
     }
 
@@ -290,7 +239,7 @@ namespace p5
                 case ShapeType::concave: drawResult = concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
             }
 
-            renderer->submitMesh(getDrawCalls(), drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         if (strokeStyle != FillStyle::none) {
@@ -310,7 +259,7 @@ namespace p5
                 shouldClose
             );
 
-            renderer->submitMesh(getDrawCalls(), drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
         }
 
         linepath->clear();
@@ -333,14 +282,14 @@ namespace p5
     void vertex(float x, float y, float u, float v)
     {
         const RenderState& state = peekState();
-        const float2 transformed = transformPoint(state.metrics.top(), {x, y});
+        const float2 transformed = transformPoint(peekMatrix(), {x, y});
         linepath->vertex(transformed.x, transformed.y, u, v, state.fillColor, state.strokeColor);
     }
 
     void curveVertex(float x, float y)
     {
         const RenderState& state = peekState();
-        curveVertexPositions[curveVertexCount++] = transformPoint(state.metrics.top(), {x, y});
+        curveVertexPositions[curveVertexCount++] = transformPoint(peekMatrix(), {x, y});
 
         if (curveVertexCount >= 4) {
             const RenderState& state = peekState();
@@ -368,7 +317,7 @@ namespace p5
         }
     }
 
-    void shader(std::shared_ptr<Shader> shader) { peekState().shader = shader; }
+    void shader(std::shared_ptr<Shader> shader) { peekState().shader = std::move(shader); }
     void noShader() { peekState().shader.reset(); }
 
     TextMetrics measureText(std::string_view text)
@@ -689,23 +638,17 @@ namespace p5
     {
         const RenderState& state = peekState();
         const std::array<float2, 4> positions = {
-            transformPoint(state.metrics.top(), {left, top}),
-            transformPoint(state.metrics.top(), {left + width, top}),
-            transformPoint(state.metrics.top(), {left + width, top + height}),
-            transformPoint(state.metrics.top(), {left, top + height}),
+            transformPoint(peekMatrix(), {left, top}),
+            transformPoint(peekMatrix(), {left + width, top}),
+            transformPoint(peekMatrix(), {left + width, top + height}),
+            transformPoint(peekMatrix(), {left, top + height}),
         };
 
-        // const std::array<float2, 4> positions = {
-        //     float2 {left, top},
-        //     float2 {left + width, top},
-        //     float2 {left + width, top + height},
-        //     float2 {left, top + height}
-        // };
         const std::array<float2, 4> texcoords = {
-            float2 {0.0f, 0.0f},
-            float2 {1.0f, 0.0f},
+            float2 {0.0f, 1.0f},
             float2 {1.0f, 1.0f},
-            float2 {0.0f, 1.0f}
+            float2 {1.0f, 0.0f},
+            float2 {0.0f, 0.0f}
         };
         const std::array<color_t, 4> colors = {
             state.tintColor,
@@ -726,9 +669,7 @@ namespace p5
                 }
             );
 
-            std::fprintf(stdout, "Current Layer: %zu\n", activeRenderLayerIndex);
-            std::fflush(stdout);
-            renderer->submitMesh(getDrawCalls(), drawResult, textureId, getCurrentShader(state), state.blendMode);
+            renderer->submitMesh(drawResult, textureId, getCurrentShader(state), state.blendMode);
         }
     }
 
@@ -800,10 +741,10 @@ namespace p5
             const float bottom = top + glyph->size.y;
 
             const std::array<float2, 4> positions = {
-                transformPoint(state.metrics.top(), {left, top}),
-                transformPoint(state.metrics.top(), {right, top}),
-                transformPoint(state.metrics.top(), {right, bottom}),
-                transformPoint(state.metrics.top(), {left, bottom}),
+                transformPoint(peekMatrix(), {left, top}),
+                transformPoint(peekMatrix(), {right, top}),
+                transformPoint(peekMatrix(), {right, bottom}),
+                transformPoint(peekMatrix(), {left, bottom}),
             };
             const rect2f uvRect = glyph->uvRect;
             const std::array<float2, 4> texcoords = {
@@ -832,7 +773,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderer->submitMesh(getDrawCalls(), drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderer->submitMesh(drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
             }
 
             px += glyph->advance.x;
@@ -900,13 +841,14 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    defaultCanvas = createCanvas(window.windowWidth, window.windowHeight);
-    renderPasses = std::make_unique<RenderPassStack>(defaultCanvas);
+    defaultCanvas = createCanvas(800, 600);
+    renderStates = std::make_unique<RenderStateStack>();
 
     static std::unique_ptr sketch = createSketch();
+    renderer->beginPass(defaultCanvas);
     renderer->beginFrame(projectionMatrix);
     sketch->setup();
-    renderer->endFrame(renderPasses->getRenderPasses());
+    renderer->endFrame();
 
     glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
         if (action == GLFW_PRESS) {
@@ -918,18 +860,16 @@ int main()
 
     glfwShowWindow(window.handle);
 
-    bool first = true;
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
 
+        renderer->beginPass(defaultCanvas);
         renderer->beginFrame(projectionMatrix);
         sketch->draw();
-        renderer->endFrame(renderPasses->getRenderPasses());
+        renderer->endFrame();
 
-        if (first) {
-            resetCanvas();
-            first = false;
-        }
+        renderStates->clear();
+
         blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);
     }

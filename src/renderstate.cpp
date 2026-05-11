@@ -12,7 +12,7 @@ namespace p5
           miterLimit(10.0f),
           roundJoinThreshold(0.44f), // 25°
           blendMode(BlendMode::alpha),
-          metrics(std::stack<matrix4x4>({matrix4x4::identity})),
+          metrics(),
           isFillDisabled(false),
           isStrokeDisabled(false),
           bezierDetail(20),
@@ -24,8 +24,7 @@ namespace p5
           strokePatternOffset(0.0f),
           font(),
           textSize(12.0f),
-          shader(),
-          canvases()
+          shader()
     {
     }
 } // namespace p5
@@ -55,5 +54,12 @@ namespace p5
     RenderState& RenderStateStack::peek()
     {
         return m_stack.at(m_activeRenderStateIndex);
+    }
+
+    void RenderStateStack::clear()
+    {
+        // Remove every stack except the first one to reset to the default state
+        m_stack.erase(m_stack.begin() + 1, m_stack.end());
+        m_activeRenderStateIndex = 0;
     }
 } // namespace p5

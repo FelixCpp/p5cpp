@@ -1,8 +1,8 @@
 #pragma once
 
 #include "p5.hpp"
+#include "matrixstack.hpp"
 
-#include <stack>
 #include <vector>
 
 namespace p5
@@ -21,7 +21,7 @@ namespace p5
 
         BlendMode blendMode;
 
-        std::stack<matrix4x4> metrics;
+        MatrixStack metrics;
 
         bool isFillDisabled;
         bool isStrokeDisabled;
@@ -40,7 +40,6 @@ namespace p5
         float textSize;
 
         std::shared_ptr<Shader> shader;
-        std::stack<std::shared_ptr<Canvas>> canvases;
 
         HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
         VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
@@ -59,6 +58,8 @@ namespace p5
         void push();
         void pop();
         RenderState& peek();
+
+        void clear();
 
     private:
         std::vector<RenderState> m_stack;

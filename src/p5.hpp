@@ -194,16 +194,6 @@ namespace p5
     struct Shader
     {
         virtual ~Shader() = default;
-        virtual void uploadMatrix(std::string_view name, const matrix4x4& matrix) = 0;
-        virtual void uploadTexture(std::string_view name, uint32_t textureId) = 0;
-        virtual void uploadInt1(std::string_view name, int x) = 0;
-        virtual void uploadInt2(std::string_view name, int x, int y) = 0;
-        virtual void uploadInt3(std::string_view name, int x, int y, int z) = 0;
-        virtual void uploadInt4(std::string_view name, int x, int y, int z, int w) = 0;
-        virtual void uploadFloat1(std::string_view name, float x) = 0;
-        virtual void uploadFloat2(std::string_view name, float x, float y) = 0;
-        virtual void uploadFloat3(std::string_view name, float x, float y, float z) = 0;
-        virtual void uploadFloat4(std::string_view name, float x, float y, float z, float w) = 0;
         virtual int getUniformLocation(std::string_view name) = 0;
         virtual uint32_t getRendererId() const = 0;
     };
@@ -270,6 +260,7 @@ namespace p5
     void vertex(float x, float y, float u, float v);
     void curveVertex(float x, float y);
 
+    std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
 

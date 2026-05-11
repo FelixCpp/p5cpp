@@ -84,15 +84,14 @@ namespace p5
         m_indexCursor = 0;
     }
 
-    void Renderer::endFrame(std::span<RenderPass> renderPasses)
+    void Renderer::endFrame()
     {
-        const size_t size = renderPasses.size();
-        if (size == 0) {
+        if (m_renderPasses.empty()) {
             return;
         }
 
-        std::fprintf(stdout, "Renderer: %zu render passes, %u vertices, %u indices\n", size, m_vertexCursor, m_indexCursor);
-        std::fflush(stdout);
+        // std::fprintf(stdout, "Renderer: %zu render passes, %u vertices, %u indices\n", size, m_vertexCursor, m_indexCursor);
+        // std::fflush(stdout);
 
         glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, m_vertexCursor * sizeof(Vertex), m_vertices.get());
@@ -102,13 +101,11 @@ namespace p5
 
         glBindVertexArray(m_vao);
 
-        for (size_t i = 0; i < size; ++i) {
-            std::shared_ptr<Canvas>& canvas = renderPasses[i].canvas;
+        for (const RenderPass& renderPass : m_renderPasses) {
+            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
+            glViewport(0, 0, renderPass.canvas->getSize().x, renderPass.canvas->getSize().y);
 
-            glBindFramebuffer(GL_FRAMEBUFFER, canvas->getRendererId());
-            glViewport(0, 0, canvas->getSize().x, canvas->getSize().y);
-
-            for (const DrawCall& drawCall : renderPasses[i].drawCalls) {
+            for (const DrawCall& drawCall : renderPass.drawCalls) {
                 glUseProgram(drawCall.shader->getRendererId());
                 setBlendMode(drawCall.blendMode);
 
@@ -126,13 +123,35 @@ namespace p5
                     glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
                 }
 
-                glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, (void*)(drawCall.indexOffset * sizeof(uint32_t)));
+                glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.indexOffset * sizeof(uint32_t)));
             }
         }
+
+        m_renderPasses.clear();
     }
 
-    void Renderer::submitMesh(std::vector<DrawCall>& drawCalls, const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
+    void Renderer::beginPass(std::shared_ptr<Canvas> canvas)
     {
+        m_renderPasses.push_back(RenderPass {
+            .canvas = std::move(canvas),
+            .drawCalls = {},
+        });
+    }
+
+    uint2 Renderer::getCanvasSize() const
+    {
+        if (m_renderPasses.empty()) {
+            return {0, 0};
+        }
+
+        return m_renderPasses.back().canvas->getSize();
+    }
+
+    void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
+    {
+        RenderPass& currentPass = m_renderPasses.back();
+        auto& drawCalls = currentPass.drawCalls;
+
         if (drawCalls.empty()) {
             DrawCall drawCall = {
                 .indexOffset = result.baseIndex,
@@ -157,6 +176,7 @@ namespace p5
 
                 return true;
             });
+
             const bool textureSlotAvailable = drawCall.textureUnitCount < drawCall.textureUnits.size();
             const bool canBatch = not hasShaderChange and not hasBlendModeChange and (not hasTextureChange or textureSlotAvailable);
 

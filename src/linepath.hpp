@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include <vector>
 
 #include "p5.hpp"
 #include "vertex.hpp"
@@ -27,9 +27,9 @@ namespace p5
     private:
         size_t drawPointCount;
         size_t drawPointCapacity;
-        std::unique_ptr<float2[]> drawPointPositions;
-        std::unique_ptr<float2[]> drawPointTexCoords;
-        std::unique_ptr<color_t[]> drawPointFillColors;
-        std::unique_ptr<color_t[]> drawPointStrokeColors;
+        std::vector<float2> drawPointPositions;
+        std::vector<float2> drawPointTexCoords;
+        std::vector<color_t> drawPointFillColors;
+        std::vector<color_t> drawPointStrokeColors;
     };
 } // namespace p5

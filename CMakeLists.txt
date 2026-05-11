@@ -22,8 +22,8 @@ add_executable(
   src/shader.cpp
   src/drawscope.cpp
   src/canvas.cpp
-  src/renderpass.cpp
-  src/renderstate.cpp)
+  src/renderstate.cpp
+  src/matrixstack.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 

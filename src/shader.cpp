@@ -83,67 +83,6 @@ namespace p5
             glDeleteProgram(programId);
         }
 
-        void uploadMatrix(std::string_view name, const matrix4x4& value) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniformMatrix4fv(programId, location, 1, GL_FALSE, value.m);
-            }
-        }
-        void uploadTexture(std::string_view name, uint32_t textureId) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform1i(programId, location, textureId);
-            }
-        }
-        void uploadInt1(std::string_view name, int x) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform1i(programId, location, x);
-            }
-        }
-        void uploadInt2(std::string_view name, int x, int y) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform2i(programId, location, x, y);
-            }
-        }
-        void uploadInt3(std::string_view name, int x, int y, int z) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform3i(programId, location, x, y, z);
-            }
-        }
-        void uploadInt4(std::string_view name, int x, int y, int z, int w) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform4i(programId, location, x, y, z, w);
-            }
-        }
-        void uploadFloat1(std::string_view name, float x) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform1f(programId, location, x);
-            }
-        }
-        void uploadFloat2(std::string_view name, float x, float y) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform2f(programId, location, x, y);
-            }
-        }
-        void uploadFloat3(std::string_view name, float x, float y, float z) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform3f(programId, location, x, y, z);
-            }
-        }
-        void uploadFloat4(std::string_view name, float x, float y, float z, float w) override
-        {
-            if (const GLint location = getUniformLocation(name); location != -1) {
-                glProgramUniform4f(programId, location, x, y, z, w);
-            }
-        }
-
         GLint getUniformLocation(std::string_view name) override
         {
             const auto itr = uniformLocationCache.find(std::string(name));
@@ -174,7 +113,10 @@ namespace p5
         uint32_t programId;
         std::unordered_map<std::string, int> uniformLocationCache;
     };
+} // namespace p5
 
+namespace p5
+{
     std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource)
     {
         return OpenGLShader::create(vertexSource, fragmentSource);

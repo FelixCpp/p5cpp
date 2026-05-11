@@ -7,40 +7,33 @@ using namespace p5;
 struct Starfield : p5::Sketch
 {
 public:
-    std::shared_ptr<Canvas> layer;
-    // std::shared_ptr<Canvas> layer2;
+    std::shared_ptr<Font> font;
+    std::shared_ptr<Canvas> canvas;
+    std::shared_ptr<Canvas> cv;
 
     void setup() override
     {
-        layer = createCanvas(400, 400);
-        // layer2 = createCanvas(200, 200);
+        font = loadFont("Skia.ttf");
+        canvas = createCanvas(200, 200);
+        cv = createCanvas(200, 200);
 
-        pushCanvas(layer);
-        background(100);
+        pushCanvas(cv);
+        background(0);
+        rect(50.0f, 50.0f, 100.0f, 100.0f);
+        // textSize(42.0f);
+        // text("Hello", 100.0f, 100.0f);
         popCanvas();
     }
 
     void draw() override
     {
         background(51);
-        // fill(255, 0, 0);
-        // rect(100.0f, 100.0f, 200.0f, 200.0f);
 
-        // textSize(48.0f);
-        // fill(255);
-        // text("Hello, World!", 150.0f, 150.0f);
+        pushCanvas(canvas);
+        background(0, 0, 255);
+        popCanvas();
 
-        // canvas(layer);
-        // background(255);
-        // fill(255, 0, 0);
-        // rect(50.0f, 50.0f, 150.0f, 150.0f);
-        // fill(0, 255, 0);
-        // rect(200.0f, 50.0f, 150.0f, 150.0f);
-        // noCanvas();
-
-        // image(layer2->getTextureId(), 50.0f, 50.0f, 150.0f, 150.0f);
-        // background(255, 0, 0);
-        image(layer->getTextureId(), 150.0f, mouseY, 400.0f, 400.0f);
+        image(cv->getTextureId(), 100.0f, 100.0f, 300.0f, 300.0f);
     }
 
     void destroy() override

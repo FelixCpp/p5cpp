@@ -5,7 +5,6 @@
 
 namespace p5
 {
-
     class OpenGLCanvas : public Canvas
     {
     public:
@@ -32,11 +31,13 @@ namespace p5
             glBindFramebuffer(GL_FRAMEBUFFER, fboId);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboId);
+
+            const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-            GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
             if (status != GL_FRAMEBUFFER_COMPLETE) {
                 error("Failed to create framebuffer: " + std::to_string(status));
+
                 glDeleteTextures(1, &textureId);
                 glDeleteRenderbuffers(1, &rboId);
                 glDeleteFramebuffers(1, &fboId);
@@ -73,7 +74,6 @@ namespace p5
 
         uint2 m_size;
     };
-
 } // namespace p5
 
 namespace p5
