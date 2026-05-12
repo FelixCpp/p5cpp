@@ -318,6 +318,18 @@ namespace p5
 
     void shader(std::shared_ptr<Shader> shader) { peekState().shader = std::move(shader); }
     void noShader() { peekState().shader.reset(); }
+    void setUniform(std::string_view name, float x)
+    {
+        if (std::shared_ptr<Shader> currentShader = getCurrentShader(peekState()); currentShader != nullptr) {
+            glProgramUniform1f(currentShader->getRendererId(), currentShader->getUniformLocation(name), x);
+        }
+    }
+    void setUniform(std::string_view name, float x, float y)
+    {
+        if (std::shared_ptr<Shader> currentShader = getCurrentShader(peekState()); currentShader != nullptr) {
+            glProgramUniform2f(currentShader->getRendererId(), currentShader->getUniformLocation(name), x, y);
+        }
+    }
 
     TextMetrics measureText(std::string_view text)
     {
@@ -864,6 +876,7 @@ int main()
 
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
+        glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
 
         renderer->beginFrame();
         renderer->pushPass(defaultCanvas);
@@ -872,22 +885,15 @@ int main()
         renderer->endFrame();
         renderStates->clear();
 
-        glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultCanvas->getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
-        glBlitFramebuffer(
-            0,
-            0,
-            defaultCanvas->getSize().x,
-            defaultCanvas->getSize().y,
-            0,
-            0,
-            window.framebufferWidth,
-            window.framebufferHeight,
-            GL_COLOR_BUFFER_BIT,
-            GL_NEAREST
-        );
+        glBlitFramebuffer(0, 0, defaultCanvas->getSize().x, defaultCanvas->getSize().y, 0, 0, window.framebufferWidth, window.framebufferHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::fprintf(stdout, "GL Error after blit: 0x%x\n", err);
+            std::fflush(stdout);
+        }
 
         glfwSwapBuffers(window.handle);
     }

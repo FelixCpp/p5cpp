@@ -263,6 +263,8 @@ namespace p5
     std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
+    void setUniform(std::string_view name, float x);
+    void setUniform(std::string_view name, float x, float y);
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
     std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);

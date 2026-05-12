@@ -99,14 +99,13 @@ namespace p5
 
         for (const RenderPass& renderPass : m_renderPasses) {
             const uint2 canvasSize = renderPass.canvas->getSize();
-
             glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
             glViewport(0, 0, canvasSize.x, canvasSize.y);
 
             const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
 
-            std::fprintf(stdout, "Rendering to framebuffer %u with %zu draw calls\n", renderPass.canvas->getRendererId(), renderPass.drawCalls.size());
-            std::fflush(stdout);
+            // std::fprintf(stdout, "Rendering to framebuffer %u with %zu draw calls\n", renderPass.canvas->getRendererId(), renderPass.drawCalls.size());
+            // std::fflush(stdout);
 
             for (const DrawCall& drawCall : renderPass.drawCalls) {
                 glUseProgram(drawCall.shader->getRendererId());
