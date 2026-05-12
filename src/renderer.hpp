@@ -34,21 +34,11 @@ namespace p5
         void beginFrame(const matrix4x4& projectionMatrix);
         void endFrame();
 
-        void beginPass(std::shared_ptr<Canvas> canvas);
-        void endPass();
-
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
-        uint2 getCanvasSize() const;
 
         void submitMesh(const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
 
     private:
-        struct RenderPass
-        {
-            std::shared_ptr<Canvas> canvas;
-            std::vector<DrawCall> drawCalls;
-        };
-
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture);
 
         std::unique_ptr<Vertex[]> m_vertices;
@@ -56,7 +46,7 @@ namespace p5
         uint32_t m_vertexCursor;
         uint32_t m_indexCursor;
 
-        // std::vector<DrawCall> m_drawCalls;
+        std::vector<DrawCall> m_drawCalls;
 
         matrix4x4 m_projectionMatrix;
 
@@ -65,8 +55,5 @@ namespace p5
         GLuint m_ebo;
 
         GLuint m_whiteTexture;
-
-        std::vector<RenderPass> m_renderPasses;
-        size_t m_currentRenderPassIndex;
     };
 } // namespace p5

@@ -1,5 +1,4 @@
 #include "p5.hpp"
-#include "canvas.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "renderstate.hpp"
@@ -120,9 +119,6 @@ namespace p5
     void pushState() { renderStates->push(); }
     void popState() { renderStates->pop(); }
 
-    void pushCanvas(std::shared_ptr<Canvas> canvas) { renderer->beginPass(std::move(canvas)); }
-    void popCanvas() { renderer->endPass(); }
-
     void pushMatrix() { peekState().metrics.push(); }
     void popMatrix() { peekState().metrics.pop(); }
     void resetMatrix() { peekState().metrics.peek() = matrix4x4::identity; }
@@ -138,7 +134,7 @@ namespace p5
     void background(color_t color)
     {
         const RenderState& state = peekState();
-        const uint2 size = renderer->getCanvasSize();
+        const uint2 size = {static_cast<uint32_t>(window.windowWidth), static_cast<uint32_t>(window.windowHeight)};
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -802,7 +798,7 @@ int main()
 
     window.windowWidth = 800;
     window.windowHeight = 600;
-    projectionMatrix = ortho(0.0f, static_cast<float>(window.windowWidth), static_cast<float>(window.windowHeight), 0.0f, -1.0f, 1.0f);
+    projectionMatrix = ortho(0.0f, static_cast<float>(window.windowHeight), static_cast<float>(window.windowWidth), 0.0f, -1.0f, 1.0f);
 
     window.handle = glfwCreateWindow(window.windowWidth, window.windowHeight, "p5", nullptr, nullptr);
     glfwMakeContextCurrent(window.handle);
@@ -811,7 +807,7 @@ int main()
     glfwSetWindowSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
         window.windowWidth = width;
         window.windowHeight = height;
-        projectionMatrix = ortho(0.0f, 0.0f, static_cast<float>(window.windowWidth), static_cast<float>(window.windowHeight), -1.0f, 1.0f);
+        projectionMatrix = ortho(0.0f, static_cast<float>(window.windowHeight), static_cast<float>(window.windowWidth), 0.0f, -1.0f, 1.0f);
     });
 
     glfwSetFramebufferSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
@@ -840,13 +836,9 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    std::fprintf(stdout, "Creating default canvas\n");
-    std::fflush(stdout);
-    defaultCanvas = createCanvas(800, 600);
     renderStates = std::make_unique<RenderStateStack>();
 
     static std::unique_ptr sketch = createSketch();
-    renderer->beginPass(defaultCanvas);
     renderer->beginFrame(projectionMatrix);
     sketch->setup();
     renderer->endFrame();
@@ -861,21 +853,17 @@ int main()
 
     glfwShowWindow(window.handle);
 
-    bool first = true;
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
 
-        if (first) {
-            renderer->beginPass(defaultCanvas);
-            renderer->beginFrame(projectionMatrix);
-            sketch->draw();
-            renderer->endFrame();
-            renderStates->clear();
+        glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
+        glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
 
-            first = false;
-        }
+        renderer->beginFrame(projectionMatrix);
+        sketch->draw();
+        renderer->endFrame();
+        renderStates->clear();
 
-        blitRenderbufferToScreen(*defaultCanvas, window.windowWidth, window.windowHeight);
         glfwSwapBuffers(window.handle);
     }
 

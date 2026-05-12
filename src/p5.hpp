@@ -214,9 +214,6 @@ namespace p5
     void pushState();
     void popState();
 
-    void pushCanvas(std::shared_ptr<Canvas> canvas);
-    void popCanvas();
-
     void pushMatrix();
     void popMatrix();
     void resetMatrix();

@@ -20,9 +20,6 @@ namespace p5
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glBindTexture(GL_TEXTURE_2D, 0);
 
-            std::fprintf(stdout, "Created texture with ID %u for canvas\n", textureId);
-            std::fflush(stdout);
-
             GLuint rboId = 0;
             glGenRenderbuffers(1, &rboId);
             glBindRenderbuffer(GL_RENDERBUFFER, rboId);
