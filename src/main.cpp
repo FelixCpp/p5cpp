@@ -89,11 +89,17 @@ public:
         popCanvas();
     }
 
+    float time = 0.0f;
+
     void draw() override
     {
+        time += 0.05f;
+        float x = noise(time * 0.1f) * 800.0f + 800.0f;
+        float y = noise((time + 1000.0f) * 0.1f) * 600.0f + 600.0f;
+
         background(0);
         shader(lightShader);
-        setUniform("u_LightPos", static_cast<float>(mouseX) * 2.0f, 1200.0f - static_cast<float>(mouseY) * 2.0f);
+        setUniform("u_LightPos", x, y);
         setUniform("u_LightRadius", 600.0f);
         image(scene->getTextureId(), 0.0f, 0.0f, 1600.0f, 1200.0f);
         noShader();

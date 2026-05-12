@@ -359,10 +359,10 @@ namespace p5
 
 namespace p5
 {
-    DrawScopeResult generateSolidStroke(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
+    void generateSolidStroke(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
     {
         const size_t n = points.size;
-        if (n < 2) return scope.build(); // NOTE: There's nothing to stroke if there are less than 2 points
+        if (n < 2) return; // NOTE: There's nothing to stroke if there are less than 2 points
 
         const float halfStrokeWeight = strokeWeight * 0.5f;
 
@@ -397,8 +397,6 @@ namespace p5
                 if (isEnd) caps::emitStrokeCap(scope, segment, points, strokeWeight, strokeCap, true);
             }
         }
-
-        return scope.build();
     }
 } // namespace p5
 
@@ -410,10 +408,10 @@ namespace p5
         size_t end;
     };
 
-    DrawScopeResult generateDashedStroke(DrawScope& scope, const PathPoints& points, const StrokePattern& pattern, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
+    void generateDashedStroke(DrawScope& scope, const PathPoints& points, const StrokePattern& pattern, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
     {
         const size_t n = points.size;
-        if (n < 2) return scope.build();
+        if (n < 2) return;
 
         if (pattern.segments.empty()) {
             // Wenn kein gültiges Pattern definiert ist, einfach durchgehend stricheln
@@ -528,7 +526,5 @@ namespace p5
         // Letzten Sub-Pfad abschließen falls wir in einem Dash enden
         if (isDash && scratchPositions.size() >= 2)
             flushSubPath();
-
-        return scope.build();
     }
 } // namespace p5

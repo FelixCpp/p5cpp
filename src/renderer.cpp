@@ -1,7 +1,6 @@
 #include "renderer.hpp"
 
 #include <cassert>
-#include <optional>
 
 inline static constexpr size_t MAX_VERTICES = 65536;
 inline static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
@@ -67,16 +66,6 @@ namespace p5
         return std::unique_ptr<Renderer>(new Renderer(vao, vbo, ebo, whiteTexture));
     }
 
-    DrawScope Renderer::aquireDrawScope()
-    {
-        return DrawScope(
-            std::span {m_vertices.get(), MAX_VERTICES},
-            std::span {m_indices.get(), MAX_INDICES},
-            m_vertexCursor,
-            m_indexCursor
-        );
-    }
-
     void Renderer::beginFrame()
     {
         m_vertexCursor = 0;
@@ -99,13 +88,10 @@ namespace p5
 
         for (const RenderPass& renderPass : m_renderPasses) {
             const uint2 canvasSize = renderPass.canvas->getSize();
-            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
-            glViewport(0, 0, canvasSize.x, canvasSize.y);
-
             const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
 
-            // std::fprintf(stdout, "Rendering to framebuffer %u with %zu draw calls\n", renderPass.canvas->getRendererId(), renderPass.drawCalls.size());
-            // std::fflush(stdout);
+            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
+            glViewport(0, 0, canvasSize.x, canvasSize.y);
 
             for (const DrawCall& drawCall : renderPass.drawCalls) {
                 glUseProgram(drawCall.shader->getRendererId());
@@ -155,76 +141,19 @@ namespace p5
         return m_renderPasses[m_activeRenderPassIndex].canvas->getSize();
     }
 
-    void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
+    void Renderer::submitMesh(uint32_t baseVertex, uint32_t baseIndex, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
     {
-        auto& drawCalls = m_renderPasses[m_activeRenderPassIndex].drawCalls;
+        const uint32_t vertexCount = m_vertexCursor - baseVertex;
+        const uint32_t indexCount = m_indexCursor - baseIndex;
 
-        if (drawCalls.empty()) {
-            DrawCall drawCall = {
-                .indexOffset = result.baseIndex,
-                .indexCount = 0,
-                .blendMode = blendMode,
-                .shader = shader,
-                .textureUnits = {},
-                .textureUnitCount = 0,
-            };
+        DrawCall& drawCall = getOrCreateDrawCall(std::move(shader), blendMode, texture, baseIndex);
+        size_t textureUnitIndex = resolveTExtureUnit(drawCall, texture);
 
-            drawCalls.push_back(drawCall);
-        } else {
-            DrawCall& drawCall = drawCalls.back();
-            const bool hasShaderChange = drawCall.shader != shader;
-            const bool hasBlendModeChange = drawCall.blendMode != blendMode;
-            const bool hasTextureChange = std::invoke([&]() {
-                for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
-                    if (drawCall.textureUnits[i] == texture) {
-                        return false;
-                    }
-                }
+        drawCall.indexCount += indexCount;
 
-                return true;
-            });
-
-            const bool textureSlotAvailable = drawCall.textureUnitCount < drawCall.textureUnits.size();
-            const bool canBatch = not hasShaderChange and not hasBlendModeChange and (not hasTextureChange or textureSlotAvailable);
-
-            if (not canBatch) {
-                DrawCall newDrawCall = {
-                    .indexOffset = result.baseIndex,
-                    .indexCount = 0,
-                    .blendMode = blendMode,
-                    .shader = shader,
-                    .textureUnits = {},
-                    .textureUnitCount = 0,
-                };
-
-                drawCalls.push_back(newDrawCall);
-            }
+        for (size_t i = 0; i < vertexCount; ++i) {
+            m_vertices[baseVertex + i].texIndex = static_cast<float>(textureUnitIndex);
         }
-
-        DrawCall& drawCall = drawCalls.back();
-        drawCall.indexCount += result.indexCount;
-
-        std::optional<size_t> foundTextureUnitIndex;
-        for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
-            if (drawCall.textureUnits[i] == texture) {
-                foundTextureUnitIndex = i;
-                break;
-            }
-        }
-
-        const size_t textureUnitIndex = foundTextureUnitIndex.value_or(drawCall.textureUnitCount);
-
-        if (not foundTextureUnitIndex.has_value()) {
-            drawCall.textureUnits[textureUnitIndex] = texture;
-            drawCall.textureUnitCount++;
-        }
-
-        for (size_t i = 0; i < result.vertexCount; ++i) {
-            m_vertices[result.baseVertex + i].texIndex = static_cast<float>(textureUnitIndex);
-        }
-
-        m_vertexCursor += result.vertexCount;
-        m_indexCursor += result.indexCount;
     }
 
     Renderer::Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture)
@@ -237,5 +166,57 @@ namespace p5
           m_ebo(ebo),
           m_whiteTexture(whiteTexture)
     {
+    }
+
+    DrawCall& Renderer::getOrCreateDrawCall(std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture, uint32_t baseIndex)
+    {
+        std::vector<DrawCall>& drawCalls = m_renderPasses[m_activeRenderPassIndex].drawCalls;
+        DrawCall* previousDrawCall = drawCalls.empty() ? nullptr : &drawCalls.back();
+
+        const bool hasShaderChange = previousDrawCall != nullptr and previousDrawCall->shader != shader;
+        const bool hasBlendModeChange = previousDrawCall != nullptr and previousDrawCall->blendMode != blendMode;
+
+        if (previousDrawCall == nullptr or hasShaderChange or hasBlendModeChange) {
+            DrawCall newDrawCall = {
+                .indexOffset = baseIndex,
+                .indexCount = 0,
+                .blendMode = blendMode,
+                .shader = shader,
+                .textureUnits = {},
+                .textureUnitCount = 0,
+            };
+
+            drawCalls.push_back(newDrawCall);
+            return drawCalls.back();
+        }
+
+        return *previousDrawCall;
+    }
+
+    size_t Renderer::resolveTExtureUnit(DrawCall& drawCall, uint32_t texture)
+    {
+        for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+            if (drawCall.textureUnits[i] == texture) {
+                return i;
+            }
+        }
+
+        assert(drawCall.textureUnitCount < drawCall.textureUnits.size() && "Exceeded maximum texture units per draw call");
+        const size_t newTextureUnitIndex = drawCall.textureUnitCount;
+        drawCall.textureUnits[newTextureUnitIndex] = texture;
+        drawCall.textureUnitCount++;
+        return newTextureUnitIndex;
+    }
+
+    DrawScope Renderer::createDrawScope()
+    {
+        return DrawScope {
+            .vertices = std::span {m_vertices.get(), MAX_VERTICES},
+            .indices = std::span {m_indices.get(), MAX_INDICES},
+            .vertexCursor = m_vertexCursor,
+            .indexCursor = m_indexCursor,
+            .baseVertex = m_vertexCursor,
+            .baseIndex = m_indexCursor,
+        };
     }
 } // namespace p5

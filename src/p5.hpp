@@ -15,6 +15,10 @@ namespace p5
     void randomSeed(uint64_t seed);
     float random(float max);
     float random(float min, float max);
+
+    float noise(float x);
+    float noise(float x, float y);
+    float noise(float x, float y, float z);
 } // namespace p5
 
 namespace p5

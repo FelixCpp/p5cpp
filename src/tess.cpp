@@ -24,10 +24,10 @@ namespace p5
     class FanTesselator : public Tesselator
     {
     public:
-        DrawScopeResult tesselate(DrawScope& scope, const PathPoints& points) override
+        void tesselate(DrawScope& scope, const PathPoints& points) override
         {
             if (points.size < 3) {
-                return scope.build();
+                return;
             }
 
             for (size_t i = 0; i < points.size; ++i) {
@@ -41,8 +41,6 @@ namespace p5
             for (size_t i = 2; i < points.size; ++i) {
                 scope.pushTriangle(0, i - 1, i);
             }
-
-            return scope.build();
         }
     };
 
@@ -59,7 +57,7 @@ namespace p5
             tessDeleteTess(m_tess);
         }
 
-        DrawScopeResult tesselate(DrawScope& scope, const PathPoints& points) override
+        void tesselate(DrawScope& scope, const PathPoints& points) override
         {
             if (m_tessPoints.size() < points.size * 3) {
                 m_tessPoints.resize(points.size * 3);
@@ -73,7 +71,7 @@ namespace p5
 
             tessAddContour(m_tess, 3, m_tessPoints.data(), sizeof(float) * 3, points.size);
             if (not tessTesselate(m_tess, TESS_WINDING_ODD, TESS_POLYGONS, 3, 3, nullptr)) {
-                return scope.build();
+                return;
             }
 
             const TESSreal* tessVerts = tessGetVertices(m_tess);
@@ -109,8 +107,6 @@ namespace p5
 
                 scope.pushTriangle(a, b, c);
             }
-
-            return scope.build();
         }
 
     private:

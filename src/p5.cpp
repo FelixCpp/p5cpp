@@ -152,9 +152,8 @@ namespace p5
         };
         const std::array<color_t, 4> colors = {color, color, color, color};
 
-        {
-            DrawScope scope = renderer->aquireDrawScope();
-            DrawScopeResult drawResult = fanTesselator->tesselate(
+        renderer->submit(getCurrentShader(state), BlendMode::alpha, renderer->getWhiteTextureId(), [&](DrawScope& scope) {
+            fanTesselator->tesselate(
                 scope,
                 PathPoints {
                     .size = 4,
@@ -163,9 +162,7 @@ namespace p5
                     .colors = colors,
                 }
             );
-
-            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), BlendMode::alpha);
-        }
+        });
     }
 
     void noFill() { peekState().isFillDisabled = true; }
@@ -230,35 +227,18 @@ namespace p5
         const RenderState& state = peekState();
 
         if (fillStyle != FillStyle::none) {
-            DrawScope scope = renderer->aquireDrawScope();
-
-            DrawScopeResult drawResult;
-            switch (type) {
-                case ShapeType::convex: drawResult = fanTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
-                case ShapeType::concave: drawResult = concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
-            }
-
-            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submit(getCurrentShader(state), state.blendMode, renderer->getWhiteTextureId(), [&](DrawScope& scope) {
+                switch (type) {
+                    case ShapeType::convex: fanTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
+                    case ShapeType::concave: concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
+                }
+            });
         }
 
         if (strokeStyle != FillStyle::none) {
-            DrawScope scope = renderer->aquireDrawScope();
-            DrawScopeResult drawResult = generateDashedStroke(
-                scope,
-                linepath->buildDrawPoints(strokeStyle),
-                StrokePattern {
-                    .segments = state.strokePatternSegments,
-                    .offset = state.strokePatternOffset,
-                },
-                state.strokeWeight,
-                state.strokeCap,
-                state.strokeJoin,
-                state.miterLimit,
-                state.roundJoinThreshold,
-                shouldClose
-            );
-
-            renderer->submitMesh(drawResult, renderer->getWhiteTextureId(), getCurrentShader(state), state.blendMode);
+            renderer->submit(getCurrentShader(state), state.blendMode, renderer->getWhiteTextureId(), [&](DrawScope& scope) {
+                generateSolidStroke(scope, linepath->buildDrawPoints(strokeStyle), state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, shouldClose);
+            });
         }
 
         linepath->clear();
@@ -667,9 +647,8 @@ namespace p5
             state.tintColor
         };
 
-        {
-            DrawScope scope = renderer->aquireDrawScope();
-            DrawScopeResult drawResult = fanTesselator->tesselate(
+        renderer->submit(getCurrentShader(state), state.blendMode, textureId, [&positions, &texcoords, &colors](DrawScope& scope) {
+            fanTesselator->tesselate(
                 scope,
                 PathPoints {
                     .size = 4,
@@ -678,9 +657,7 @@ namespace p5
                     .colors = colors,
                 }
             );
-
-            renderer->submitMesh(drawResult, textureId, getCurrentShader(state), state.blendMode);
-        }
+        });
     }
 
     void textFont(std::shared_ptr<Font> font)
@@ -771,19 +748,18 @@ namespace p5
             };
 
             {
-                DrawScope scope = renderer->aquireDrawScope();
-                DrawScopeResult drawResult = fanTesselator->tesselate(
-                    scope,
-                    PathPoints {
-                        .size = 4,
-                        .positions = positions,
-                        .texcoords = texcoords,
-                        .colors = colors,
-                    }
-                );
-
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                renderer->submitMesh(drawResult, font->getGlyphPageTextureId(glyph->pageIndex), shader, state.blendMode);
+                renderer->submit(std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex), [&positions, &texcoords, &colors](DrawScope& scope) {
+                    fanTesselator->tesselate(
+                        scope,
+                        PathPoints {
+                            .size = 4,
+                            .positions = positions,
+                            .texcoords = texcoords,
+                            .colors = colors,
+                        }
+                    );
+                });
             }
 
             px += glyph->advance.x;
@@ -812,8 +788,8 @@ int main()
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    window.windowWidth = 800;
-    window.windowHeight = 600;
+    window.windowWidth = 1600;
+    window.windowHeight = 1200;
     projectionMatrix = ortho(0.0f, static_cast<float>(window.windowHeight), static_cast<float>(window.windowWidth), 0.0f, -1.0f, 1.0f);
 
     window.handle = glfwCreateWindow(window.windowWidth, window.windowHeight, "p5", nullptr, nullptr);

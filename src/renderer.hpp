@@ -29,7 +29,12 @@ namespace p5
     public:
         static std::unique_ptr<Renderer> create();
 
-        DrawScope aquireDrawScope();
+        void submit(std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture, std::invocable<DrawScope&> auto&& function)
+        {
+            DrawScope scope = createDrawScope();
+            function(scope);
+            submitMesh(scope.baseVertex, scope.baseIndex, texture, std::move(shader), blendMode);
+        }
 
         void beginFrame();
         void endFrame();
@@ -40,10 +45,14 @@ namespace p5
         uint2 getCanvasSize() const;
         uint32_t getWhiteTextureId() const { return m_whiteTexture; }
 
-        void submitMesh(const DrawScopeResult& writer, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
-
     private:
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, GLuint whiteTexture);
+
+        DrawCall& getOrCreateDrawCall(std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture, uint32_t baseIndex);
+        size_t resolveTExtureUnit(DrawCall& drawCall, uint32_t texture);
+
+        DrawScope createDrawScope();
+        void submitMesh(uint32_t baseVertex, uint32_t baseIndex, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode);
 
         struct RenderPass
         {

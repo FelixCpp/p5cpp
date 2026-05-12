@@ -23,7 +23,8 @@ add_executable(
   src/drawscope.cpp
   src/canvas.cpp
   src/renderstate.cpp
-  src/matrixstack.cpp)
+  src/matrixstack.cpp
+  src/noise.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 

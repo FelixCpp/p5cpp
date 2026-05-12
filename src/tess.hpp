@@ -8,7 +8,7 @@ namespace p5
     struct Tesselator
     {
         virtual ~Tesselator() = default;
-        virtual DrawScopeResult tesselate(DrawScope& scope, const PathPoints& points) = 0;
+        virtual void tesselate(DrawScope& scope, const PathPoints& points) = 0;
     };
 
     std::unique_ptr<Tesselator> createFanTesselator();
