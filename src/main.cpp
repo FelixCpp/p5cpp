@@ -16,14 +16,29 @@ public:
         font = loadFont("Skia.ttf");
         redRect = createCanvas(200, 200);
         blueRect = createCanvas(200, 200);
+
+        pushCanvas(redRect);
+        background(255, 0, 0);
+        pushCanvas(blueRect);
+        background(0, 0, 255);
+        popCanvas();
+        popCanvas();
     }
 
     void draw() override
     {
         background(51);
-        noStroke();
-        fill(255);
-        rect(10.0f, 10.0f, 200.0f, 200.0f);
+        // noStroke();
+        // fill(255);
+        // rect(10.0f, 10.0f, 200.0f, 200.0f);
+
+        noFill();
+        stroke(255);
+        strokeWeight(15.0f);
+        rect(150.0f, 150.0f, 200.0f, 200.0f);
+        image(redRect->getTextureId(), 150.0f, 150.0f, 200.0f, 200.0f);
+        rect(150.0f, 450.0f, 200.0f, 200.0f);
+        image(blueRect->getTextureId(), 150.0f, 450.0f, 200.0f, 200.0f);
     }
 
     void destroy() override

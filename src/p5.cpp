@@ -116,6 +116,9 @@ namespace p5
         return result;
     }
 
+    void pushCanvas(std::shared_ptr<Canvas> canvas) { renderer->pushPass(std::move(canvas)); }
+    void popCanvas() { renderer->popPass(); }
+
     void pushState() { renderStates->push(); }
     void popState() { renderStates->pop(); }
 
@@ -134,7 +137,7 @@ namespace p5
     void background(color_t color)
     {
         const RenderState& state = peekState();
-        const uint2 size = {static_cast<uint32_t>(window.windowWidth), static_cast<uint32_t>(window.windowHeight)};
+        const uint2 size = renderer->getCanvasSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -795,6 +798,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     window.windowWidth = 800;
     window.windowHeight = 600;
@@ -829,6 +833,8 @@ int main()
     std::cout << glGetString(GL_RENDERER) << std::endl;
     std::cout << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
+    glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
+
     renderer = Renderer::create();
     fanTesselator = createFanTesselator();
     concaveTesselator = createConcaveTesselator();
@@ -836,11 +842,14 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
+    defaultCanvas = createCanvas(window.framebufferWidth, window.framebufferHeight);
     renderStates = std::make_unique<RenderStateStack>();
 
     static std::unique_ptr sketch = createSketch();
-    renderer->beginFrame(projectionMatrix);
+    renderer->beginFrame();
+    renderer->pushPass(defaultCanvas);
     sketch->setup();
+    renderer->popPass();
     renderer->endFrame();
 
     glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
@@ -856,13 +865,29 @@ int main()
     while (not glfwWindowShouldClose(window.handle)) {
         glfwPollEvents();
 
-        glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
-        glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
-
-        renderer->beginFrame(projectionMatrix);
+        renderer->beginFrame();
+        renderer->pushPass(defaultCanvas);
         sketch->draw();
+        renderer->popPass();
         renderer->endFrame();
         renderStates->clear();
+
+        glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultCanvas->getRendererId());
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
+        glBlitFramebuffer(
+            0,
+            0,
+            defaultCanvas->getSize().x,
+            defaultCanvas->getSize().y,
+            0,
+            0,
+            window.framebufferWidth,
+            window.framebufferHeight,
+            GL_COLOR_BUFFER_BIT,
+            GL_NEAREST
+        );
 
         glfwSwapBuffers(window.handle);
     }

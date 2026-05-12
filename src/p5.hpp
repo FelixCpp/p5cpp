@@ -211,6 +211,9 @@ namespace p5
 
     size_t computeCircleSegmentCount(float angle, float radius);
 
+    void pushCanvas(std::shared_ptr<Canvas> canvas);
+    void popCanvas();
+
     void pushState();
     void popState();
 

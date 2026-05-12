@@ -77,16 +77,15 @@ namespace p5
         );
     }
 
-    void Renderer::beginFrame(const matrix4x4& projectionMatrix)
+    void Renderer::beginFrame()
     {
-        m_projectionMatrix = projectionMatrix;
         m_vertexCursor = 0;
         m_indexCursor = 0;
     }
 
     void Renderer::endFrame()
     {
-        if (m_drawCalls.empty()) {
+        if (m_renderPasses.empty()) {
             return;
         }
 
@@ -98,33 +97,68 @@ namespace p5
 
         glBindVertexArray(m_vao);
 
-        for (const DrawCall& drawCall : m_drawCalls) {
-            glUseProgram(drawCall.shader->getRendererId());
-            setBlendMode(drawCall.blendMode);
+        for (const RenderPass& renderPass : m_renderPasses) {
+            const uint2 canvasSize = renderPass.canvas->getSize();
 
-            for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
-                glActiveTexture(GL_TEXTURE0 + i);
-                glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
+            glViewport(0, 0, canvasSize.x, canvasSize.y);
+
+            const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
+
+            std::fprintf(stdout, "Rendering to framebuffer %u with %zu draw calls\n", renderPass.canvas->getRendererId(), renderPass.drawCalls.size());
+            std::fflush(stdout);
+
+            for (const DrawCall& drawCall : renderPass.drawCalls) {
+                glUseProgram(drawCall.shader->getRendererId());
+                setBlendMode(drawCall.blendMode);
+
+                for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+                    glActiveTexture(GL_TEXTURE0 + i);
+                    glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+                }
+
+                static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
+                if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
+                    glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
+                }
+
+                if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
+                    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, orthoProjection.m);
+                }
+
+                glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.indexOffset * sizeof(uint32_t)));
             }
-
-            static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-            if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
-                glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
-            }
-
-            if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
-                glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, m_projectionMatrix.m);
-            }
-
-            glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.indexOffset * sizeof(uint32_t)));
         }
 
-        m_drawCalls.clear();
+        m_renderPasses.clear();
+        m_activeRenderPassIndex = 0;
+    }
+
+    void Renderer::pushPass(std::shared_ptr<Canvas> canvas)
+    {
+        m_renderPasses.push_back(RenderPass {
+            .canvas = std::move(canvas),
+            .drawCalls = {},
+        });
+
+        m_activeRenderPassIndex = m_renderPasses.size() - 1;
+    }
+
+    void Renderer::popPass()
+    {
+        if (m_activeRenderPassIndex > 0) {
+            --m_activeRenderPassIndex;
+        }
+    }
+
+    uint2 Renderer::getCanvasSize() const
+    {
+        return m_renderPasses[m_activeRenderPassIndex].canvas->getSize();
     }
 
     void Renderer::submitMesh(const DrawScopeResult& result, uint32_t texture, std::shared_ptr<Shader> shader, BlendMode blendMode)
     {
-        auto& drawCalls = m_drawCalls;
+        auto& drawCalls = m_renderPasses[m_activeRenderPassIndex].drawCalls;
 
         if (drawCalls.empty()) {
             DrawCall drawCall = {
@@ -199,7 +233,6 @@ namespace p5
           m_indices(std::make_unique<uint32_t[]>(MAX_INDICES)),
           m_vertexCursor(0),
           m_indexCursor(0),
-          m_projectionMatrix(),
           m_vao(vao),
           m_vbo(vbo),
           m_ebo(ebo),
