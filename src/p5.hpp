@@ -202,6 +202,13 @@ namespace p5
         virtual uint32_t getRendererId() const = 0;
     };
 
+    struct Texture
+    {
+        virtual ~Texture() = default;
+        virtual uint32_t getRendererId() const = 0;
+        virtual uint2 getSize() const = 0;
+    };
+
     typedef uint32_t color_t;
     color_t color(int grey, int alpha = 255);
     color_t color(int red, int green, int blue, int alpha = 255);
@@ -269,6 +276,9 @@ namespace p5
     void noShader();
     void setUniform(std::string_view name, float x);
     void setUniform(std::string_view name, float x, float y);
+
+    std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
+    std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
     std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);

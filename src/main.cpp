@@ -94,15 +94,24 @@ public:
     void draw() override
     {
         time += 0.05f;
-        float x = noise(time * 0.1f) * 800.0f + 800.0f;
-        float y = noise((time + 1000.0f) * 0.1f) * 600.0f + 600.0f;
+        // float x = noise(time * 0.1f) * 800.0f + 800.0f;
+        // float y = noise((time + 1000.0f) * 0.1f) * 600.0f + 600.0f;
+
+        float mx = mouseX * 2.0f;
+        float my = mouseY * 2.0f;
 
         background(0);
         shader(lightShader);
-        setUniform("u_LightPos", x, y);
-        setUniform("u_LightRadius", 600.0f);
+        setUniform("u_LightPos", mx, 1200.0f - my);
+        setUniform("u_LightRadius", 300.0f);
         image(scene->getTextureId(), 0.0f, 0.0f, 1600.0f, 1200.0f);
         noShader();
+
+        noFill();
+        strokeWeight(8.0f);
+        stroke(255);
+        strokeJoin(StrokeJoin::round);
+        circle(mx, my, 600.0f);
     }
 
     void destroy() override

@@ -4,26 +4,57 @@
 
 namespace p5
 {
-    uint32_t DrawScope::pushVertex(const float2& position, const float2& texcoord, const float4& color)
+    DrawBuffer draw_buffer_create(size_t maxVertices, size_t maxIndices)
     {
-        assert((vertexCursor < vertices.size()) && "CPU Vertex buffer overflow");
+        return DrawBuffer {
+            .vertices = std::make_unique<Vertex[]>(maxVertices),
+            .indices = std::make_unique<uint32_t[]>(maxIndices),
+            .vertexCount = maxVertices,
+            .indexCount = maxIndices,
+            .vertexCursor = 0,
+            .indexCursor = 0,
+        };
+    }
 
-        vertices[vertexCursor++] = Vertex {
+    DrawScope draw_buffer_get_scope(DrawBuffer& buffer)
+    {
+        return DrawScope {
+            .vertices = std::span(buffer.vertices.get(), buffer.vertexCount),
+            .indices = std::span(buffer.indices.get(), buffer.indexCount),
+            .vertexCursor = buffer.vertexCursor,
+            .indexCursor = buffer.indexCursor,
+            .baseVertex = buffer.vertexCursor,
+            .baseIndex = buffer.indexCursor,
+        };
+    }
+
+    void draw_buffer_clear(DrawBuffer& buffer)
+    {
+        buffer.vertexCursor = 0;
+        buffer.indexCursor = 0;
+    }
+} // namespace p5
+
+namespace p5
+{
+    void draw_scope_push_vertex(DrawScope scope, const float2& position, const float2& texcoord, const float4& color)
+    {
+        assert((scope.vertexCursor < scope.vertices.size()) && "CPU Vertex buffer overflow");
+
+        scope.vertices[scope.vertexCursor++] = Vertex {
             .position = position,
             .texcoord = texcoord,
             .color = color,
             .texIndex = 0.0f, // Texture index will be assigned later by the renderer based on the current batch state
         };
-
-        return vertexCursor - 1 - baseVertex;
     }
 
-    void DrawScope::pushTriangle(uint32_t a, uint32_t b, uint32_t c)
+    void draw_scope_push_triangle(DrawScope scope, uint32_t a, uint32_t b, uint32_t c)
     {
-        assert((indexCursor + 3 <= indices.size()) && "CPU Index buffer overflow");
+        assert((scope.indexCursor + 3 <= scope.indices.size()) && "CPU Index buffer overflow");
 
-        indices[indexCursor++] = baseVertex + a;
-        indices[indexCursor++] = baseVertex + b;
-        indices[indexCursor++] = baseVertex + c;
+        scope.indices[scope.indexCursor++] = scope.baseVertex + a;
+        scope.indices[scope.indexCursor++] = scope.baseVertex + b;
+        scope.indices[scope.indexCursor++] = scope.baseVertex + c;
     }
 } // namespace p5

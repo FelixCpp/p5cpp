@@ -49,8 +49,8 @@ namespace p5
     static StrokeSegment computeStrokeSegment(size_t startIndex, size_t endIndex, const PathPoints& points, float halfStrokeWeight);
     static void emitStrokeSegment(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points);
 
-    static uint32_t push(DrawScope& scope, const float2& position, color_t color);
-    static void pushTriangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c);
+    static void push(DrawScope scope, const float2& position, color_t color);
+    static void pushTriangle(DrawScope scope, uint32_t a, uint32_t b, uint32_t c);
     static std::optional<float2> lineIntersection(const float2& p1, const float2& d1, const float2& p2, const float2& d2);
 } // namespace p5
 
@@ -77,13 +77,15 @@ namespace p5::caps
         const float2 innerCapStart = isEnd ? segment.innerEnd : segment.innerStart;
         const float2 innerCapEnd = isEnd ? segment.innerEnd + offset : segment.innerStart - offset;
 
-        const uint32_t innerStart = push(scope, innerCapStart, color);
-        const uint32_t start = push(scope, capStart, color);
-        const uint32_t end = push(scope, capEnd, color);
-        const uint32_t innerEnd = push(scope, innerCapEnd, color);
+        const size_t baseVertex = scope.vertexCursor;
 
-        pushTriangle(scope, innerStart, start, end);
-        pushTriangle(scope, end, innerEnd, innerStart);
+        push(scope, innerCapStart, color);
+        push(scope, capStart, color);
+        push(scope, capEnd, color);
+        push(scope, innerCapEnd, color);
+
+        pushTriangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
+        pushTriangle(scope, baseVertex + 2, baseVertex + 3, baseVertex + 0);
     }
 
     void emitRoundCap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd)
@@ -96,7 +98,8 @@ namespace p5::caps
         const float startAngle = std::atan2(direction.y, direction.x) - PI / 2.0f;
 
         // Insert center vertex for the round cap
-        const uint32_t centerIndex = push(scope, center, color);
+        const size_t centerIndex = scope.vertexCursor;
+        push(scope, center, color);
 
         for (size_t i = 0; i <= segmentCount; ++i) {
             float angle = startAngle + static_cast<float>(i) / static_cast<float>(segmentCount) * PI;
@@ -125,11 +128,12 @@ namespace p5::joins
     {
         const color_t color = points.colors[corner.index];
 
-        const uint32_t innerHit = push(scope, corner.innerHit, color);
-        const uint32_t joinStart = push(scope, corner.joinStart, color);
-        const uint32_t joinEnd = push(scope, corner.joinEnd, color);
+        const size_t baseVertex = scope.vertexCursor;
+        push(scope, corner.innerHit, color);
+        push(scope, corner.joinStart, color);
+        push(scope, corner.joinEnd, color);
 
-        pushTriangle(scope, innerHit, joinStart, joinEnd);
+        pushTriangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
     }
 
     static void emitMiterJoin(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points)
@@ -139,15 +143,16 @@ namespace p5::joins
             return emitBevelJoin(scope, corner, points);
         }
 
+        const size_t baseVertex = scope.vertexCursor;
         const color_t color = points.colors[corner.index];
 
-        const uint32_t innerHit = push(scope, corner.innerHit, color);
-        const uint32_t joinStart = push(scope, corner.joinStart, color);
-        const uint32_t outerHit = push(scope, corner.outerHit, color);
-        const uint32_t joinEnd = push(scope, corner.joinEnd, color);
+        push(scope, corner.innerHit, color);
+        push(scope, corner.joinStart, color);
+        push(scope, corner.outerHit, color);
+        push(scope, corner.joinEnd, color);
 
-        pushTriangle(scope, innerHit, joinStart, outerHit);
-        pushTriangle(scope, outerHit, joinEnd, innerHit);
+        pushTriangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
+        pushTriangle(scope, baseVertex + 2, baseVertex + 3, baseVertex + 0);
     }
 
     static void emitRoundJoin(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold)
@@ -178,7 +183,8 @@ namespace p5::joins
         const size_t steps = computeCircleSegmentCount(std::abs(angleDiff), halfStrokeWeight);
 
         // Zentrum (innerHit) einmal pushen
-        const uint32_t innerHit = push(scope, corner.innerHit, color); // Index: vertexBase + 0
+        const size_t baseVertex = scope.vertexCursor;
+        push(scope, corner.innerHit, color); // Index: vertexBase + 0
 
         // Fächer-Vertices entlang des Bogens
         for (int i = 0; i <= steps; i++) {
@@ -192,9 +198,9 @@ namespace p5::joins
         for (int i = 0; i < steps; i++) {
             pushTriangle(
                 scope,
-                innerHit + 0,     // innerHit
-                innerHit + 1 + i, // aktueller Bogenpunkt
-                innerHit + 2 + i  // nächster Bogenpunkt
+                baseVertex + 0,     // innerHit
+                baseVertex + 1 + i, // aktueller Bogenpunkt
+                baseVertex + 2 + i  // nächster Bogenpunkt
             );
         }
     }
@@ -308,24 +314,25 @@ namespace p5
         const color_t startColor = points.colors[segment.startIndex];
         const color_t endColor = points.colors[segment.endIndex];
 
-        const uint32_t innerStart = push(scope, segment.innerStart, startColor);
-        const uint32_t outerStart = push(scope, segment.outerStart, startColor);
-        const uint32_t outerEnd = push(scope, segment.outerEnd, endColor);
-        const uint32_t innerEnd = push(scope, segment.innerEnd, endColor);
+        const size_t baseVertex = scope.vertexCursor;
+        push(scope, segment.innerStart, startColor);
+        push(scope, segment.outerStart, startColor);
+        push(scope, segment.outerEnd, endColor);
+        push(scope, segment.innerEnd, endColor);
 
         // push(scope, segment.innerStart, color(255, 0, 0));
         // push(scope, segment.outerStart, color(0, 255, 0));
         // push(scope, segment.outerEnd, color(0, 255, 255));
         // push(scope, segment.innerEnd, color(255, 0, 255));
 
-        pushTriangle(scope, innerStart, outerStart, outerEnd);
-        pushTriangle(scope, outerEnd, innerEnd, innerStart);
+        pushTriangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
+        pushTriangle(scope, baseVertex + 2, baseVertex + 3, baseVertex + 0);
     }
 } // namespace p5
 
 namespace p5
 {
-    static uint32_t push(DrawScope& scope, const float2& position, color_t color)
+    static void push(DrawScope scope, const float2& position, color_t color)
     {
         const float4 col = float4 {
             .x = static_cast<float>(red(color)) / 255.0f,
@@ -334,12 +341,12 @@ namespace p5
             .w = static_cast<float>(alpha(color)) / 255.0f,
         };
 
-        return scope.pushVertex(position, float2 {}, col);
+        draw_scope_push_vertex(scope, position, float2 {}, col);
     }
 
-    static void pushTriangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
+    static void pushTriangle(DrawScope scope, uint32_t a, uint32_t b, uint32_t c)
     {
-        scope.pushTriangle(a, b, c);
+        draw_scope_push_triangle(scope, a, b, c);
     }
 
     static std::optional<float2> lineIntersection(const float2& p1, const float2& p2, const float2& p3, const float2& p4)
@@ -359,7 +366,7 @@ namespace p5
 
 namespace p5
 {
-    void generateSolidStroke(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
+    void generateSolidStroke(DrawScope scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
     {
         const size_t n = points.size;
         if (n < 2) return; // NOTE: There's nothing to stroke if there are less than 2 points
@@ -408,7 +415,7 @@ namespace p5
         size_t end;
     };
 
-    void generateDashedStroke(DrawScope& scope, const PathPoints& points, const StrokePattern& pattern, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
+    void generateDashedStroke(DrawScope scope, const PathPoints& points, const StrokePattern& pattern, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
     {
         const size_t n = points.size;
         if (n < 2) return;

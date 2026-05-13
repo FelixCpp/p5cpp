@@ -50,19 +50,15 @@ namespace p5
 
 namespace p5
 {
-    class RenderStateStack
+    struct RenderStateStack
     {
-    public:
-        RenderStateStack();
-
-        void push();
-        void pop();
-        RenderState& peek();
-
-        void clear();
-
-    private:
-        std::vector<RenderState> m_stack;
-        size_t m_activeRenderStateIndex;
+        std::vector<RenderState> renderStates;
+        size_t activeRenderStateIndex;
     };
+
+    RenderStateStack render_state_stack_create();
+    void render_state_stack_push(RenderStateStack& stack, const RenderState& state);
+    void render_state_stack_pop(RenderStateStack& stack);
+    void render_state_stack_clear(RenderStateStack& stack);
+    RenderState& render_state_stack_peek(RenderStateStack& stack);
 } // namespace p5

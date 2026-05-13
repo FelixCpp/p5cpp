@@ -24,14 +24,15 @@ namespace p5
     class FanTesselator : public Tesselator
     {
     public:
-        void tesselate(DrawScope& scope, const PathPoints& points) override
+        void tesselate(DrawScope scope, const PathPoints& points) override
         {
             if (points.size < 3) {
                 return;
             }
 
             for (size_t i = 0; i < points.size; ++i) {
-                scope.pushVertex(
+                draw_scope_push_vertex(
+                    scope,
                     points.positions[i],
                     points.texcoords[i],
                     color_to_float4(points.colors[i])
@@ -39,7 +40,7 @@ namespace p5
             }
 
             for (size_t i = 2; i < points.size; ++i) {
-                scope.pushTriangle(0, i - 1, i);
+                draw_scope_push_triangle(scope, 0, i - 1, i);
             }
         }
     };
@@ -57,7 +58,7 @@ namespace p5
             tessDeleteTess(m_tess);
         }
 
-        void tesselate(DrawScope& scope, const PathPoints& points) override
+        void tesselate(DrawScope scope, const PathPoints& points) override
         {
             if (m_tessPoints.size() < points.size * 3) {
                 m_tessPoints.resize(points.size * 3);
@@ -84,13 +85,15 @@ namespace p5
                 const int srcIdx = vertexIndex[i];
 
                 if (srcIdx == TESS_UNDEF) {
-                    scope.pushVertex(
+                    draw_scope_push_vertex(
+                        scope,
                         float2 {tessVerts[i * 3 + 0], tessVerts[i * 3 + 1]},
                         float2 {0.0f, 0.0f},
                         color_to_float4(points.colors[0])
                     );
                 } else {
-                    scope.pushVertex(
+                    draw_scope_push_vertex(
+                        scope,
                         points.positions[srcIdx],
                         points.texcoords[srcIdx],
                         color_to_float4(points.colors[srcIdx])
@@ -105,7 +108,7 @@ namespace p5
                 const int c = tessIdx[i * 3 + 2];
                 if (a == TESS_UNDEF || b == TESS_UNDEF || c == TESS_UNDEF) continue;
 
-                scope.pushTriangle(a, b, c);
+                draw_scope_push_triangle(scope, a, b, c);
             }
         }
 

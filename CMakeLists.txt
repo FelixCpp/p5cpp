@@ -13,7 +13,6 @@ add_executable(
   app
   src/main.cpp
   src/p5.cpp
-  src/renderer.cpp
   src/math.cpp
   src/tess.cpp
   src/stroker.cpp
@@ -24,7 +23,11 @@ add_executable(
   src/canvas.cpp
   src/renderstate.cpp
   src/matrixstack.cpp
-  src/noise.cpp)
+  src/noise.cpp
+  src/rendering.cpp
+  src/renderpassstack.cpp
+  src/drawcall.cpp
+  src/texture.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 

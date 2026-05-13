@@ -2,25 +2,48 @@
 
 namespace p5
 {
-    MatrixStack::MatrixStack()
-        : m_stack({matrix4x4::identity})
+    MatrixStack matrix_stack_create()
     {
+        return MatrixStack {
+            .metrics = std::stack<matrix4x4> {
+                {matrix4x4::identity}
+            },
+        };
     }
 
-    void MatrixStack::push()
+    void matrix_stack_push(MatrixStack& stack, const matrix4x4& matrix)
     {
-        m_stack.push(m_stack.top());
+        stack.metrics.push(matrix);
     }
 
-    void MatrixStack::pop()
+    void matrix_stack_pop(MatrixStack& stack)
     {
-        if (m_stack.size() > 1) {
-            m_stack.pop();
+        if (stack.metrics.size() > 1) {
+            stack.metrics.pop();
         }
     }
 
-    matrix4x4& MatrixStack::peek()
+    void matrix_stack_reset(MatrixStack& stack)
     {
-        return m_stack.top();
+        while (stack.metrics.size() > 1) {
+            stack.metrics.pop();
+        }
+
+        stack.metrics.top() = matrix4x4::identity;
+    }
+
+    void matrix_stack_apply(MatrixStack& stack, const matrix4x4& matrix)
+    {
+        stack.metrics.top() = combine(stack.metrics.top(), matrix);
+    }
+
+    void matrix_stack_set(MatrixStack& stack, const matrix4x4& matrix)
+    {
+        stack.metrics.top() = matrix;
+    }
+
+    matrix4x4& matrix_stack_peek(MatrixStack& stack)
+    {
+        return stack.metrics.top();
     }
 } // namespace p5

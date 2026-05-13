@@ -6,17 +6,17 @@
 
 namespace p5
 {
-    class MatrixStack
+    struct MatrixStack
     {
-    public:
-        MatrixStack();
-
-        void push();
-        void pop();
-
-        matrix4x4& peek();
-
-    private:
-        std::stack<matrix4x4> m_stack;
+        std::stack<matrix4x4> metrics;
     };
+
+    MatrixStack matrix_stack_create();
+    void matrix_stack_push(MatrixStack& stack, const matrix4x4& matrix);
+    void matrix_stack_pop(MatrixStack& stack);
+    void matrix_stack_reset(MatrixStack& stack);
+    void matrix_stack_apply(MatrixStack& stack, const matrix4x4& matrix);
+    void matrix_stack_set(MatrixStack& stack, const matrix4x4& matrix);
+
+    matrix4x4& matrix_stack_peek(MatrixStack& stack);
 } // namespace p5

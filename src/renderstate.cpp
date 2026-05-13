@@ -12,7 +12,7 @@ namespace p5
           miterLimit(10.0f),
           roundJoinThreshold(0.44f), // 25°
           blendMode(BlendMode::alpha),
-          metrics(),
+          metrics(matrix_stack_create()),
           isFillDisabled(false),
           isStrokeDisabled(false),
           bezierDetail(20),
@@ -31,35 +31,41 @@ namespace p5
 
 namespace p5
 {
-    RenderStateStack::RenderStateStack()
-        : m_stack({RenderState {}}), m_activeRenderStateIndex(0)
+    RenderStateStack render_state_stack_create()
     {
+        return RenderStateStack {
+            .renderStates = {RenderState()},
+            .activeRenderStateIndex = 0
+        };
     }
 
-    void RenderStateStack::push()
+    void render_state_stack_push(RenderStateStack& stack, const RenderState& state)
     {
-        m_stack.push_back(m_stack[m_activeRenderStateIndex]);
-        m_activeRenderStateIndex++;
-    }
-
-    void RenderStateStack::pop()
-    {
-        // Avoid popping the last render state to ensure there's always a valid state to work with
-        if (m_activeRenderStateIndex > 0) {
-            m_stack.pop_back();
-            m_activeRenderStateIndex--;
+        if (stack.activeRenderStateIndex < stack.renderStates.size() - 1) {
+            stack.activeRenderStateIndex++;
+            stack.renderStates[stack.activeRenderStateIndex] = state;
+        } else {
+            stack.renderStates.push_back(state);
+            stack.activeRenderStateIndex = stack.renderStates.size() - 1;
         }
     }
 
-    RenderState& RenderStateStack::peek()
+    void render_state_stack_pop(RenderStateStack& stack)
     {
-        return m_stack.at(m_activeRenderStateIndex);
+        if (stack.activeRenderStateIndex > 0) {
+            stack.activeRenderStateIndex--;
+        }
     }
 
-    void RenderStateStack::clear()
+    void render_state_stack_clear(RenderStateStack& stack)
     {
-        // Remove every stack except the first one to reset to the default state
-        m_stack.erase(m_stack.begin() + 1, m_stack.end());
-        m_activeRenderStateIndex = 0;
+        stack.renderStates.resize(1);
+        stack.renderStates[0] = RenderState();
+        stack.activeRenderStateIndex = 0;
+    }
+
+    RenderState& render_state_stack_peek(RenderStateStack& stack)
+    {
+        return stack.renderStates[stack.activeRenderStateIndex];
     }
 } // namespace p5
