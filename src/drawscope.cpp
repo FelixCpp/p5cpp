@@ -37,7 +37,7 @@ namespace p5
 
 namespace p5
 {
-    void draw_scope_push_vertex(DrawScope scope, const float2& position, const float2& texcoord, const float4& color)
+    void draw_scope_push_vertex(DrawScope& scope, const float2& position, const float2& texcoord, const float4& color)
     {
         assert((scope.vertexCursor < scope.vertices.size()) && "CPU Vertex buffer overflow");
 
@@ -49,7 +49,7 @@ namespace p5
         };
     }
 
-    void draw_scope_push_triangle(DrawScope scope, uint32_t a, uint32_t b, uint32_t c)
+    void draw_scope_push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
     {
         assert((scope.indexCursor + 3 <= scope.indices.size()) && "CPU Index buffer overflow");
 

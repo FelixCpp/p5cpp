@@ -33,6 +33,6 @@ namespace p5
     DrawScope draw_buffer_get_scope(DrawBuffer& buffer);
     void draw_buffer_clear(DrawBuffer& buffer);
 
-    void draw_scope_push_vertex(DrawScope scope, const float2& position, const float2& texcoord, const float4& color);
-    void draw_scope_push_triangle(DrawScope scope, uint32_t a, uint32_t b, uint32_t c);
+    void draw_scope_push_vertex(DrawScope& scope, const float2& position, const float2& texcoord, const float4& color);
+    void draw_scope_push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c);
 } // namespace p5

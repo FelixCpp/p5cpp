@@ -24,7 +24,7 @@ namespace p5
     class FanTesselator : public Tesselator
     {
     public:
-        void tesselate(DrawScope scope, const PathPoints& points) override
+        void tesselate(DrawScope& scope, const PathPoints& points) override
         {
             if (points.size < 3) {
                 return;
@@ -58,7 +58,7 @@ namespace p5
             tessDeleteTess(m_tess);
         }
 
-        void tesselate(DrawScope scope, const PathPoints& points) override
+        void tesselate(DrawScope& scope, const PathPoints& points) override
         {
             if (m_tessPoints.size() < points.size * 3) {
                 m_tessPoints.resize(points.size * 3);
