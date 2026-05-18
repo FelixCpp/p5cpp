@@ -6,7 +6,6 @@
 #include <string_view>
 #include <span>
 #include <filesystem>
-#include <variant>
 #include <array>
 
 namespace p5
@@ -187,15 +186,15 @@ namespace p5
         uint32_t lineCount;
     };
 
-    struct Canvas
+    struct Framebuffer
     {
-        virtual ~Canvas() = default;
+        virtual ~Framebuffer() = default;
         virtual uint32_t getTextureId() const = 0;
         virtual uint32_t getRendererId() const = 0;
         virtual uint2 getSize() const = 0;
     };
 
-    std::unique_ptr<Canvas> createCanvas(int width, int height);
+    std::unique_ptr<Framebuffer> createCanvas(int width, int height);
 
     struct UniformVariable
     {
@@ -259,7 +258,7 @@ namespace p5
 
     size_t computeCircleSegmentCount(float angle, float radius);
 
-    void pushCanvas(std::shared_ptr<Canvas> canvas);
+    void pushCanvas(std::shared_ptr<Framebuffer> canvas);
     void popCanvas();
 
     void pushState();

@@ -16,8 +16,8 @@ namespace p5
 
     matrix4x4 combine(const matrix4x4& a, const matrix4x4& b)
     {
-        const float* m1 = a.m;
-        const float* m2 = b.m;
+        const float* m1 = a.m.data();
+        const float* m2 = b.m.data();
 
         return {
             m1[0] * m2[0] + m1[4] * m2[1] + m1[8] * m2[2] + m1[12] * m2[3],

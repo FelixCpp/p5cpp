@@ -11,22 +11,21 @@ add_subdirectory(external/glad)
 
 add_executable(
   app
-  src/main.cpp
-  src/p5.cpp
-  src/math.cpp
-  src/tess.cpp
-  src/stroker.cpp
-  src/linepath.cpp
-  src/font.cpp
-  src/shader.cpp
-  src/drawscope.cpp
   src/canvas.cpp
-  src/renderstate.cpp
+  src/drawscope.cpp
+  src/font.cpp
+  src/framebuffer.cpp
+  src/linepath.cpp
+  src/main.cpp
+  src/math.cpp
   src/matrixstack.cpp
   src/noise.cpp
+  src/p5.cpp
   src/rendering.cpp
-  src/renderpassstack.cpp
-  src/drawcall.cpp
+  src/renderstate.cpp
+  src/shader.cpp
+  src/stroker.cpp
+  src/tess.cpp
   src/texture.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)

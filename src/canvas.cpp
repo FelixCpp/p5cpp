@@ -1,95 +1,130 @@
 #include "canvas.hpp"
-#include "p5.hpp"
-
-#include <glad/glad.h>
+#include <optional>
 
 namespace p5
 {
-    class OpenGLCanvas : public Canvas
+    inline static bool draw_command_mergeable(const DrawCommand& a, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
-    public:
-        static std::unique_ptr<OpenGLCanvas> create(uint32_t width, uint32_t height)
-        {
-            GLuint textureId = 0;
-            glGenTextures(1, &textureId);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glBindTexture(GL_TEXTURE_2D, 0);
+        // We can not merge draw commands if they use different shaders.
+        if (a.shader != shader) {
+            return false;
+        }
 
-            GLuint rboId = 0;
-            glGenRenderbuffers(1, &rboId);
-            glBindRenderbuffer(GL_RENDERBUFFER, rboId);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-            glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        // We can not merge draw commands if they use different blend modes.
+        if (a.blendMode != blendMode) {
+            return false;
+        }
 
-            GLuint fboId = 0;
-            glGenFramebuffers(1, &fboId);
-            glBindFramebuffer(GL_FRAMEBUFFER, fboId);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboId);
-
-            const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-            if (status != GL_FRAMEBUFFER_COMPLETE) {
-                error("Failed to create framebuffer: " + std::to_string(status));
-
-                glDeleteTextures(1, &textureId);
-                glDeleteRenderbuffers(1, &rboId);
-                glDeleteFramebuffers(1, &fboId);
-                return nullptr;
+        // We can not merge draw commands if they use different textures, unless one of the draw commands has an available texture slot for the new texture.
+        const bool isTextureAlreadyUsed = std::invoke([&a, texture]() {
+            for (size_t i = 0; i < a.textureUnitCount; ++i) {
+                if (a.textureUnits[i] == texture) {
+                    return true;
+                }
             }
+            return false;
+        });
 
-            return std::unique_ptr<OpenGLCanvas>(new OpenGLCanvas(fboId, rboId, textureId, {width, height}));
+        const bool isTextureSlotAvailable = a.textureUnitCount < a.textureUnits.size();
+        if (not isTextureAlreadyUsed and not isTextureSlotAvailable) {
+            return false;
         }
 
-        uint32_t getTextureId() const override
-        {
-            return m_texture;
-        }
+        // TODO: Later we need to check for shader uniform changes as well, but for now we can ignore this, as we don't have any shader uniforms that can be set by the user yet.
 
-        uint32_t getRendererId() const override
-        {
-            return m_fbo;
-        }
+        // We are actually able to merge these draw commands together, either because they use the same texture, or because one of the draw commands has an available texture slot for the new texture.
+        return true;
+    }
 
-        uint2 getSize() const override
-        {
-            return m_size;
-        }
-
-    private:
-        explicit OpenGLCanvas(GLuint fbo, GLuint rbo, GLuint texture, uint2 size)
-            : m_fbo(fbo), m_rbo(rbo), m_texture(texture), m_size(size)
-        {
-        }
-
-        GLuint m_fbo;
-        GLuint m_rbo;
-        GLuint m_texture;
-
-        uint2 m_size;
-    };
-} // namespace p5
-
-namespace p5
-{
-    std::unique_ptr<Canvas> createCanvas(int width, int height)
+    inline static DrawCommand& create_draw_command(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
-        return OpenGLCanvas::create(width, height);
+        DrawCommand newCommand = {
+            .drawBufferIndexStart = scope.baseIndex,
+            .drawBufferIndexCount = 0,
+            .shader = std::move(shader),
+            .blendMode = blendMode,
+            .textureUnits = {texture},
+            .textureUnitCount = 1,
+        };
+
+        commands.push_back(newCommand);
+        return commands.back();
+    }
+
+    inline static DrawCommand& draw_commands_get_or_create(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    {
+        if (not commands.empty() and draw_command_mergeable(commands.back(), shader, blendMode, texture)) {
+            return commands.back();
+        }
+
+        return create_draw_command(commands, scope, std::move(shader), blendMode, texture);
+    }
+
+    inline static std::optional<size_t> find_texture_unit_index(const DrawCommand& command, uint32_t texture)
+    {
+        for (size_t i = 0; i < command.textureUnitCount; ++i) {
+            if (command.textureUnits[i] == texture) {
+                return i;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    void draw_commands_submit(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    {
+        // Get or create a draw command for this draw call, and update its draw buffer index count to include the new indices from this draw call.
+        DrawCommand& command = draw_commands_get_or_create(commands, scope, shader, blendMode, texture);
+        command.drawBufferIndexCount += scope.indexCursor - scope.baseIndex;
+
+        // Now we need to make sure that the texture used by this draw command is included in the command's texture units, if it is not already included.
+        // To archive this we need to find an available texture unit for this texture, and add it to the command's texture units if it is not already included.
+        // Then we need to check if we found the texture in the command's texture units, or if we need to add it to the command's texture units.
+        const std::optional<size_t> textureUnitIndex = find_texture_unit_index(command, texture);
+        size_t newTextureUnitIndex;
+        if (not textureUnitIndex.has_value()) {
+            newTextureUnitIndex = command.textureUnitCount;
+            command.textureUnits[newTextureUnitIndex] = texture;
+            command.textureUnitCount++;
+        } else {
+            newTextureUnitIndex = textureUnitIndex.value();
+        }
+
+        // We must update the "texIndex" attribute of the vertices in the draw scope to point to the correct texture unit index for this texture, so that
+        // the shader can sample from the correct texture unit when rendering this draw command.
+        const size_t vertexCount = scope.vertexCursor - scope.baseVertex;
+        for (size_t i = 0; i < vertexCount; ++i) {
+            scope.vertices[scope.baseVertex + i].texIndex = static_cast<float>(newTextureUnitIndex);
+        }
     }
 } // namespace p5
 
 namespace p5
 {
-    void blitRenderbufferToScreen(const Canvas& source, uint32_t width, uint32_t height)
+    void canvas_stack_push(CanvasStack& stack, const Canvas& canvas)
     {
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getRendererId());
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(0, 0, width, height, 0, height, width, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        stack.push_back(canvas);
+    }
+
+    void canvas_stack_pop(CanvasStack& stack)
+    {
+        if (not stack.empty()) {
+            stack.pop_back();
+        }
+    }
+
+    void canvas_stack_clear(CanvasStack& stack)
+    {
+        stack.clear();
+    }
+
+    bool canvas_stack_is_empty(const CanvasStack& stack)
+    {
+        return stack.empty();
+    }
+
+    Canvas& canvas_stack_peek(CanvasStack& stack)
+    {
+        return stack.back();
     }
 } // namespace p5

@@ -25,8 +25,6 @@ namespace p5
           font(),
           textSize(12.0f),
           shader(),
-          shaderUniforms(),
-          uniformsDirty(false),
           horizontalTextAlign(HorizontalTextAlign::left),
           verticalTextAlign(VerticalTextAlign::baseline)
     {

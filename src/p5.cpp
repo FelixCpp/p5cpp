@@ -1,10 +1,9 @@
 #include "p5.hpp"
-#include "drawcall.hpp"
-#include "renderpassstack.hpp"
+#include "shader.hpp"
+#include "canvas.hpp"
 #include "rendering.hpp"
 #include "linepath.hpp"
 #include "renderstate.hpp"
-#include "shader.hpp"
 #include "tess.hpp"
 #include "stroker.hpp"
 #include "dejavusans.hpp"
@@ -97,16 +96,16 @@ namespace p5
     inline static std::shared_ptr<Shader> defaultShader;
     inline static std::shared_ptr<Shader> textShader;
     inline static std::shared_ptr<Font> defaultFont;
-    inline static std::shared_ptr<Canvas> defaultCanvas;
-    inline static RenderStateStack renderStates;
+    inline static std::shared_ptr<Framebuffer> defaultFramebuffer;
     inline static std::unique_ptr<Texture> whiteTexture;
-    inline static RenderPassStack renderPassStack;
+    inline static CanvasStack canvasStack;
     inline static Renderer renderer;
     inline static DrawBuffer drawBuffer;
 
     inline Window window;
 
-    inline RenderState& peekState() { return render_state_stack_peek(renderStates); }
+    inline RenderStateStack& getRenderStateStack() { return canvas_stack_peek(canvasStack).renderStates; }
+    inline RenderState& peekState() { return render_state_stack_peek(getRenderStateStack()); }
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
@@ -126,11 +125,37 @@ namespace p5
     UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
     UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
 
-    void pushCanvas(std::shared_ptr<Canvas> canvas) { render_passes_push(renderPassStack, std::move(canvas)); }
-    void popCanvas() { render_passes_pop(renderPassStack); }
+    void pushCanvas(std::shared_ptr<Framebuffer> framebuffer)
+    {
+        // First we need to flush the renderer to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
+        if (not canvas_stack_is_empty(canvasStack)) {
+            Canvas& canvas = canvas_stack_peek(canvasStack);
+            renderer_flush(renderer, canvas, drawBuffer);
+        }
 
-    void pushState() { render_state_stack_push(renderStates, peekState()); }
-    void popState() { render_state_stack_pop(renderStates); }
+        canvas_stack_push(
+            canvasStack,
+            Canvas {
+                .framebuffer = std::move(framebuffer),
+                .renderStates = render_state_stack_create(),
+                .drawCommands = {},
+            }
+        );
+    }
+
+    void popCanvas()
+    {
+        // FLush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
+        if (not canvas_stack_is_empty(canvasStack)) {
+            Canvas& canvas = canvas_stack_peek(canvasStack);
+            renderer_flush(renderer, canvas, drawBuffer);
+        }
+
+        canvas_stack_pop(canvasStack);
+    }
+
+    void pushState() { render_state_stack_push(getRenderStateStack(), peekState()); }
+    void popState() { render_state_stack_pop(getRenderStateStack()); }
 
     void pushMatrix() { matrix_stack_push(peekState().metrics, matrix_stack_peek(peekState().metrics)); }
     void popMatrix() { matrix_stack_pop(peekState().metrics); }
@@ -147,7 +172,7 @@ namespace p5
     void background(color_t color)
     {
         RenderState& state = peekState();
-        const uint2 size = render_passes_get_active_canvas_size(renderPassStack);
+        const uint2 size = canvas_stack_peek(canvasStack).framebuffer->getSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -173,7 +198,7 @@ namespace p5
             }
         );
 
-        draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.shaderUniforms, state.uniformsDirty, state.blendMode, whiteTexture->getRendererId());
+        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
         return;
     }
 
@@ -252,7 +277,7 @@ namespace p5
                 generateSolidStroke(scope, linepath->buildDrawPoints(strokeStyle), state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, shouldClose);
             }
 
-            draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.shaderUniforms, state.uniformsDirty, state.blendMode, whiteTexture->getRendererId());
+            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
         }
 
         linepath->clear();
@@ -672,7 +697,7 @@ namespace p5
                 }
             );
 
-            draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.shaderUniforms, state.uniformsDirty, state.blendMode, textureId);
+            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, getCurrentShader(state), state.blendMode, textureId);
         }
     }
 
@@ -776,7 +801,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
+                draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
             }
 
             px += glyph->advance.x;
@@ -853,20 +878,22 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    defaultCanvas = createCanvas(window.framebufferWidth, window.framebufferHeight);
-    renderStates = render_state_stack_create();
+    defaultFramebuffer = createCanvas(window.framebufferWidth, window.framebufferHeight);
 
     static std::unique_ptr sketch = createSketch();
-    renderer_begin_frame(renderer);
-    render_passes_begin_frame(renderPassStack, defaultCanvas);
     {
-        render_passes_push(renderPassStack, defaultCanvas);
-        {
-            sketch->setup();
-        }
-        render_passes_pop(renderPassStack);
+        Canvas defaultCanvas = Canvas {
+            .framebuffer = defaultFramebuffer,
+            .renderStates = render_state_stack_create(),
+            .drawCommands = {},
+        };
+
+        renderer_begin_frame(renderer);
+        pushCanvas(defaultFramebuffer);
+        sketch->setup();
+        popCanvas();
+        renderer_end_frame(renderer, drawBuffer);
     }
-    renderer_end_frame(renderer, renderPassStack, drawBuffer);
 
     glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
         if (action == GLFW_PRESS) {
@@ -882,22 +909,26 @@ int main()
         glfwPollEvents();
         glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
 
+        Canvas defaultCanvas = Canvas {
+            .framebuffer = defaultFramebuffer,
+            .renderStates = render_state_stack_create(),
+            .drawCommands = {},
+        };
+
         renderer_begin_frame(renderer);
-        render_passes_begin_frame(renderPassStack, defaultCanvas);
         {
-            render_passes_push(renderPassStack, defaultCanvas);
+            pushCanvas(defaultFramebuffer);
             {
                 sketch->draw();
             }
-            render_passes_pop(renderPassStack);
+            popCanvas();
         }
-        renderer_end_frame(renderer, renderPassStack, drawBuffer);
-        render_state_stack_clear(renderStates);
+        renderer_end_frame(renderer, drawBuffer);
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultCanvas->getRendererId());
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultFramebuffer->getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
-        glBlitFramebuffer(0, 0, defaultCanvas->getSize().x, defaultCanvas->getSize().y, 0, 0, window.framebufferWidth, window.framebufferHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, defaultFramebuffer->getSize().x, defaultFramebuffer->getSize().y, 0, 0, window.framebufferWidth, window.framebufferHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
         GLenum err = glGetError();
         if (err != GL_NO_ERROR) {
