@@ -121,6 +121,11 @@ namespace p5
         return result;
     }
 
+    UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
+    UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
+    UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
+    UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
+
     void pushCanvas(std::shared_ptr<Canvas> canvas) { render_passes_push(renderPassStack, std::move(canvas)); }
     void popCanvas() { render_passes_pop(renderPassStack); }
 
@@ -137,11 +142,11 @@ namespace p5
     void scale(float x, float y) { applyMatrix(scaling(x, y)); }
     void rotate(float angle) { applyMatrix(rotation(angle)); }
 
-    void background(int grey, int alpha) { background(color(grey, grey, grey, alpha)); }
+    void background(int grey, int alpha) { background(color(grey, alpha)); }
     void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
     void background(color_t color)
     {
-        const RenderState& state = peekState();
+        RenderState& state = peekState();
         const uint2 size = render_passes_get_active_canvas_size(renderPassStack);
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
@@ -168,7 +173,8 @@ namespace p5
             }
         );
 
-        draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+        draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.shaderUniforms, state.uniformsDirty, state.blendMode, whiteTexture->getRendererId());
+        return;
     }
 
     void noFill() { peekState().isFillDisabled = true; }
@@ -230,7 +236,7 @@ namespace p5
 
     void endShapeImpl(bool shouldClose, FillStyle fillStyle, FillStyle strokeStyle, ShapeType type)
     {
-        const RenderState& state = peekState();
+        RenderState& state = peekState();
 
         {
             DrawScope scope = draw_buffer_get_scope(drawBuffer);
@@ -246,7 +252,7 @@ namespace p5
                 generateSolidStroke(scope, linepath->buildDrawPoints(strokeStyle), state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, shouldClose);
             }
 
-            draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+            draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.shaderUniforms, state.uniformsDirty, state.blendMode, whiteTexture->getRendererId());
         }
 
         linepath->clear();
@@ -306,16 +312,15 @@ namespace p5
 
     void shader(std::shared_ptr<Shader> shader) { peekState().shader = std::move(shader); }
     void noShader() { peekState().shader.reset(); }
-    void setUniform(std::string_view name, float x)
+    void setUniform(std::string_view name, const UniformVariable& variable)
     {
-        if (std::shared_ptr<Shader> currentShader = getCurrentShader(peekState()); currentShader != nullptr) {
-            glProgramUniform1f(currentShader->getRendererId(), currentShader->getUniformLocation(name), x);
-        }
-    }
-    void setUniform(std::string_view name, float x, float y)
-    {
-        if (std::shared_ptr<Shader> currentShader = getCurrentShader(peekState()); currentShader != nullptr) {
-            glProgramUniform2f(currentShader->getRendererId(), currentShader->getUniformLocation(name), x, y);
+        const RenderState& state = peekState();
+
+        if (state.shader != nullptr) {
+            state.shader->setUniform(NamedUniformVariable {
+                .name = std::string(name),
+                .variable = variable,
+            });
         }
     }
 
@@ -635,7 +640,7 @@ namespace p5
     void noTint() { peekState().tintColor = color(255, 255, 255); }
     void image(uint32_t textureId, float left, float top, float width, float height)
     {
-        const RenderState& state = peekState();
+        RenderState& state = peekState();
         const std::array<float2, 4> positions = {
             transformPoint(peekMatrix(), {left, top}),
             transformPoint(peekMatrix(), {left + width, top}),
@@ -667,7 +672,7 @@ namespace p5
                 }
             );
 
-            draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.blendMode, textureId);
+            draw_calls_submit(scope, render_passes_peek(renderPassStack).drawCalls, getCurrentShader(state), state.shaderUniforms, state.uniformsDirty, state.blendMode, textureId);
         }
     }
 
@@ -682,7 +687,7 @@ namespace p5
     {
         if (text.empty()) return;
 
-        const RenderState& state = peekState();
+        RenderState& state = peekState();
         Font* font = getCurrentFont(state).get();
 
         TextMetrics metrics = measureText(text, font, state.textSize, 1.0f);
@@ -853,6 +858,7 @@ int main()
 
     static std::unique_ptr sketch = createSketch();
     renderer_begin_frame(renderer);
+    render_passes_begin_frame(renderPassStack, defaultCanvas);
     {
         render_passes_push(renderPassStack, defaultCanvas);
         {
@@ -877,6 +883,7 @@ int main()
         glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
 
         renderer_begin_frame(renderer);
+        render_passes_begin_frame(renderPassStack, defaultCanvas);
         {
             render_passes_push(renderPassStack, defaultCanvas);
             {
@@ -889,6 +896,7 @@ int main()
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultCanvas->getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
         glBlitFramebuffer(0, 0, defaultCanvas->getSize().x, defaultCanvas->getSize().y, 0, 0, window.framebufferWidth, window.framebufferHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
         GLenum err = glGetError();

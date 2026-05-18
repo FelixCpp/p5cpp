@@ -1,6 +1,7 @@
 #include "shader.hpp"
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <glad/glad.h>
 
@@ -83,6 +84,37 @@ namespace p5
             glDeleteProgram(programId);
         }
 
+        void setUniform(const NamedUniformVariable& variable) override
+        {
+            uniforms.push_back(variable);
+            const GLint location = getUniformLocation(variable.name);
+            if (location == -1) {
+                return;
+            }
+
+            switch (variable.variable.type) {
+                case UniformVariable::Type::float1:
+                    glUniform1f(location, variable.variable.floatValue);
+                    break;
+                case UniformVariable::Type::float2:
+                    glUniform2f(location, variable.variable.float2Value.x, variable.variable.float2Value.y);
+                    break;
+                case UniformVariable::Type::float4:
+                    glUniform4f(location, variable.variable.float4Value.x, variable.variable.float4Value.y, variable.variable.float4Value.z, variable.variable.float4Value.w);
+                    break;
+                case UniformVariable::Type::matrix4x4:
+                    glUniformMatrix4fv(location, 1, GL_FALSE, variable.variable.matrix4x4Value.m.data());
+                    break;
+            }
+        }
+
+        UniformSet getUniforms() const override
+        {
+            return UniformSet {
+                .variables = uniforms,
+            };
+        }
+
         GLint getUniformLocation(std::string_view name) override
         {
             const auto itr = uniformLocationCache.find(std::string(name));
@@ -111,6 +143,7 @@ namespace p5
         }
 
         uint32_t programId;
+        std::vector<NamedUniformVariable> uniforms;
         std::unordered_map<std::string, int> uniformLocationCache;
     };
 } // namespace p5

@@ -16,6 +16,7 @@ namespace p5
         BlendMode blendMode;
 
         std::shared_ptr<Shader> shader;
+        std::vector<UniformVariable> shaderUniforms;
 
         std::array<uint32_t, 8> textureUnits;
         size_t textureUnitCount;

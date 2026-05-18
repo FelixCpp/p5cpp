@@ -6,6 +6,8 @@
 #include <string_view>
 #include <span>
 #include <filesystem>
+#include <variant>
+#include <array>
 
 namespace p5
 {
@@ -82,7 +84,7 @@ namespace p5
 
     struct matrix4x4
     {
-        float m[16];
+        std::array<float, 16> m;
 
         static const matrix4x4 identity;
     };
@@ -195,10 +197,45 @@ namespace p5
 
     std::unique_ptr<Canvas> createCanvas(int width, int height);
 
+    struct UniformVariable
+    {
+        enum class Type {
+            float1,
+            float2,
+            float4,
+            matrix4x4
+        } type;
+
+        union {
+            float floatValue;
+            float2 float2Value;
+            float4 float4Value;
+            matrix4x4 matrix4x4Value;
+        };
+    };
+
+    UniformVariable uniform(float x);
+    UniformVariable uniform(float x, float y);
+    UniformVariable uniform(float x, float y, float z, float w);
+    UniformVariable uniform(const matrix4x4& value);
+
+    struct NamedUniformVariable
+    {
+        std::string name;
+        UniformVariable variable;
+    };
+
+    struct UniformSet
+    {
+        std::span<const NamedUniformVariable> variables;
+    };
+
     struct Shader
     {
         virtual ~Shader() = default;
         virtual int getUniformLocation(std::string_view name) = 0;
+        virtual void setUniform(const NamedUniformVariable& variable) = 0;
+        virtual UniformSet getUniforms() const = 0;
         virtual uint32_t getRendererId() const = 0;
     };
 
@@ -272,10 +309,10 @@ namespace p5
     void curveVertex(float x, float y);
 
     std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
+
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
-    void setUniform(std::string_view name, float x);
-    void setUniform(std::string_view name, float x, float y);
+    void setUniform(std::string_view name, const UniformVariable& variable);
 
     std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
     std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);

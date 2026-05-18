@@ -13,13 +13,20 @@ namespace p5
         DrawCallList drawCalls;
     };
 
+    struct ActiveRenderPassIndex
+    {
+        size_t activeIndex;
+        size_t continuationIndex;
+    };
+
     struct RenderPassStack
     {
         std::vector<RenderPass> renderPasses;
-        size_t activeRenderPassIndex;
+        std::vector<ActiveRenderPassIndex> activeStack;
     };
 
-    RenderPassStack render_passes_create(std::shared_ptr<Canvas> initialCanvas);
+    RenderPassStack render_passes_create();
+    void render_passes_begin_frame(RenderPassStack& stack, std::shared_ptr<Canvas> initialCanvas);
     void render_passes_push(RenderPassStack& stack, std::shared_ptr<Canvas> canvas);
     void render_passes_pop(RenderPassStack& stack);
     void render_passes_clear(RenderPassStack& stack);

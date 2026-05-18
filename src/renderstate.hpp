@@ -41,8 +41,8 @@ namespace p5
 
         std::shared_ptr<Shader> shader;
 
-        HorizontalTextAlign horizontalTextAlign = HorizontalTextAlign::left;
-        VerticalTextAlign verticalTextAlign = VerticalTextAlign::baseline;
+        HorizontalTextAlign horizontalTextAlign;
+        VerticalTextAlign verticalTextAlign;
 
         RenderState();
     };

@@ -83,43 +83,54 @@ namespace p5
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
+    static void render_pass_render(const Renderer& renderer, const RenderPass& renderPass)
+    {
+        const uint2 canvasSize = renderPass.canvas->getSize();
+        const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
+        glViewport(0, 0, canvasSize.x, canvasSize.y);
+
+        for (const DrawCall& drawCall : renderPass.drawCalls) {
+            glUseProgram(drawCall.shader->getRendererId());
+            setBlendMode(drawCall.blendMode);
+
+            for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
+                glActiveTexture(GL_TEXTURE0 + i);
+                glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
+            }
+
+            static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
+            if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
+                glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
+            }
+
+            if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
+                glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, orthoProjection.m);
+            }
+
+            glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.indexOffset * sizeof(uint32_t)));
+        }
+    }
+
     void renderer_flush(Renderer& renderer, RenderPassStack& stack, DrawBuffer& drawBuffer)
     {
         if (stack.renderPasses.empty()) {
             return;
         }
 
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, drawBuffer.vertexCursor * sizeof(Vertex), drawBuffer.vertices.get());
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer.ebo);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, drawBuffer.indexCursor * sizeof(uint32_t), drawBuffer.indices.get());
 
-        for (RenderPass& renderPass : stack.renderPasses) {
-            const uint2 canvasSize = renderPass.canvas->getSize();
-            const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
-
-            glBindFramebuffer(GL_FRAMEBUFFER, renderPass.canvas->getRendererId());
-            glViewport(0, 0, canvasSize.x, canvasSize.y);
-
-            for (const DrawCall& drawCall : renderPass.drawCalls) {
-                glUseProgram(drawCall.shader->getRendererId());
-                setBlendMode(drawCall.blendMode);
-
-                for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
-                    glActiveTexture(GL_TEXTURE0 + i);
-                    glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
-                }
-
-                static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-                if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {
-                    glUniform1iv(samplersLocation, static_cast<GLsizei>(drawCall.textureUnitCount), samplers);
-                }
-
-                if (const GLint projectionMatrixLocation = drawCall.shader->getUniformLocation("u_ProjectionMatrix"); projectionMatrixLocation != -1) {
-                    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, orthoProjection.m);
-                }
-
-                glDrawElements(GL_TRIANGLES, drawCall.indexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.indexOffset * sizeof(uint32_t)));
-            }
+        for (const RenderPass& renderPass : stack.renderPasses) {
+            render_pass_render(renderer, renderPass);
         }
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
         render_passes_clear(stack);
         draw_buffer_clear(drawBuffer);

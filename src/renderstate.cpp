@@ -24,7 +24,11 @@ namespace p5
           strokePatternOffset(0.0f),
           font(),
           textSize(12.0f),
-          shader()
+          shader(),
+          shaderUniforms(),
+          uniformsDirty(false),
+          horizontalTextAlign(HorizontalTextAlign::left),
+          verticalTextAlign(VerticalTextAlign::baseline)
     {
     }
 } // namespace p5
