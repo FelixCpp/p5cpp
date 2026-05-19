@@ -58,12 +58,12 @@ void main() {
     vec4 result = vec4(0.0);
     float weightSum = 0.0;
 
-    for (int x = -u_Radius; x <= u_Radius; x++) {
-        for (int y = -u_Radius; y <= u_Radius; y++) {
+    for (int x = -int(u_Radius); x <= int(u_Radius); x++) {
+        for (int y = -int(u_Radius); y <= int(u_Radius); y++) {
             vec2 offset = vec2(float(x), float(y)) * u_TexelSize;
 
             // Gaussian weight: e^(-(x²+y²) / (2σ²)), σ = Radius/2
-            float sigma = float(u_Radius) / 2.0;
+            float sigma = u_Radius / 2.0;
             float weight = exp(-float(x*x + y*y) / (2.0 * sigma * sigma));
 
             result += sampleTexture(texIndex, v_TexCoord + offset) * weight;
@@ -101,6 +101,11 @@ public:
         }
 
         texture = loadTexture(w, h, data);
+
+        // shader(blurShader);
+        // setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
+        // setUniform("u_Radius", uniform(15.0f));
+        // noShader();
     }
 
     void draw() override
@@ -113,15 +118,22 @@ public:
         image(texture->getRendererId(), 0, 0, 400, 600);
         noShader();
 
+        shader(blurShader);
+        setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
+        setUniform("u_Radius", uniform(5.0f));
+        // setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
+        // setUniform("u_Radius", uniform(15.0f));
+        image(texture->getRendererId(), 400, 0, 400, 600);
+        noShader();
+
+        strokeCap(StrokeCap::butt);
         strokeWeight(10.0f);
         stroke(255);
         line(400, 0, 400, 600);
 
-        shader(blurShader);
-        setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
-        setUniform("u_Radius", uniform(15.0f));
-        image(texture->getRendererId(), 400, 0, 400, 600);
-        noShader();
+        // textFont(font);
+        textSize(64);
+        text("Hello, World!\nThe quick brown fox jumps over the lazy dog.", 50, 100);
     }
 
     void destroy() override

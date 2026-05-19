@@ -7,6 +7,7 @@
 #include <span>
 #include <filesystem>
 #include <array>
+#include <vector>
 
 namespace p5
 {
@@ -218,20 +219,10 @@ namespace p5
     UniformVariable uniform(float x, float y, float z, float w);
     UniformVariable uniform(const matrix4x4& value);
 
-    struct NamedUniformVariable
-    {
-        std::string name;
-        UniformVariable variable;
-    };
-
     struct Shader
     {
         virtual ~Shader() = default;
         virtual int getUniformLocation(std::string_view name) = 0;
-        virtual void setUniform(const NamedUniformVariable& variable) = 0;
-        virtual void uploadUniforms() = 0;
-        virtual std::span<const NamedUniformVariable> getUniforms() const = 0;
-        virtual size_t getUniformHash() const = 0;
         virtual uint32_t getRendererId() const = 0;
     };
 
@@ -309,6 +300,7 @@ namespace p5
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
     void setUniform(std::string_view name, const UniformVariable& variable);
+    void setUniform(std::shared_ptr<Shader> shader, std::string_view name, const UniformVariable& variable);
 
     std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
     std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);

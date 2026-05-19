@@ -73,7 +73,7 @@ namespace p5
     void info(std::string_view message) { std::cout << "[INFO]: " << message << std::endl; }
     void debug(std::string_view message) { std::cout << "[DEBUG]: " << message << std::endl; }
     void warning(std::string_view message) { std::cout << "[WARNING]: " << message << std::endl; }
-    void error(std::string_view message) { std::cout << "[ERROR]: " << message << std::endl; }
+    void error(std::string_view message) { std::cerr << "[ERROR]: " << message << std::endl; }
 } // namespace p5
 
 namespace p5
@@ -101,6 +101,7 @@ namespace p5
     inline static CanvasStack canvasStack;
     inline static Renderer renderer;
     inline static DrawBuffer drawBuffer;
+    inline static UniformCache uniformCache;
 
     inline Window window;
 
@@ -307,11 +308,11 @@ namespace p5
     void curveVertex(float x, float y)
     {
         const RenderState& state = peekState();
-        curveVertexPositions[curveVertexCount++] = transformPoint(peekMatrix(), {x, y});
+        curveVertexPositions[curveVertexCount++] = {x, y};
 
         if (curveVertexCount >= 4) {
             const RenderState& state = peekState();
-            float alpha = (1.0f - state.curveTightness) * 0.5f;
+            const float alpha = (1.0f - state.curveTightness) * 0.5f;
 
             for (size_t i = 0; i < curveVertexPositions.size() - 3; ++i) {
                 auto [x1, y1] = curveVertexPositions[i];
@@ -340,13 +341,13 @@ namespace p5
     void setUniform(std::string_view name, const UniformVariable& variable)
     {
         const RenderState& state = peekState();
-
         if (state.shader != nullptr) {
-            state.shader->setUniform(NamedUniformVariable {
-                .name = std::string(name),
-                .variable = variable,
-            });
+            setUniform(state.shader, name, variable);
         }
+    }
+
+    void setUniform(std::shared_ptr<Shader> shader, std::string_view name, const UniformVariable& variable)
+    {
     }
 
     TextMetrics measureText(std::string_view text)

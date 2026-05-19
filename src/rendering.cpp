@@ -1,6 +1,7 @@
 #include "rendering.hpp"
 #include "canvas.hpp"
 #include "drawscope.hpp"
+#include "p5.hpp"
 
 namespace p5
 {
@@ -82,7 +83,7 @@ namespace p5
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
-    static void render_canvas(Renderer& renderer, const Canvas& canvas)
+    static void render_canvas(Renderer& renderer, UniformCache& cache, const Canvas& canvas)
     {
         const uint2 canvasSize = canvas.framebuffer->getSize();
         const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
@@ -99,7 +100,19 @@ namespace p5
             }
 
             glUseProgram(drawCall.shader->getRendererId());
-            drawCall.shader->uploadUniforms();
+
+            for (const CachedUniformVariable& entry : drawCall.variables) {
+                const UniformVariable& variable = entry.variable;
+                const GLint location = drawCall.shader->getUniformLocation(name.c_str());
+
+                switch (variable.type) {
+                    using UniformType = UniformVariable::Type;
+                    case UniformType::float1: glUniform1f(location, variable.floatValue); break;
+                    case UniformType::float2: glUniform2f(location, variable.float2Value.x, variable.float2Value.y); break;
+                    case UniformType::float4: glUniform4f(location, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w); break;
+                    case UniformType::matrix4x4: glUniformMatrix4fv(location, 1, GL_FALSE, variable.matrix4x4Value.m.data()); break;
+                }
+            }
 
             static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
             if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {

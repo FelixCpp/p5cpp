@@ -1,8 +1,45 @@
 #include "shader.hpp"
+#include "p5.hpp"
 #include <string>
 #include <unordered_map>
 
 #include <glad/glad.h>
+
+namespace p5
+{
+    // static size_t getUniformHash(std::span<const NamedUniformVariable> variables)
+    // {
+    //     static std::hash<float> floatHasher;
+    //     static std::hash<std::string> stringHasher;
+    //     static std::hash<int> intHasher;
+    //
+    //     size_t hash = 0;
+    //     for (const NamedUniformVariable& entry : variables) {
+    //         const std::string& name = entry.name;
+    //         const UniformVariable& variable = entry.variable;
+    //
+    //         hash ^= stringHasher(name) ^ intHasher(static_cast<int>(variable.type));
+    //         switch (variable.type) {
+    //             case UniformVariable::Type::float1:
+    //                 hash ^= floatHasher(variable.floatValue);
+    //                 break;
+    //             case UniformVariable::Type::float2:
+    //                 hash ^= floatHasher(variable.float2Value.x) ^ floatHasher(variable.float2Value.y);
+    //                 break;
+    //             case UniformVariable::Type::float4:
+    //                 hash ^= floatHasher(variable.float4Value.x) ^ floatHasher(variable.float4Value.y) ^ floatHasher(variable.float4Value.z) ^ floatHasher(variable.float4Value.w);
+    //                 break;
+    //             case UniformVariable::Type::matrix4x4:
+    //                 for (int i = 0; i < variable.matrix4x4Value.m.size(); ++i) {
+    //                     hash ^= floatHasher(variable.matrix4x4Value.m[i]);
+    //                 }
+    //                 break;
+    //         }
+    //     }
+    //
+    //     return hash;
+    // }
+} // namespace p5
 
 namespace p5
 {
@@ -26,7 +63,7 @@ namespace p5
                     glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &logLength);
                     std::string log(logLength, '\0');
                     glGetShaderInfoLog(vertexShader, logLength, nullptr, log.data());
-                    error("Failed to compile shader:\n" + log);
+                    error("Failed to compile vertex shader:\n" + log);
                     glDeleteShader(vertexShader);
                     return nullptr;
                 }
@@ -44,7 +81,7 @@ namespace p5
                     glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &logLength);
                     std::string log(logLength, '\0');
                     glGetShaderInfoLog(fragmentShader, logLength, nullptr, log.data());
-                    error("Failed to compile shader:\n" + log);
+                    error("Failed to compile fragment shader:\n" + log);
                     glDeleteShader(vertexShader);
                     glDeleteShader(fragmentShader);
                     return nullptr;
@@ -83,66 +120,6 @@ namespace p5
             glDeleteProgram(programId);
         }
 
-        void setUniform(const NamedUniformVariable& variable) override
-        {
-            uniforms.insert_or_assign(variable.name, variable.variable);
-        }
-
-        void uploadUniforms() override
-        {
-            for (const auto& [name, variable] : uniforms) {
-                const GLint location = getUniformLocation(name);
-                if (location == -1) {
-                    continue;
-                }
-
-                switch (variable.type) {
-                    case UniformVariable::Type::float1:
-                        glProgramUniform1f(programId, location, variable.floatValue);
-                        break;
-                    case UniformVariable::Type::float2:
-                        glProgramUniform2f(programId, location, variable.float2Value.x, variable.float2Value.y);
-                        break;
-                    case UniformVariable::Type::float4:
-                        glProgramUniform4f(programId, location, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w);
-                        break;
-                    case UniformVariable::Type::matrix4x4:
-                        glProgramUniformMatrix4fv(programId, location, 1, GL_FALSE, variable.matrix4x4Value.m.data());
-                        break;
-                }
-            }
-        }
-
-        size_t getUniformHash() const override
-        {
-            static std::hash<float> floatHasher;
-            static std::hash<std::string> stringHasher;
-            static std::hash<int> intHasher;
-
-            size_t hash = 0;
-            for (const auto& [name, variable] : uniforms) {
-                hash ^= stringHasher(name) ^ intHasher(static_cast<int>(variable.type));
-                switch (variable.type) {
-                    case UniformVariable::Type::float1:
-                        hash ^= floatHasher(variable.floatValue);
-                        break;
-                    case UniformVariable::Type::float2:
-                        hash ^= floatHasher(variable.float2Value.x) ^ floatHasher(variable.float2Value.y);
-                        break;
-                    case UniformVariable::Type::float4:
-                        hash ^= floatHasher(variable.float4Value.x) ^ floatHasher(variable.float4Value.y) ^ floatHasher(variable.float4Value.z) ^ floatHasher(variable.float4Value.w);
-                        break;
-                    case UniformVariable::Type::matrix4x4:
-                        for (int i = 0; i < variable.matrix4x4Value.m.size(); ++i) {
-                            hash ^= floatHasher(variable.matrix4x4Value.m[i]);
-                        }
-                        break;
-                }
-            }
-
-            return hash;
-        }
-
         GLint getUniformLocation(std::string_view name) override
         {
             const auto itr = uniformLocationCache.find(std::string(name));
@@ -171,7 +148,7 @@ namespace p5
         }
 
         uint32_t programId;
-        std::unordered_map<std::string, UniformVariable> uniforms;
+        std::vector<NamedUniformVariable> uniforms;
         std::unordered_map<std::string, int> uniformLocationCache;
     };
 } // namespace p5
