@@ -1,36 +1,41 @@
 #include "canvas.hpp"
+#include <cstdio>
 #include <optional>
 
 namespace p5
 {
-    inline static bool draw_command_mergeable(const DrawCommand& a, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    inline static bool draw_command_mergeable(const DrawCommand& command, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
         // We can not merge draw commands if they use different shaders.
-        if (a.shader != shader) {
+        if (command.shader != shader) {
+            return false;
+        }
+
+        // Make sure that even if the shaders are the same, they are actually using the same shader uniforms, as
+        // we can only merge draw commands together if they use the same shader uniforms as well.
+        if (command.shader->getUniformHash() != shader->getUniformHash()) {
             return false;
         }
 
         // We can not merge draw commands if they use different blend modes.
-        if (a.blendMode != blendMode) {
+        if (command.blendMode != blendMode) {
             return false;
         }
 
         // We can not merge draw commands if they use different textures, unless one of the draw commands has an available texture slot for the new texture.
-        const bool isTextureAlreadyUsed = std::invoke([&a, texture]() {
-            for (size_t i = 0; i < a.textureUnitCount; ++i) {
-                if (a.textureUnits[i] == texture) {
+        const bool isTextureAlreadyUsed = std::invoke([&command, texture]() {
+            for (size_t i = 0; i < command.textureUnitCount; ++i) {
+                if (command.textureUnits[i] == texture) {
                     return true;
                 }
             }
             return false;
         });
 
-        const bool isTextureSlotAvailable = a.textureUnitCount < a.textureUnits.size();
+        const bool isTextureSlotAvailable = command.textureUnitCount < command.textureUnits.size();
         if (not isTextureAlreadyUsed and not isTextureSlotAvailable) {
             return false;
         }
-
-        // TODO: Later we need to check for shader uniform changes as well, but for now we can ignore this, as we don't have any shader uniforms that can be set by the user yet.
 
         // We are actually able to merge these draw commands together, either because they use the same texture, or because one of the draw commands has an available texture slot for the new texture.
         return true;
@@ -38,17 +43,17 @@ namespace p5
 
     inline static DrawCommand& create_draw_command(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
-        DrawCommand newCommand = {
+        const size_t shaderUniformHash = shader->getUniformHash();
+        return commands.emplace_back(DrawCommand {
             .drawBufferIndexStart = scope.baseIndex,
             .drawBufferIndexCount = 0,
             .shader = std::move(shader),
+            .shaderUniforms = std::vector<NamedUniformVariable> {shader->getUniforms().begin(), shader->getUniforms().end()},
+            .shaderUniformHash = shaderUniformHash,
             .blendMode = blendMode,
             .textureUnits = {texture},
             .textureUnitCount = 1,
-        };
-
-        commands.push_back(newCommand);
-        return commands.back();
+        });
     }
 
     inline static DrawCommand& draw_commands_get_or_create(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)

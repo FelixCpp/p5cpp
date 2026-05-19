@@ -91,13 +91,15 @@ namespace p5
         glViewport(0, 0, canvasSize.x, canvasSize.y);
 
         for (const DrawCommand& drawCall : canvas.drawCommands) {
-            glUseProgram(drawCall.shader->getRendererId());
             setBlendMode(drawCall.blendMode);
 
             for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
                 glActiveTexture(GL_TEXTURE0 + i);
                 glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
             }
+
+            glUseProgram(drawCall.shader->getRendererId());
+            drawCall.shader->uploadUniforms();
 
             static constexpr int samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
             if (const GLint samplersLocation = drawCall.shader->getUniformLocation("u_Textures"); samplersLocation != -1) {

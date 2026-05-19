@@ -224,17 +224,14 @@ namespace p5
         UniformVariable variable;
     };
 
-    struct UniformSet
-    {
-        std::span<const NamedUniformVariable> variables;
-    };
-
     struct Shader
     {
         virtual ~Shader() = default;
         virtual int getUniformLocation(std::string_view name) = 0;
         virtual void setUniform(const NamedUniformVariable& variable) = 0;
-        virtual UniformSet getUniforms() const = 0;
+        virtual void uploadUniforms() = 0;
+        virtual std::span<const NamedUniformVariable> getUniforms() const = 0;
+        virtual size_t getUniformHash() const = 0;
         virtual uint32_t getRendererId() const = 0;
     };
 

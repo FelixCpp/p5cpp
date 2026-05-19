@@ -11,12 +11,14 @@ namespace p5
     // for the renderer to execute this draw call, such as the shader to use, the blend mode as well as the textures and more.
     struct DrawCommand
     {
-        size_t drawBufferIndexStart;          // Where in the global DrawBuffer this draw command starts
-        size_t drawBufferIndexCount;          // How many indices this draw command has in the global DrawBuffer
-        std::shared_ptr<Shader> shader;       // Which shader to use for this draw command
-        BlendMode blendMode;                  // Which blend mode to use for this draw command
-        std::array<uint32_t, 8> textureUnits; // Which texture units to bind for this draw command
-        size_t textureUnitCount;              // The number of texture units used by this draw command
+        size_t drawBufferIndexStart;                      // Where in the global DrawBuffer this draw command starts
+        size_t drawBufferIndexCount;                      // How many indices this draw command has in the global DrawBuffer
+        std::shared_ptr<Shader> shader;                   // Which shader to use for this draw command
+        std::vector<NamedUniformVariable> shaderUniforms; // Which shader uniforms to use for this draw command, as well as their values, used to determine if two draw commands can be merged together or not, as we can only merge draw commands together if they use the same shader uniforms as well.
+        size_t shaderUniformHash;                         // A hash of the shader uniforms used by this draw command, used to determine if two draw commands can be merged together or not, as we can only merge draw commands together if they use the same shader uniforms as well.
+        BlendMode blendMode;                              // Which blend mode to use for this draw command
+        std::array<uint32_t, 8> textureUnits;             // Which texture units to bind for this draw command
+        size_t textureUnitCount;                          // The number of texture units used by this draw command
     };
 
     // The DrawCommandList is a wrapper around a list of DrawCommands, which is used by the renderer to execute the draw calls in the correct order.
