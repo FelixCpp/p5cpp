@@ -148,7 +148,6 @@ namespace p5
         }
 
         uint32_t programId;
-        std::vector<NamedUniformVariable> uniforms;
         std::unordered_map<std::string, int> uniformLocationCache;
     };
 } // namespace p5

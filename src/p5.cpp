@@ -8,6 +8,7 @@
 #include "stroker.hpp"
 #include "dejavusans.hpp"
 #include <cassert>
+#include <unordered_map>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -101,7 +102,6 @@ namespace p5
     inline static CanvasStack canvasStack;
     inline static Renderer renderer;
     inline static DrawBuffer drawBuffer;
-    inline static UniformCache uniformCache;
 
     inline Window window;
 

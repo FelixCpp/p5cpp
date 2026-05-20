@@ -100,17 +100,17 @@ namespace p5
             }
 
             glUseProgram(drawCall.shader->getRendererId());
+            ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, drawCall.shader.get());
+            for (const UniformCacheEntry& entry : shaderCache.uniformCache) {
+                if (entry.dirty) {
+                    switch (entry.variable.type) {
+                        case UniformVariable::Type::float1: glUniform1f(entry.location, entry.variable.floatValue); break;
+                        case UniformVariable::Type::float2: glUniform2f(entry.location, entry.variable.float2Value.x, entry.variable.float2Value.y); break;
+                        case UniformVariable::Type::float4: glUniform4f(entry.location, entry.variable.float4Value.x, entry.variable.float4Value.y, entry.variable.float4Value.z, entry.variable.float4Value.w); break;
+                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(entry.location, 1, GL_FALSE, entry.variable.matrix4x4Value.m.data()); break;
+                    }
 
-            for (const CachedUniformVariable& entry : drawCall.variables) {
-                const UniformVariable& variable = entry.variable;
-                const GLint location = drawCall.shader->getUniformLocation(name.c_str());
-
-                switch (variable.type) {
-                    using UniformType = UniformVariable::Type;
-                    case UniformType::float1: glUniform1f(location, variable.floatValue); break;
-                    case UniformType::float2: glUniform2f(location, variable.float2Value.x, variable.float2Value.y); break;
-                    case UniformType::float4: glUniform4f(location, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w); break;
-                    case UniformType::matrix4x4: glUniformMatrix4fv(location, 1, GL_FALSE, variable.matrix4x4Value.m.data()); break;
+                    shader_uniform_cache_mark_upload(shaderCache, shaderCache.);
                 }
             }
 
