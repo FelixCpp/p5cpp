@@ -19,5 +19,5 @@ namespace p5
     Renderer renderer_create(size_t vertexCount, size_t indexCount);
     void renderer_begin_frame(Renderer& renderer);
     void renderer_end_frame(Renderer& renderer, DrawBuffer& drawBuffer);
-    void renderer_flush(Renderer& renderer, Canvas& stack, DrawBuffer& drawBuffer);
+    void renderer_flush(Renderer& renderer, UniformCache& cache, Canvas& stack, DrawBuffer& drawBuffer);
 } // namespace p5

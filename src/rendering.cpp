@@ -101,16 +101,21 @@ namespace p5
 
             glUseProgram(drawCall.shader->getRendererId());
             ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, drawCall.shader.get());
-            for (const UniformCacheEntry& entry : shaderCache.uniformCache) {
+            for (const UniformCacheEntry& entry : drawCall.uniformCache) {
                 if (entry.dirty) {
+                    const int location = entry.location.value_or(glGetUniformLocation(drawCall.shader->getRendererId(), entry.name.c_str()));
+                    std::fprintf(stdout, "Uploading uniform '%s' to location %d\n", entry.name.c_str(), location);
+                    std::fflush(stdout);
+
                     switch (entry.variable.type) {
-                        case UniformVariable::Type::float1: glUniform1f(entry.location, entry.variable.floatValue); break;
-                        case UniformVariable::Type::float2: glUniform2f(entry.location, entry.variable.float2Value.x, entry.variable.float2Value.y); break;
-                        case UniformVariable::Type::float4: glUniform4f(entry.location, entry.variable.float4Value.x, entry.variable.float4Value.y, entry.variable.float4Value.z, entry.variable.float4Value.w); break;
-                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(entry.location, 1, GL_FALSE, entry.variable.matrix4x4Value.m.data()); break;
+                        case UniformVariable::Type::float1: glUniform1f(location, entry.variable.floatValue); break;
+                        case UniformVariable::Type::float2: glUniform2f(location, entry.variable.float2Value.x, entry.variable.float2Value.y); break;
+                        case UniformVariable::Type::float4: glUniform4f(location, entry.variable.float4Value.x, entry.variable.float4Value.y, entry.variable.float4Value.z, entry.variable.float4Value.w); break;
+                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(location, 1, GL_FALSE, entry.variable.matrix4x4Value.m.data()); break;
                     }
 
-                    shader_uniform_cache_mark_upload(shaderCache, shaderCache.);
+                    // shader_uniform_cache_set_location(shaderCache, entry.name);
+                    shader_uniform_cache_mark_upload(shaderCache, entry.name);
                 }
             }
 
@@ -127,7 +132,7 @@ namespace p5
         }
     }
 
-    void renderer_flush(Renderer& renderer, Canvas& canvas, DrawBuffer& drawBuffer)
+    void renderer_flush(Renderer& renderer, UniformCache& cache, Canvas& canvas, DrawBuffer& drawBuffer)
     {
         glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, drawBuffer.vertexCursor * sizeof(Vertex), drawBuffer.vertices.get());
@@ -135,7 +140,7 @@ namespace p5
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer.ebo);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, drawBuffer.indexCursor * sizeof(uint32_t), drawBuffer.indices.get());
 
-        render_canvas(renderer, canvas);
+        render_canvas(renderer, cache, canvas);
         draw_buffer_clear(drawBuffer);
     }
 } // namespace p5

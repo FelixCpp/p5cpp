@@ -8,7 +8,6 @@
 #include "stroker.hpp"
 #include "dejavusans.hpp"
 #include <cassert>
-#include <unordered_map>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -102,6 +101,7 @@ namespace p5
     inline static CanvasStack canvasStack;
     inline static Renderer renderer;
     inline static DrawBuffer drawBuffer;
+    inline static UniformCache uniformCache;
 
     inline Window window;
 
@@ -131,7 +131,7 @@ namespace p5
         // First we need to flush the renderer to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
         if (not canvas_stack_is_empty(canvasStack)) {
             Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, canvas, drawBuffer);
+            renderer_flush(renderer, uniformCache, canvas, drawBuffer);
         }
 
         canvas_stack_push(
@@ -149,7 +149,7 @@ namespace p5
         // FLush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
         if (not canvas_stack_is_empty(canvasStack)) {
             Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, canvas, drawBuffer);
+            renderer_flush(renderer, uniformCache, canvas, drawBuffer);
         }
 
         canvas_stack_pop(canvasStack);
@@ -199,7 +199,7 @@ namespace p5
             }
         );
 
-        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
         return;
     }
 
@@ -278,7 +278,7 @@ namespace p5
                 generateSolidStroke(scope, linepath->buildDrawPoints(strokeStyle), state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, shouldClose);
             }
 
-            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
         }
 
         linepath->clear();
@@ -348,6 +348,8 @@ namespace p5
 
     void setUniform(std::shared_ptr<Shader> shader, std::string_view name, const UniformVariable& variable)
     {
+        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(uniformCache, shader.get());
+        shader_uniform_cache_set(shaderCache, name, variable);
     }
 
     TextMetrics measureText(std::string_view text)
@@ -698,7 +700,7 @@ namespace p5
                 }
             );
 
-            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, getCurrentShader(state), state.blendMode, textureId);
+            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, textureId);
         }
     }
 
@@ -802,7 +804,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, scope, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
+                draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
             }
 
             px += glyph->advance.x;
@@ -880,6 +882,7 @@ int main()
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     defaultFramebuffer = createCanvas(window.framebufferWidth, window.framebufferHeight);
+    uniformCache = uniform_cache_create();
 
     static std::unique_ptr sketch = createSketch();
     {

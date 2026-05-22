@@ -9,14 +9,15 @@ namespace p5
 {
     struct UniformCacheEntry
     {
+        std::string name;
         bool dirty;
-        int location;
+        std::optional<int> location;
         UniformVariable variable;
     };
 
     struct ShaderUniformCache
     {
-        std::unordered_map<std::string, UniformCacheEntry> entries;
+        std::vector<UniformCacheEntry> entries;
     };
 
     void shader_uniform_cache_set(ShaderUniformCache& cache, std::string_view name, const UniformVariable& variable);
@@ -27,6 +28,7 @@ namespace p5
         std::unordered_map<Shader*, ShaderUniformCache> entries;
     };
 
+    UniformCache uniform_cache_create();
     ShaderUniformCache& uniform_cache_get_shader_cache(UniformCache& cache, Shader* shader);
 
     // A Draw-Command represents a single draw call made by the user, such as
@@ -48,7 +50,7 @@ namespace p5
     typedef std::vector<DrawCommand> DrawCommandList;
 
     // This function is responsible for submitting the draw commands to the renderer, it takes care of merging draw commands together when possible, and also resolves texture units for each draw command.
-    void draw_commands_submit(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture);
+    void draw_commands_submit(DrawCommandList& commands, UniformCache& cache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture);
 
     // A canvas consists out of a framebuffer to which we can render,
     // as well as a list of render states controlled by the user.

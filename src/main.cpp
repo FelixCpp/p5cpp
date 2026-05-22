@@ -119,10 +119,10 @@ public:
         noShader();
 
         shader(blurShader);
-        setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
-        setUniform("u_Radius", uniform(5.0f));
         // setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
-        // setUniform("u_Radius", uniform(15.0f));
+        // setUniform("u_Radius", uniform(5.0f));
+        setUniform("u_TexelSize", uniform(1.0f / 400.0f, 1.0f / 600.0f));
+        setUniform("u_Radius", uniform(15.0f));
         image(texture->getRendererId(), 400, 0, 400, 600);
         noShader();
 
