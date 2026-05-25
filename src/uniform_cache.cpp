@@ -6,54 +6,53 @@ namespace p5
     {
         return ShaderUniformCache {
             .uniforms = {},
-            .dirtyUniformIndices = {},
-            .uniformLocationCache = {},
-            .uniformNameToIdCache = {},
-            .uniformIdToNameCache = {},
+            .uniformNameToIndex = {},
         };
     }
 
     void shader_uniform_cache_insert_or_update(ShaderUniformCache& cache, const std::string& name, const UniformVariable& variable)
     {
-        const auto itr = cache.uniformNameToIdCache.find(name);
-        if (itr == cache.uniformNameToIdCache.end()) {
+        const auto itr = cache.uniformNameToIndex.find(name);
+        if (itr == cache.uniformNameToIndex.end()) {
             const size_t id = cache.uniforms.size();
-            cache.uniforms.push_back(variable);
-            cache.uniformNameToIdCache.emplace(name, id);
-            cache.uniformIdToNameCache.emplace(id, name);
-            cache.dirtyUniformIndices.insert(id);
+
+            UniformEntry entry = UniformEntry {
+                .name = name,
+                .location = -1,
+                .variable = variable,
+                .dirty = true,
+            };
+
+            cache.uniforms.emplace_back(std::move(entry));
+            cache.uniformNameToIndex.emplace(name, id);
             return;
         }
 
-        const size_t id = itr->second;
-        cache.uniforms[id] = variable;
-        cache.dirtyUniformIndices.insert(id);
+        UniformEntry& entry = cache.uniforms[itr->second];
+        entry.variable = variable;
+        entry.dirty = true;
     }
 
-    int shader_uniform_cache_get_location(ShaderUniformCache& cache, size_t id, const std::function<int(const std::string&)>& locationResolver)
+    void shader_uniform_cache_mark_upload(ShaderUniformCache& cache)
     {
-        const auto itr = cache.uniformLocationCache.find(id);
-        if (itr != cache.uniformLocationCache.end()) {
-            return itr->second;
+        for (UniformEntry& entry : cache.uniforms) {
+            entry.dirty = false;
+        }
+    }
+
+    int shader_uniform_cache_get_location(ShaderUniformCache& cache, const std::string& name, const std::function<int(const std::string&)>& locationResolver)
+    {
+        const auto itr = cache.uniformNameToIndex.find(name);
+        if (itr == cache.uniformNameToIndex.end()) {
+            return -1;
         }
 
-        const std::string& name = cache.uniformIdToNameCache.at(id);
-        const int location = locationResolver(name);
-        cache.uniformLocationCache.emplace(id, location);
-        return location;
-    }
+        UniformEntry& entry = cache.uniforms[itr->second];
+        if (entry.location == -1) {
+            entry.location = locationResolver(name);
+        }
 
-    UniformVariable& shader_uniform_cache_get_variable(ShaderUniformCache& cache, size_t id)
-    {
-        return cache.uniforms[id];
-    }
-
-    void shader_uniform_cache_mark_upload(ShaderUniformCache& cache, const UniformIds& uniformIds)
-    {
-        cache.dirtyUniformIndices.clear();
-        // for (const size_t id : uniformIds) {
-        //     cache.dirtyUniformIndices.erase(id);
-        // }
+        return entry.location;
     }
 } // namespace p5
 

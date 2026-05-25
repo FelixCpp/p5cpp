@@ -102,9 +102,11 @@ namespace p5
 
             ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, drawCall.shader.get());
             glUseProgram(drawCall.shader->getRendererId());
-            for (const LocatedUniform& uniform : drawCall.uniforms) {
+            for (const UniformSnapshot& uniform : drawCall.uniforms) {
                 const UniformVariable& entry = uniform.variable;
-                const int location = uniform.location;
+                const int location = shader_uniform_cache_get_location(shaderCache, uniform.name, [&](const std::string& name) {
+                    return glGetUniformLocation(drawCall.shader->getRendererId(), name.c_str());
+                });
 
                 switch (entry.type) {
                     case UniformVariable::Type::float1: glUniform1f(location, entry.floatValue); break;

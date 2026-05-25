@@ -17,8 +17,11 @@ namespace p5
             return false;
         }
 
-        if (not cache.dirtyUniformIndices.empty()) {
-            return false;
+        // If there is any uniform which has been set since last time, we cannot merge these commands.
+        for (const UniformEntry& entry : cache.uniforms) {
+            if (entry.dirty) {
+                return false;
+            }
         }
 
         // We can not merge draw commands if they use different textures, unless one of the draw commands has an available texture slot for the new texture.
@@ -84,21 +87,16 @@ namespace p5
         command.drawBufferIndexCount += scope.indexCursor - scope.baseIndex;
 
         {
-            std::vector<LocatedUniform> newUniforms;
-            for (const size_t id : shaderCache.dirtyUniformIndices) {
-                const UniformVariable& variable = shader_uniform_cache_get_variable(shaderCache, id);
-                const int location = shader_uniform_cache_get_location(shaderCache, id, [&shader](const std::string& name) {
-                    return shader->getUniformLocation(name);
-                });
-
-                newUniforms.push_back(LocatedUniform {
-                    .location = location,
-                    .variable = variable,
+            std::vector<UniformSnapshot> snapshots;
+            for (const UniformEntry& entry : shaderCache.uniforms) {
+                snapshots.push_back(UniformSnapshot {
+                    .name = entry.name,
+                    .variable = entry.variable,
                 });
             }
 
-            command.uniforms.append_range(std::move(newUniforms));
-            shader_uniform_cache_mark_upload(shaderCache, shaderCache.dirtyUniformIndices);
+            command.uniforms.append_range(std::move(snapshots));
+            shader_uniform_cache_mark_upload(shaderCache);
         }
 
         // Now we need to make sure that the texture used by this draw command is included in the command's texture units, if it is not already included.
