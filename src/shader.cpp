@@ -7,42 +7,6 @@
 
 namespace p5
 {
-    // static size_t getUniformHash(std::span<const NamedUniformVariable> variables)
-    // {
-    //     static std::hash<float> floatHasher;
-    //     static std::hash<std::string> stringHasher;
-    //     static std::hash<int> intHasher;
-    //
-    //     size_t hash = 0;
-    //     for (const NamedUniformVariable& entry : variables) {
-    //         const std::string& name = entry.name;
-    //         const UniformVariable& variable = entry.variable;
-    //
-    //         hash ^= stringHasher(name) ^ intHasher(static_cast<int>(variable.type));
-    //         switch (variable.type) {
-    //             case UniformVariable::Type::float1:
-    //                 hash ^= floatHasher(variable.floatValue);
-    //                 break;
-    //             case UniformVariable::Type::float2:
-    //                 hash ^= floatHasher(variable.float2Value.x) ^ floatHasher(variable.float2Value.y);
-    //                 break;
-    //             case UniformVariable::Type::float4:
-    //                 hash ^= floatHasher(variable.float4Value.x) ^ floatHasher(variable.float4Value.y) ^ floatHasher(variable.float4Value.z) ^ floatHasher(variable.float4Value.w);
-    //                 break;
-    //             case UniformVariable::Type::matrix4x4:
-    //                 for (int i = 0; i < variable.matrix4x4Value.m.size(); ++i) {
-    //                     hash ^= floatHasher(variable.matrix4x4Value.m[i]);
-    //                 }
-    //                 break;
-    //         }
-    //     }
-    //
-    //     return hash;
-    // }
-} // namespace p5
-
-namespace p5
-{
     class OpenGLShader : public Shader
     {
     public:

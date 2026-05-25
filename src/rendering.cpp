@@ -2,6 +2,7 @@
 #include "canvas.hpp"
 #include "drawscope.hpp"
 #include "p5.hpp"
+#include "uniform_cache.hpp"
 
 namespace p5
 {
@@ -99,23 +100,17 @@ namespace p5
                 glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
             }
 
-            glUseProgram(drawCall.shader->getRendererId());
             ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, drawCall.shader.get());
-            for (const UniformCacheEntry& entry : drawCall.uniformCache) {
-                if (entry.dirty) {
-                    const int location = entry.location.value_or(glGetUniformLocation(drawCall.shader->getRendererId(), entry.name.c_str()));
-                    std::fprintf(stdout, "Uploading uniform '%s' to location %d\n", entry.name.c_str(), location);
-                    std::fflush(stdout);
+            glUseProgram(drawCall.shader->getRendererId());
+            for (const LocatedUniform& uniform : drawCall.uniforms) {
+                const UniformVariable& entry = uniform.variable;
+                const int location = uniform.location;
 
-                    switch (entry.variable.type) {
-                        case UniformVariable::Type::float1: glUniform1f(location, entry.variable.floatValue); break;
-                        case UniformVariable::Type::float2: glUniform2f(location, entry.variable.float2Value.x, entry.variable.float2Value.y); break;
-                        case UniformVariable::Type::float4: glUniform4f(location, entry.variable.float4Value.x, entry.variable.float4Value.y, entry.variable.float4Value.z, entry.variable.float4Value.w); break;
-                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(location, 1, GL_FALSE, entry.variable.matrix4x4Value.m.data()); break;
-                    }
-
-                    // shader_uniform_cache_set_location(shaderCache, entry.name);
-                    shader_uniform_cache_mark_upload(shaderCache, entry.name);
+                switch (entry.type) {
+                    case UniformVariable::Type::float1: glUniform1f(location, entry.floatValue); break;
+                    case UniformVariable::Type::float2: glUniform2f(location, entry.float2Value.x, entry.float2Value.y); break;
+                    case UniformVariable::Type::float4: glUniform4f(location, entry.float4Value.x, entry.float4Value.y, entry.float4Value.z, entry.float4Value.w); break;
+                    case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(location, 1, GL_FALSE, entry.matrix4x4Value.m.data()); break;
                 }
             }
 

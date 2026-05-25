@@ -5,66 +5,7 @@
 
 namespace p5
 {
-    void shader_uniform_cache_set(ShaderUniformCache& cache, std::string_view name, const UniformVariable& variable)
-    {
-        for (UniformCacheEntry& entry : cache.entries) {
-            if (entry.name == name) {
-                // std::fprintf(stdout, "Found Uniform '%.*s' in cache\n", static_cast<int>(name.size()), name.data());
-                // std::fflush(stdout);
-
-                entry.variable = variable;
-                entry.dirty = true;
-                return;
-            }
-        }
-
-        std::fprintf(stdout, "Pushed Uniform '%.*s' to cache\n", static_cast<int>(name.size()), name.data());
-        std::fflush(stdout);
-        cache.entries.push_back(
-            UniformCacheEntry {
-                .name = std::string(name),
-                .dirty = true,
-                .location = std::nullopt,
-                .variable = variable,
-            }
-        );
-    }
-
-    void shader_uniform_cache_mark_upload(ShaderUniformCache& cache, std::string_view name)
-    {
-        for (UniformCacheEntry& entry : cache.entries) {
-            if (entry.name == name) {
-                entry.dirty = false;
-                return;
-            }
-        }
-    }
-} // namespace p5
-
-namespace p5
-{
-    UniformCache uniform_cache_create()
-    {
-        return UniformCache {
-            .entries = {},
-        };
-    }
-
-    ShaderUniformCache& uniform_cache_get_shader_cache(UniformCache& cache, Shader* shader)
-    {
-        const auto itr = cache.entries.find(shader);
-        if (itr != cache.entries.end()) {
-            return itr->second;
-        }
-
-        // If there is no cache for this shader, we create an empty one and return it.
-        return cache.entries.insert(std::make_pair(shader, ShaderUniformCache {})).first->second;
-    }
-} // namespace p5
-
-namespace p5
-{
-    inline static bool draw_command_mergeable(const DrawCommand& command, ShaderUniformCache& cache, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    inline static bool draw_command_mergeable(const DrawCommand& command, const std::shared_ptr<Shader>& shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
     {
         // We can not merge draw commands if they use different shaders.
         if (command.shader != shader) {
@@ -76,17 +17,8 @@ namespace p5
             return false;
         }
 
-        if (command.uniformCache.size() != cache.entries.size()) {
+        if (not cache.dirtyUniformIndices.empty()) {
             return false;
-        }
-
-        // Check if the uniforms have changed between these draw commands, if they have
-        // changed we can not merge these draw commands together, as they would require
-        // different uniform values to be uploaded when the renderer executes them.
-        for (const UniformCacheEntry& entry : command.uniformCache) {
-            if (entry.dirty) {
-                return false;
-            }
         }
 
         // We can not merge draw commands if they use different textures, unless one of the draw commands has an available texture slot for the new texture.
@@ -108,14 +40,14 @@ namespace p5
         return true;
     }
 
-    inline static DrawCommand& create_draw_command(DrawCommandList& commands, ShaderUniformCache& cache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    inline static DrawCommand& create_draw_command(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
     {
         return commands.emplace_back(
             DrawCommand {
                 .drawBufferIndexStart = scope.baseIndex,
                 .drawBufferIndexCount = 0,
                 .shader = std::move(shader),
-                .uniformCache = cache.entries,
+                .uniforms = {},
                 .blendMode = blendMode,
                 .textureUnits = {texture},
                 .textureUnitCount = 1,
@@ -123,15 +55,13 @@ namespace p5
         );
     }
 
-    inline static DrawCommand& draw_commands_get_or_create(DrawCommandList& commands, UniformCache& cache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    inline static DrawCommand& draw_commands_get_or_create(DrawCommandList& commands, ShaderUniformCache& shaderCache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
-        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, shader.get());
-
-        if (not commands.empty() and draw_command_mergeable(commands.back(), shaderCache, shader, blendMode, texture)) {
+        if (not commands.empty() and draw_command_mergeable(commands.back(), shader, shaderCache, blendMode, texture)) {
             return commands.back();
         }
 
-        return create_draw_command(commands, shaderCache, scope, shader, blendMode, texture);
+        return create_draw_command(commands, scope, shader, shaderCache, blendMode, texture);
     }
 
     inline static std::optional<size_t> find_texture_unit_index(const DrawCommand& command, uint32_t texture)
@@ -147,9 +77,29 @@ namespace p5
 
     void draw_commands_submit(DrawCommandList& commands, UniformCache& cache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
+        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, shader.get());
+
         // Get or create a draw command for this draw call, and update its draw buffer index count to include the new indices from this draw call.
-        DrawCommand& command = draw_commands_get_or_create(commands, cache, scope, shader, blendMode, texture);
+        DrawCommand& command = draw_commands_get_or_create(commands, shaderCache, scope, shader, blendMode, texture);
         command.drawBufferIndexCount += scope.indexCursor - scope.baseIndex;
+
+        {
+            std::vector<LocatedUniform> newUniforms;
+            for (const size_t id : shaderCache.dirtyUniformIndices) {
+                const UniformVariable& variable = shader_uniform_cache_get_variable(shaderCache, id);
+                const int location = shader_uniform_cache_get_location(shaderCache, id, [&shader](const std::string& name) {
+                    return shader->getUniformLocation(name);
+                });
+
+                newUniforms.push_back(LocatedUniform {
+                    .location = location,
+                    .variable = variable,
+                });
+            }
+
+            command.uniforms.append_range(std::move(newUniforms));
+            shader_uniform_cache_mark_upload(shaderCache, shaderCache.dirtyUniformIndices);
+        }
 
         // Now we need to make sure that the texture used by this draw command is included in the command's texture units, if it is not already included.
         // To archive this we need to find an available texture unit for this texture, and add it to the command's texture units if it is not already included.

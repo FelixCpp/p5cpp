@@ -7,6 +7,7 @@
 #include "tess.hpp"
 #include "stroker.hpp"
 #include "dejavusans.hpp"
+#include "uniform_cache.hpp"
 #include <cassert>
 
 #define GLFW_INCLUDE_NONE
@@ -338,7 +339,7 @@ namespace p5
 
     void shader(std::shared_ptr<Shader> shader) { peekState().shader = std::move(shader); }
     void noShader() { peekState().shader.reset(); }
-    void setUniform(std::string_view name, const UniformVariable& variable)
+    void setUniform(const std::string& name, const UniformVariable& variable)
     {
         const RenderState& state = peekState();
         if (state.shader != nullptr) {
@@ -346,10 +347,10 @@ namespace p5
         }
     }
 
-    void setUniform(std::shared_ptr<Shader> shader, std::string_view name, const UniformVariable& variable)
+    void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
     {
         ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(uniformCache, shader.get());
-        shader_uniform_cache_set(shaderCache, name, variable);
+        shader_uniform_cache_insert_or_update(shaderCache, name, variable);
     }
 
     TextMetrics measureText(std::string_view text)

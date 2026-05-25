@@ -299,8 +299,8 @@ namespace p5
 
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
-    void setUniform(std::string_view name, const UniformVariable& variable);
-    void setUniform(std::shared_ptr<Shader> shader, std::string_view name, const UniformVariable& variable);
+    void setUniform(const std::string& name, const UniformVariable& variable);
+    void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable);
 
     std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
     std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);
