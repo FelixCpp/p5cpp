@@ -274,56 +274,48 @@ namespace p5
     {
     }
 
-    void endShapeImpl(bool shouldClose, FillStyle fillStyle, FillStyle strokeStyle, ShapeType type)
-    {
-        RenderState& state = peekState();
-
-        {
-            DrawScope scope = draw_buffer_get_scope(drawBuffer);
-
-            if (fillStyle != FillStyle::none) {
-                const PathPoints points = linepath->buildDrawPoints(fillStyle);
-
-                switch (type) {
-                    case ShapeType::lines: tesselate_lines(scope, points); break;
-                    case ShapeType::lineStrip: tesselate_line_strip(scope, points); break;
-                    case ShapeType::lineLoop: tesselate_line_loop(scope, points); break;
-                    case ShapeType::triangles: tesselate_triangles(scope, points); break;
-                    case ShapeType::triangleStrip: tesselate_triangle_strip(scope, points); break;
-                    case ShapeType::triangleFan: tesselate_triangle_fan(scope, points); break;
-                    case ShapeType::quads: tesselate_quads(scope, points); break;
-                    case ShapeType::quadStrip: tesselate_quad_strip(scope, points); break;
-                }
-            }
-
-            if (strokeStyle != FillStyle::none) {
-                const PathPoints points = linepath->buildDrawPoints(strokeStyle);
-
-                switch (type) {
-                    case ShapeType::lines: stroke_lines(scope, points, state.strokeWeight, state.strokeCap, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::lineStrip: stroke_line_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::lineLoop: stroke_line_loop(scope, points, state.strokeWeight, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::triangles: stroke_triangles(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::triangleStrip: stroke_triangle_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::triangleFan: stroke_triangle_fan(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::quads: stroke_quads(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                    case ShapeType::quadStrip: stroke_quad_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                }
-            }
-
-            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
-        }
-
-        linepath->clear();
-        curveVertexCount = 0;
-    }
-
     void endShape(ShapeType type, bool close)
     {
         const RenderState& state = peekState();
-        const FillStyle fillStyle = state.isFillDisabled ? FillStyle::none : FillStyle::fill;
-        const FillStyle strokeStyle = state.isStrokeDisabled ? FillStyle::none : FillStyle::stroke;
-        endShapeImpl(close, fillStyle, strokeStyle, type);
+
+        DrawScope scope = draw_buffer_get_scope(drawBuffer);
+
+        if (not state.isFillDisabled) {
+            const PathPoints points = linepath->buildDrawPoints(FillStyle::fill);
+
+            switch (type) {
+                case ShapeType::lines: break;
+                case ShapeType::lineStrip: break;
+                case ShapeType::lineLoop: break;
+                case ShapeType::triangles: tesselate_triangles(scope, points); break;
+                case ShapeType::triangleStrip: tesselate_triangle_strip(scope, points); break;
+                case ShapeType::triangleFan: tesselate_triangle_fan(scope, points); break;
+                case ShapeType::quads: tesselate_quads(scope, points); break;
+                case ShapeType::quadStrip: tesselate_quad_strip(scope, points); break;
+                case ShapeType::polygon: tesselate_polygon(scope, points); break;
+            }
+        }
+
+        if (not state.isStrokeDisabled) {
+            const PathPoints points = linepath->buildDrawPoints(FillStyle::stroke);
+
+            switch (type) {
+                case ShapeType::lines: stroke_lines(scope, points, state.strokeWeight, state.strokeCap, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::lineStrip: stroke_line_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::lineLoop: stroke_line_loop(scope, points, state.strokeWeight, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::triangles: stroke_triangles(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::triangleStrip: stroke_triangle_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::triangleFan: stroke_triangle_fan(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::quads: stroke_quads(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::quadStrip: stroke_quad_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::polygon: stroke_polygon(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+            }
+        }
+
+        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+
+        linepath->clear();
+        curveVertexCount = 0;
     }
 
     void vertex(float x, float y)
@@ -519,7 +511,7 @@ namespace p5
             }
         }
 
-        endShape(ShapeType::triangles, true);
+        endShape(ShapeType::polygon, true);
     }
 
     void square(float left, float top, float size)
@@ -538,7 +530,7 @@ namespace p5
             float y = centerY + std::sin(angle) * height * 0.5f;
             vertex(x, y);
         }
-        endShape(ShapeType::triangles, true);
+        endShape(ShapeType::polygon, true);
     }
 
     void circle(float centerX, float centerY, float size)
@@ -558,7 +550,8 @@ namespace p5
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
         }
-        endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::triangles);
+        endShape(ShapeType::polygon, true);
+        // endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::triangles);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -599,7 +592,7 @@ namespace p5
             vertex(x, y);
         }
 
-        endShape(ShapeType::triangles, arcMode != ArcMode::open);
+        endShape(ShapeType::polygon, arcMode != ArcMode::open);
     }
 
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -621,7 +614,8 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
+        endShape(ShapeType::lineStrip, false);
+        // endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
     }
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -641,7 +635,8 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
+        endShape(ShapeType::lineStrip, false);
+        // endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
     }
 
     void tint(int grey, int alpha) { tint(color(grey, grey, grey, alpha)); }
@@ -687,10 +682,7 @@ namespace p5
         }
     }
 
-    void textFont(std::shared_ptr<Font> font)
-    {
-        peekState().font = font;
-    }
+    void textFont(std::shared_ptr<Font> font) { peekState().font = font; }
     void noTextFont() { peekState().font.reset(); }
     void textSize(float size) { peekState().textSize = size; }
 

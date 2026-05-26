@@ -128,6 +128,7 @@ namespace p5
         triangleFan,
         quads,
         quadStrip,
+        polygon,
     };
 
     enum class StrokeCapStyle {
