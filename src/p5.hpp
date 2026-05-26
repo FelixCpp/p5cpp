@@ -7,7 +7,6 @@
 #include <span>
 #include <filesystem>
 #include <array>
-#include <vector>
 
 namespace p5
 {
@@ -120,10 +119,31 @@ namespace p5
     void warning(std::string_view message);
     void error(std::string_view message);
 
-    enum class StrokeCap {
+    enum class ShapeType {
+        lines,
+        lineStrip,
+        lineLoop,
+        triangles,
+        triangleStrip,
+        triangleFan,
+        quads,
+        quadStrip,
+    };
+
+    enum class StrokeCapStyle {
         butt,
         square,
         round,
+    };
+
+    struct StrokeCap
+    {
+        StrokeCapStyle start;
+        StrokeCapStyle end;
+
+        static const StrokeCap butt;
+        static const StrokeCap square;
+        static const StrokeCap round;
     };
 
     enum class StrokeJoin {
@@ -290,7 +310,7 @@ namespace p5
     void bezierDetail(uint32_t detail);
 
     void beginShape();
-    void endShape(bool close = true);
+    void endShape(ShapeType shapeType, bool close = true);
     void vertex(float x, float y);
     void vertex(float x, float y, float u, float v);
     void curveVertex(float x, float y);

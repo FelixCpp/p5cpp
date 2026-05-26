@@ -18,7 +18,6 @@ namespace p5
 
             UniformEntry entry = UniformEntry {
                 .name = name,
-                .location = -1,
                 .variable = variable,
                 .dirty = true,
             };
@@ -42,17 +41,14 @@ namespace p5
 
     int shader_uniform_cache_get_location(ShaderUniformCache& cache, const std::string& name, const std::function<int(const std::string&)>& locationResolver)
     {
-        const auto itr = cache.uniformNameToIndex.find(name);
-        if (itr == cache.uniformNameToIndex.end()) {
-            return -1;
+        const auto itr = cache.uniformNameToLocation.find(name);
+        if (itr != cache.uniformNameToLocation.end()) {
+            return itr->second;
         }
 
-        UniformEntry& entry = cache.uniforms[itr->second];
-        if (entry.location == -1) {
-            entry.location = locationResolver(name);
-        }
-
-        return entry.location;
+        const int location = locationResolver(name);
+        cache.uniformNameToLocation.emplace(name, location);
+        return location;
     }
 } // namespace p5
 

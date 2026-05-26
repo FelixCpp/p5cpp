@@ -5,7 +5,6 @@
 #include "linepath.hpp"
 #include "renderstate.hpp"
 #include "tess.hpp"
-#include "stroker.hpp"
 #include "dejavusans.hpp"
 #include "uniform_cache.hpp"
 #include <cassert>
@@ -18,6 +17,13 @@
 #include <array>
 #include <numbers>
 #include <algorithm>
+
+namespace p5
+{
+    const StrokeCap StrokeCap::butt = StrokeCap {.start = StrokeCapStyle::butt, .end = StrokeCapStyle::butt};
+    const StrokeCap StrokeCap::square = StrokeCap {.start = StrokeCapStyle::square, .end = StrokeCapStyle::square};
+    const StrokeCap StrokeCap::round = StrokeCap {.start = StrokeCapStyle::round, .end = StrokeCapStyle::round};
+} // namespace p5
 
 namespace p5
 {
@@ -92,8 +98,6 @@ namespace p5
     inline static std::array<float2, 4> curveVertexPositions;
 
     inline static std::unique_ptr<LinePathBuilder> linepath;
-    inline static std::unique_ptr<Tesselator> fanTesselator;
-    inline static std::unique_ptr<Tesselator> concaveTesselator;
     inline static std::shared_ptr<Shader> defaultShader;
     inline static std::shared_ptr<Shader> textShader;
     inline static std::shared_ptr<Font> defaultFont;
@@ -187,21 +191,35 @@ namespace p5
             float2 {0.0f, 0.0f},
             float2 {0.0f, 0.0f},
         };
-        const std::array<color_t, 4> colors = {color, color, color, color};
+        const std::array<color_t, 4> colors = {
+            color,
+            color,
+            color,
+            color,
+        };
 
-        DrawScope scope = draw_buffer_get_scope(drawBuffer);
-        fanTesselator->tesselate(
-            scope,
-            PathPoints {
-                .size = 4,
-                .positions = positions,
-                .texcoords = texcoords,
-                .colors = colors,
-            }
-        );
+        {
+            DrawScope scope = draw_buffer_get_scope(drawBuffer);
 
-        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
-        return;
+            tesselate_quads(
+                scope,
+                PathPoints {
+                    .size = 4,
+                    .positions = positions,
+                    .texcoords = texcoords,
+                    .colors = colors,
+                }
+            );
+
+            draw_commands_submit(
+                canvas_stack_peek(canvasStack).drawCommands,
+                uniformCache,
+                scope,
+                getCurrentShader(state),
+                state.blendMode,
+                whiteTexture->getRendererId()
+            );
+        }
     }
 
     void noFill() { peekState().isFillDisabled = true; }
@@ -256,11 +274,6 @@ namespace p5
     {
     }
 
-    enum class ShapeType {
-        convex,
-        concave,
-    };
-
     void endShapeImpl(bool shouldClose, FillStyle fillStyle, FillStyle strokeStyle, ShapeType type)
     {
         RenderState& state = peekState();
@@ -269,14 +282,33 @@ namespace p5
             DrawScope scope = draw_buffer_get_scope(drawBuffer);
 
             if (fillStyle != FillStyle::none) {
+                const PathPoints points = linepath->buildDrawPoints(fillStyle);
+
                 switch (type) {
-                    case ShapeType::convex: fanTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
-                    case ShapeType::concave: concaveTesselator->tesselate(scope, linepath->buildDrawPoints(fillStyle)); break;
+                    case ShapeType::lines: tesselate_lines(scope, points); break;
+                    case ShapeType::lineStrip: tesselate_line_strip(scope, points); break;
+                    case ShapeType::lineLoop: tesselate_line_loop(scope, points); break;
+                    case ShapeType::triangles: tesselate_triangles(scope, points); break;
+                    case ShapeType::triangleStrip: tesselate_triangle_strip(scope, points); break;
+                    case ShapeType::triangleFan: tesselate_triangle_fan(scope, points); break;
+                    case ShapeType::quads: tesselate_quads(scope, points); break;
+                    case ShapeType::quadStrip: tesselate_quad_strip(scope, points); break;
                 }
             }
 
             if (strokeStyle != FillStyle::none) {
-                generateSolidStroke(scope, linepath->buildDrawPoints(strokeStyle), state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, shouldClose);
+                const PathPoints points = linepath->buildDrawPoints(strokeStyle);
+
+                switch (type) {
+                    case ShapeType::lines: stroke_lines(scope, points, state.strokeWeight, state.strokeCap, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::lineStrip: stroke_line_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::lineLoop: stroke_line_loop(scope, points, state.strokeWeight, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::triangles: stroke_triangles(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::triangleStrip: stroke_triangle_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::triangleFan: stroke_triangle_fan(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::quads: stroke_quads(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                    case ShapeType::quadStrip: stroke_quad_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                }
             }
 
             draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
@@ -286,7 +318,7 @@ namespace p5
         curveVertexCount = 0;
     }
 
-    void endShape(const bool close, ShapeType type)
+    void endShape(ShapeType type, bool close)
     {
         const RenderState& state = peekState();
         const FillStyle fillStyle = state.isFillDisabled ? FillStyle::none : FillStyle::fill;
@@ -438,7 +470,7 @@ namespace p5
         vertex(left + width, top);
         vertex(left + width, top + height);
         vertex(left, top + height);
-        endShape(true, ShapeType::convex);
+        endShape(ShapeType::quads, true);
     }
 
     void rect(float left, float top, float width, float height, float cx, float cy)
@@ -487,7 +519,7 @@ namespace p5
             }
         }
 
-        endShape(true, ShapeType::convex);
+        endShape(ShapeType::triangles, true);
     }
 
     void square(float left, float top, float size)
@@ -506,7 +538,7 @@ namespace p5
             float y = centerY + std::sin(angle) * height * 0.5f;
             vertex(x, y);
         }
-        endShape(true, ShapeType::convex);
+        endShape(ShapeType::triangles, true);
     }
 
     void circle(float centerX, float centerY, float size)
@@ -526,7 +558,7 @@ namespace p5
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
         }
-        endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::convex);
+        endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::triangles);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -535,67 +567,16 @@ namespace p5
         vertex(x1, y1);
         vertex(x2, y2);
         vertex(x3, y3);
-        endShape(true, ShapeType::convex);
+        endShape(ShapeType::triangles, true);
     }
 
     void line(float x1, float y1, float x2, float y2)
     {
         const RenderState& state = peekState();
-        float halfStrokeWeight = state.strokeWeight * 0.5f;
-
-        const float dx = x2 - x1;
-        const float dy = y2 - y1;
-        const float len = std::sqrt(dx * dx + dy * dy);
-
-        if (len == 0.0f) return;
-
-        const float ndx = dx / len;
-        const float ndy = dy / len;
-
-        if (state.strokeCap == StrokeCap::square) {
-            x1 -= ndx * halfStrokeWeight;
-            y1 -= ndy * halfStrokeWeight;
-            x2 += ndx * halfStrokeWeight;
-            y2 += ndy * halfStrokeWeight;
-        }
-
-        const float px = -ndy;
-        const float py = ndx;
-
-        const float ox = px * halfStrokeWeight;
-        const float oy = py * halfStrokeWeight;
-
         beginShape();
-        if (state.strokeCap != StrokeCap::round) {
-            vertex(x1 + ox, y1 + oy);
-            vertex(x2 + ox, y2 + oy);
-            vertex(x2 - ox, y2 - oy);
-            vertex(x1 - ox, y1 - oy);
-        } else {
-            const size_t segments = 8;
-            float baseAngle = std::atan2(dy, dx);
-
-            for (size_t i = 0; i <= segments; ++i) {
-                float t = static_cast<float>(i) / segments;
-                float a = baseAngle + std::numbers::pi_v<float> * 0.5f + t * std::numbers::pi_v<float>;
-
-                float x = x1 + std::cos(a) * halfStrokeWeight;
-                float y = y1 + std::sin(a) * halfStrokeWeight;
-
-                vertex(x, y);
-            }
-
-            for (size_t i = 0; i <= segments; ++i) {
-                float t = static_cast<float>(i) / segments;
-                float a = baseAngle - std::numbers::pi_v<float> * 0.5f + t * std::numbers::pi_v<float>;
-
-                float x = x2 + std::cos(a) * halfStrokeWeight;
-                float y = y2 + std::sin(a) * halfStrokeWeight;
-
-                vertex(x, y);
-            }
-        }
-        endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::convex); // TODO: Is the ShapeType correct?
+        vertex(x1, y1);
+        vertex(x2, y2);
+        endShape(ShapeType::lines, false);
     }
 
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
@@ -618,7 +599,7 @@ namespace p5
             vertex(x, y);
         }
 
-        endShape(arcMode != ArcMode::open, ShapeType::convex);
+        endShape(ShapeType::triangles, arcMode != ArcMode::open);
     }
 
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -640,7 +621,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::convex);
+        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
     }
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -660,7 +641,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::convex);
+        endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
     }
 
     void tint(int grey, int alpha) { tint(color(grey, grey, grey, alpha)); }
@@ -691,7 +672,8 @@ namespace p5
 
         {
             DrawScope scope = draw_buffer_get_scope(drawBuffer);
-            fanTesselator->tesselate(
+
+            tesselate_quads(
                 scope,
                 PathPoints {
                     .size = 4,
@@ -794,7 +776,7 @@ namespace p5
 
             {
                 DrawScope scope = draw_buffer_get_scope(drawBuffer);
-                fanTesselator->tesselate(
+                tesselate_quads(
                     scope,
                     PathPoints {
                         .size = 4,
@@ -876,8 +858,6 @@ int main()
     renderer = renderer_create(MAX_VERTICES, MAX_INDICES);
     whiteTexture = loadTexture(1, 1, whitePixel);
     drawBuffer = draw_buffer_create(MAX_VERTICES, MAX_INDICES);
-    fanTesselator = createFanTesselator();
-    concaveTesselator = createConcaveTesselator();
     linepath = std::make_unique<LinePathBuilder>();
     defaultShader = createDefaultShader();
     textShader = createTextShader();

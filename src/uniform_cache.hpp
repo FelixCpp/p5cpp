@@ -14,7 +14,6 @@ namespace p5
     struct UniformEntry
     {
         std::string name;
-        int location;
         UniformVariable variable;
         bool dirty;
     };
@@ -26,6 +25,7 @@ namespace p5
     {
         std::vector<UniformEntry> uniforms;                         // A list of uniform variables that have been set by the user.
         std::unordered_map<std::string, size_t> uniformNameToIndex; // A cache of uniform variable name to index mappings, this allows us to quickly access the index of a uniform variable by its name when we need to set a uniform variable from the user code.
+        std::unordered_map<std::string, int> uniformNameToLocation;
     };
 
     struct UniformCache
