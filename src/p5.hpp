@@ -100,19 +100,138 @@ namespace p5
 
 namespace p5
 {
+    // ── Mouse button ─────────────────────────────────────────────────────
+    enum class MouseButton {
+        left,
+        middle,
+        right,
+    };
+
+    // ── Keyboard key ─────────────────────────────────────────────────────
+    // clang-format off
+    enum class Key
+    {
+        unknown,
+
+        // Printable characters
+        space,
+        apostrophe, comma, minus, period, slash,
+        n0, n1, n2, n3, n4, n5, n6, n7, n8, n9,
+        semicolon, equal,
+        leftBracket, backslash, rightBracket, graveAccent,
+
+        // Letters
+        a, b, c, d, e, f, g, h, i, j, k, l, m,
+        n, o, p, q, r, s, t, u, v, w, x, y, z,
+
+        // Control & navigation
+        escape, enter, tab, backspace,
+        insert, del,
+        right, left, down, up,
+        pageUp, pageDown, home, end,
+
+        // Function keys
+        f1,  f2,  f3,  f4,  f5,  f6,
+        f7,  f8,  f9,  f10, f11, f12,
+
+        // Modifier keys
+        leftShift,  leftCtrl,  leftAlt,  leftSuper,
+        rightShift, rightCtrl, rightAlt, rightSuper,
+    };
+    // clang-format on
+
+    // ── Modifier bitmasks ────────────────────────────────────────────────
+    namespace KeyMod
+    {
+        inline constexpr int shift = 0x01;
+        inline constexpr int ctrl = 0x02;
+        inline constexpr int alt = 0x04;
+        inline constexpr int super = 0x08;
+    } // namespace KeyMod
+
+    // ── Event type tag ───────────────────────────────────────────────────
+    enum class EventType {
+        mouseMove,
+        mousePress,
+        mouseRelease,
+        mouseScroll,
+        keyPress,
+        keyRelease,
+        keyRepeat,
+        character,
+        windowResize,
+    };
+
+    // ── Unified window event (SDL-style: type tag + data union) ──────────
+    struct WindowEvent
+    {
+        EventType type;
+
+        struct MouseMoveData
+        {
+            int x, y;
+        };
+
+        struct MouseButtonData
+        {
+            MouseButton button;
+            int x, y;
+        };
+
+        struct MouseScrollData
+        {
+            float dx, dy;
+            int x, y;
+        };
+
+        struct KeyData
+        {
+            Key key;
+            int mods;
+        };
+
+        struct CharData
+        {
+            char32_t codepoint;
+        };
+
+        struct ResizeData
+        {
+            int width, height;
+        };
+
+        union {
+            MouseMoveData mouseMove;
+            MouseButtonData mouseButton; // used for both mousePress and mouseRelease
+            MouseScrollData mouseScroll;
+            KeyData keyEvent; // used for keyPress, keyRelease and keyRepeat
+            CharData charEvent;
+            ResizeData windowResize;
+        };
+    };
+} // namespace p5
+
+namespace p5
+{
     struct Sketch
     {
         virtual ~Sketch() = default;
         virtual void setup() = 0;
         virtual void draw() = 0;
         virtual void destroy() = 0;
-        virtual void mousePressed(int x, int y) = 0;
+        virtual void event(const WindowEvent&) {}
     };
 
     extern std::unique_ptr<Sketch> createSketch();
 
     extern int mouseX;
     extern int mouseY;
+
+    extern int width;       // Current window width in logical points
+    extern int height;      // Current window height in logical points
+    extern int frameCount;  // Number of draw() calls completed
+    extern float fps;       // Smoothed frames per second
+    extern float deltaTime; // Seconds elapsed since the previous draw() call
 
     void info(std::string_view message);
     void debug(std::string_view message);
@@ -213,7 +332,11 @@ namespace p5
         virtual ~Framebuffer() = default;
         virtual uint32_t getTextureId() const = 0;
         virtual uint32_t getRendererId() const = 0;
+        // Logical size — used for the projection matrix and user drawing coordinates.
         virtual uint2 getSize() const = 0;
+        // Physical pixel size — used for glViewport. Differs from getSize() on HiDPI/Retina displays.
+        // Default implementation assumes no DPI scaling (offscreen canvases).
+        virtual uint2 getViewportSize() const { return getSize(); }
     };
 
     std::unique_ptr<Framebuffer> createCanvas(int width, int height);
@@ -353,4 +476,18 @@ namespace p5
     void noTextFont();
     void textSize(float size);
     void text(std::string_view text, float x, float y);
+
+    // ── Window management ─────────────────────────────────────────────────
+    void setWindowSize(int width, int height);
+    void setWindowTitle(std::string_view title);
+    void setWindowResizable(bool resizable);
+    int getWindowWidth();
+    int getWindowHeight();
+
+    // ── Timing & frame rate ───────────────────────────────────────────────
+    void frameRate(float targetFps); // Limit to N fps; 0 = unlimited (default)
+    void loop();
+    void noLoop();
+    bool isLooping();
+    float millis(); // Milliseconds since the application started
 } // namespace p5

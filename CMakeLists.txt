@@ -27,7 +27,8 @@ add_executable(
   src/stroker.cpp
   src/tess.cpp
   src/texture.cpp
-  src/uniform_cache.cpp)
+  src/uniform_cache.cpp
+  src/window.cpp)
 
 target_link_libraries(app PRIVATE glfw glad freetype)
 

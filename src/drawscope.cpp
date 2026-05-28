@@ -39,7 +39,11 @@ namespace p5
 {
     void draw_scope_push_vertex(DrawScope& scope, const float2& position, const float2& texcoord, const float4& color)
     {
-        assert((scope.vertexCursor < scope.vertices.size()) && "CPU Vertex buffer overflow");
+        if (scope.vertexCursor >= scope.vertices.size()) {
+            // Buffer is full; the caller should have called flushIfNeeded() before
+            // creating this scope.  Silently drop the vertex to prevent an OOB write.
+            return;
+        }
 
         scope.vertices[scope.vertexCursor++] = Vertex {
             .position = position,
@@ -51,7 +55,10 @@ namespace p5
 
     void draw_scope_push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
     {
-        assert((scope.indexCursor + 3 <= scope.indices.size()) && "CPU Index buffer overflow");
+        if (scope.indexCursor + 2 >= scope.indices.size()) {
+            // Buffer is full; silently drop to prevent an OOB write.
+            return;
+        }
 
         scope.indices[scope.indexCursor++] = scope.baseVertex + a;
         scope.indices[scope.indexCursor++] = scope.baseVertex + b;

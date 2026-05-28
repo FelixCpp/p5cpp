@@ -1,4 +1,5 @@
 #include "p5.hpp"
+#include "window.hpp"
 #include "shader.hpp"
 #include "canvas.hpp"
 #include "rendering.hpp"
@@ -9,14 +10,12 @@
 #include "uniform_cache.hpp"
 #include <cassert>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-#include <glad/glad.h>
-
 #include <iostream>
 #include <array>
 #include <numbers>
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 namespace p5
 {
@@ -85,15 +84,6 @@ namespace p5
 
 namespace p5
 {
-    struct Window
-    {
-        GLFWwindow* handle;
-        int framebufferWidth;
-        int framebufferHeight;
-        int windowWidth;
-        int windowHeight;
-    };
-
     inline static size_t curveVertexCount;
     inline static std::array<float2, 4> curveVertexPositions;
 
@@ -108,10 +98,10 @@ namespace p5
     inline static DrawBuffer drawBuffer;
     inline static UniformCache uniformCache;
 
-    inline Window window;
+    inline static AppWindow* appWindow = nullptr;
 
-    inline RenderStateStack& getRenderStateStack() { return canvas_stack_peek(canvasStack).renderStates; }
-    inline RenderState& peekState() { return render_state_stack_peek(getRenderStateStack()); }
+    inline RenderStateStack& get_render_state_stack() { return canvas_stack_peek(canvasStack).renderStates; }
+    inline RenderState& peekState() { return render_state_stack_peek(get_render_state_stack()); }
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
@@ -130,6 +120,20 @@ namespace p5
     UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
     UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
     UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
+
+    // Flush the CPU draw buffer to the GPU if there is less than SAFE_MARGIN
+    // room left.  Must be called BEFORE draw_buffer_get_scope() so the new
+    // scope always starts at a valid (non-overflowed) base offset.
+    void flushIfNeeded()
+    {
+        constexpr size_t SAFE_MARGIN_V = 4096;
+        constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
+        if (drawBuffer.vertexCursor + SAFE_MARGIN_V >= drawBuffer.vertexCount ||
+            drawBuffer.indexCursor + SAFE_MARGIN_I >= drawBuffer.indexCount) {
+            Canvas& canvas = canvas_stack_peek(canvasStack);
+            renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+        }
+    }
 
     void pushCanvas(std::shared_ptr<Framebuffer> framebuffer)
     {
@@ -160,8 +164,8 @@ namespace p5
         canvas_stack_pop(canvasStack);
     }
 
-    void pushState() { render_state_stack_push(getRenderStateStack(), peekState()); }
-    void popState() { render_state_stack_pop(getRenderStateStack()); }
+    void pushState() { render_state_stack_push(get_render_state_stack(), peekState()); }
+    void popState() { render_state_stack_pop(get_render_state_stack()); }
 
     void pushMatrix() { matrix_stack_push(peekState().metrics, matrix_stack_peek(peekState().metrics)); }
     void popMatrix() { matrix_stack_pop(peekState().metrics); }
@@ -199,6 +203,7 @@ namespace p5
         };
 
         {
+            flushIfNeeded();
             DrawScope scope = draw_buffer_get_scope(drawBuffer);
 
             tesselate_quads(
@@ -274,16 +279,20 @@ namespace p5
     {
     }
 
-    void endShapeImpl(ShapeType type, std::optional<ColorStyle> fillStyle, std::optional<ColorStyle> strokeStyle, bool close)
+    // fillType  controls how the fill is tessellated into triangles.
+    // strokeType controls how the outline is stroked — can differ from fillType
+    // (e.g. fill a triangleFan but stroke only the outer lineLoop).
+    void endShapeImpl(ShapeType fillType, ShapeType strokeType, std::optional<ColorStyle> fillStyle, std::optional<ColorStyle> strokeStyle, bool close)
     {
         const RenderState& state = peekState();
 
+        flushIfNeeded();
         DrawScope scope = draw_buffer_get_scope(drawBuffer);
 
         if (fillStyle.has_value()) {
             const PathPoints points = linepath->buildDrawPoints(fillStyle.value());
 
-            switch (type) {
+            switch (fillType) {
                 case ShapeType::lines: break;
                 case ShapeType::lineStrip: break;
                 case ShapeType::lineLoop: break;
@@ -299,7 +308,7 @@ namespace p5
         if (strokeStyle.has_value()) {
             const PathPoints points = linepath->buildDrawPoints(strokeStyle.value());
 
-            switch (type) {
+            switch (strokeType) {
                 case ShapeType::lines: stroke_lines(scope, points, state.strokeWeight, state.strokeCap, state.miterLimit, state.roundJoinThreshold); break;
                 case ShapeType::lineStrip: stroke_line_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
                 case ShapeType::lineLoop: stroke_line_loop(scope, points, state.strokeWeight, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
@@ -323,7 +332,7 @@ namespace p5
         const RenderState& state = peekState();
         const std::optional<ColorStyle> fillStyle = state.isFillDisabled ? std::nullopt : std::make_optional(ColorStyle::fill);
         const std::optional<ColorStyle> strokeStyle = state.isStrokeDisabled ? std::nullopt : std::make_optional(ColorStyle::stroke);
-        endShapeImpl(type, fillStyle, strokeStyle, close);
+        endShapeImpl(type, type, fillStyle, strokeStyle, close);
     }
 
     void vertex(float x, float y)
@@ -440,7 +449,10 @@ namespace p5
                     ascender = std::max(ascender, glyph->bearing.y * scale);
                 }
 
-                descender = std::min(descender, (glyph->size.y - glyph->bearing.y) * scale);
+                // descender is the maximum descent BELOW the baseline (positive value).
+                // size.y - bearing.y is the distance from baseline to bottom of glyph;
+                // positive means the glyph extends below the baseline.
+                descender = std::max(descender, (glyph->size.y - glyph->bearing.y) * scale);
             }
         }
 
@@ -529,16 +541,29 @@ namespace p5
 
     void ellipse(float centerX, float centerY, float width, float height)
     {
+        const RenderState& state = peekState();
         const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, std::max(width, height) * 0.5f);
 
-        beginShape();
-        for (size_t i = 0; i < segmentCount; ++i) {
-            float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
-            float x = centerX + std::cos(angle) * width * 0.5f;
-            float y = centerY + std::sin(angle) * height * 0.5f;
-            vertex(x, y);
+        // Fill: centre vertex + closed rim → triangleFan (no libtess2, O(n) vertices)
+        if (!state.isFillDisabled) {
+            beginShape();
+            vertex(centerX, centerY);
+            for (size_t i = 0; i <= segmentCount; ++i) {
+                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+                vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
+            }
+            endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
         }
-        endShape(ShapeType::polygon, true);
+
+        // Stroke: rim only → lineLoop, so only the outer edge is stroked, not the internal fan edges
+        if (!state.isStrokeDisabled) {
+            beginShape();
+            for (size_t i = 0; i < segmentCount; ++i) {
+                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+                vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
+            }
+            endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
+        }
     }
 
     void circle(float centerX, float centerY, float size)
@@ -548,17 +573,19 @@ namespace p5
 
     void point(float x, float y)
     {
+        if (peekState().isStrokeDisabled) return;
+
         const RenderState& state = peekState();
         const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, state.strokeWeight * 0.5f);
 
+        // Fill a disc with the stroke color as a triangleFan — no libtess2, no outline edges
         beginShape();
-        for (size_t i = 0; i < segmentCount; ++i) {
+        vertex(x, y);
+        for (size_t i = 0; i <= segmentCount; ++i) {
             float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
-            float px = x + std::cos(angle) * state.strokeWeight * 0.5f;
-            float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
-            vertex(px, py);
+            vertex(x + std::cos(angle) * state.strokeWeight * 0.5f, y + std::sin(angle) * state.strokeWeight * 0.5f);
         }
-        endShapeImpl(ShapeType::polygon, ColorStyle::stroke, std::nullopt, false);
+        endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::stroke, std::nullopt, false);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -575,7 +602,7 @@ namespace p5
         beginShape();
         vertex(x1, y1);
         vertex(x2, y2);
-        endShapeImpl(ShapeType::lines, std::nullopt, ColorStyle::stroke, false);
+        endShapeImpl(ShapeType::lines, ShapeType::lines, std::nullopt, ColorStyle::stroke, false);
     }
 
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
@@ -620,7 +647,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
+        endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -640,7 +667,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShapeImpl(ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
+        endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
     void tint(int grey, int alpha) { tint(color(grey, grey, grey, alpha)); }
@@ -670,6 +697,7 @@ namespace p5
         };
 
         {
+            flushIfNeeded();
             DrawScope scope = draw_buffer_get_scope(drawBuffer);
 
             tesselate_quads(
@@ -695,42 +723,47 @@ namespace p5
         if (text.empty()) return;
 
         RenderState& state = peekState();
+        if (state.isFillDisabled) return; // fill color is the text color
+
         Font* font = getCurrentFont(state).get();
 
         TextMetrics metrics = measureText(text, font, state.textSize, 1.0f);
 
-        float px;
+        // The horizontal start position for every line (alignment is against the full text width).
+        float lineStartX;
         switch (state.horizontalTextAlign) {
-            case HorizontalTextAlign::left: px = x; break;
-            case HorizontalTextAlign::center: px = x - metrics.width * 0.5f; break;
-            case HorizontalTextAlign::right: px = x - metrics.width; break;
+            case HorizontalTextAlign::left: lineStartX = x; break;
+            case HorizontalTextAlign::center: lineStartX = x - metrics.width * 0.5f; break;
+            case HorizontalTextAlign::right: lineStartX = x - metrics.width; break;
         }
 
         float py;
         switch (state.verticalTextAlign) {
             case VerticalTextAlign::top: py = y + metrics.ascender; break;
-            case VerticalTextAlign::center: py = y + metrics.ascender * 0.5f; break;
+            case VerticalTextAlign::center: py = y + metrics.ascender - metrics.totalHeight * 0.5f; break;
             case VerticalTextAlign::baseline: py = y; break;
-            case VerticalTextAlign::bottom: py = y - metrics.descender; break;
-        }
-
-        if (const Glyph* firstGlyph = font->getGlyph(text.front(), state.textSize)) {
-            px -= firstGlyph->bearing.x;
+            case VerticalTextAlign::bottom: py = y - metrics.totalHeight + metrics.ascender; break;
         }
 
         const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(state.textSize));
+        float px = lineStartX;
+        bool isFirstCharOnLine = true; // tracks whether we need to apply bearing correction for this line
+
         for (size_t i = 0; i < text.length(); ++i) {
             const char32_t ch = text[i];
 
             if (ch == U'\n') {
-                px = x;
+                px = lineStartX; // reset to alignment-adjusted start, not raw x
                 py += font->getLineHeight(state.textSize);
+                isFirstCharOnLine = true;
                 continue;
             }
 
             if (ch == U' ') {
-                px += spaceGlyph->advance.x;
-                py += spaceGlyph->advance.y;
+                if (spaceGlyph != nullptr) {
+                    px += spaceGlyph->advance.x;
+                    py += spaceGlyph->advance.y;
+                }
                 continue;
             }
 
@@ -739,8 +772,11 @@ namespace p5
                 continue;
             }
 
-            const bool hasPrevious = i > 0 && text[i - 1] != '\n';
-            if (hasPrevious) {
+            if (isFirstCharOnLine) {
+                // Shift the pen left so the first glyph's visual left edge starts exactly at lineStartX.
+                px -= glyph->bearing.x;
+                isFirstCharOnLine = false;
+            } else {
                 const char32_t previousCh = text[i - 1];
                 px += font->getKerning(previousCh, ch, static_cast<int>(state.textSize));
             }
@@ -771,6 +807,7 @@ namespace p5
             };
 
             {
+                flushIfNeeded();
                 DrawScope scope = draw_buffer_get_scope(drawBuffer);
                 tesselate_quads(
                     scope,
@@ -796,56 +833,60 @@ namespace p5
 {
     int mouseX = 0;
     int mouseY = 0;
+    int width = 0;
+    int height = 0;
+    int frameCount = 0;
+    float fps = 0.0f;
+    float deltaTime = 0.0f;
 
-    matrix4x4 projectionMatrix;
+    inline static float s_targetFrameTime = 0.0f;
+    inline static auto s_appStartTime = std::chrono::steady_clock::now();
+    inline static bool s_isAppPaused = false;
+
+    void setWindowSize(int w, int h)
+    {
+        window_set_size(appWindow, w, h);
+        width = w;
+        height = h;
+    }
+    void setWindowTitle(std::string_view title) { window_set_title(appWindow, title); }
+    void setWindowResizable(bool resizable) { window_set_resizable(appWindow, resizable); }
+    int getWindowWidth() { return window_logical_width(appWindow); }
+    int getWindowHeight() { return window_logical_height(appWindow); }
+
+    void frameRate(float targetFps) { s_targetFrameTime = (targetFps > 0.0f) ? (1.0f / targetFps) : 0.0f; }
+    void loop() { s_isAppPaused = false; }
+    void noLoop() { s_isAppPaused = true; }
+    bool isLooping() { return !s_isAppPaused; }
+    float millis()
+    {
+        return std::chrono::duration<float, std::milli>(
+                   std::chrono::steady_clock::now() - s_appStartTime
+        )
+            .count();
+    }
 } // namespace p5
 
 int main()
 {
     using namespace p5;
 
-    glfwInit();
+    static std::unique_ptr sketch = createSketch();
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    window.windowWidth = 800;
-    window.windowHeight = 600;
-    projectionMatrix = ortho(0.0f, static_cast<float>(window.windowHeight), static_cast<float>(window.windowWidth), 0.0f, -1.0f, 1.0f);
-
-    window.handle = glfwCreateWindow(window.windowWidth, window.windowHeight, "p5", nullptr, nullptr);
-    glfwMakeContextCurrent(window.handle);
-    glfwSwapInterval(1);
-
-    glfwSetWindowSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
-        window.windowWidth = width;
-        window.windowHeight = height;
-        projectionMatrix = ortho(0.0f, static_cast<float>(window.windowHeight), static_cast<float>(window.windowWidth), 0.0f, -1.0f, 1.0f);
+    appWindow = window_create(800, 600, "p5", [&](const WindowEvent& e) {
+        if (e.type == EventType::mouseMove) {
+            mouseX = e.mouseMove.x;
+            mouseY = e.mouseMove.y;
+        }
+        if (e.type == EventType::windowResize) {
+            width = e.windowResize.width;
+            height = e.windowResize.height;
+        }
+        sketch->event(e);
     });
 
-    glfwSetFramebufferSizeCallback(window.handle, [](GLFWwindow* handle, int width, int height) {
-        window.framebufferWidth = width;
-        window.framebufferHeight = height;
-    });
-
-    glfwSetCursorPosCallback(window.handle, [](GLFWwindow* handle, double x, double y) {
-        mouseX = static_cast<int>(x);
-        mouseY = static_cast<int>(y);
-    });
-
-    gladLoadGLLoader(reinterpret_cast<GLADloadproc>(&glfwGetProcAddress));
-
-    glEnable(GL_MULTISAMPLE);
-
-    std::cout << "Version: " << glGetString(GL_VERSION) << std::endl;
-    std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
-    std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
-    std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
-
-    glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
+    width = window_logical_width(appWindow);
+    height = window_logical_height(appWindow);
 
     static constexpr size_t MAX_VERTICES = 65536;
     static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
@@ -858,17 +899,10 @@ int main()
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    defaultFramebuffer = createCanvas(window.framebufferWidth, window.framebufferHeight);
     uniformCache = uniform_cache_create();
+    defaultFramebuffer = window_default_framebuffer(appWindow);
 
-    static std::unique_ptr sketch = createSketch();
     {
-        Canvas defaultCanvas = Canvas {
-            .framebuffer = defaultFramebuffer,
-            .renderStates = render_state_stack_create(),
-            .drawCommands = {},
-        };
-
         renderer_begin_frame(renderer);
         pushCanvas(defaultFramebuffer);
         sketch->setup();
@@ -876,53 +910,40 @@ int main()
         renderer_end_frame(renderer, drawBuffer);
     }
 
-    glfwSetMouseButtonCallback(window.handle, [](GLFWwindow* handle, int button, int action, int) {
-        if (action == GLFW_PRESS) {
-            double mx, my;
-            glfwGetCursorPos(handle, &mx, &my);
-            sketch->mousePressed(mx, my);
-        }
-    });
+    window_show(appWindow);
 
-    glfwShowWindow(window.handle);
+    auto lastFrameTime = std::chrono::steady_clock::now();
 
-    while (not glfwWindowShouldClose(window.handle)) {
-        glfwPollEvents();
-        glfwGetFramebufferSize(window.handle, &window.framebufferWidth, &window.framebufferHeight);
+    while (not window_should_close(appWindow)) {
+        auto frameStart = std::chrono::steady_clock::now();
+        deltaTime = std::chrono::duration<float>(frameStart - lastFrameTime).count();
+        lastFrameTime = frameStart;
 
-        Canvas defaultCanvas = Canvas {
-            .framebuffer = defaultFramebuffer,
-            .renderStates = render_state_stack_create(),
-            .drawCommands = {},
-        };
+        // Exponential smoothing for displayed FPS (avoid divide-by-zero on first frame)
+        if (deltaTime > 0.0f)
+            fps = fps * 0.9f + (1.0f / deltaTime) * 0.1f;
 
-        renderer_begin_frame(renderer);
-        {
+        window_poll_events(appWindow);
+
+        if (not s_isAppPaused) {
+            renderer_begin_frame(renderer);
             pushCanvas(defaultFramebuffer);
-            {
-                sketch->draw();
-            }
+            sketch->draw();
             popCanvas();
-        }
-        renderer_end_frame(renderer, drawBuffer);
+            renderer_end_frame(renderer, drawBuffer);
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultFramebuffer->getRendererId());
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glViewport(0, 0, window.framebufferWidth, window.framebufferHeight);
-        glBlitFramebuffer(0, 0, defaultFramebuffer->getSize().x, defaultFramebuffer->getSize().y, 0, 0, window.framebufferWidth, window.framebufferHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-        GLenum err = glGetError();
-        if (err != GL_NO_ERROR) {
-            std::fprintf(stdout, "GL Error after blit: 0x%x\n", err);
-            std::fflush(stdout);
+            window_swap_buffers(appWindow);
+            frameCount++;
         }
 
-        glfwSwapBuffers(window.handle);
+        // FPS limiter: sleep remainder of target frame duration
+        if (s_targetFrameTime > 0.0f)
+            std::this_thread::sleep_until(frameStart + std::chrono::duration<float>(s_targetFrameTime));
     }
 
     sketch->destroy();
     sketch.reset();
-    glfwTerminate();
+    window_destroy(appWindow);
 
     return 0;
 }

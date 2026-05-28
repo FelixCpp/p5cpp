@@ -151,8 +151,15 @@ namespace p5
 
         float getLineHeight(int textSize) const override
         {
+            const auto it = lineHeightCache.find(textSize);
+            if (it != lineHeightCache.end()) {
+                return it->second;
+            }
+
             FT_Set_Pixel_Sizes(face.get(), 0, textSize);
-            return static_cast<float>(face->size->metrics.height) / 64.0f; // FreeType uses 1/64th of a pixel as its unit for line height
+            const float lineHeight = static_cast<float>(face->size->metrics.height) / 64.0f;
+            lineHeightCache.emplace(textSize, lineHeight);
+            return lineHeight;
         }
 
         float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override
@@ -367,6 +374,7 @@ namespace p5
         std::vector<GlyphPage> glyphPages;
         std::unordered_map<GlyphCacheEntry, Glyph, GlyphCacheEntryHasher> glyphs;
         std::unordered_map<KerningCacheEntry, float, KerningCacheEntryHasher> kerningCache;
+        mutable std::unordered_map<int, float> lineHeightCache;
     };
 } // namespace p5
 

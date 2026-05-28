@@ -86,11 +86,12 @@ namespace p5
 
     static void render_canvas(Renderer& renderer, UniformCache& cache, const Canvas& canvas)
     {
-        const uint2 canvasSize = canvas.framebuffer->getSize();
+        const uint2 canvasSize   = canvas.framebuffer->getSize();         // logical (for projection)
+        const uint2 viewportSize = canvas.framebuffer->getViewportSize(); // physical pixels (for glViewport)
         const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
 
         glBindFramebuffer(GL_FRAMEBUFFER, canvas.framebuffer->getRendererId());
-        glViewport(0, 0, canvasSize.x, canvasSize.y);
+        glViewport(0, 0, viewportSize.x, viewportSize.y);
 
         for (const DrawCommand& drawCall : canvas.drawCommands) {
             setBlendMode(drawCall.blendMode);
@@ -131,6 +132,9 @@ namespace p5
 
     void renderer_flush(Renderer& renderer, UniformCache& cache, Canvas& canvas, DrawBuffer& drawBuffer)
     {
+        if (drawBuffer.vertexCursor == 0 && canvas.drawCommands.empty())
+            return;
+
         glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, drawBuffer.vertexCursor * sizeof(Vertex), drawBuffer.vertices.get());
 
@@ -138,6 +142,9 @@ namespace p5
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, drawBuffer.indexCursor * sizeof(uint32_t), drawBuffer.indices.get());
 
         render_canvas(renderer, cache, canvas);
+        // Clear the already-rendered commands so a subsequent flush on the same
+        // canvas does not re-render stale draw commands against a fresh buffer.
+        canvas.drawCommands.clear();
         draw_buffer_clear(drawBuffer);
     }
 } // namespace p5
