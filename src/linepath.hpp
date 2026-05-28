@@ -20,7 +20,7 @@ namespace p5
     public:
         LinePathBuilder();
 
-        PathPoints buildDrawPoints(FillStyle type);
+        PathPoints buildDrawPoints(ColorStyle type);
         void vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor);
         void clear();
 

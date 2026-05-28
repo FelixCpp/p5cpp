@@ -274,14 +274,14 @@ namespace p5
     {
     }
 
-    void endShape(ShapeType type, bool close)
+    void endShapeImpl(ShapeType type, std::optional<ColorStyle> fillStyle, std::optional<ColorStyle> strokeStyle, bool close)
     {
         const RenderState& state = peekState();
 
         DrawScope scope = draw_buffer_get_scope(drawBuffer);
 
-        if (not state.isFillDisabled) {
-            const PathPoints points = linepath->buildDrawPoints(FillStyle::fill);
+        if (fillStyle.has_value()) {
+            const PathPoints points = linepath->buildDrawPoints(fillStyle.value());
 
             switch (type) {
                 case ShapeType::lines: break;
@@ -296,8 +296,8 @@ namespace p5
             }
         }
 
-        if (not state.isStrokeDisabled) {
-            const PathPoints points = linepath->buildDrawPoints(FillStyle::stroke);
+        if (strokeStyle.has_value()) {
+            const PathPoints points = linepath->buildDrawPoints(strokeStyle.value());
 
             switch (type) {
                 case ShapeType::lines: stroke_lines(scope, points, state.strokeWeight, state.strokeCap, state.miterLimit, state.roundJoinThreshold); break;
@@ -308,7 +308,7 @@ namespace p5
                 case ShapeType::triangleFan: stroke_triangle_fan(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
                 case ShapeType::quads: stroke_quads(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
                 case ShapeType::quadStrip: stroke_quad_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::polygon: stroke_polygon(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
+                case ShapeType::polygon: stroke_polygon(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, close); break;
             }
         }
 
@@ -316,6 +316,14 @@ namespace p5
 
         linepath->clear();
         curveVertexCount = 0;
+    }
+
+    void endShape(ShapeType type, bool close)
+    {
+        const RenderState& state = peekState();
+        const std::optional<ColorStyle> fillStyle = state.isFillDisabled ? std::nullopt : std::make_optional(ColorStyle::fill);
+        const std::optional<ColorStyle> strokeStyle = state.isStrokeDisabled ? std::nullopt : std::make_optional(ColorStyle::stroke);
+        endShapeImpl(type, fillStyle, strokeStyle, close);
     }
 
     void vertex(float x, float y)
@@ -550,8 +558,7 @@ namespace p5
             float py = y + std::sin(angle) * state.strokeWeight * 0.5f;
             vertex(px, py);
         }
-        endShape(ShapeType::polygon, true);
-        // endShapeImpl(false, FillStyle::stroke, FillStyle::none, ShapeType::triangles);
+        endShapeImpl(ShapeType::polygon, ColorStyle::stroke, std::nullopt, false);
     }
 
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -565,11 +572,10 @@ namespace p5
 
     void line(float x1, float y1, float x2, float y2)
     {
-        const RenderState& state = peekState();
         beginShape();
         vertex(x1, y1);
         vertex(x2, y2);
-        endShape(ShapeType::lines, false);
+        endShapeImpl(ShapeType::lines, std::nullopt, ColorStyle::stroke, false);
     }
 
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
@@ -614,8 +620,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShape(ShapeType::lineStrip, false);
-        // endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
+        endShapeImpl(ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -635,8 +640,7 @@ namespace p5
 
             vertex(bx, by);
         }
-        endShape(ShapeType::lineStrip, false);
-        // endShapeImpl(false, FillStyle::none, FillStyle::stroke, ShapeType::triangles);
+        endShapeImpl(ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
     void tint(int grey, int alpha) { tint(color(grey, grey, grey, alpha)); }

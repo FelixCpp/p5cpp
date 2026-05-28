@@ -3,6 +3,12 @@
 #include <cstdio>
 #include <optional>
 
+constexpr int foo(int a, int b) {
+  return a + b;
+}
+
+int result = foo(120, 120);
+
 namespace p5
 {
     inline static bool draw_command_mergeable(const DrawCommand& command, const std::shared_ptr<Shader>& shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)

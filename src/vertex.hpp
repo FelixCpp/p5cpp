@@ -12,7 +12,7 @@ namespace p5
         float texIndex;
     };
 
-    enum class FillStyle {
+    enum class ColorStyle {
         none,
         fill,
         stroke,

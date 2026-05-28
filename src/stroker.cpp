@@ -96,7 +96,7 @@ namespace p5::caps
         const float startAngle = std::atan2(direction.y, direction.x) - PI / 2.0f;
 
         // Insert center vertex for the round cap
-        const size_t centerIndex = scope.vertexCursor;
+        const size_t centerIndex = scope.vertexCursor - scope.baseVertex;
         push_vertex(scope, center, color);
 
         for (size_t i = 0; i <= segmentCount; ++i) {

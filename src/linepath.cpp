@@ -10,13 +10,13 @@ namespace p5
     {
     }
 
-    PathPoints LinePathBuilder::buildDrawPoints(FillStyle type)
+    PathPoints LinePathBuilder::buildDrawPoints(ColorStyle type)
     {
         return PathPoints {
             .size = drawPointCount,
             .positions = drawPointPositions,
             .texcoords = drawPointTexCoords,
-            .colors = type == FillStyle::fill ? drawPointFillColors : drawPointStrokeColors,
+            .colors = type == ColorStyle::fill ? drawPointFillColors : drawPointStrokeColors,
         };
     }
 

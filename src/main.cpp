@@ -17,22 +17,11 @@ public:
     void draw() override
     {
         background(51);
-        textFont(skia);
-        textSize(64.0f);
-        text("Hello, p5!", 100.0f, 200.0f);
 
         fill(255, 0, 0);
         stroke(255);
-        strokeWeight(4.0f);
-        beginShape();
-        vertex(100.0f, 100.0f);
-        vertex(100.0f, 300.0f);
-        vertex(300.0f, 300.0f);
-        vertex(300.0f, 100.0f);
-
-        vertex(500.0f, 100.0f);
-        vertex(500.0f, 300.0f);
-        endShape(ShapeType::quadStrip);
+        strokeWeight(18.0f);
+        line(200.0f, 200.0f, 300.0f, 150.0f);
     }
 
     void destroy() override
