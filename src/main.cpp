@@ -2,507 +2,705 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <memory>
-#include <random>
+#include <numbers>
 #include <string>
-#include <vector>
 
 using namespace p5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static std::string fmtf(float v, int dp)
+static constexpr float PI = std::numbers::pi_v<float>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ShowcaseSketch
+//  Row 1 – Stroke Joins  : miter / bevel / round  (5-pointed star)
+//  Row 2 – Stroke Caps   : butt  / square / round (open lines, 3 weights)
+//  Row 3 – Shape Gallery : line / rect / circle / triangle / arc / bezier
+//  Row 4 – Edge Cases    : near-U-turn · razor spikes · SW>>segs ·
+//                          sharp V+miter-limit · open-path caps · concave polygon
+//  Row 5 – Supershapes   : heart · rose · Lissajous · astroid · superellipse · spirograph
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct ShowcaseSketch : p5::Sketch
 {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%.*f", dp, static_cast<double>(v));
-    return buf;
-}
+    static constexpr int WIN_W = 1200;
+    static constexpr int VIEWPORT_H = 840; // visible window height
+    static constexpr int CONTENT_H = 1400; // total content height (5 × ROW_H)
+    static constexpr float COL3_W = WIN_W / 3.f;
+    static constexpr float COL6_W = WIN_W / 6.f;
+    static constexpr float ROW_H = CONTENT_H / 5.f; // 280 px per row
+    static constexpr float TITLE_H = 22.f;
+    static constexpr float SCROLL_SPD = 40.f; // px per scroll tick
 
-// ── Neural Network  2 → H → 1 ─────────────────────────────────────────────────
-// Hidden activation: tanh   |   Output activation: sigmoid
-// Training:         full-batch gradient descent with binary cross-entropy loss
-
-struct Net
-{
-    int H = 0;
-    std::vector<float> w1, b1; // input→hidden  (H×2), (H)
-    std::vector<float> w2, b2; // hidden→output (H),   (1)
-    std::vector<float> hAct;   // hidden activations, reused across forward()
-
-    void init(int hidden, std::mt19937& rng)
-    {
-        H = hidden;
-        std::normal_distribution<float> d(0.f, 0.8f);
-        w1.resize(H * 2);
-        b1.assign(H, 0.f);
-        w2.resize(H);
-        b2.assign(1, 0.f);
-        hAct.resize(H);
-        for (auto& w : w1) w = d(rng);
-        for (auto& w : w2) w = d(rng);
-    }
-
-    // Stateless forward pass – used for heatmap and accuracy queries.
-    float predict(float x0, float x1) const
-    {
-        float o = b2[0];
-        for (int j = 0; j < H; ++j) {
-            float a = std::tanh(w1[j * 2] * x0 + w1[j * 2 + 1] * x1 + b1[j]);
-            o += w2[j] * a;
-        }
-        return 1.f / (1.f + std::exp(-o));
-    }
-
-    // Forward pass that caches hidden activations for backprop.
-    float forward(float x0, float x1)
-    {
-        float o = b2[0];
-        for (int j = 0; j < H; ++j) {
-            hAct[j] = std::tanh(w1[j * 2] * x0 + w1[j * 2 + 1] * x1 + b1[j]);
-            o += w2[j] * hAct[j];
-        }
-        return 1.f / (1.f + std::exp(-o));
-    }
-
-    // One full-batch GD step; returns mean cross-entropy loss.
-    float trainStep(const std::vector<std::pair<float2, float>>& data, float lr)
-    {
-        if (data.empty()) return 0.f;
-
-        std::vector<float> dw1(H * 2, 0.f), db1(H, 0.f), dw2(H, 0.f);
-        float db2 = 0.f, totalLoss = 0.f;
-
-        for (auto& [pt, lbl] : data) {
-            float p = forward(pt.x, pt.y);
-            totalLoss += -(lbl * std::log(p + 1e-7f) + (1.f - lbl) * std::log(1.f - p + 1e-7f));
-            float dO = p - lbl; // dL / d(pre-activation output)
-            db2 += dO;
-            for (int j = 0; j < H; ++j) {
-                dw2[j] += dO * hAct[j];
-                float dH = dO * w2[j] * (1.f - hAct[j] * hAct[j]); // tanh′
-                dw1[j * 2] += dH * pt.x;
-                dw1[j * 2 + 1] += dH * pt.y;
-                db1[j] += dH;
-            }
-        }
-
-        float s = lr / static_cast<float>(data.size());
-        b2[0] -= s * db2;
-        for (int j = 0; j < H; ++j) {
-            w2[j] -= s * dw2[j];
-            w1[j * 2] -= s * dw1[j * 2];
-            w1[j * 2 + 1] -= s * dw1[j * 2 + 1];
-            b1[j] -= s * db1[j];
-        }
-        return totalLoss / static_cast<float>(data.size());
-    }
-
-    void reset(std::mt19937& rng)
-    {
-        std::normal_distribution<float> d(0.f, 0.8f);
-        std::fill(b1.begin(), b1.end(), 0.f);
-        b2[0] = 0.f;
-        for (auto& w : w1) w = d(rng);
-        for (auto& w : w2) w = d(rng);
-    }
-};
-
-// ── Sketch ────────────────────────────────────────────────────────────────────
-
-struct NNSketch : p5::Sketch
-{
-    // ── Layout ───────────────────────────────────────────────────────────
-    static constexpr int FIELD_W = 700;
-    static constexpr int FIELD_H = 700;
-    static constexpr int PANEL_W = 280;
-    static constexpr int HM_RES = 70; // heatmap canvas resolution per axis
-    static constexpr int HIDDEN = 4;
-    static constexpr float LR = 0.05f;
-    static constexpr int STEPS_PER_FRAME = 20;
-    static constexpr float HM_INTERVAL = 0.05f; // seconds between heatmap rebuilds
-
-    // ── State ────────────────────────────────────────────────────────────
-    Net nn;
-    std::mt19937 rng {42};
-
-    struct Point
-    {
-        float2 norm, screen;
-        float label;
-    };
-    std::vector<Point> points;
-    std::vector<std::pair<float2, float>> trainSet; // mirrors points, avoids alloc per step
-
-    bool training = true;
-    float loss = 0.f;
-    int epoch = 0;
-
-    std::shared_ptr<Framebuffer> heatmapCanvas;
-    float hmTimer = 0.f;
-
-    bool lmbDown = false, rmbDown = false;
-    float2 lastPt = {-9999.f, -9999.f};
-
-    // ── Lifecycle ────────────────────────────────────────────────────────
+    float scrollY = 0.f;
+    float time = 0.f; // accumulated seconds, used by all animations
 
     void setup() override
     {
-        setWindowSize(FIELD_W + PANEL_W, FIELD_H);
-        setWindowTitle("Neural Network  –  2D Classifier");
+        setWindowSize(WIN_W, VIEWPORT_H);
+        setWindowTitle("Stroke Joins & Caps – Showcase  [↑↓ / scroll to navigate]");
         setWindowResizable(false);
-        // frameRate(60);
-
-        nn.init(HIDDEN, rng);
-        heatmapCanvas = createCanvas(HM_RES, HM_RES);
-        rebuildHeatmap();
     }
 
     void destroy() override {}
 
-    // ── Draw ─────────────────────────────────────────────────────────────
+    // Returns a value oscillating smoothly in [0,1] — used by all animations.
+    float osc(float speed, float phase = 0.f) const
+    {
+        return 0.5f + 0.5f * std::sin(time * speed + phase);
+    }
 
     void draw() override
     {
-        if (training && !trainSet.empty()) {
-            for (int i = 0; i < STEPS_PER_FRAME; ++i)
-                loss = nn.trainStep(trainSet, LR);
-            epoch += STEPS_PER_FRAME;
-        }
+        time += deltaTime;
+        background(22, 22, 26);
 
-        hmTimer += deltaTime;
-        if (hmTimer >= HM_INTERVAL) {
-            hmTimer = 0.f;
-            rebuildHeatmap();
-        }
+        // ── Scrollable content ────────────────────────────────────────────
+        pushMatrix();
+        translate(0.f, -scrollY);
 
-        background(20, 20, 28);
-        drawField();
-        drawPanel();
-
-        // stroke(255, 0, 0);
-        // fill(0, 255, 0);
-        // strokeWeight(15.f);
-        // rect(100.0f, 100.0f, 300.0f, 300.0f);
-    }
-
-    // ── Heatmap ──────────────────────────────────────────────────────────
-
-    void rebuildHeatmap()
-    {
-        pushCanvas(heatmapCanvas);
-        noStroke();
-        for (int row = 0; row < HM_RES; ++row) {
-            for (int col = 0; col < HM_RES; ++col) {
-                float nx = (col + .5f) / HM_RES * 2.f - 1.f;
-                float ny = (row + .5f) / HM_RES * 2.f - 1.f;
-                float v = nn.predict(nx, ny);
-                int r = static_cast<int>(v * 190.f);
-                int b = static_cast<int>((1.f - v) * 190.f);
-                fill(20 + r, 20, 20 + b);
-
-                rect(static_cast<float>(col), static_cast<float>(row), 1.0f, 1.0f);
-            }
-        }
-        popCanvas();
-    }
-
-    // ── Field (left 700 × 700) ────────────────────────────────────────────
-
-    void drawField()
-    {
-        noTint();
-        noStroke();
-        image(heatmapCanvas->getTextureId(), 0.f, 0.f, FIELD_W, FIELD_H);
-
-        // Subtle grid
-        stroke(255, 255, 255, 18);
-        strokeWeight(1.f);
-        for (int i = 1; i < 4; ++i) {
-            line(FIELD_W * i / 4.f, 0.f, FIELD_W * i / 4.f, FIELD_H);
-            line(0.f, FIELD_H * i / 4.f, FIELD_W, FIELD_H * i / 4.f);
-        }
-        // Center axes
-        stroke(255, 255, 255, 40);
-        line(FIELD_W * .5f, 0.f, FIELD_W * .5f, FIELD_H);
-        line(0.f, FIELD_H * .5f, FIELD_W, FIELD_H * .5f);
-        noStroke();
-
-        // Data points
-        for (auto& p : points) {
-            if (p.label > .5f) {
-                fill(255, 80, 80);
-                stroke(255, 200, 200);
-            } else {
-                fill(80, 120, 255);
-                stroke(180, 200, 255);
-            }
-            strokeWeight(1.5f);
-            circle(p.screen.x, p.screen.y, 12.f);
-        }
-        noStroke();
-
-        // FPS overlay (top-left)
-        textSize(13.f);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
-        fill(160, 255, 160, 200);
-        text("FPS " + std::to_string(static_cast<int>(fps + .5f)), 8.f, 6.f);
-    }
-
-    // ── Panel (right 280 px) ──────────────────────────────────────────────
-
-    void drawPanel()
-    {
-        float px = static_cast<float>(FIELD_W);
-
-        noStroke();
-        fill(14, 14, 22);
-        rect(px, 0.f, static_cast<float>(PANEL_W), static_cast<float>(FIELD_H));
-
-        stroke(50, 50, 72);
-        strokeWeight(1.f);
-        line(px, 0.f, px, static_cast<float>(FIELD_H));
-        noStroke();
-
-        drawNNDiagram(px);
-        drawStats(px);
-    }
-
-    // ── NN diagram ────────────────────────────────────────────────────────
-
-    // Returns the y-coordinate for node `idx` in a layer of `count` nodes,
-    // evenly distributed between [top, top+span].
-    static float nodeY(int count, int idx, float top, float span)
-    {
-        if (count == 1) return top + span * .5f;
-        return top + span * static_cast<float>(idx) / static_cast<float>(count - 1);
-    }
-
-    void drawWeightLine(float x1, float y1, float x2, float y2, float w)
-    {
-        float wAbs = std::min(std::abs(w), 3.f);
-        int a = static_cast<int>(wAbs / 3.f * 160.f) + 20;
-        if (w > 0.f) stroke(255, 130, 80, a);
-        else stroke(80, 150, 255, a);
-        strokeWeight(wAbs * .7f + .3f);
-        line(x1, y1, x2, y2);
-    }
-
-    void drawNNDiagram(float px)
-    {
-        constexpr int IN = 2;
-        constexpr int HID = HIDDEN;
-
-        float cx0 = px + 50.f;  // input column x
-        float cx1 = px + 140.f; // hidden column x
-        float cx2 = px + 230.f; // output column x
-
-        float yTop = 30.f, yBot = 460.f, span = yBot - yTop;
-
-        // Input nodes occupy a narrower vertical range for visual balance
-        float inTop = yTop + 90.f, inSpan = span - 180.f;
-
-        // ── Connections: input → hidden ───────────────────────────────
-        for (int j = 0; j < HID; ++j) {
-            float yh = nodeY(HID, j, yTop, span);
-            for (int i = 0; i < IN; ++i)
-                drawWeightLine(cx0, nodeY(IN, i, inTop, inSpan), cx1, yh, nn.w1[j * 2 + i]);
-        }
-
-        // ── Connections: hidden → output ──────────────────────────────
-        float yOut = nodeY(1, 0, yTop, span);
-        for (int j = 0; j < HID; ++j)
-            drawWeightLine(cx1, nodeY(HID, j, yTop, span), cx2, yOut, nn.w2[j]);
-        noStroke();
-
-        // ── Input nodes ───────────────────────────────────────────────
-        const char* inLabels[] = {"x", "y"};
-        for (int i = 0; i < IN; ++i) {
-            float y = nodeY(IN, i, inTop, inSpan);
-            fill(70, 150, 240);
-            stroke(160, 200, 255);
-            strokeWeight(1.5f);
-            circle(cx0, y, 18.f);
-            fill(255);
-            noStroke();
-            textSize(10.f);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
-            text(inLabels[i], cx0, y);
-        }
-
-        // ── Hidden nodes (brightness reflects bias) ───────────────────
-        for (int j = 0; j < HID; ++j) {
-            float y = nodeY(HID, j, yTop, span);
-            float t = std::tanh(nn.b1[j]) * .5f + .5f;
-            int br = static_cast<int>(t * 120.f) + 30;
-            fill(br, br, br + 30);
-            stroke(130, 130, 180);
-            strokeWeight(1.f);
-            circle(cx1, y, 12.f);
-        }
-        noStroke();
-
-        // ── Output node (color reflects prediction at mouse position) ──
+        // ── Row 1: Join types ────────────────────────────────────────────
+        sectionTitle("Stroke Joins", 10.f, 4.f);
         {
-            float pred = .5f;
-            if (mouseX >= 0 && mouseX < FIELD_W && mouseY >= 0 && mouseY < FIELD_H) {
-                float mx = (static_cast<float>(mouseX) / FIELD_W) * 2.f - 1.f;
-                float my = (static_cast<float>(mouseY) / FIELD_H) * 2.f - 1.f;
-                pred = nn.predict(mx, my);
-            }
-            int r = static_cast<int>(pred * 200.f);
-            int b = static_cast<int>((1.f - pred) * 200.f);
-            fill(40 + r, 40, 40 + b);
-            stroke(200, 200, 220);
-            strokeWeight(1.5f);
-            circle(cx2, yOut, 20.f);
-            fill(255);
-            noStroke();
-            textSize(9.f);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
-            text("out", cx2, yOut);
+            const StrokeJoin joins[] = {StrokeJoin::miter, StrokeJoin::bevel, StrokeJoin::round};
+            const char* labels[] = {"Miter", "Bevel", "Round"};
+            for (int i = 0; i < 3; ++i)
+                drawJoinPanel(i * COL3_W, TITLE_H, COL3_W, ROW_H - TITLE_H, joins[i], labels[i]);
         }
 
-        // ── Layer labels ──────────────────────────────────────────────
-        textSize(10.f);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
-        fill(90, 90, 130);
-        text("Input", cx0, yBot + 8.f);
-        text("Hidden", cx1, yBot + 8.f);
-        text("Output", cx2, yBot + 8.f);
+        // ── Row 2: Cap styles ────────────────────────────────────────────
+        const float row2Y = ROW_H;
+        sectionTitle("Stroke Caps", 10.f, row2Y + 4.f);
+        {
+            const StrokeCap caps[] = {StrokeCap::butt, StrokeCap::square, StrokeCap::round};
+            const char* labels[] = {"Butt", "Square", "Round"};
+            for (int i = 0; i < 3; ++i)
+                drawCapPanel(i * COL3_W, row2Y + TITLE_H, COL3_W, ROW_H - TITLE_H, caps[i], labels[i]);
+        }
+
+        // ── Row 3: Primitive shapes ──────────────────────────────────────
+        const float row3Y = ROW_H * 2.f;
+        sectionTitle("Shape Gallery  (Round join / Round cap / strokeWeight 6)", 10.f, row3Y + 4.f);
+        {
+            const char* labels[] = {"line()", "rect()", "circle()", "triangle()", "arc()  pie", "bezier()"};
+            for (int i = 0; i < 6; ++i)
+                drawShapePanel(i * COL6_W, row3Y + TITLE_H, COL6_W, ROW_H - TITLE_H, i, labels[i]);
+        }
+
+        // ── Row 4: Edge cases ────────────────────────────────────────────
+        const float row4Y = ROW_H * 3.f;
+        sectionTitle("Edge Cases  (near-U-turn · razor spikes · SW>>segs · sharp V+miter · open caps · concave)", 10.f, row4Y + 4.f);
+        {
+            const char* labels[] = {"U-turn joins", "Razor spikes", "SW >> segs", "Sharp V (miter)", "Open path caps", "Concave polygon"};
+            for (int i = 0; i < 6; ++i)
+                drawEdgePanel(i * COL6_W, row4Y + TITLE_H, COL6_W, ROW_H - TITLE_H, i, labels[i]);
+        }
+
+        // ── Row 5: Supershapes ───────────────────────────────────────────
+        const float row5Y = ROW_H * 4.f;
+        sectionTitle("Supershapes  (heart · rose · Lissajous · astroid · superellipse · spirograph)", 10.f, row5Y + 4.f);
+        {
+            const char* labels[] = {"Herz", "Rosenblüte", "Lissajous", "Astroid", "Superellipse", "Spirograph"};
+            for (int i = 0; i < 6; ++i)
+                drawSuperPanel(i * COL6_W, row5Y + TITLE_H, COL6_W, ROW_H - TITLE_H, i, labels[i]);
+        }
+
+        popMatrix();
+
+        // ── Scrollbar (fixed, outside the scrolling transform) ────────────
+        drawScrollbar();
     }
 
-    // ── Stats / controls panel ────────────────────────────────────────────
-
-    void drawStats(float px)
+    void drawScrollbar()
     {
-        float y = 488.f;
-        float xl = px + 12.f;
-        float xr = px + PANEL_W - 12.f;
+        constexpr float BAR_W = 6.f;
+        constexpr float MARGIN = 2.f;
+        const float maxScroll = static_cast<float>(CONTENT_H - VIEWPORT_H);
+        const float barH = static_cast<float>(VIEWPORT_H) - MARGIN * 2.f;
+        const float thumbH = barH * static_cast<float>(VIEWPORT_H) / static_cast<float>(CONTENT_H);
+        const float thumbY = MARGIN + (scrollY / maxScroll) * (barH - thumbH);
+        const float barX = static_cast<float>(WIN_W) - BAR_W - MARGIN;
 
-        // Loss label + value
-        textSize(12.f);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
-        fill(180, 180, 200);
-        text("Loss", xl, y);
-        textAlign(HorizontalTextAlign::right, VerticalTextAlign::top);
-        fill(210, 210, 220);
-        text(fmtf(loss, 4), xr, y);
-
-        // Loss bar
-        float barX = xl + 36.f, barY = y + 3.f, barW = 138.f, barH = 10.f;
         noStroke();
-        fill(35, 35, 50);
-        rect(barX, barY, barW, barH);
-        fill(255, 160, 60);
-        rect(barX, barY, barW * (1.f - std::min(loss, 2.f) / 2.f), barH);
+        fill(45, 45, 55);
+        rect(barX, MARGIN, BAR_W, barH);
 
-        y += 20.f;
-        textSize(12.f);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
-
-        fill(150, 200, 150);
-        text("Epoch  " + std::to_string(epoch), xl, y);
-        y += 18.f;
-
-        int nRed = 0, nBlue = 0;
-        for (auto& p : points) {
-            if (p.label > .5f) ++nRed;
-            else ++nBlue;
-        }
-        fill(255, 100, 100);
-        text("● Red   " + std::to_string(nRed), xl, y);
-        y += 16.f;
-        fill(100, 140, 255);
-        text("● Blue  " + std::to_string(nBlue), xl, y);
-        y += 20.f;
-
-        fill(training ? color(100, 255, 120) : color(255, 200, 60));
-        text(training ? "● Training" : "  Paused", xl, y);
-        y += 20.f;
-
-        // Divider
-        stroke(50, 50, 70);
-        strokeWeight(1.f);
-        line(xl, y, xr, y);
-        noStroke();
-        y += 10.f;
-
-        // Controls
-        textSize(11.f);
-        fill(95, 95, 130);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
-
-        const char* ctrls[] = {
-            "[LMB]   add red point",
-            "[RMB]   add blue point",
-            "[drag]  paint points",
-            "[C]     clear all points",
-            "[R]     reset network",
-            "[Space] pause / resume",
-        };
-        for (auto* s : ctrls) {
-            text(s, xl, y);
-            y += 14.f;
-        }
+        fill(110, 110, 140);
+        rect(barX, thumbY, BAR_W, thumbH);
     }
-
-    // ── Events ────────────────────────────────────────────────────────────
 
     void event(const WindowEvent& e) override
     {
-        switch (e.type) {
-            case EventType::mousePress: {
-                int mx = e.mouseButton.x, my = e.mouseButton.y;
-                if (e.mouseButton.button == MouseButton::left) lmbDown = true;
-                if (e.mouseButton.button == MouseButton::right) rmbDown = true;
-                if (mx >= 0 && mx < FIELD_W && my >= 0 && my < FIELD_H)
-                    addPoint(mx, my, lmbDown ? 1.f : 0.f);
-                break;
+        const float maxScroll = static_cast<float>(CONTENT_H - VIEWPORT_H);
+
+        if (e.type == EventType::mouseScroll) {
+            scrollY -= e.mouseScroll.dy * SCROLL_SPD;
+            scrollY = std::clamp(scrollY, 0.f, maxScroll);
+        }
+
+        if (e.type == EventType::keyPress) {
+            switch (e.keyEvent.key) {
+                case Key::up: scrollY -= SCROLL_SPD; break;
+                case Key::down: scrollY += SCROLL_SPD; break;
+                case Key::pageUp: scrollY -= ROW_H; break;
+                case Key::pageDown: scrollY += ROW_H; break;
+                case Key::home: scrollY = 0.f; break;
+                case Key::end: scrollY = maxScroll; break;
+                default: break;
             }
-            case EventType::mouseRelease:
-                if (e.mouseButton.button == MouseButton::left) lmbDown = false;
-                if (e.mouseButton.button == MouseButton::right) rmbDown = false;
-                break;
-            case EventType::mouseMove: {
-                if (!lmbDown && !rmbDown) break;
-                int mx = e.mouseMove.x, my = e.mouseMove.y;
-                if (mx < 0 || mx >= FIELD_W || my < 0 || my >= FIELD_H) break;
-                float2 cur = {static_cast<float>(mx), static_cast<float>(my)};
-                float2 d = cur - lastPt;
-                if (d.x * d.x + d.y * d.y < 18.f * 18.f) break; // throttle
-                addPoint(mx, my, lmbDown ? 1.f : 0.f);
-                break;
-            }
-            case EventType::keyPress:
-                switch (e.keyEvent.key) {
-                    case Key::space: training = !training; break;
-                    case Key::r:
-                        nn.reset(rng);
-                        loss = 0.f;
-                        epoch = 0;
-                        rebuildHeatmap();
-                        break;
-                    case Key::c:
-                        points.clear();
-                        trainSet.clear();
-                        loss = 0.f;
-                        epoch = 0;
-                        break;
-                    default: break;
-                }
-                break;
-            default: break;
+            scrollY = std::clamp(scrollY, 0.f, maxScroll);
         }
     }
 
-    void addPoint(int sx, int sy, float label)
+    // ─── Shared helpers ─────────────────────────────────────────────────────
+
+    void sectionTitle(const char* label, float x, float y)
     {
-        float nx = (static_cast<float>(sx) / FIELD_W) * 2.f - 1.f;
-        float ny = (static_cast<float>(sy) / FIELD_H) * 2.f - 1.f;
-        points.push_back(Point {{nx, ny}, {static_cast<float>(sx), static_cast<float>(sy)}, label});
-        trainSet.push_back({{nx, ny}, label});
-        lastPt = {static_cast<float>(sx), static_cast<float>(sy)};
+        noStroke();
+        fill(190, 190, 210);
+        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
+        textSize(12.f);
+        text(label, x, y);
+    }
+
+    void panelBackground(float x, float y, float w, float h, const char* label)
+    {
+        noStroke();
+        fill(30, 30, 36);
+        rect(x + 2.f, y + 2.f, w - 4.f, h - 4.f);
+
+        noFill();
+        stroke(52, 52, 66);
+        strokeWeight(1.f);
+        rect(x + 2.f, y + 2.f, w - 4.f, h - 4.f);
+
+        noStroke();
+        fill(150, 150, 170);
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+        textSize(12.f);
+        text(label, x + w / 2.f, y + 7.f);
+    }
+
+    // ─── Row 1 – Join demos ──────────────────────────────────────────────────
+
+    void drawJoinPanel(float x, float y, float w, float h, StrokeJoin join, const char* label)
+    {
+        panelBackground(x, y, w, h, label);
+
+        const float cx = x + w / 2.f;
+        const float cy = y + h / 2.f + 8.f;
+        const float outerR = std::min(w, h) * 0.35f;
+        // innerR oscillates: razor-thin (2 %) → normal star (44 %)
+        const float phase = x / static_cast<float>(WIN_W) * PI * 2.f;
+        const float innerR = outerR * (0.02f + 0.42f * osc(0.55f, phase));
+        // strokeWeight pulses 6 → 16
+        const float sw = 6.f + 10.f * osc(0.45f, phase + 1.f);
+        // slow rotation
+        const float rot = time * 0.3f + phase * 0.2f;
+
+        strokeJoin(join);
+        strokeCap(StrokeCap::butt);
+        strokeWeight(sw);
+        stroke(255, 195, 60);
+        noFill();
+
+        // 5-pointed star, rotated over time
+        beginShape();
+        for (int i = 0; i < 10; ++i) {
+            const float angle = rot + 2.f * PI * i / 10.f - PI / 2.f;
+            const float r = (i % 2 == 0) ? outerR : innerR;
+            vertex(cx + std::cos(angle) * r, cy + std::sin(angle) * r);
+        }
+        endShape(ShapeType::lineLoop, true);
+    }
+
+    // ─── Row 2 – Cap demos ───────────────────────────────────────────────────
+
+    void drawCapPanel(float x, float y, float w, float h, StrokeCap cap, const char* label)
+    {
+        panelBackground(x, y, w, h, label);
+
+        const float phase = x / static_cast<float>(WIN_W) * PI * 2.f;
+        const float baseMargin = w * 0.17f;
+        // Lines grow and shrink — margin oscillates inward/outward
+        const float extra = w * 0.10f * osc(0.6f, phase);
+        const float x0 = x + baseMargin + extra;
+        const float x1 = x + w - baseMargin - extra;
+        const float usableH = h - 40.f;
+        const float step = usableH / 4.f; // 3 lines in 4 slots → even spacing
+
+        // strokeWeight pulses differently for each line
+        for (int i = 0; i < 3; ++i) {
+            const float ly = y + 35.f + step * static_cast<float>(i + 1);
+            const float sw = 4.f + 18.f * osc(0.65f, phase + static_cast<float>(i) * 1.2f);
+
+            stroke(70, 150, 245);
+            strokeWeight(sw);
+            strokeCap(cap);
+            noFill();
+            line(x0, ly, x1, ly);
+
+            // Thin tick marks at the exact endpoint positions
+            stroke(90, 90, 110);
+            strokeWeight(1.f);
+            strokeCap(StrokeCap::butt);
+            const float tick = sw * 0.65f + 2.f;
+            line(x0, ly - tick, x0, ly + tick);
+            line(x1, ly - tick, x1, ly + tick);
+        }
+    }
+
+    // ─── Row 3 – Shape gallery ───────────────────────────────────────────────
+
+    void drawShapePanel(float x, float y, float w, float h, int shapeIndex, const char* label)
+    {
+        panelBackground(x, y, w, h, label);
+
+        const float phase = static_cast<float>(shapeIndex) * 0.9f;
+        // strokeWeight pulses 2 → 12
+        const float sw = 2.f + 10.f * osc(0.5f, phase);
+        // arc sweep grows 20° → 340°
+        const float sweep = (20.f + 320.f * osc(0.35f, phase + 0.5f)) * PI / 180.f;
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(75, 205, 125);
+        fill(38, 70, 52, 190);
+
+        const float cx = x + w / 2.f;
+        const float cy = y + h / 2.f + 10.f;
+        const float r = std::min(w, h) * 0.30f;
+
+        switch (shapeIndex) {
+            case 0: // line() — endpoint oscillates vertically
+                noFill();
+                line(cx - r, cy - r * 0.5f * osc(0.7f, phase), cx + r, cy + r * 0.5f * osc(0.7f, phase + PI));
+                break;
+
+            case 1: // rect() — size pulses
+            {
+                const float rw = r * (1.2f + 0.6f * osc(0.4f, phase));
+                const float rh = r * (0.9f + 0.4f * osc(0.4f, phase + 1.f));
+                rect(cx - rw / 2.f, cy - rh / 2.f, rw, rh);
+                break;
+            }
+
+            case 2: // circle() — radius pulses
+                circle(cx, cy, r * 2.f * (0.6f + 0.5f * osc(0.5f, phase)));
+                break;
+
+            case 3: // triangle() — apex oscillates
+                triangle(cx, cy - r * (0.8f + 0.4f * osc(0.55f, phase)), cx - r, cy + r * 0.7f, cx + r, cy + r * 0.7f);
+                break;
+
+            case 4: // arc() — sweep angle grows / shrinks
+                arc(cx, cy, r * 2.f, r * 2.f, -PI / 2.f, sweep, ArcMode::pie);
+                break;
+
+            case 5: // bezier() — control points breathe
+            {
+                const float lift = r * (0.7f + 0.5f * osc(0.45f, phase));
+                noFill();
+                bezier(cx - r, cy + r * 0.5f, cx - r * 0.3f, cy - lift, cx + r * 0.3f, cy - lift, cx + r, cy + r * 0.5f);
+                break;
+            }
+        }
+    }
+    // ─── Row 4 – Edge case dispatcher ───────────────────────────────────────
+
+    void drawEdgePanel(float x, float y, float w, float h, int index, const char* label)
+    {
+        panelBackground(x, y, w, h, label);
+        const float cx = x + w / 2.f;
+        const float cy = y + h / 2.f + 8.f;
+        const float r = std::min(w, h) * 0.28f;
+        switch (index) {
+            case 0: edge_UTurnJoins(x, y, w, h); break;
+            case 1: edge_RazorSpikes(cx, cy, r); break;
+            case 2: edge_ThickShortSegs(cx, cy); break;
+            case 3: edge_SharpVMiter(x, y, w, h, cx); break;
+            case 4: edge_OpenPathCaps(x, y, w, h, cx); break;
+            case 5: edge_ConcavePolygon(cx, cy, r); break;
+        }
+    }
+
+    // ── Edge 0: same hairpin (~174° turn) drawn with all three join types ──
+
+    void edge_UTurnJoins(float x, float y, float w, float h)
+    {
+        const StrokeJoin joins[] = {StrokeJoin::miter, StrokeJoin::bevel, StrokeJoin::round};
+        const char* jnames[] = {"miter", "bevel", "round"};
+        const float rowH = (h - 30.f) / 3.f;
+        const float cx = x + w / 2.f;
+        const float arm = w * 0.30f;
+        // gap oscillates 0.5 → 22 px — the near-zero case is where the old innerHit bug fired
+        const float gap = 0.5f + 21.5f * osc(0.4f);
+
+        for (int i = 0; i < 3; ++i) {
+            const float ry = y + 30.f + rowH * (i + 0.5f);
+            // strokeWeight pulses independently per row
+            const float sw = 5.f + 8.f * osc(0.5f, static_cast<float>(i) * 1.2f);
+
+            strokeJoin(joins[i]);
+            strokeCap(StrokeCap::butt);
+            strokeWeight(sw);
+            stroke(255, 195, 60);
+            noFill();
+
+            beginShape();
+            vertex(cx - arm, ry - gap / 2.f);
+            vertex(cx + arm * 0.5f, ry - gap / 2.f);
+            vertex(cx - arm, ry + gap / 2.f);
+            endShape(ShapeType::lineStrip, false);
+
+            noStroke();
+            fill(90, 90, 115);
+            textSize(9.f);
+            textAlign(HorizontalTextAlign::left, VerticalTextAlign::center);
+            text(jnames[i], x + 5.f, ry);
+        }
+    }
+
+    // ── Edge 1: 5-pointed star with near-zero-degree spike tips ────────────
+
+    void edge_RazorSpikes(float cx, float cy, float r)
+    {
+        // innerR oscillates: 1 % (hair-thin) → 30 % (normal star)
+        const float innerR = r * (0.01f + 0.29f * osc(0.5f));
+        // slow rotation to stress all angle orientations
+        const float rot = time * 0.4f;
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(4.f);
+        stroke(255, 90, 90);
+        noFill();
+
+        beginShape();
+        for (int i = 0; i < 10; ++i) {
+            const float angle = rot + 2.f * PI * i / 10.f - PI / 2.f;
+            const float rad = (i % 2 == 0) ? r : innerR;
+            vertex(cx + std::cos(angle) * rad, cy + std::sin(angle) * rad);
+        }
+        endShape(ShapeType::lineLoop, true);
+    }
+
+    // ── Edge 2: strokeWeight >> segment length ─────────────────────────────
+
+    void edge_ThickShortSegs(float cx, float cy)
+    {
+        // amplitude oscillates 2 → 18 px — changes how steep each segment is
+        const float amp = 2.f + 16.f * osc(0.6f);
+        // strokeWeight also pulses so sw/segLen ratio swings widely
+        const float sw = 8.f + 14.f * osc(0.45f, 0.8f);
+        const int N = 9;
+        const float stepX = 10.f;
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(100, 200, 255);
+        noFill();
+
+        beginShape();
+        for (int i = 0; i < N; ++i) {
+            const float vx = cx - stepX * (N - 1) / 2.f + i * stepX;
+            const float vy = cy + (i % 2 == 0 ? -amp : amp);
+            vertex(vx, vy);
+        }
+        endShape(ShapeType::lineStrip, false);
+    }
+
+    // ── Edge 3: V-shapes at three included angles — exercises miter limit ──
+
+    void edge_SharpVMiter(float x, float y, float w, float h, float cx)
+    {
+        // Each row sweeps its included angle independently → dynamic miter-limit transitions
+        // Row 0: sweeps 2° → 18° (crosses the bevel fallback threshold around 11°)
+        // Row 1: sweeps 10° → 60° (stays in miter zone)
+        // Row 2: sweeps 30° → 90° (always miter)
+        const float minHalf[] = {radians(1.f), radians(5.f), radians(15.f)};
+        const float maxHalf[] = {radians(9.f), radians(30.f), radians(45.f)};
+        const char* angLabels[] = {"~5° (threshold)", "10–60° range", "30–90° range"};
+        const float rowH = (h - 30.f) / 3.f;
+        const float arm = w * 0.30f;
+
+        for (int i = 0; i < 3; ++i) {
+            const float phase = static_cast<float>(i) * 1.1f;
+            const float halfAngle = minHalf[i] + (maxHalf[i] - minHalf[i]) * osc(0.4f, phase);
+            const float ry = y + 30.f + rowH * (i + 0.5f);
+            const float tipY = ry + arm * 0.15f;
+            const float endDX = arm * std::sin(halfAngle);
+            const float endY = tipY - arm * std::cos(halfAngle);
+            const float sw = 3.f + 7.f * osc(0.55f, phase + 2.f);
+
+            strokeJoin(StrokeJoin::miter);
+            strokeCap(StrokeCap::butt);
+            strokeWeight(sw);
+            stroke(180, 130, 255);
+            noFill();
+
+            beginShape();
+            vertex(cx - endDX, endY);
+            vertex(cx, tipY);
+            vertex(cx + endDX, endY);
+            endShape(ShapeType::lineStrip, false);
+
+            noStroke();
+            fill(90, 90, 115);
+            textSize(9.f);
+            textAlign(HorizontalTextAlign::left, VerticalTextAlign::center);
+            text(angLabels[i], x + 5.f, ry);
+        }
+    }
+
+    // ── Edge 4: open zigzag — all three cap styles stacked ─────────────────
+
+    void edge_OpenPathCaps(float x, float y, float w, float h, float cx)
+    {
+        const StrokeCap caps[] = {StrokeCap::butt, StrokeCap::square, StrokeCap::round};
+        const char* cnames[] = {"butt", "square", "round"};
+        const float rowH = (h - 30.f) / 3.f;
+        const float step = w * 0.14f;
+
+        for (int i = 0; i < 3; ++i) {
+            const float ry = y + 30.f + rowH * (i + 0.5f);
+            // strokeWeight pulses with independent phase per row
+            const float sw = 3.f + 15.f * osc(0.5f, static_cast<float>(i) * 1.1f);
+            // amplitude also shifts so the zigzag shape changes
+            const float amp = 5.f + 8.f * osc(0.65f, static_cast<float>(i) * 0.7f + 1.5f);
+
+            strokeJoin(StrokeJoin::round);
+            strokeCap(caps[i]);
+            strokeWeight(sw);
+            stroke(80, 200, 160);
+            noFill();
+
+            beginShape();
+            vertex(cx - step * 1.5f, ry + amp);
+            vertex(cx - step * 0.5f, ry - amp);
+            vertex(cx + step * 0.5f, ry + amp);
+            vertex(cx + step * 1.5f, ry - amp);
+            endShape(ShapeType::lineStrip, false);
+
+            // Tick marks at the exact start/end endpoints
+            stroke(80, 80, 100);
+            strokeWeight(1.f);
+            strokeCap(StrokeCap::butt);
+            const float tick = sw * 0.7f + 2.f;
+            line(cx - step * 1.5f, ry + amp - tick, cx - step * 1.5f, ry + amp + tick);
+            line(cx + step * 1.5f, ry - amp - tick, cx + step * 1.5f, ry - amp + tick);
+
+            noStroke();
+            fill(90, 90, 115);
+            textSize(9.f);
+            textAlign(HorizontalTextAlign::left, VerticalTextAlign::center);
+            text(cnames[i], x + 5.f, ry);
+        }
+    }
+
+    // ── Edge 5: 12-vertex plus/cross — exercises concave (reflex) corners ──
+
+    void edge_ConcavePolygon(float cx, float cy, float r)
+    {
+        // arm half-width pulses: thin arms ↔ fat arms
+        const float a = r * (0.18f + 0.22f * osc(0.4f));
+        const float b = r;
+        // slow continuous rotation
+        const float rot = time * 0.25f;
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(5.f);
+        stroke(255, 165, 80);
+        fill(80, 55, 25, 190);
+
+        pushMatrix();
+        translate(cx, cy);
+        rotate(rot);
+
+        // 12-vertex plus sign (4 convex 90° + 8 concave 270° corners), centred at origin
+        beginShape();
+        vertex(-a, -b);
+        vertex(a, -b);
+        vertex(a, -a);
+        vertex(b, -a);
+        vertex(b, a);
+        vertex(a, a);
+        vertex(a, b);
+        vertex(-a, b);
+        vertex(-a, a);
+        vertex(-b, a);
+        vertex(-b, -a);
+        vertex(-a, -a);
+        endShape(ShapeType::lineLoop, true);
+
+        popMatrix();
+    }
+
+    // ─── Row 5 – Supershapes ─────────────────────────────────────────────────
+
+    void drawSuperPanel(float x, float y, float w, float h, int idx, const char* label)
+    {
+        panelBackground(x, y, w, h, label);
+        const float cx = x + w / 2.f;
+        const float cy = y + h / 2.f + 8.f;
+        const float r = std::min(w, h) * 0.38f;
+        switch (idx) {
+            case 0: super_Heart(cx, cy, r); break;
+            case 1: super_Rose(cx, cy, r); break;
+            case 2: super_Lissajous(cx, cy, r); break;
+            case 3: super_Astroid(cx, cy, r); break;
+            case 4: super_Superellipse(cx, cy, r); break;
+            case 5: super_Spirograph(cx, cy, r); break;
+        }
+    }
+
+    // Parametric heart:  x = 16 sin³ t,  y = 13 cos t − 5 cos 2t − 2 cos 3t − cos 4t
+    // y-centre of mass ≈ −2.5 (math coords)  →  screen_y = cy − (y + 2.5) · scale
+    void super_Heart(float cx, float cy, float r)
+    {
+        const float scale = r / 16.f;
+        // Heartbeat: product of two sines creates a realistic double-thump pattern
+        const float beat = osc(1.1f) * osc(2.2f);
+        const float sc = 1.f + 0.10f * beat;
+        const float sw = 2.5f + 3.5f * beat;
+
+        strokeJoin(StrokeJoin::miter);
+        strokeCap(StrokeCap::butt);
+        strokeWeight(sw);
+        stroke(255, 75, 115);
+        fill(170, 25, 55, 110);
+
+        const int N = 120;
+        beginShape();
+        for (int i = 0; i < N; ++i) {
+            const float t = 2.f * PI * i / N;
+            const float hx = 16.f * std::sin(t) * std::sin(t) * std::sin(t);
+            const float hy = 13.f * std::cos(t) - 5.f * std::cos(2.f * t) - 2.f * std::cos(3.f * t) - std::cos(4.f * t);
+            vertex(cx + hx * scale * sc, cy - (hy + 2.5f) * scale * sc);
+        }
+        endShape(ShapeType::lineLoop, true);
+    }
+
+    // Polar rose  r = cos(k · θ)  — k morphs 1.5 → 5.0 → 1.5 (petals grow / split)
+    void super_Rose(float cx, float cy, float r)
+    {
+        const float k = 1.5f + 3.5f * osc(0.12f);
+        const float rot = time * 0.18f;
+        const float sw = 1.5f + 3.f * osc(0.4f, 1.f);
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(190, 100, 255);
+        fill(55, 15, 95, 85);
+
+        // 0..4π captures all petals for non-integer k
+        const int N = 800;
+        beginShape();
+        for (int i = 0; i < N; ++i) {
+            const float theta = 4.f * PI * i / N;
+            const float rad = r * std::cos(k * theta);
+            vertex(cx + rad * std::cos(theta + rot), cy + rad * std::sin(theta + rot));
+        }
+        endShape(ShapeType::lineStrip, false);
+    }
+
+    // Lissajous  x = r sin(3t + φ),  y = r sin(2t)  — phase φ drifts → figure morphs
+    void super_Lissajous(float cx, float cy, float r)
+    {
+        const float phi = time * 0.55f;
+        const float sw = 1.5f + 2.5f * osc(0.35f, 0.7f);
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(70, 215, 230);
+        noFill();
+
+        const int N = 600;
+        beginShape();
+        for (int i = 0; i <= N; ++i) {
+            const float t = 2.f * PI * i / N;
+            vertex(cx + r * std::sin(3.f * t + phi), cy + r * std::sin(2.f * t));
+        }
+        endShape(ShapeType::lineStrip, false);
+    }
+
+    // Astroid  x = a cos³ t,  y = b sin³ t
+    // a and b breathe in opposite phase → morphs between tall and wide
+    void super_Astroid(float cx, float cy, float r)
+    {
+        const float a = r * (0.65f + 0.40f * osc(0.28f));
+        const float b = r * (0.65f + 0.40f * osc(0.28f, PI));
+        const float sw = 1.5f + 4.f * osc(0.45f, 1.3f);
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(255, 205, 50);
+        fill(75, 55, 5, 85);
+
+        const int N = 240;
+        beginShape();
+        for (int i = 0; i < N; ++i) {
+            const float t = 2.f * PI * i / N;
+            const float ct = std::cos(t), st = std::sin(t);
+            vertex(cx + a * ct * ct * ct, cy + b * st * st * st);
+        }
+        endShape(ShapeType::lineLoop, true);
+    }
+
+    // Superellipse  |x/r|^n + |y/r|^n = 1
+    // n morphs: 0.5 (pointy star) → 1 (diamond) → 2 (circle) → 5 (squircle)
+    void super_Superellipse(float cx, float cy, float r)
+    {
+        const float n = 0.5f + 4.5f * osc(0.18f, 0.5f);
+        const float exp_ = 2.f / n;
+        const float sw = 1.5f + 3.f * osc(0.42f, 2.f);
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(85, 230, 140);
+        fill(15, 65, 30, 85);
+
+        const int N = 320;
+        beginShape();
+        for (int i = 0; i < N; ++i) {
+            const float t = 2.f * PI * i / N;
+            const float ct = std::cos(t), st = std::sin(t);
+            vertex(cx + std::copysign(std::pow(std::abs(ct), exp_), ct) * r, cy + std::copysign(std::pow(std::abs(st), exp_), st) * r);
+        }
+        endShape(ShapeType::lineLoop, true);
+    }
+
+    // Hypotrochoid (spirograph)  R:r = 5:3, tracing arm d oscillates
+    // Curve closes after t = 0..6π
+    void super_Spirograph(float cx, float cy, float r)
+    {
+        const float R_ = r * 5.f / 8.f;
+        const float ri_ = r * 3.f / 8.f;
+        const float k_ = (R_ - ri_) / ri_; // ≈ 0.667
+        const float d = ri_ * (0.4f + 2.0f * osc(0.22f));
+        const float sw = 1.5f + 2.5f * osc(0.4f, 1.8f);
+
+        strokeJoin(StrokeJoin::round);
+        strokeCap(StrokeCap::round);
+        strokeWeight(sw);
+        stroke(255, 145, 75);
+        noFill();
+
+        const int N = 900;
+        beginShape();
+        for (int i = 0; i <= N; ++i) {
+            const float t = 6.f * PI * i / N;
+            vertex(cx + (R_ - ri_) * std::cos(t) + d * std::cos(k_ * t), cy + (R_ - ri_) * std::sin(t) - d * std::sin(k_ * t));
+        }
+        endShape(ShapeType::lineStrip, false);
     }
 };
 
@@ -510,6 +708,6 @@ namespace p5
 {
     std::unique_ptr<p5::Sketch> createSketch()
     {
-        return std::make_unique<NNSketch>();
+        return std::make_unique<ShowcaseSketch>();
     }
 } // namespace p5

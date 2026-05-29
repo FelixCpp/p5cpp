@@ -86,7 +86,7 @@ namespace p5
 
     static void render_canvas(Renderer& renderer, UniformCache& cache, const Canvas& canvas)
     {
-        const uint2 canvasSize   = canvas.framebuffer->getSize();         // logical (for projection)
+        const uint2 canvasSize = canvas.framebuffer->getSize();           // logical (for projection)
         const uint2 viewportSize = canvas.framebuffer->getViewportSize(); // physical pixels (for glViewport)
         const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
 

@@ -45,3 +45,26 @@ add_library(
 target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 target_link_libraries(app PRIVATE libtess2)
+
+add_executable(
+  breakout
+  src/canvas.cpp
+  src/drawscope.cpp
+  src/font.cpp
+  src/framebuffer.cpp
+  src/linepath.cpp
+  src/breakout.cpp
+  src/math.cpp
+  src/matrixstack.cpp
+  src/noise.cpp
+  src/p5.cpp
+  src/rendering.cpp
+  src/renderstate.cpp
+  src/shader.cpp
+  src/stroker.cpp
+  src/tess.cpp
+  src/texture.cpp
+  src/uniform_cache.cpp
+  src/window.cpp)
+
+target_link_libraries(breakout PRIVATE glfw glad freetype libtess2)

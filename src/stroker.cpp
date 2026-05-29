@@ -175,7 +175,7 @@ namespace p5::joins
         const size_t steps = computeCircleSegmentCount(std::abs(angleDiff), halfStrokeWeight);
 
         const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
-        push_vertex(scope, corner.innerHit, color); // Index: vertexBase + 0
+        push_vertex(scope, cornerPos, color); // Index: vertexBase + 0
 
         for (int i = 0; i <= steps; i++) {
             const float t = static_cast<float>(i) / static_cast<float>(steps);
@@ -215,25 +215,16 @@ namespace p5
         const float2 joinStart = !leftTurn ? current.innerEnd : current.outerEnd;
         const float2 joinEnd = !leftTurn ? next.innerStart : next.outerStart;
 
-        const float2 innerA = !leftTurn ? current.outerEnd : current.innerEnd;
-        const float2 innerB = !leftTurn ? next.outerStart : next.innerStart;
-
-        float2 innerHit;
-        {
-            const float2 AB = innerB - innerA;
-            const float denom = cross(current.direction, next.direction);
-
-            if ((std::abs(denom) < 1e-6f) or (turn < 0.1f))
-                innerHit = (innerA + innerB) * 0.5f;
-            else
-                innerHit = innerA + current.direction * (cross(AB, next.direction) / denom);
-        }
+        // innerHit is the base vertex of the join triangle on the concave side.
+        // Always use the corner position: the concave-side region is already covered
+        // by the two adjacent segment quads, so only the convex-side gap needs filling.
+        const float2 innerHit = points.positions[cornerIndex];
 
         float2 outerHit;
         bool exceedsMiterLimit = false;
         {
             const float2 AB = joinEnd - joinStart;
-            const float denom = cross(current.direction, next.direction); // selber denom wie oben
+            const float denom = cross(current.direction, next.direction);
 
             if (std::abs(denom) < 1e-6f) {
                 outerHit = (joinStart + joinEnd) * 0.5f;
