@@ -151,6 +151,7 @@ namespace p5
 
     // ── Event type tag ───────────────────────────────────────────────────
     enum class EventType {
+        close,
         mouseMove,
         mousePress,
         mouseRelease,
@@ -489,5 +490,8 @@ namespace p5
     void loop();
     void noLoop();
     bool isLooping();
+    void quit();
+    void quit(int exitCode);
+    void exitCode(int code);
     float millis(); // Milliseconds since the application started
 } // namespace p5

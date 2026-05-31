@@ -183,6 +183,13 @@ namespace p5
         // Store win pointer so stateless GLFW callbacks can recover it.
         glfwSetWindowUserPointer(win->handle, win);
 
+        glfwSetWindowCloseCallback(win->handle, [](GLFWwindow* h) {
+            auto* win = static_cast<AppWindow*>(glfwGetWindowUserPointer(h));
+            WindowEvent e;
+            e.type = EventType::close;
+            win->onEvent(e);
+        });
+
         // Logical size changed → notify sketch so it can adapt layouts.
         glfwSetWindowSizeCallback(win->handle, [](GLFWwindow* h, int w, int ht) {
             auto* win = static_cast<AppWindow*>(glfwGetWindowUserPointer(h));

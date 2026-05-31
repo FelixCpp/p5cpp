@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <numbers>
 #include <random>
@@ -40,114 +41,137 @@ static constexpr float PI = std::numbers::pi_v<float>;
 struct BreakoutSketch : p5::Sketch
 {
     // ── Window / layout ──────────────────────────────────────────────────────
-    static constexpr int   W           = 800;
-    static constexpr int   H           = 900;
-    static constexpr float PADDLE_W    = 110.f;
-    static constexpr float PADDLE_H    = 14.f;
-    static constexpr float PADDLE_Y    = H - 55.f;
-    static constexpr float BALL_R      = 8.f;
-    static constexpr float BRICK_W     = 67.f;
-    static constexpr float BRICK_H     = 20.f;
-    static constexpr float BRICK_GAP   = 5.f;
-    static constexpr int   BRICK_COLS  = 10;
-    static constexpr int   BRICK_ROWS  = 7;
+    static constexpr int W = 800;
+    static constexpr int H = 900;
+    static constexpr float PADDLE_W = 110.f;
+    static constexpr float PADDLE_H = 14.f;
+    static constexpr float PADDLE_Y = H - 55.f;
+    static constexpr float BALL_R = 8.f;
+    static constexpr float BRICK_W = 67.f;
+    static constexpr float BRICK_H = 20.f;
+    static constexpr float BRICK_GAP = 5.f;
+    static constexpr int BRICK_COLS = 10;
+    static constexpr int BRICK_ROWS = 7;
     static constexpr float BRICKS_LEFT = 25.f;
-    static constexpr float BRICKS_TOP  = 90.f;
-    static constexpr float BASE_SPEED  = 300.f;
-    static constexpr int   TRAIL_LEN   = 24;
-    static constexpr float SHIELD_Y    = H - 28.f;
-    static constexpr int   MAX_LEVELS  = 3;
+    static constexpr float BRICKS_TOP = 90.f;
+    static constexpr float BASE_SPEED = 300.f;
+    static constexpr int TRAIL_LEN = 24;
+    static constexpr float SHIELD_Y = H - 28.f;
+    static constexpr int MAX_LEVELS = 3;
 
     // ── Types ────────────────────────────────────────────────────────────────
-    enum class State { Start, Playing, LevelClear, GameOver, Win };
+    enum class State { MainMenu,
+                       Options,
+                       Playing,
+                       Paused,
+                       LevelClear,
+                       GameOver,
+                       Win };
 
     struct Ball
     {
         float x = 0, y = 0, vx = 0, vy = 0;
-        bool  alive = true;
-        std::array<float2, TRAIL_LEN> trail{};
-        int   trailLen = 0;
+        bool alive = true;
+        std::array<float2, TRAIL_LEN> trail {};
+        int trailLen = 0;
     };
 
     struct Brick
     {
-        float   x = 0, y = 0;
-        int     hp = 1, maxHp = 1;
-        bool    alive  = true;
-        bool    isBomb = false;
-        color_t col    = 0;
-        float   phase  = 0.f;
+        float x = 0, y = 0;
+        int hp = 1, maxHp = 1;
+        bool alive = true;
+        bool isBomb = false;
+        color_t col = 0;
+        float phase = 0.f;
     };
 
     struct Particle
     {
-        float   x = 0, y = 0, vx = 0, vy = 0;
-        float   life = 1.f, maxLife = 1.f, size = 3.f;
-        color_t col  = 0;
+        float x = 0, y = 0, vx = 0, vy = 0;
+        float life = 1.f, maxLife = 1.f, size = 3.f;
+        color_t col = 0;
     };
 
     struct LaserBeam
     {
         float x = 0.f, y = 0.f;
-        bool  alive = true;
+        bool alive = true;
         static constexpr float VY = -680.f;
     };
 
     struct ScorePopup
     {
-        float   x = 0.f, y = 0.f;
-        float   life = 1.3f, maxLife = 1.3f;
-        int     value = 0;
-        color_t col   = 0;
+        float x = 0.f, y = 0.f;
+        float life = 1.3f, maxLife = 1.3f;
+        int value = 0;
+        color_t col = 0;
     };
 
-    enum class PUType { MultiBall, Wide, Slow, Laser, Shield, Ghost, Fast };
+    enum class PUType { MultiBall,
+                        Wide,
+                        Slow,
+                        Laser,
+                        Shield,
+                        Ghost,
+                        Fast };
 
     struct PowerUp
     {
-        float  x = 0.f, y = 0.f, vy = 115.f;
-        PUType type  = PUType::MultiBall;
-        bool   alive = true;
+        float x = 0.f, y = 0.f, vy = 115.f;
+        PUType type = PUType::MultiBall;
+        bool alive = true;
     };
 
-    struct Star { float x = 0.f, y = 0.f, speed = 0.f, sz = 0.f; };
+    struct Star
+    {
+        float x = 0.f, y = 0.f, speed = 0.f, sz = 0.f;
+    };
 
     // ── Persistent state (survives game restarts) ─────────────────────────────
     int highScore = 0;
+    State prevState = State::MainMenu; // tracks where Options was opened from
 
     // ── Per-game state ────────────────────────────────────────────────────────
-    State state           = State::Start;
-    float paddleX         = W / 2.f;
-    float paddleGlow      = 0.f;
-    float wideTimer       = 0.f;
-    float slowTimer       = 0.f;
-    float laserTimer      = 0.f;
-    float ghostTimer      = 0.f;
-    float shieldHP        = 0.f;
-    float laserCooldown   = 0.f;
+    State state = State::MainMenu;
+    float paddleX = W / 2.f;
+    float paddleGlow = 0.f;
+    float wideTimer = 0.f;
+    float slowTimer = 0.f;
+    float laserTimer = 0.f;
+    float ghostTimer = 0.f;
+    float shieldHP = 0.f;
+    float laserCooldown = 0.f;
     float levelFlashTimer = 0.f;
-    int   score           = 0;
-    int   lives           = 3;
-    int   combo           = 0;
-    int   level           = 1;
-    float comboTimer      = 0.f;
-    float shakeAmt        = 0.f;
-    float shakeX          = 0.f;
-    float shakeY          = 0.f;
-    float t               = 0.f;
+    int score = 0;
+    int lives = 3;
+    int combo = 0;
+    int level = 1;
+    float comboTimer = 0.f;
+    float shakeAmt = 0.f;
+    float shakeX = 0.f;
+    float shakeY = 0.f;
+    float t = 0.f;
 
-    std::vector<Ball>       balls;
-    std::vector<Brick>      bricks;
-    std::vector<Particle>   particles;
-    std::vector<PowerUp>    powerUps;
-    std::vector<LaserBeam>  lasers;
+    // ── Effect toggles (options menu) ────────────────────────────────────────
+    bool fxParticles = true;
+    bool fxShake = true;
+    bool fxBgShader = true;
+    bool fxStars = true;
+    bool fxTrail = true;
+
+    std::vector<Ball> balls;
+    std::vector<Brick> bricks;
+    std::vector<Particle> particles;
+    std::vector<PowerUp> powerUps;
+    std::vector<LaserBeam> lasers;
     std::vector<ScorePopup> popups;
-    std::vector<Star>       stars;
+    std::vector<Star> stars;
 
-    std::shared_ptr<Shader>      bgShader;
+    std::shared_ptr<Shader> bgShader;
     std::shared_ptr<Framebuffer> bgCanvas;
 
-    std::mt19937 rng{ std::random_device{}() };
+    std::mt19937 rng {std::random_device {}()};
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     float rnd(float lo, float hi)
@@ -160,20 +184,44 @@ struct BreakoutSketch : p5::Sketch
         h = std::fmod(h, 360.f);
         if (h < 0.f) h += 360.f;
         float r, g, b;
-        const int   i = int(h / 60.f) % 6;
+        const int i = int(h / 60.f) % 6;
         const float f = h / 60.f - int(h / 60.f);
         const float p = v * (1.f - s);
         const float q = v * (1.f - f * s);
         const float u = v * (1.f - (1.f - f) * s);
         switch (i) {
-            case 0: r=v; g=u; b=p; break;
-            case 1: r=q; g=v; b=p; break;
-            case 2: r=p; g=v; b=u; break;
-            case 3: r=p; g=q; b=v; break;
-            case 4: r=u; g=p; b=v; break;
-            default: r=v; g=p; b=q; break;
+            case 0:
+                r = v;
+                g = u;
+                b = p;
+                break;
+            case 1:
+                r = q;
+                g = v;
+                b = p;
+                break;
+            case 2:
+                r = p;
+                g = v;
+                b = u;
+                break;
+            case 3:
+                r = p;
+                g = q;
+                b = v;
+                break;
+            case 4:
+                r = u;
+                g = p;
+                b = v;
+                break;
+            default:
+                r = v;
+                g = p;
+                b = q;
+                break;
         }
-        return color(int(r*255), int(g*255), int(b*255), a);
+        return color(int(r * 255), int(g * 255), int(b * 255), a);
     }
 
     float currentPaddleHW() const
@@ -184,19 +232,22 @@ struct BreakoutSketch : p5::Sketch
     PUType randomPUType()
     {
         const float r = rnd(0.f, 1.f);
-        if      (r < 0.18f) return PUType::MultiBall;
+        if (r < 0.18f) return PUType::MultiBall;
         else if (r < 0.34f) return PUType::Wide;
         else if (r < 0.50f) return PUType::Slow;
         else if (r < 0.63f) return PUType::Laser;
         else if (r < 0.75f) return PUType::Shield;
         else if (r < 0.87f) return PUType::Ghost;
-        else                return PUType::Fast;
+        else return PUType::Fast;
     }
 
     void addPopup(float x, float y, int val, color_t col)
     {
         ScorePopup p;
-        p.x = x; p.y = y; p.value = val; p.col = col;
+        p.x = x;
+        p.y = y;
+        p.value = val;
+        p.col = col;
         popups.push_back(p);
     }
 
@@ -276,24 +327,36 @@ struct BreakoutSketch : p5::Sketch
     {
         stars.resize(160);
         for (auto& s : stars) {
-            s.x     = rnd(0.f, float(W));
-            s.y     = rnd(0.f, float(H));
+            s.x = rnd(0.f, float(W));
+            s.y = rnd(0.f, float(H));
             s.speed = rnd(8.f, 55.f);
-            s.sz    = rnd(0.4f, 2.6f);
+            s.sz = rnd(0.4f, 2.6f);
         }
     }
 
     // ── Game lifecycle ───────────────────────────────────────────────────────
     void initGame()
     {
-        score = 0; lives = 3; combo = 0; level = 1;
-        comboTimer = 0.f; shakeAmt = 0.f;
-        wideTimer = 0.f; slowTimer = 0.f;
-        laserTimer = 0.f; ghostTimer = 0.f;
-        shieldHP = 0.f; laserCooldown = 0.f; levelFlashTimer = 0.f;
-        paddleGlow = 0.f; paddleX = W / 2.f;
-        balls.clear(); particles.clear(); powerUps.clear();
-        lasers.clear(); popups.clear();
+        score = 0;
+        lives = 3;
+        combo = 0;
+        level = 1;
+        comboTimer = 0.f;
+        shakeAmt = 0.f;
+        wideTimer = 0.f;
+        slowTimer = 0.f;
+        laserTimer = 0.f;
+        ghostTimer = 0.f;
+        shieldHP = 0.f;
+        laserCooldown = 0.f;
+        levelFlashTimer = 0.f;
+        paddleGlow = 0.f;
+        paddleX = W / 2.f;
+        balls.clear();
+        particles.clear();
+        powerUps.clear();
+        lasers.clear();
+        popups.clear();
         spawnBall();
         buildBricks();
     }
@@ -301,22 +364,23 @@ struct BreakoutSketch : p5::Sketch
     void nextLevel()
     {
         level++;
-        powerUps.clear(); lasers.clear();
+        powerUps.clear();
+        lasers.clear();
         // Speed all surviving balls up by 10 %
         for (auto& b : balls) {
-            const float sp  = std::sqrt(b.vx * b.vx + b.vy * b.vy);
+            const float sp = std::sqrt(b.vx * b.vx + b.vy * b.vy);
             const float fac = (sp * 1.10f) / sp;
-            b.vx *= fac; b.vy *= fac;
+            b.vx *= fac;
+            b.vy *= fac;
         }
         buildBricks();
     }
 
-    void spawnBall(float fromX      = float(W) / 2.f,
-                   float fromY      = PADDLE_Y - BALL_R - 4.f,
-                   float extraAngle = 0.f)
+    void spawnBall(float fromX = float(W) / 2.f, float fromY = PADDLE_Y - BALL_R - 4.f, float extraAngle = 0.f)
     {
         Ball b;
-        b.x = fromX; b.y = fromY;
+        b.x = fromX;
+        b.y = fromY;
         const float a = -PI / 2.f + extraAngle + rnd(-0.4f, 0.4f);
         b.vx = BASE_SPEED * std::cos(a);
         b.vy = BASE_SPEED * std::sin(a);
@@ -327,15 +391,15 @@ struct BreakoutSketch : p5::Sketch
     {
         bricks.clear();
         // Level N → rows 0..(N-1) get 2 HP; bomb chance scales with level
-        const int   hardRows   = level;
+        const int hardRows = level;
         const float bombChance = 0.08f + level * 0.03f;
         for (int row = 0; row < BRICK_ROWS; ++row) {
             for (int col = 0; col < BRICK_COLS; ++col) {
                 Brick br;
-                br.x     = BRICKS_LEFT + col * (BRICK_W + BRICK_GAP);
-                br.y     = BRICKS_TOP  + row * (BRICK_H + BRICK_GAP);
+                br.x = BRICKS_LEFT + col * (BRICK_W + BRICK_GAP);
+                br.y = BRICKS_TOP + row * (BRICK_H + BRICK_GAP);
                 br.maxHp = br.hp = (row < hardRows) ? 2 : 1;
-                br.col   = hsv(float(row) * (360.f / BRICK_ROWS) + 10.f, 0.85f, 1.f);
+                br.col = hsv(float(row) * (360.f / BRICK_ROWS) + 10.f, 0.85f, 1.f);
                 br.phase = rnd(0.f, 2.f * PI);
                 br.isBomb = (rnd(0.f, 1.f) < bombChance);
                 if (br.isBomb)
@@ -348,17 +412,18 @@ struct BreakoutSketch : p5::Sketch
     // ── Explosion helpers ────────────────────────────────────────────────────
     void spawnBurst(float x, float y, color_t c, int n, bool big)
     {
+        if (!fxParticles) return;
         for (int i = 0; i < n; ++i) {
             Particle p;
-            p.x  = x + rnd(-BRICK_W * 0.35f, BRICK_W * 0.35f);
-            p.y  = y + rnd(-BRICK_H * 0.5f,  BRICK_H * 0.5f);
-            const float a  = rnd(0.f, 2.f * PI);
+            p.x = x + rnd(-BRICK_W * 0.35f, BRICK_W * 0.35f);
+            p.y = y + rnd(-BRICK_H * 0.5f, BRICK_H * 0.5f);
+            const float a = rnd(0.f, 2.f * PI);
             const float sp = big ? rnd(70.f, 330.f) : rnd(25.f, 120.f);
-            p.vx     = sp * std::cos(a);
-            p.vy     = sp * std::sin(a) - (big ? 90.f : 0.f);
-            p.life   = p.maxLife = rnd(0.25f, big ? 1.1f : 0.55f);
-            p.size   = big ? rnd(2.f, 7.f) : rnd(1.f, 3.5f);
-            p.col    = c;
+            p.vx = sp * std::cos(a);
+            p.vy = sp * std::sin(a) - (big ? 90.f : 0.f);
+            p.life = p.maxLife = rnd(0.25f, big ? 1.1f : 0.55f);
+            p.size = big ? rnd(2.f, 7.f) : rnd(1.f, 3.5f);
+            p.col = c;
             particles.push_back(p);
         }
     }
@@ -366,7 +431,7 @@ struct BreakoutSketch : p5::Sketch
     void explodeBomb(float bx, float by)
     {
         // Big orange blast at bomb centre
-        shakeAmt = std::min(shakeAmt + 0.75f, 2.f);
+        if (fxShake) shakeAmt = std::min(shakeAmt + 0.75f, 2.f);
         spawnBurst(bx + BRICK_W * 0.5f, by + BRICK_H * 0.5f, color(255, 140, 0), 40, true);
 
         // Destroy all alive bricks within a 1-cell radius
@@ -376,9 +441,8 @@ struct BreakoutSketch : p5::Sketch
             if (!nb.alive) continue;
             const float nx = nb.x + BRICK_W * 0.5f;
             const float ny = nb.y + BRICK_H * 0.5f;
-            if (std::abs(nx - cx) <= BRICK_W  + BRICK_GAP + 2.f &&
-                std::abs(ny - cy) <= BRICK_H  + BRICK_GAP + 2.f)
-            {
+            if (std::abs(nx - cx) <= BRICK_W + BRICK_GAP + 2.f &&
+                std::abs(ny - cy) <= BRICK_H + BRICK_GAP + 2.f) {
                 nb.alive = false;
                 score += 15;
                 spawnBurst(nx, ny, nb.col, 16, true);
@@ -391,34 +455,37 @@ struct BreakoutSketch : p5::Sketch
     void applyPU(PUType type)
     {
         switch (type) {
-        case PUType::MultiBall: {
-            std::vector<Ball> extras;
-            for (auto& b : balls) {
-                Ball nb = b; nb.trail = {}; nb.trailLen = 0;
-                const float sp = std::sqrt(nb.vx * nb.vx + nb.vy * nb.vy);
-                const float a  = std::atan2(nb.vy, nb.vx) + PI / 5.f;
-                nb.vx = sp * std::cos(a);
-                nb.vy = sp * std::sin(a);
-                extras.push_back(nb);
+            case PUType::MultiBall: {
+                std::vector<Ball> extras;
+                for (auto& b : balls) {
+                    Ball nb = b;
+                    nb.trail = {};
+                    nb.trailLen = 0;
+                    const float sp = std::sqrt(nb.vx * nb.vx + nb.vy * nb.vy);
+                    const float a = std::atan2(nb.vy, nb.vx) + PI / 5.f;
+                    nb.vx = sp * std::cos(a);
+                    nb.vy = sp * std::sin(a);
+                    extras.push_back(nb);
+                }
+                for (auto& e : extras) balls.push_back(e);
+                break;
             }
-            for (auto& e : extras) balls.push_back(e);
-            break;
-        }
-        case PUType::Wide:   wideTimer  = 9.f; break;
-        case PUType::Slow:   slowTimer  = 6.f; break;
-        case PUType::Laser:  laserTimer = 8.f; break;
-        case PUType::Shield: shieldHP   = 1.f; break;
-        case PUType::Ghost:  ghostTimer = 5.f; break;
-        case PUType::Fast: {
-            // Bad: speed all balls up by 38 %, cap at 2.5× BASE_SPEED
-            for (auto& b : balls) {
-                const float sp    = std::sqrt(b.vx * b.vx + b.vy * b.vy);
-                const float newSp = std::min(sp * 1.38f, BASE_SPEED * 2.5f);
-                const float fac   = newSp / sp;
-                b.vx *= fac; b.vy *= fac;
+            case PUType::Wide: wideTimer = 9.f; break;
+            case PUType::Slow: slowTimer = 6.f; break;
+            case PUType::Laser: laserTimer = 8.f; break;
+            case PUType::Shield: shieldHP = 1.f; break;
+            case PUType::Ghost: ghostTimer = 5.f; break;
+            case PUType::Fast: {
+                // Bad: speed all balls up by 38 %, cap at 2.5× BASE_SPEED
+                for (auto& b : balls) {
+                    const float sp = std::sqrt(b.vx * b.vx + b.vy * b.vy);
+                    const float newSp = std::min(sp * 1.38f, BASE_SPEED * 2.5f);
+                    const float fac = newSp / sp;
+                    b.vx *= fac;
+                    b.vy *= fac;
+                }
+                break;
             }
-            break;
-        }
         }
     }
 
@@ -427,8 +494,10 @@ struct BreakoutSketch : p5::Sketch
         const float hw = currentPaddleHW();
         const float pT = PADDLE_Y - PADDLE_H * 0.5f;
         LaserBeam l1, l2;
-        l1.x = paddleX - hw * 0.5f; l1.y = pT;
-        l2.x = paddleX + hw * 0.5f; l2.y = pT;
+        l1.x = paddleX - hw * 0.5f;
+        l1.y = pT;
+        l2.x = paddleX + hw * 0.5f;
+        l2.y = pT;
         lasers.push_back(l1);
         lasers.push_back(l2);
         laserCooldown = 0.32f;
@@ -439,18 +508,29 @@ struct BreakoutSketch : p5::Sketch
     void updateParticlesAndStars(float dt)
     {
         for (auto& p : particles) {
-            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
             p.vy += 240.f * dt;
             p.life -= dt;
         }
-        particles.erase(std::remove_if(particles.begin(), particles.end(),
-            [](const Particle& p){ return p.life <= 0.f; }), particles.end());
-        for (auto& pp : popups) { pp.y -= 45.f * dt; pp.life -= dt; }
-        popups.erase(std::remove_if(popups.begin(), popups.end(),
-            [](const ScorePopup& p){ return p.life <= 0.f; }), popups.end());
+        particles.erase(std::remove_if(particles.begin(), particles.end(), [](const Particle& p) {
+                            return p.life <= 0.f;
+                        }),
+                        particles.end());
+        for (auto& pp : popups) {
+            pp.y -= 45.f * dt;
+            pp.life -= dt;
+        }
+        popups.erase(std::remove_if(popups.begin(), popups.end(), [](const ScorePopup& p) {
+                         return p.life <= 0.f;
+                     }),
+                     popups.end());
         for (auto& s : stars) {
             s.y += s.speed * dt;
-            if (s.y > float(H) + 4.f) { s.y = -4.f; s.x = rnd(0.f, float(W)); }
+            if (s.y > float(H) + 4.f) {
+                s.y = -4.f;
+                s.x = rnd(0.f, float(W));
+            }
         }
     }
 
@@ -467,14 +547,14 @@ struct BreakoutSketch : p5::Sketch
             return;
         }
 
-        comboTimer    -= dt;
+        comboTimer -= dt;
         if (comboTimer <= 0.f) combo = 0;
-        wideTimer      = std::max(0.f, wideTimer  - dt);
-        slowTimer      = std::max(0.f, slowTimer  - dt);
-        laserTimer     = std::max(0.f, laserTimer - dt);
-        ghostTimer     = std::max(0.f, ghostTimer - dt);
-        laserCooldown  = std::max(0.f, laserCooldown - dt);
-        paddleGlow     = std::max(0.f, paddleGlow - dt * 3.f);
+        wideTimer = std::max(0.f, wideTimer - dt);
+        slowTimer = std::max(0.f, slowTimer - dt);
+        laserTimer = std::max(0.f, laserTimer - dt);
+        ghostTimer = std::max(0.f, ghostTimer - dt);
+        laserCooldown = std::max(0.f, laserCooldown - dt);
+        paddleGlow = std::max(0.f, paddleGlow - dt * 3.f);
 
         // Paddle follows mouse
         const float pHW = currentPaddleHW();
@@ -485,7 +565,9 @@ struct BreakoutSketch : p5::Sketch
             shakeAmt -= dt * 7.f;
             shakeX = rnd(-shakeAmt * 7.f, shakeAmt * 7.f);
             shakeY = rnd(-shakeAmt * 7.f, shakeAmt * 7.f);
-        } else { shakeX = shakeY = 0.f; }
+        } else {
+            shakeX = shakeY = 0.f;
+        }
 
         const float sm = slowTimer > 0.f ? 0.55f : 1.f;
 
@@ -497,40 +579,42 @@ struct BreakoutSketch : p5::Sketch
 
             for (int i = std::min(ball.trailLen, TRAIL_LEN - 1); i > 0; --i)
                 ball.trail[i] = ball.trail[i - 1];
-            ball.trail[0] = { ball.x, ball.y };
+            ball.trail[0] = {ball.x, ball.y};
             if (ball.trailLen < TRAIL_LEN) ++ball.trailLen;
 
             // Wall bounce
-            if (ball.x - BALL_R < 0.f)      { ball.x = BALL_R;            ball.vx =  std::abs(ball.vx); }
-            if (ball.x + BALL_R > float(W))  { ball.x = float(W) - BALL_R; ball.vx = -std::abs(ball.vx); }
-            if (ball.y - BALL_R < 0.f)       { ball.y = BALL_R;            ball.vy =  std::abs(ball.vy); }
+            if (ball.x - BALL_R < 0.f) {
+                ball.x = BALL_R;
+                ball.vx = std::abs(ball.vx);
+            }
+            if (ball.x + BALL_R > float(W)) {
+                ball.x = float(W) - BALL_R;
+                ball.vx = -std::abs(ball.vx);
+            }
+            if (ball.y - BALL_R < 0.f) {
+                ball.y = BALL_R;
+                ball.vy = std::abs(ball.vy);
+            }
 
             // Shield catch
-            if (shieldHP > 0.f && ball.vy > 0.f
-                && ball.y + BALL_R >= SHIELD_Y
-                && ball.y + BALL_R <= SHIELD_Y + 22.f)
-            {
-                ball.vy  = -std::abs(ball.vy);
-                ball.y   = SHIELD_Y - BALL_R - 0.5f;
+            if (shieldHP > 0.f && ball.vy > 0.f && ball.y + BALL_R >= SHIELD_Y && ball.y + BALL_R <= SHIELD_Y + 22.f) {
+                ball.vy = -std::abs(ball.vy);
+                ball.y = SHIELD_Y - BALL_R - 0.5f;
                 shieldHP = 0.f;
-                shakeAmt = std::min(shakeAmt + 0.35f, 1.f);
+                if (fxShake) shakeAmt = std::min(shakeAmt + 0.35f, 1.f);
                 spawnBurst(ball.x, SHIELD_Y, color(0, 220, 255), 16, false);
             }
 
             // Paddle collision
             const float pL = paddleX - pHW, pR = paddleX + pHW;
             const float pT = PADDLE_Y - PADDLE_H * 0.5f;
-            if (ball.vy > 0.f
-                && ball.y + BALL_R >= pT
-                && ball.y - BALL_R <= pT + PADDLE_H + 5.f
-                && ball.x >= pL - 2.f && ball.x <= pR + 2.f)
-            {
+            if (ball.vy > 0.f && ball.y + BALL_R >= pT && ball.y - BALL_R <= pT + PADDLE_H + 5.f && ball.x >= pL - 2.f && ball.x <= pR + 2.f) {
                 const float hit = (ball.x - paddleX) / pHW;
-                const float sp  = std::sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-                const float an  = hit * PI / 2.8f;
-                ball.vx    = sp * std::sin(an);
-                ball.vy    = -sp * std::cos(an);
-                ball.y     = pT - BALL_R - 0.5f;
+                const float sp = std::sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+                const float an = hit * PI / 2.8f;
+                ball.vx = sp * std::sin(an);
+                ball.vy = -sp * std::cos(an);
+                ball.y = pT - BALL_R - 0.5f;
                 paddleGlow = 1.f;
                 spawnBurst(ball.x, pT, color(120, 210, 255), 9, false);
             }
@@ -543,7 +627,8 @@ struct BreakoutSketch : p5::Sketch
                     if (ball.x + BALL_R <= br.x || ball.x - BALL_R >= br.x + BRICK_W) continue;
                     if (ball.y + BALL_R <= br.y || ball.y - BALL_R >= br.y + BRICK_H) continue;
 
-                    ++combo; comboTimer = 2.5f;
+                    ++combo;
+                    comboTimer = 2.5f;
                     const int pts = 10 * std::max(1, combo / 4);
                     score += pts;
                     const float bx = br.x, by = br.y;
@@ -555,7 +640,8 @@ struct BreakoutSketch : p5::Sketch
                     if (wasBomb) explodeBomb(bx, by);
                     if (rnd(0.f, 1.f) < 0.14f) {
                         PowerUp pu;
-                        pu.x = bx + BRICK_W * 0.5f; pu.y = by + BRICK_H;
+                        pu.x = bx + BRICK_W * 0.5f;
+                        pu.y = by + BRICK_H;
                         pu.type = randomPUType();
                         powerUps.push_back(pu);
                     }
@@ -573,31 +659,41 @@ struct BreakoutSketch : p5::Sketch
                     if (oL < 0 || oR < 0 || oT < 0 || oB < 0) continue;
 
                     const float mo = std::min({oL, oR, oT, oB});
-                    if      (mo == oL) { ball.vx = -std::abs(ball.vx); ball.x = bL - BALL_R; }
-                    else if (mo == oR) { ball.vx =  std::abs(ball.vx); ball.x = bR + BALL_R; }
-                    else if (mo == oT) { ball.vy = -std::abs(ball.vy); ball.y = bT - BALL_R; }
-                    else               { ball.vy =  std::abs(ball.vy); ball.y = bB + BALL_R; }
+                    if (mo == oL) {
+                        ball.vx = -std::abs(ball.vx);
+                        ball.x = bL - BALL_R;
+                    } else if (mo == oR) {
+                        ball.vx = std::abs(ball.vx);
+                        ball.x = bR + BALL_R;
+                    } else if (mo == oT) {
+                        ball.vy = -std::abs(ball.vy);
+                        ball.y = bT - BALL_R;
+                    } else {
+                        ball.vy = std::abs(ball.vy);
+                        ball.y = bB + BALL_R;
+                    }
 
                     --br.hp;
-                    ++combo; comboTimer = 2.5f;
+                    ++combo;
+                    comboTimer = 2.5f;
                     const int pts = 10 * std::max(1, combo / 4);
                     score += pts;
-                    shakeAmt = std::min(shakeAmt + 0.22f, 1.f);
+                    if (fxShake) shakeAmt = std::min(shakeAmt + 0.22f, 1.f);
 
                     const bool destroyed = br.hp <= 0;
-                    const bool wasBomb   = br.isBomb;
+                    const bool wasBomb = br.isBomb;
                     const float bx = br.x, by = br.y;
                     const color_t bc = br.col;
 
-                    spawnBurst(bx + BRICK_W * 0.5f, by + BRICK_H * 0.5f, bc,
-                               destroyed ? 22 : 7, destroyed);
+                    spawnBurst(bx + BRICK_W * 0.5f, by + BRICK_H * 0.5f, bc, destroyed ? 22 : 7, destroyed);
                     if (destroyed) {
                         br.alive = false;
                         addPopup(bx + BRICK_W * 0.5f, by, pts, bc);
                         if (wasBomb) explodeBomb(bx, by);
                         if (rnd(0.f, 1.f) < 0.18f) {
                             PowerUp pu;
-                            pu.x = bx + BRICK_W * 0.5f; pu.y = by + BRICK_H;
+                            pu.x = bx + BRICK_W * 0.5f;
+                            pu.y = by + BRICK_H;
                             pu.type = randomPUType();
                             powerUps.push_back(pu);
                         }
@@ -609,8 +705,10 @@ struct BreakoutSketch : p5::Sketch
             if (ball.y - BALL_R > float(H)) ball.alive = false;
         }
 
-        balls.erase(std::remove_if(balls.begin(), balls.end(),
-            [](const Ball& b){ return !b.alive; }), balls.end());
+        balls.erase(std::remove_if(balls.begin(), balls.end(), [](const Ball& b) {
+                        return !b.alive;
+                    }),
+                    balls.end());
 
         if (balls.empty()) {
             if (--lives <= 0) {
@@ -622,7 +720,11 @@ struct BreakoutSketch : p5::Sketch
         }
 
         bool anyAlive = false;
-        for (const auto& br : bricks) if (br.alive) { anyAlive = true; break; }
+        for (const auto& br : bricks)
+            if (br.alive) {
+                anyAlive = true;
+                break;
+            }
         if (!anyAlive) {
             if (level >= MAX_LEVELS) {
                 highScore = std::max(highScore, score);
@@ -638,20 +740,22 @@ struct BreakoutSketch : p5::Sketch
         for (auto& l : lasers) {
             if (!l.alive) continue;
             l.y += LaserBeam::VY * dt;
-            if (l.y < -20.f) { l.alive = false; continue; }
+            if (l.y < -20.f) {
+                l.alive = false;
+                continue;
+            }
             for (auto& br : bricks) {
                 if (!br.alive) continue;
                 if (l.x < br.x - 2.f || l.x > br.x + BRICK_W + 2.f) continue;
-                if (l.y > br.y + BRICK_H || l.y + 22.f < br.y)         continue;
+                if (l.y > br.y + BRICK_H || l.y + 22.f < br.y) continue;
 
                 --br.hp;
                 score += 10;
                 const bool destroyed = br.hp <= 0;
-                spawnBurst(br.x + BRICK_W * 0.5f, br.y + BRICK_H * 0.5f,
-                           br.col, destroyed ? 18 : 5, destroyed);
+                spawnBurst(br.x + BRICK_W * 0.5f, br.y + BRICK_H * 0.5f, br.col, destroyed ? 18 : 5, destroyed);
                 if (destroyed) {
                     const float bx = br.x, by = br.y;
-                    const bool  wb = br.isBomb;
+                    const bool wb = br.isBomb;
                     const color_t bc = br.col;
                     br.alive = false;
                     addPopup(bx + BRICK_W * 0.5f, by, 10, bc);
@@ -661,23 +765,26 @@ struct BreakoutSketch : p5::Sketch
                 break;
             }
         }
-        lasers.erase(std::remove_if(lasers.begin(), lasers.end(),
-            [](const LaserBeam& l){ return !l.alive; }), lasers.end());
+        lasers.erase(std::remove_if(lasers.begin(), lasers.end(), [](const LaserBeam& l) {
+                         return !l.alive;
+                     }),
+                     lasers.end());
 
         // ── Power-ups ────────────────────────────────────────────────────────
         for (auto& pu : powerUps) {
             if (!pu.alive) continue;
             pu.y += pu.vy * dt;
             const float pHalfW = currentPaddleHW();
-            if (std::abs(pu.x - paddleX) < pHalfW + 12.f
-                && std::abs(pu.y - PADDLE_Y) < PADDLE_H + 12.f)
-            {
-                applyPU(pu.type); pu.alive = false;
+            if (std::abs(pu.x - paddleX) < pHalfW + 12.f && std::abs(pu.y - PADDLE_Y) < PADDLE_H + 12.f) {
+                applyPU(pu.type);
+                pu.alive = false;
             }
             if (pu.y > float(H) + 20.f) pu.alive = false;
         }
-        powerUps.erase(std::remove_if(powerUps.begin(), powerUps.end(),
-            [](const PowerUp& p){ return !p.alive; }), powerUps.end());
+        powerUps.erase(std::remove_if(powerUps.begin(), powerUps.end(), [](const PowerUp& p) {
+                           return !p.alive;
+                       }),
+                       powerUps.end());
 
         updateParticlesAndStars(dt);
     }
@@ -687,9 +794,10 @@ struct BreakoutSketch : p5::Sketch
     {
         pushCanvas(bgCanvas);
         shader(bgShader);
-        setUniform("uTime",       uniform(t));
+        setUniform("uTime", uniform(t));
         setUniform("uResolution", uniform(float(W), float(H)));
-        noStroke(); fill(255);
+        noStroke();
+        fill(255);
         rect(0.f, 0.f, float(W), float(H));
         noShader();
         popCanvas();
@@ -714,11 +822,11 @@ struct BreakoutSketch : p5::Sketch
     {
         for (const auto& br : bricks) {
             if (!br.alive) continue;
-            const int   r  = p5::red(br.col);
-            const int   g  = p5::green(br.col);
-            const int   b  = p5::blue(br.col);
+            const int r = p5::red(br.col);
+            const int g = p5::green(br.col);
+            const int b = p5::blue(br.col);
             const float pu = 0.5f + 0.5f * std::sin(t * 1.8f + br.phase);
-            const int   dm = (br.hp < br.maxHp) ? 130 : 255;
+            const int dm = (br.hp < br.maxHp) ? 130 : 255;
 
             // Additive glow halo (bomb bricks pulse faster & larger)
             blendMode(BlendMode::additive);
@@ -762,9 +870,9 @@ struct BreakoutSketch : p5::Sketch
                 stroke(0, 0, 0, 130);
                 strokeWeight(1.5f);
                 const float cx = br.x + BRICK_W * 0.5f;
-                line(cx - 7.f, br.y + 2.f,     cx,        br.y + 8.f);
-                line(cx,       br.y + 8.f,     cx - 4.f,  br.y + 13.f);
-                line(cx - 4.f, br.y + 13.f,    cx + 5.f,  br.y + BRICK_H - 2.f);
+                line(cx - 7.f, br.y + 2.f, cx, br.y + 8.f);
+                line(cx, br.y + 8.f, cx - 4.f, br.y + 13.f);
+                line(cx - 4.f, br.y + 13.f, cx + 5.f, br.y + BRICK_H - 2.f);
             }
         }
     }
@@ -777,14 +885,16 @@ struct BreakoutSketch : p5::Sketch
         noStroke();
 
         // Trail
-        for (int i = ball.trailLen - 1; i >= 0; --i) {
-            const float frac = 1.f - float(i) / float(ball.trailLen);
-            const float tr   = BALL_R * frac * 0.8f;
-            if (isGhost)
-                fill(180, 40, 255, int(160.f * frac * frac));
-            else
-                fill(50, 170, 255, int(160.f * frac * frac));
-            circle(ball.trail[i].x, ball.trail[i].y, tr * 2.f);
+        if (fxTrail) {
+            for (int i = ball.trailLen - 1; i >= 0; --i) {
+                const float frac = 1.f - float(i) / float(ball.trailLen);
+                const float tr = BALL_R * frac * 0.8f;
+                if (isGhost)
+                    fill(180, 40, 255, int(160.f * frac * frac));
+                else
+                    fill(50, 170, 255, int(160.f * frac * frac));
+                circle(ball.trail[i].x, ball.trail[i].y, tr * 2.f);
+            }
         }
 
         // Ghost aura ring
@@ -847,9 +957,9 @@ struct BreakoutSketch : p5::Sketch
 
         // Paddle body colour depends on active power-ups
         noStroke();
-        if (wideTimer > 0.f)       fill(color(70,  255, 150));
-        else if (ghostTimer > 0.f) fill(color(200, 80,  255));
-        else                       fill(color(60,  145, 255));
+        if (wideTimer > 0.f) fill(color(70, 255, 150));
+        else if (ghostTimer > 0.f) fill(color(200, 80, 255));
+        else fill(color(60, 145, 255));
         rect(pL, pT, pW, PADDLE_H, 7.f, 7.f);
 
         // Top highlight strip
@@ -906,8 +1016,8 @@ struct BreakoutSketch : p5::Sketch
         noStroke();
         textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
         for (const auto& pp : popups) {
-            const float a    = pp.life / pp.maxLife;
-            const float sz   = 11.f + 6.f * (1.f - a);
+            const float a = pp.life / pp.maxLife;
+            const float sz = 11.f + 6.f * (1.f - a);
             fill(p5::red(pp.col), p5::green(pp.col), p5::blue(pp.col), int(200.f * a));
             textSize(sz);
             text("+" + std::to_string(pp.value), pp.x, pp.y);
@@ -920,17 +1030,39 @@ struct BreakoutSketch : p5::Sketch
         for (const auto& pu : powerUps) {
             if (!pu.alive) continue;
             const float pulse = 0.5f + 0.5f * std::sin(t * 4.5f);
-            color_t     c;
+            color_t c;
             const char* label;
-            bool        isBad = false;
+            bool isBad = false;
             switch (pu.type) {
-                case PUType::MultiBall: c = color(255,  80, 200); label = "x2"; break;
-                case PUType::Wide:      c = color( 80, 255, 100); label = "WD"; break;
-                case PUType::Slow:      c = color(100, 200, 255); label = "SL"; break;
-                case PUType::Laser:     c = color(255, 140,  20); label = "LS"; break;
-                case PUType::Shield:    c = color(  0, 220, 255); label = "SH"; break;
-                case PUType::Ghost:     c = color(190,  60, 255); label = "GB"; break;
-                case PUType::Fast:      c = color(255,  40,  40); label = "F!"; isBad = true; break;
+                case PUType::MultiBall:
+                    c = color(255, 80, 200);
+                    label = "x2";
+                    break;
+                case PUType::Wide:
+                    c = color(80, 255, 100);
+                    label = "WD";
+                    break;
+                case PUType::Slow:
+                    c = color(100, 200, 255);
+                    label = "SL";
+                    break;
+                case PUType::Laser:
+                    c = color(255, 140, 20);
+                    label = "LS";
+                    break;
+                case PUType::Shield:
+                    c = color(0, 220, 255);
+                    label = "SH";
+                    break;
+                case PUType::Ghost:
+                    c = color(190, 60, 255);
+                    label = "GB";
+                    break;
+                case PUType::Fast:
+                    c = color(255, 40, 40);
+                    label = "F!";
+                    isBad = true;
+                    break;
             }
             const int cr = p5::red(c), cg = p5::green(c), cb = p5::blue(c);
 
@@ -976,8 +1108,7 @@ struct BreakoutSketch : p5::Sketch
         fill(180, 200, 255, 180);
         textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
         textSize(14.f);
-        text("LVL " + std::to_string(level) + " / " + std::to_string(MAX_LEVELS),
-             float(W) * 0.5f, 10.f);
+        text("LVL " + std::to_string(level) + " / " + std::to_string(MAX_LEVELS), float(W) * 0.5f, 10.f);
 
         // Combo
         if (combo >= 3) {
@@ -992,20 +1123,23 @@ struct BreakoutSketch : p5::Sketch
 
         // Active power-up timers (bottom)
         float ty = float(H) - 12.f;
-        const struct { float t; const char* label; color_t c; }
-        timers[] = {
-            { wideTimer,  "WIDE",   color( 80, 255, 100) },
-            { slowTimer,  "SLOW",   color(100, 200, 255) },
-            { laserTimer, "LASER",  color(255, 140,  20) },
-            { ghostTimer, "GHOST",  color(190,  60, 255) },
+        const struct
+        {
+            float t;
+            const char* label;
+            color_t c;
+        } timers[] = {
+            {wideTimer, "WIDE", color(80, 255, 100)},
+            {slowTimer, "SLOW", color(100, 200, 255)},
+            {laserTimer, "LASER", color(255, 140, 20)},
+            {ghostTimer, "GHOST", color(190, 60, 255)},
         };
         for (const auto& tm : timers) {
             if (tm.t <= 0.f) continue;
             fill(tm.c);
             textAlign(HorizontalTextAlign::center, VerticalTextAlign::bottom);
             textSize(12.f);
-            text(std::string(tm.label) + "  " + std::to_string(int(tm.t) + 1) + "s",
-                 float(W) * 0.5f, ty);
+            text(std::string(tm.label) + "  " + std::to_string(int(tm.t) + 1) + "s", float(W) * 0.5f, ty);
             ty -= 16.f;
         }
 
@@ -1060,74 +1194,358 @@ struct BreakoutSketch : p5::Sketch
         text("Bricks are harder  –  Ball is faster", float(W) * 0.5f, float(H) * 0.5f + 62.f);
     }
 
-    void drawStartScreen()
+    // ── Menu helpers ─────────────────────────────────────────────────────────
+    bool isHoveredBtn(float x, float y, float w, float h) const
     {
-        const float pulse = 0.5f + 0.5f * std::sin(t * 2.2f);
+        return float(mouseX) >= x && float(mouseX) <= x + w && float(mouseY) >= y && float(mouseY) <= y + h;
+    }
+
+    void drawMenuButton(float x, float y, float w, float h, const char* label, bool hover)
+    {
+        const float r = h * 0.5f;
+        const float cx = x + w * 0.5f;
+        const float cy = y + h * 0.5f;
+        const float pulse = 0.5f + 0.5f * std::sin(t * 3.f);
+
+        if (hover) {
+            blendMode(BlendMode::additive);
+            noStroke();
+            fill(40, 110, 255, int(45.f * pulse + 20.f));
+            rect(x - 6.f, y - 6.f, w + 12.f, h + 12.f, r + 6.f, r + 6.f);
+            blendMode(BlendMode::alpha);
+        }
+
+        noStroke();
+        fill(hover ? color(22, 58, 145, 220) : color(8, 22, 70, 190));
+        rect(x, y, w, h, r, r);
+
+        noFill();
+        stroke(hover ? color(110, 190, 255) : color(45, 90, 185));
+        strokeWeight(hover ? 2.f : 1.5f);
+        rect(x, y, w, h, r, r);
 
         blendMode(BlendMode::additive);
         noStroke();
-        fill(0, 90, 255, int(80.f * pulse));
+        fill(255, 255, 255, hover ? 28 : 16);
+        rect(x + 5.f, y + 3.f, w - 10.f, h * 0.28f, r - 3.f, r - 3.f);
+        blendMode(BlendMode::alpha);
+
+        noStroke();
+        fill(hover ? color(225, 242, 255) : color(155, 195, 240));
         textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
-        textSize(72.f);
-        text("BREAKOUT", float(W) * 0.5f + 4.f, float(H) * 0.5f - 115.f + 4.f);
+        textSize(18.f);
+        text(label, cx, cy);
+    }
+
+    void drawToggleRow(float x, float y, float w, float h, const char* label, bool enabled, bool hover)
+    {
+        const float r = h * 0.42f;
+        const float pulse = 0.5f + 0.5f * std::sin(t * 3.f);
+
+        if (hover) {
+            blendMode(BlendMode::additive);
+            noStroke();
+            fill(30, 90, 210, int(30.f * pulse + 12.f));
+            rect(x - 4.f, y - 4.f, w + 8.f, h + 8.f, r + 4.f, r + 4.f);
+            blendMode(BlendMode::alpha);
+        }
+
+        noStroke();
+        fill(hover ? color(15, 42, 110, 200) : color(5, 16, 52, 160));
+        rect(x, y, w, h, r, r);
+
+        noFill();
+        stroke(hover ? color(80, 160, 255) : color(30, 68, 148));
+        strokeWeight(1.5f);
+        rect(x, y, w, h, r, r);
+
+        noStroke();
+        fill(hover ? color(210, 230, 255) : color(145, 180, 228));
+        textAlign(HorizontalTextAlign::left, VerticalTextAlign::center);
+        textSize(15.f);
+        text(label, x + 20.f, y + h * 0.5f);
+
+        // ON / OFF pill
+        const float pw = 54.f, ph = 26.f;
+        const float px = x + w - pw - 18.f;
+        const float py = y + (h - ph) * 0.5f;
+        const float pr = ph * 0.5f;
+
+        noStroke();
+        fill(enabled ? color(28, 195, 75, 225) : color(90, 28, 28, 185));
+        rect(px, py, pw, ph, pr, pr);
+
+        if (enabled) {
+            blendMode(BlendMode::additive);
+            fill(40, 255, 95, 48);
+            rect(px - 3.f, py - 3.f, pw + 6.f, ph + 6.f, pr + 3.f, pr + 3.f);
+            blendMode(BlendMode::alpha);
+        }
+
+        fill(255, 255, 255, 220);
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textSize(11.f);
+        text(enabled ? "AN" : "AUS", px + pw * 0.5f, py + ph * 0.5f);
+    }
+
+    void drawMainMenu()
+    {
+        const float cx = float(W) * 0.5f;
+        const float pulse = 0.5f + 0.5f * std::sin(t * 2.2f);
+
+        // Full dark overlay so the background bricks don't bleed through
+        noStroke();
+        fill(0, 0, 0, 175);
+        rect(0.f, 0.f, float(W), float(H));
+
+        // Central card
+        const float cardW = 540.f, cardH = 640.f;
+        const float cardX = cx - cardW * 0.5f;
+        const float cardY = 70.f;
+
+        // Card shadow glow
+        blendMode(BlendMode::additive);
+        noStroke();
+        fill(10, 40, 130, int(55.f * pulse + 20.f));
+        rect(cardX - 18.f, cardY - 18.f, cardW + 36.f, cardH + 36.f, 30.f, 30.f);
+        blendMode(BlendMode::alpha);
+
+        // Card body
+        noStroke();
+        fill(5, 10, 40, 215);
+        rect(cardX, cardY, cardW, cardH, 18.f, 18.f);
+
+        // Card border
+        noFill();
+        stroke(35, 80, 200, 200);
+        strokeWeight(1.5f);
+        rect(cardX, cardY, cardW, cardH, 18.f, 18.f);
+
+        // Decorative top accent line
+        blendMode(BlendMode::additive);
+        noStroke();
+        fill(80, 160, 255, int(120.f * pulse + 40.f));
+        rect(cardX + 40.f, cardY - 2.f, cardW - 80.f, 4.f, 2.f, 2.f);
+        blendMode(BlendMode::alpha);
+
+        // Title glow
+        blendMode(BlendMode::additive);
+        noStroke();
+        fill(0, 90, 255, int(100.f * pulse));
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textSize(74.f);
+        text("BREAKOUT", cx + 5.f, cardY + 105.f + 5.f);
         blendMode(BlendMode::alpha);
 
         fill(85, 195, 255);
-        textSize(72.f);
-        text("BREAKOUT", float(W) * 0.5f, float(H) * 0.5f - 115.f);
+        textSize(74.f);
+        text("BREAKOUT", cx, cardY + 105.f);
 
-        fill(200, 220, 255, int(190.f + 65.f * pulse));
-        textSize(17.f);
-        text("Move mouse to control the paddle", float(W) * 0.5f, float(H) * 0.5f + 5.f);
+        fill(145, 175, 225, int(155.f + 55.f * pulse));
+        textSize(14.f);
+        text("p5 Edition", cx, cardY + 165.f);
 
-        fill(165, 205, 255, int(140.f + 115.f * pulse));
-        textSize(16.f);
-        text("Click to Start", float(W) * 0.5f, float(H) * 0.5f + 42.f);
+        // Divider
+        noFill();
+        stroke(35, 70, 160, 140);
+        strokeWeight(1.f);
+        line(cardX + 60.f, cardY + 195.f, cardX + cardW - 60.f, cardY + 195.f);
 
-        fill(160, 175, 200, 155);
-        textSize(11.f);
-        text("x2 MultiBall  |  WD Wide  |  SL Slow  |  LS Laser  |  SH Shield  |  GB Ghost  |  F! Fast(BAD)",
-             float(W) * 0.5f, float(H) * 0.5f + 82.f);
-        text("BOMB bricks (orange \xc3\x97) explode their neighbours!",
-             float(W) * 0.5f, float(H) * 0.5f + 100.f);
+        // Buttons
+        const float bw = 300.f, bh = 54.f;
+        const float bx = cx - bw * 0.5f;
+        const float b1y = cardY + 220.f;
+        const float b2y = b1y + 74.f;
+        const float b3y = b2y + 74.f;
+        drawMenuButton(bx, b1y, bw, bh, "SPIELEN", isHoveredBtn(bx, b1y, bw, bh));
+        drawMenuButton(bx, b2y, bw, bh, "OPTIONEN", isHoveredBtn(bx, b2y, bw, bh));
+        drawMenuButton(bx, b3y, bw, bh, "BEENDEN", isHoveredBtn(bx, b3y, bw, bh));
 
         if (highScore > 0) {
-            fill(255, 230, 80, 200);
+            // High-score badge
+            const float badgeY = b3y + bh + 36.f;
+            noStroke();
+            fill(40, 30, 5, 200);
+            rect(cx - 130.f, badgeY - 14.f, 260.f, 30.f, 15.f, 15.f);
+            noFill();
+            stroke(180, 150, 20, 160);
+            strokeWeight(1.f);
+            rect(cx - 130.f, badgeY - 14.f, 260.f, 30.f, 15.f, 15.f);
+
+            fill(255, 230, 80, 210);
+            textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
             textSize(13.f);
-            text("BEST  " + std::to_string(highScore), float(W) * 0.5f, float(H) * 0.5f + 125.f);
+            text("\xe2\x98\x85  BESTLEISTUNG  " + std::to_string(highScore) + "  \xe2\x98\x85", cx, badgeY);
         }
+
+        // Hint bar at bottom of card
+        const float hintY = cardY + cardH - 48.f;
+        noStroke();
+        fill(10, 18, 55, 180);
+        rect(cardX + 1.f, hintY, cardW - 2.f, 48.f, 0.f, 0.f, 0.f, 0.f, 18.f, 18.f, 18.f, 18.f);
+
+        fill(130, 150, 195, 140);
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textSize(10.5f);
+        text("x2 MultiBall  |  WD Wide  |  SL Slow  |  LS Laser  |  SH Shield  |  GB Ghost  |  F! Fast(SCHLECHT)", cx, hintY + 16.f);
+        text("BOMBE-Steine (orange \xc3\x97) explodieren ihre Nachbarn!", cx, hintY + 33.f);
+    }
+
+    void drawPauseMenu()
+    {
+        const float cx = float(W) * 0.5f;
+        const float pulse = 0.5f + 0.5f * std::sin(t * 2.5f);
+
+        // Dim the game behind
+        noStroke();
+        fill(0, 0, 0, 160);
+        rect(0.f, 0.f, float(W), float(H));
+
+        // Card
+        const float cardW = 440.f, cardH = 400.f;
+        const float cardX = cx - cardW * 0.5f;
+        const float cardY = float(H) * 0.5f - cardH * 0.5f;
+
+        blendMode(BlendMode::additive);
+        noStroke();
+        fill(20, 60, 160, int(55.f * pulse + 18.f));
+        rect(cardX - 16.f, cardY - 16.f, cardW + 32.f, cardH + 32.f, 28.f, 28.f);
+        blendMode(BlendMode::alpha);
+
+        noStroke();
+        fill(5, 10, 42, 225);
+        rect(cardX, cardY, cardW, cardH, 18.f, 18.f);
+
+        noFill();
+        stroke(40, 90, 210, 200);
+        strokeWeight(1.5f);
+        rect(cardX, cardY, cardW, cardH, 18.f, 18.f);
+
+        // Accent line
+        blendMode(BlendMode::additive);
+        noStroke();
+        fill(80, 150, 255, int(110.f * pulse + 35.f));
+        rect(cardX + 50.f, cardY - 2.f, cardW - 100.f, 4.f, 2.f, 2.f);
+        blendMode(BlendMode::alpha);
+
+        // "PAUSE" title
+        blendMode(BlendMode::additive);
+        noStroke();
+        fill(0, 80, 240, int(90.f * pulse));
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textSize(56.f);
+        text("PAUSE", cx + 4.f, cardY + 68.f + 4.f);
+        blendMode(BlendMode::alpha);
+
+        fill(85, 195, 255);
+        textSize(56.f);
+        text("PAUSE", cx, cardY + 68.f);
+
+        // Divider
+        noFill();
+        stroke(35, 70, 160, 130);
+        strokeWeight(1.f);
+        line(cardX + 50.f, cardY + 106.f, cardX + cardW - 50.f, cardY + 106.f);
+
+        // Buttons
+        const float bw = 300.f, bh = 52.f;
+        const float bx = cx - bw * 0.5f;
+        const float b1y = cardY + 126.f;
+        const float b2y = b1y + 72.f;
+        const float b3y = b2y + 72.f;
+        drawMenuButton(bx, b1y, bw, bh, "WEITERSPIELEN", isHoveredBtn(bx, b1y, bw, bh));
+        drawMenuButton(bx, b2y, bw, bh, "OPTIONEN", isHoveredBtn(bx, b2y, bw, bh));
+        drawMenuButton(bx, b3y, bw, bh, "HAUPTMEN\xc3\xbc", isHoveredBtn(bx, b3y, bw, bh));
+
+        // ESC hint
+        fill(120, 150, 200, int(140.f + 50.f * pulse));
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textSize(11.f);
+        text("ESC = Fortsetzen", cx, cardY + cardH - 20.f);
+    }
+
+    void drawOptionsScreen()
+    {
+        const float cx = float(W) * 0.5f;
+
+        // Dim overlay
+        noStroke();
+        fill(0, 0, 0, 115);
+        rect(0.f, 0.f, float(W), float(H));
+
+        // Title
+        fill(85, 195, 255);
+        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textSize(46.f);
+        text("OPTIONEN", cx, 115.f);
+
+        fill(100, 130, 185, 160);
+        textSize(13.f);
+        text("EFFEKTE", cx, 178.f);
+
+        // Toggle rows
+        struct Row
+        {
+            const char* label;
+            bool enabled;
+        };
+        Row rows[] = {
+            {"Partikel-Explosionen", fxParticles},
+            {"Bildschirm-Shake", fxShake},
+            {"Hintergrund-Shader", fxBgShader},
+            {"Sternfeld", fxStars},
+            {"Ball-Schweif", fxTrail},
+        };
+        const float rw = 420.f, rh = 46.f;
+        const float rx = cx - rw * 0.5f;
+        const float startY = 220.f;
+        for (int i = 0; i < 5; ++i) {
+            const float ry = startY + float(i) * 65.f;
+            drawToggleRow(rx, ry, rw, rh, rows[i].label, rows[i].enabled, isHoveredBtn(rx, ry, rw, rh));
+        }
+
+        // Back button
+        const float bw = 200.f, bh = 48.f;
+        const float bx = cx - bw * 0.5f;
+        drawMenuButton(bx, 575.f, bw, bh, "ZURÜCK", isHoveredBtn(bx, 575.f, bw, bh));
     }
 
     void drawEndScreen(const char* title, color_t titleCol)
     {
-        noStroke(); fill(0, 0, 0, 155);
+        noStroke();
+        fill(0, 0, 0, 155);
         rect(0.f, 0.f, float(W), float(H));
 
+        const float cx = float(W) * 0.5f;
         const float pulse = 0.5f + 0.5f * std::sin(t * 2.5f);
-        noStroke(); fill(titleCol);
+        noStroke();
+        fill(titleCol);
         textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
         textSize(58.f);
-        text(title, float(W) * 0.5f, float(H) * 0.5f - 90.f);
+        text(title, cx, float(H) * 0.5f - 90.f);
 
         fill(255, 255, 255, 220);
         textSize(22.f);
-        text("SCORE  " + std::to_string(score), float(W) * 0.5f, float(H) * 0.5f - 20.f);
+        text("SCORE  " + std::to_string(score), cx, float(H) * 0.5f - 20.f);
 
         if (score >= highScore && score > 0) {
             blendMode(BlendMode::additive);
             fill(255, 230, 50, int(180.f + 75.f * pulse));
             textSize(15.f);
-            text("NEW HIGH SCORE!", float(W) * 0.5f, float(H) * 0.5f + 12.f);
+            text("NEW HIGH SCORE!", cx, float(H) * 0.5f + 12.f);
             blendMode(BlendMode::alpha);
         } else if (highScore > 0) {
             fill(200, 200, 180, 175);
             textSize(13.f);
-            text("BEST  " + std::to_string(highScore), float(W) * 0.5f, float(H) * 0.5f + 12.f);
+            text("BEST  " + std::to_string(highScore), cx, float(H) * 0.5f + 12.f);
         }
 
-        fill(200, 220, 255, int(140.f + 115.f * pulse));
-        textSize(16.f);
-        text("Click to play again", float(W) * 0.5f, float(H) * 0.5f + 72.f);
+        // Two buttons: restart or back to main menu
+        const float bw = 240.f, bh = 52.f;
+        const float lx = cx - bw - 10.f;
+        const float rx = cx + 10.f;
+        drawMenuButton(lx, 530.f, bw, bh, "NOCHMAL", isHoveredBtn(lx, 530.f, bw, bh));
+        drawMenuButton(rx, 530.f, bw, bh, "HAUPTMEN\xc3\xbc", isHoveredBtn(rx, 530.f, bw, bh));
     }
 
     // ── Main draw ────────────────────────────────────────────────────────────
@@ -1137,29 +1555,35 @@ struct BreakoutSketch : p5::Sketch
         if (state == State::Playing || state == State::LevelClear)
             update(deltaTime);
 
-        drawBackground();
+        if (fxBgShader)
+            drawBackground();
+        else {
+            background(8, 10, 28);
+        }
 
         pushMatrix();
         translate(shakeX, shakeY);
 
-        drawStars();
+        if (fxStars) drawStars();
         drawBricks();
-        drawParticles();
+        if (fxParticles) drawParticles();
         drawPowerUps();
         drawLasers();
         drawPopups();
         drawShield();
 
-        if (state != State::Start) {
+        if (state == State::Playing || state == State::LevelClear || state == State::Paused || state == State::GameOver || state == State::Win) {
             for (auto& ball : balls) drawBall(ball);
             drawPaddle();
             drawHUD();
         }
 
-        if (state == State::Start)      drawStartScreen();
+        if (state == State::MainMenu) drawMainMenu();
+        if (state == State::Options) drawOptionsScreen();
+        if (state == State::Paused) drawPauseMenu();
         if (state == State::LevelClear) drawLevelClearOverlay();
-        if (state == State::GameOver)   drawEndScreen("GAME OVER", color(255,  70,  70));
-        if (state == State::Win)        drawEndScreen("YOU WIN!",  color(255, 255,  80));
+        if (state == State::GameOver) drawEndScreen("GAME OVER", color(255, 70, 70));
+        if (state == State::Win) drawEndScreen("YOU WIN!", color(255, 255, 80));
 
         popMatrix();
     }
@@ -1167,16 +1591,93 @@ struct BreakoutSketch : p5::Sketch
     // ── Events ───────────────────────────────────────────────────────────────
     void event(const WindowEvent& e) override
     {
+        // ── Escape key: toggle pause / close options ──────────────────────
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::escape) {
+            if (state == State::Playing || state == State::LevelClear) {
+                state = State::Paused;
+                return;
+            }
+            if (state == State::Paused) {
+                state = State::Playing;
+                return;
+            }
+            if (state == State::Options) {
+                state = prevState;
+                return;
+            }
+        }
+
         if (e.type != EventType::mousePress) return;
-        if (state == State::Start) {
-            state = State::Playing;
+        const float mx = float(e.mouseButton.x);
+        const float my = float(e.mouseButton.y);
+
+        if (state == State::MainMenu) {
+            const float cx = float(W) * 0.5f;
+            const float cardY = 70.f;
+            const float bw = 300.f, bh = 54.f;
+            const float bx = cx - bw * 0.5f;
+            const float b1y = cardY + 220.f;
+            const float b2y = b1y + 74.f;
+            const float b3y = b2y + 74.f;
+            if (mx >= bx && mx <= bx + bw) {
+                if (my >= b1y && my <= b1y + bh) {
+                    initGame();
+                    state = State::Playing;
+                } else if (my >= b2y && my <= b2y + bh) {
+                    prevState = State::MainMenu;
+                    state = State::Options;
+                } else if (my >= b3y && my <= b3y + bh) {
+                    quit();
+                }
+            }
+        } else if (state == State::Options) {
+            const float cx = float(W) * 0.5f;
+            const float rw = 420.f, rh = 46.f;
+            const float rx = cx - rw * 0.5f;
+            const float ys[] = {220.f, 285.f, 350.f, 415.f, 480.f};
+            bool* flags[] = {&fxParticles, &fxShake, &fxBgShader, &fxStars, &fxTrail};
+            for (int i = 0; i < 5; ++i) {
+                if (mx >= rx && mx <= rx + rw && my >= ys[i] && my <= ys[i] + rh)
+                    *flags[i] = !*flags[i];
+            }
+            const float bw = 200.f, bh = 48.f;
+            const float bx = cx - bw * 0.5f;
+            if (mx >= bx && mx <= bx + bw && my >= 575.f && my <= 575.f + bh)
+                state = prevState;
+        } else if (state == State::Paused) {
+            const float cx = float(W) * 0.5f;
+            const float cardH = 400.f;
+            const float cardY = float(H) * 0.5f - cardH * 0.5f;
+            const float bw = 300.f, bh = 52.f;
+            const float bx = cx - bw * 0.5f;
+            const float b1y = cardY + 126.f;
+            const float b2y = b1y + 72.f;
+            const float b3y = b2y + 72.f;
+            if (mx >= bx && mx <= bx + bw) {
+                if (my >= b1y && my <= b1y + bh) {
+                    state = State::Playing;
+                } else if (my >= b2y && my <= b2y + bh) {
+                    prevState = State::Paused;
+                    state = State::Options;
+                } else if (my >= b3y && my <= b3y + bh) {
+                    state = State::MainMenu;
+                }
+            }
         } else if (state == State::GameOver || state == State::Win) {
-            initGame();
-            state = State::Playing;
-        } else if (state == State::Playing
-                   && laserTimer > 0.f
-                   && laserCooldown <= 0.f)
-        {
+            const float cx = float(W) * 0.5f;
+            const float bw = 240.f, bh = 52.f;
+            const float lx = cx - bw - 10.f;
+            const float rx = cx + 10.f;
+            if (my >= 530.f && my <= 530.f + bh) {
+                if (mx >= lx && mx <= lx + bw) {
+                    initGame();
+                    state = State::Playing;
+                }
+                if (mx >= rx && mx <= rx + bw) {
+                    state = State::MainMenu;
+                }
+            }
+        } else if (state == State::Playing && laserTimer > 0.f && laserCooldown <= 0.f) {
             fireLasers();
         }
     }

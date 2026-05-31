@@ -8,6 +8,7 @@
 #include "tess.hpp"
 #include "dejavusans.hpp"
 #include "uniform_cache.hpp"
+#include "timing.hpp"
 #include <cassert>
 
 #include <iostream>
@@ -26,6 +27,38 @@ namespace p5
 
 namespace p5
 {
+    // Decodes the next UTF-8 codepoint from sv starting at byte index pos.
+    // Advances pos past all consumed bytes.
+    static char32_t utf8NextCodepoint(std::string_view sv, size_t& pos)
+    {
+        const auto b0 = static_cast<unsigned char>(sv[pos]);
+        if (b0 < 0x80) {
+            ++pos;
+            return static_cast<char32_t>(b0);
+        }
+        if ((b0 & 0xE0) == 0xC0 && pos + 1 < sv.size()) {
+            const auto b1 = static_cast<unsigned char>(sv[pos + 1]);
+            pos += 2;
+            return static_cast<char32_t>(((b0 & 0x1F) << 6) | (b1 & 0x3F));
+        }
+        if ((b0 & 0xF0) == 0xE0 && pos + 2 < sv.size()) {
+            const auto b1 = static_cast<unsigned char>(sv[pos + 1]);
+            const auto b2 = static_cast<unsigned char>(sv[pos + 2]);
+            pos += 3;
+            return static_cast<char32_t>(((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F));
+        }
+        if ((b0 & 0xF8) == 0xF0 && pos + 3 < sv.size()) {
+            const auto b1 = static_cast<unsigned char>(sv[pos + 1]);
+            const auto b2 = static_cast<unsigned char>(sv[pos + 2]);
+            const auto b3 = static_cast<unsigned char>(sv[pos + 3]);
+            pos += 4;
+            return static_cast<char32_t>(((b0 & 0x07) << 18) | ((b1 & 0x3F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F));
+        }
+        // Invalid or truncated sequence: skip byte
+        ++pos;
+        return U'\uFFFD';
+    }
+
     color_t color(int grey, int alpha) { return color(grey, grey, grey, alpha); }
     color_t color(int red, int green, int blue, int alpha) { return (red << 24) | (green << 16) | (blue << 8) | alpha; } // TODO(Felix): Clamp values to 0 .. 255
     color_t lerp(color_t a, color_t b, float t)
@@ -419,13 +452,15 @@ namespace p5
         float descender = 0.0f;
         uint32_t lineCount = 1;
 
-        for (size_t i = 0; i < text.length(); ++i) {
-            const char32_t codepoint = static_cast<char32_t>(text[i]);
+        char32_t prevCodepoint = 0;
+        for (size_t i = 0; i < text.length();) {
+            const char32_t codepoint = utf8NextCodepoint(text, i);
 
             if (codepoint == U'\n') {
                 maxWidth = std::max(maxWidth, lineWidth);
                 lineWidth = 0.0f;
                 lineCount++;
+                prevCodepoint = 0;
                 continue;
             }
 
@@ -433,14 +468,12 @@ namespace p5
                 if (const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(textSize))) {
                     lineWidth += spaceGlyph->advance.x * scale;
                 }
-
+                prevCodepoint = U' ';
                 continue;
             }
 
-            const bool hasPrevious = i > 0 && text[i - 1] != '\n';
-            if (hasPrevious) {
-                const char32_t previousCodepoint = static_cast<char32_t>(text[i - 1]);
-                lineWidth += font->getKerning(previousCodepoint, codepoint, static_cast<int>(textSize)) * scale;
+            if (prevCodepoint != 0) {
+                lineWidth += font->getKerning(prevCodepoint, codepoint, static_cast<int>(textSize)) * scale;
             }
 
             if (const Glyph* glyph = font->getGlyph(codepoint, static_cast<int>(textSize))) {
@@ -448,12 +481,10 @@ namespace p5
                 if (lineCount == 1) {
                     ascender = std::max(ascender, glyph->bearing.y * scale);
                 }
-
-                // descender is the maximum descent BELOW the baseline (positive value).
-                // size.y - bearing.y is the distance from baseline to bottom of glyph;
-                // positive means the glyph extends below the baseline.
                 descender = std::max(descender, (glyph->size.y - glyph->bearing.y) * scale);
             }
+
+            prevCodepoint = codepoint;
         }
 
         maxWidth = std::max(maxWidth, lineWidth);
@@ -503,35 +534,49 @@ namespace p5
         bottomLeftX = std::min(bottomLeftX, maxRx);
         bottomLeftY = std::min(bottomLeftY, maxRy);
 
+        static constexpr float HALF_PI = std::numbers::pi_v<float> * 0.5f;
+
         struct Corner
         {
-            float cx, cy;
-            float rx, ry;
-            float startAngle;
+            float cx, cy, rx, ry, startAngle;
+        };
+        const Corner corners[4] = {
+            {left + width - bottomRightX, top + height - bottomRightY, bottomRightX, bottomRightY, 0.0f}, // unten rechts
+            {left + bottomLeftX, top + height - bottomLeftY, bottomLeftX, bottomLeftY, HALF_PI},          // unten links
+            {left + topLeftX, top + topLeftY, topLeftX, topLeftY, HALF_PI * 2},                           // oben links
+            {left + width - topRightX, top + topRightY, topRightX, topRightY, HALF_PI * 3},               // oben rechts
         };
 
-        Corner corners[4] = {
-            {left + width - bottomRightX, top + height - bottomRightY, bottomRightX, bottomRightY, 0.0f},                 // unten rechts
-            {left + bottomLeftX, top + height - bottomLeftY, bottomLeftX, bottomLeftY, std::numbers::pi_v<float> * 0.5f}, // unten links
-            {left + topLeftX, top + topLeftY, topLeftX, topLeftY, std::numbers::pi_v<float>},                             // oben links
-            {left + width - topRightX, top + topRightY, topRightX, topRightY, std::numbers::pi_v<float> * 1.5f},          // oben rechts
-        };
-
-        constexpr size_t cornerSegments = 8;
-
-        beginShape();
-
-        for (const auto& corner : corners) {
-            for (size_t i = 0; i <= cornerSegments; ++i) {
-                float t = static_cast<float>(i) / static_cast<float>(cornerSegments);
-                float angle = corner.startAngle + t * std::numbers::pi_v<float> * 0.5f;
-                float vx = corner.cx + std::cos(angle) * corner.rx;
-                float vy = corner.cy + std::sin(angle) * corner.ry;
-                vertex(vx, vy);
+        // Emits all arc vertices for all 4 corners.
+        // Each arc uses i < segs (open end) so consecutive corners share no duplicate junction vertex.
+        // Zero-radius corners clamp to 1 segment, which emits exactly the corner point.
+        auto emitRim = [&] {
+            for (const auto& c : corners) {
+                const size_t segs = std::max(size_t(1), computeCircleSegmentCount(HALF_PI, std::max(c.rx, c.ry)));
+                for (size_t i = 0; i < segs; ++i) {
+                    const float angle = c.startAngle + HALF_PI * (float(i) / float(segs));
+                    vertex(c.cx + std::cos(angle) * c.rx, c.cy + std::sin(angle) * c.ry);
+                }
             }
+        };
+
+        const RenderState& state = peekState();
+
+        // Fill: triangleFan from the centre – rounded rect is always convex, so no libtess2 needed.
+        if (!state.isFillDisabled) {
+            beginShape();
+            vertex(left + width * 0.5f, top + height * 0.5f); // fan centre
+            emitRim();
+            vertex(corners[0].cx + corners[0].rx, corners[0].cy); // re-emit first rim vertex to close the fan
+            endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
         }
 
-        endShape(ShapeType::polygon, true);
+        // Stroke: lineLoop around the rim only (no internal fan edges).
+        if (!state.isStrokeDisabled) {
+            beginShape();
+            emitRim();
+            endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
+        }
     }
 
     void square(float left, float top, float size)
@@ -749,13 +794,15 @@ namespace p5
         float px = lineStartX;
         bool isFirstCharOnLine = true; // tracks whether we need to apply bearing correction for this line
 
-        for (size_t i = 0; i < text.length(); ++i) {
-            const char32_t ch = text[i];
+        char32_t prevCh = 0;
+        for (size_t i = 0; i < text.length();) {
+            const char32_t ch = utf8NextCodepoint(text, i);
 
             if (ch == U'\n') {
                 px = lineStartX; // reset to alignment-adjusted start, not raw x
                 py += font->getLineHeight(state.textSize);
                 isFirstCharOnLine = true;
+                prevCh = 0;
                 continue;
             }
 
@@ -764,11 +811,13 @@ namespace p5
                     px += spaceGlyph->advance.x;
                     py += spaceGlyph->advance.y;
                 }
+                prevCh = U' ';
                 continue;
             }
 
             const Glyph* glyph = font->getGlyph(ch, static_cast<int>(state.textSize));
             if (glyph == nullptr) {
+                prevCh = ch;
                 continue;
             }
 
@@ -777,8 +826,7 @@ namespace p5
                 px -= glyph->bearing.x;
                 isFirstCharOnLine = false;
             } else {
-                const char32_t previousCh = text[i - 1];
-                px += font->getKerning(previousCh, ch, static_cast<int>(state.textSize));
+                px += font->getKerning(prevCh, ch, static_cast<int>(state.textSize));
             }
 
             const float left = px + glyph->bearing.x;
@@ -825,6 +873,7 @@ namespace p5
 
             px += glyph->advance.x;
             py += glyph->advance.y;
+            prevCh = ch;
         }
     }
 } // namespace p5
@@ -842,6 +891,8 @@ namespace p5
     inline static float s_targetFrameTime = 0.0f;
     inline static auto s_appStartTime = std::chrono::steady_clock::now();
     inline static bool s_isAppPaused = false;
+    inline static bool s_isCloseRequested = false;
+    inline static int s_exitCode = 0;
 
     void setWindowSize(int w, int h)
     {
@@ -858,13 +909,21 @@ namespace p5
     void loop() { s_isAppPaused = false; }
     void noLoop() { s_isAppPaused = true; }
     bool isLooping() { return !s_isAppPaused; }
+    void quit() { s_isCloseRequested = true; }
+
+    void quit(int exitCode)
+    {
+        p5::exitCode(exitCode);
+        quit();
+    }
+
+    void exitCode(int code) { s_exitCode = code; }
+
     float millis()
     {
-        return std::chrono::duration<float, std::milli>(
-                   std::chrono::steady_clock::now() - s_appStartTime
-        )
-            .count();
+        return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
     }
+
 } // namespace p5
 
 int main()
@@ -874,6 +933,9 @@ int main()
     static std::unique_ptr sketch = createSketch();
 
     appWindow = window_create(800, 600, "p5", [&](const WindowEvent& e) {
+        if (e.type == EventType::close) {
+            quit();
+        }
         if (e.type == EventType::mouseMove) {
             mouseX = e.mouseMove.x;
             mouseY = e.mouseMove.y;
@@ -912,16 +974,15 @@ int main()
 
     window_show(appWindow);
 
-    auto lastFrameTime = std::chrono::steady_clock::now();
+    FpsCounter fpsCounter;
+    auto lastFrameTime = Clock::now();
 
-    while (not window_should_close(appWindow)) {
-        auto frameStart = std::chrono::steady_clock::now();
+    while (not s_isCloseRequested) {
+        const TimePoint frameStart = Clock::now();
         deltaTime = std::chrono::duration<float>(frameStart - lastFrameTime).count();
+        // Cap deltaTime so frame drops don't cause large physics jumps
+        deltaTime = std::min(deltaTime, 1.0f / 20.0f);
         lastFrameTime = frameStart;
-
-        // Exponential smoothing for displayed FPS (avoid divide-by-zero on first frame)
-        if (deltaTime > 0.0f)
-            fps = fps * 0.9f + (1.0f / deltaTime) * 0.1f;
 
         window_poll_events(appWindow);
 
@@ -934,16 +995,21 @@ int main()
 
             window_swap_buffers(appWindow);
             frameCount++;
+
+            fpsCounter.tick();
+            fps = fpsCounter.fps();
         }
 
-        // FPS limiter: sleep remainder of target frame duration
-        if (s_targetFrameTime > 0.0f)
-            std::this_thread::sleep_until(frameStart + std::chrono::duration<float>(s_targetFrameTime));
+        // FPS limiter: precise sleep for remainder of target frame duration
+        if (s_targetFrameTime > 0.0f) {
+            const auto targetDuration = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<float>(s_targetFrameTime));
+            precise_sleep_until(frameStart + targetDuration);
+        }
     }
 
     sketch->destroy();
     sketch.reset();
     window_destroy(appWindow);
 
-    return 0;
+    return s_exitCode;
 }
