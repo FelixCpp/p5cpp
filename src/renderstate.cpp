@@ -3,9 +3,9 @@
 namespace p5
 {
     RenderState::RenderState()
-        : fillColor(color(255, 255, 255)),
-          strokeColor(color(255, 255, 255)),
-          tintColor(color(255, 255, 255)),
+        : fillColor(rgba(255, 255, 255)),
+          strokeColor(rgba(255, 255, 255)),
+          tintColor(rgba(255, 255, 255)),
           strokeWeight(1.0f),
           strokeCap(StrokeCap::round),
           strokeJoin(StrokeJoin::round),

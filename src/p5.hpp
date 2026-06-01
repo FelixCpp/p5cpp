@@ -45,12 +45,40 @@ namespace p5
     template <typename T> inline constexpr value2<T> operator*(value2<T> lhs, T rhs) { return {lhs.x * rhs, lhs.y * rhs}; }
     template <typename T> inline constexpr value2<T> operator/(value2<T> lhs, T rhs) { return {lhs.x / rhs, lhs.y / rhs}; }
 
+    template <typename T> inline constexpr value2<T> operator+(T lhs, value2<T> rhs) { return {lhs + rhs.x, lhs + rhs.y}; }
+    template <typename T> inline constexpr value2<T> operator-(T lhs, value2<T> rhs) { return {lhs - rhs.x, lhs - rhs.y}; }
+    template <typename T> inline constexpr value2<T> operator*(T lhs, value2<T> rhs) { return {lhs * rhs.x, lhs * rhs.y}; }
+    template <typename T> inline constexpr value2<T> operator/(T lhs, value2<T> rhs) { return {lhs / rhs.x, lhs / rhs.y}; }
+
+    // clang-format off
+    template <typename T> inline constexpr value2<T>& operator+=(value2<T>& lhs, value2<T> rhs) { lhs.x += rhs.x; lhs.y += rhs.y; return lhs; }
+    template <typename T> inline constexpr value2<T>& operator-=(value2<T>& lhs, value2<T> rhs) { lhs.x -= rhs.x; lhs.y -= rhs.y; return lhs; }
+    template <typename T> inline constexpr value2<T>& operator*=(value2<T>& lhs, value2<T> rhs) { lhs.x *= rhs.x; lhs.y *= rhs.y; return lhs; }
+    template <typename T> inline constexpr value2<T>& operator/=(value2<T>& lhs, value2<T> rhs) { lhs.x /= rhs.x; lhs.y /= rhs.y; return lhs; }
+
+    template <typename T> inline constexpr value2<T>& operator+=(value2<T>& lhs, T rhs) { lhs.x += rhs; lhs.y += rhs; return lhs; }
+    template <typename T> inline constexpr value2<T>& operator-=(value2<T>& lhs, T rhs) { lhs.x -= rhs; lhs.y -= rhs; return lhs; }
+    template <typename T> inline constexpr value2<T>& operator*=(value2<T>& lhs, T rhs) { lhs.x *= rhs; lhs.y *= rhs; return lhs; }
+    template <typename T> inline constexpr value2<T>& operator/=(value2<T>& lhs, T rhs) { lhs.x /= rhs; lhs.y /= rhs; return lhs; }
+    // clang-format on
+
     template <typename T> inline constexpr value2<T> perp(value2<T> value) { return {-value.y, value.x}; }
     template <typename T> inline constexpr T dot(value2<T> a, value2<T> b) { return a.x * b.x + a.y * b.y; }
     template <typename T> inline constexpr T cross(value2<T> a, value2<T> b) { return a.x * b.y - a.y * b.x; }
     template <typename T> inline constexpr value2<T> lerp(value2<T> a, value2<T> b, T t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
     template <typename T> inline constexpr T lengthSquared(value2<T> value) { return value.x * value.x + value.y * value.y; }
     template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
+    template <typename T> inline value2<T> limit(value2<T> value, T maxLength)
+    {
+        const T lenSq = lengthSquared(value);
+        if (lenSq > maxLength * maxLength) {
+            const T len = length(value);
+            const T scale = maxLength / len;
+            return value * scale;
+        }
+
+        return value;
+    }
     template <typename T> inline value2<T> normalized(value2<T> value)
     {
         const double len = static_cast<double>(length(value));
@@ -219,7 +247,7 @@ namespace p5
         virtual ~Sketch() = default;
         virtual void setup() = 0;
         virtual void draw() = 0;
-        virtual void destroy() = 0;
+        virtual void destroy() {}
         virtual void event(const WindowEvent&) {}
     };
 
@@ -379,9 +407,12 @@ namespace p5
     };
 
     typedef uint32_t color_t;
-    color_t color(int grey, int alpha = 255);
-    color_t color(int red, int green, int blue, int alpha = 255);
+    color_t rgba(int grey, int alpha = 255);
+    color_t rgba(int red, int green, int blue, int alpha = 255);
+    color_t lighten(color_t color, float amount);
+    color_t darken(color_t color, float amount);
     color_t lerp(color_t a, color_t b, float t);
+    color_t withAlpha(color_t color, int alpha);
 
     int red(color_t color);
     int green(color_t color);

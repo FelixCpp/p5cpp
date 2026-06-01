@@ -59,16 +59,46 @@ namespace p5
         return U'\uFFFD';
     }
 
-    color_t color(int grey, int alpha) { return color(grey, grey, grey, alpha); }
-    color_t color(int red, int green, int blue, int alpha) { return (red << 24) | (green << 16) | (blue << 8) | alpha; } // TODO(Felix): Clamp values to 0 .. 255
+    color_t rgba(int grey, int alpha) { return rgba(grey, grey, grey, alpha); }
+    color_t rgba(int red, int green, int blue, int alpha)
+    {
+        const int r = std::clamp(red, 0, 255);
+        const int g = std::clamp(green, 0, 255);
+        const int b = std::clamp(blue, 0, 255);
+        const int a = std::clamp(alpha, 0, 255);
+        return (r << 24) | (g << 16) | (b << 8) | a;
+    }
+    color_t lighten(color_t color, float amount)
+    {
+        return rgba(
+            std::min(255, static_cast<int>(red(color) + amount * 255)),
+            std::min(255, static_cast<int>(green(color) + amount * 255)),
+            std::min(255, static_cast<int>(blue(color) + amount * 255)),
+            alpha(color)
+        );
+    }
+    color_t darken(color_t color, float amount)
+    {
+        return rgba(
+            std::max(0, static_cast<int>(red(color) - amount * 255)),
+            std::max(0, static_cast<int>(green(color) - amount * 255)),
+            std::max(0, static_cast<int>(blue(color) - amount * 255)),
+            alpha(color)
+        );
+    }
     color_t lerp(color_t a, color_t b, float t)
     {
-        return color(
+        return rgba(
             static_cast<int>(red(a) + t * (red(b) - red(a))),
             static_cast<int>(green(a) + t * (green(b) - green(a))),
             static_cast<int>(blue(a) + t * (blue(b) - blue(a))),
             static_cast<int>(alpha(a) + t * (alpha(b) - alpha(a)))
         );
+    }
+    color_t withAlpha(color_t color, int alpha)
+    {
+        const int a = std::clamp(alpha, 0, 255);
+        return (color & 0xFFFFFF00) | a;
     }
 
     int red(color_t color) { return (color & 0xFF000000) >> 24; }
@@ -210,8 +240,8 @@ namespace p5
     void scale(float x, float y) { applyMatrix(scaling(x, y)); }
     void rotate(float angle) { applyMatrix(rotation(angle)); }
 
-    void background(int grey, int alpha) { background(color(grey, alpha)); }
-    void background(int red, int green, int blue, int alpha) { background(color(red, green, blue, alpha)); }
+    void background(int grey, int alpha) { background(rgba(grey, alpha)); }
+    void background(int red, int green, int blue, int alpha) { background(rgba(red, green, blue, alpha)); }
     void background(color_t color)
     {
         RenderState& state = peekState();
@@ -261,8 +291,8 @@ namespace p5
     }
 
     void noFill() { peekState().isFillDisabled = true; }
-    void fill(int grey, int alpha) { fill(color(grey, grey, grey, alpha)); }
-    void fill(int red, int green, int blue, int alpha) { fill(color(red, green, blue, alpha)); }
+    void fill(int grey, int alpha) { fill(rgba(grey, grey, grey, alpha)); }
+    void fill(int red, int green, int blue, int alpha) { fill(rgba(red, green, blue, alpha)); }
     void fill(color_t color)
     {
         RenderState& state = peekState();
@@ -271,8 +301,8 @@ namespace p5
     }
 
     void noStroke() { peekState().isStrokeDisabled = true; }
-    void stroke(int grey, int alpha) { stroke(color(grey, grey, grey, alpha)); }
-    void stroke(int red, int green, int blue, int alpha) { stroke(color(red, green, blue, alpha)); }
+    void stroke(int grey, int alpha) { stroke(rgba(grey, grey, grey, alpha)); }
+    void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
     void stroke(color_t color)
     {
         RenderState& state = peekState();
@@ -715,10 +745,10 @@ namespace p5
         endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
-    void tint(int grey, int alpha) { tint(color(grey, grey, grey, alpha)); }
-    void tint(int red, int green, int blue, int alpha) { tint(color(red, green, blue, alpha)); }
+    void tint(int grey, int alpha) { tint(rgba(grey, grey, grey, alpha)); }
+    void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
     void tint(color_t color) { peekState().tintColor = color; }
-    void noTint() { peekState().tintColor = color(255, 255, 255); }
+    void noTint() { peekState().tintColor = rgba(255, 255, 255); }
     void image(uint32_t textureId, float left, float top, float width, float height)
     {
         RenderState& state = peekState();
