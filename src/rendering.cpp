@@ -126,8 +126,8 @@ namespace p5
                 glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, orthoProjection.m.data());
             }
 
-            // glDrawElements(GL_TRIANGLES, drawCall.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.drawBufferIndexStart * sizeof(uint32_t)));
-            glDrawElements(GL_LINES, drawCall.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.drawBufferIndexStart * sizeof(uint32_t)));
+            glDrawElements(GL_TRIANGLES, drawCall.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.drawBufferIndexStart * sizeof(uint32_t)));
+            // glDrawElements(GL_LINES, drawCall.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.drawBufferIndexStart * sizeof(uint32_t)));
         }
     }
 

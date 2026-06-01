@@ -92,3 +92,27 @@ add_executable(
   src/window.cpp)
 
 target_link_libraries(thetower PRIVATE glfw glad freetype libtess2)
+
+add_executable(
+  gravitas
+  src/canvas.cpp
+  src/drawscope.cpp
+  src/font.cpp
+  src/framebuffer.cpp
+  src/linepath.cpp
+  src/gravitas.cpp
+  src/math.cpp
+  src/matrixstack.cpp
+  src/noise.cpp
+  src/p5.cpp
+  src/rendering.cpp
+  src/renderstate.cpp
+  src/shader.cpp
+  src/stroker.cpp
+  src/tess.cpp
+  src/texture.cpp
+  src/timing.cpp
+  src/uniform_cache.cpp
+  src/window.cpp)
+
+target_link_libraries(gravitas PRIVATE glfw glad freetype libtess2)
