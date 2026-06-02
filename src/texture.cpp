@@ -22,6 +22,13 @@ namespace p5
             return std::unique_ptr<OpenGLTexture>(new OpenGLTexture(textureId, {width, height}));
         }
 
+        void update(std::span<const uint8_t> imageData) override
+        {
+            glBindTexture(GL_TEXTURE_2D, m_textureId);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_size.x, m_size.y, GL_RGBA, GL_UNSIGNED_BYTE, imageData.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
         uint32_t getRendererId() const override
         {
             return m_textureId;

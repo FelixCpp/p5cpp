@@ -79,18 +79,22 @@ namespace p5
 
         return value;
     }
-    template <typename T> inline value2<T> normalized(value2<T> value)
+    template <typename T> inline value2<T> fixedLength(value2<T> value, T newLength)
     {
         const double len = static_cast<double>(length(value));
         if (len == 0.0) {
             return value2 {static_cast<T>(0), static_cast<T>(0)};
         }
 
-        const double inv = 1.0 / len;
-        const double x = static_cast<double>(value.x) * inv;
-        const double y = static_cast<double>(value.y) * inv;
+        const double scale = static_cast<double>(newLength) / len;
+        const double x = static_cast<double>(value.x) * scale;
+        const double y = static_cast<double>(value.y) * scale;
 
         return {static_cast<T>(x), static_cast<T>(y)};
+    }
+    template <typename T> inline value2<T> normalized(value2<T> value)
+    {
+        return fixedLength(value, static_cast<T>(1));
     }
 
     template <typename T>
@@ -402,6 +406,7 @@ namespace p5
     struct Texture
     {
         virtual ~Texture() = default;
+        virtual void update(std::span<const uint8_t> imageData) = 0;
         virtual uint32_t getRendererId() const = 0;
         virtual uint2 getSize() const = 0;
     };
