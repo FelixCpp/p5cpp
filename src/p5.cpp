@@ -163,6 +163,10 @@ namespace p5
 
     inline static AppWindow* appWindow = nullptr;
 
+    inline static std::vector<color_t> pixelScratch;              // reusable GL-order scratch buffer
+    inline static std::unique_ptr<Framebuffer> pixelUploadCanvas; // scratch canvas for the window-FBO blit path
+    inline static uint2 pixelUploadSize = {0, 0};                 // dimensions of pixelUploadCanvas
+
     inline RenderStateStack& get_render_state_stack() { return canvas_stack_peek(canvasStack).renderStates; }
     inline RenderState& peekState() { return render_state_stack_peek(get_render_state_stack()); }
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
@@ -952,6 +956,70 @@ namespace p5
     float millis()
     {
         return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
+    }
+
+    Pixels loadPixels()
+    {
+        Canvas& canvas = canvas_stack_peek(canvasStack);
+        renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+
+        const auto [w, h] = canvas.framebuffer->getViewportSize();
+        const size_t count = static_cast<size_t>(w) * h;
+
+        pixelScratch.resize(count);
+
+        GLint prevReadFBO = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.framebuffer->getRendererId());
+        glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
+
+        std::vector<color_t> buffer(count);
+        for (uint32_t y = 0; y < h; ++y)
+            std::copy_n(pixelScratch.data() + (h - 1 - y) * w, w, buffer.data() + y * w);
+
+        return Pixels {static_cast<int>(w), static_cast<int>(h), std::move(buffer)};
+    }
+
+    void updatePixels(Pixels& px)
+    {
+        if (px.size() == 0)
+            return;
+
+        Canvas& canvas = canvas_stack_peek(canvasStack);
+        renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+
+        const auto w = static_cast<uint32_t>(px.width);
+        const auto h = static_cast<uint32_t>(px.height);
+
+        // Flip rows back to OpenGL bottom-up order
+        pixelScratch.resize(static_cast<size_t>(w) * h);
+        for (uint32_t y = 0; y < h; ++y)
+            std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
+
+        if (Texture* colorTexture = canvas.framebuffer->getColorTexture()) {
+            // Offscreen canvas: update the attached texture directly
+            colorTexture->update(std::span<const color_t>(pixelScratch));
+        } else {
+            // Window canvas: upload via a scratch offscreen canvas, then blit to FBO 0
+            if (!pixelUploadCanvas || pixelUploadSize.x != w || pixelUploadSize.y != h) {
+                pixelUploadCanvas = createCanvas(static_cast<int>(w), static_cast<int>(h));
+                pixelUploadSize = {w, h};
+            }
+
+            pixelUploadCanvas->getColorTexture()->update(std::span<const color_t>(pixelScratch));
+
+            GLint prevReadFBO = 0, prevDrawFBO = 0;
+            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, pixelUploadCanvas->getRendererId());
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, canvas.framebuffer->getRendererId());
+            glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prevDrawFBO));
+        }
     }
 
 } // namespace p5

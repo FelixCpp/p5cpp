@@ -134,8 +134,15 @@ namespace p5
     public:
         explicit DefaultWindowFramebuffer(AppWindow* win) : m_win(win) {}
 
-        uint32_t getTextureId() const override { return 0; }
-        uint32_t getRendererId() const override { return 0; } // FBO 0 = the window
+        uint32_t getTextureId() const override
+        {
+            return 0;
+        }
+
+        uint32_t getRendererId() const override
+        {
+            return 0;
+        }
 
         uint2 getSize() const override
         {
@@ -145,6 +152,11 @@ namespace p5
         uint2 getViewportSize() const override
         {
             return {static_cast<uint32_t>(m_win->physicalWidth), static_cast<uint32_t>(m_win->physicalHeight)};
+        }
+
+        Texture* getColorTexture() override
+        {
+            return nullptr;
         }
 
     private:

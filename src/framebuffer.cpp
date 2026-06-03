@@ -10,15 +10,11 @@ namespace p5
     public:
         static std::unique_ptr<OpenGLFramebuffer> create(uint32_t width, uint32_t height)
         {
-            GLuint textureId = 0;
-            glGenTextures(1, &textureId);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            auto colorTexture = createTexture(width, height);
+            if (!colorTexture) {
+                error("Failed to create color texture for framebuffer");
+                return nullptr;
+            }
 
             GLuint rboId = 0;
             glGenRenderbuffers(1, &rboId);
@@ -29,7 +25,7 @@ namespace p5
             GLuint fboId = 0;
             glGenFramebuffers(1, &fboId);
             glBindFramebuffer(GL_FRAMEBUFFER, fboId);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture->getRendererId(), 0);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboId);
 
             const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
@@ -37,19 +33,23 @@ namespace p5
 
             if (status != GL_FRAMEBUFFER_COMPLETE) {
                 error("Failed to create framebuffer: " + std::to_string(status));
-
-                glDeleteTextures(1, &textureId);
                 glDeleteRenderbuffers(1, &rboId);
                 glDeleteFramebuffers(1, &fboId);
                 return nullptr;
             }
 
-            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(fboId, rboId, textureId, {width, height}));
+            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(fboId, rboId, std::move(colorTexture), {width, height}));
+        }
+
+        ~OpenGLFramebuffer() override
+        {
+            glDeleteFramebuffers(1, &m_fbo);
+            glDeleteRenderbuffers(1, &m_rbo);
         }
 
         uint32_t getTextureId() const override
         {
-            return m_texture;
+            return m_colorTexture->getRendererId();
         }
 
         uint32_t getRendererId() const override
@@ -62,15 +62,25 @@ namespace p5
             return m_size;
         }
 
+        uint2 getViewportSize() const override
+        {
+            return m_size;
+        }
+
+        Texture* getColorTexture() override
+        {
+            return m_colorTexture.get();
+        }
+
     private:
-        explicit OpenGLFramebuffer(GLuint fbo, GLuint rbo, GLuint texture, uint2 size)
-            : m_fbo(fbo), m_rbo(rbo), m_texture(texture), m_size(size)
+        explicit OpenGLFramebuffer(GLuint fbo, GLuint rbo, std::unique_ptr<Texture> colorTexture, uint2 size)
+            : m_fbo(fbo), m_rbo(rbo), m_colorTexture(std::move(colorTexture)), m_size(size)
         {
         }
 
         GLuint m_fbo;
         GLuint m_rbo;
-        GLuint m_texture;
+        std::unique_ptr<Texture> m_colorTexture;
 
         uint2 m_size;
     };

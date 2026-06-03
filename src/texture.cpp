@@ -22,10 +22,22 @@ namespace p5
             return std::unique_ptr<OpenGLTexture>(new OpenGLTexture(textureId, {width, height}));
         }
 
+        ~OpenGLTexture() override
+        {
+            glDeleteTextures(1, &m_textureId);
+        }
+
         void update(std::span<const uint8_t> imageData) override
         {
             glBindTexture(GL_TEXTURE_2D, m_textureId);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_size.x, m_size.y, GL_RGBA, GL_UNSIGNED_BYTE, imageData.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
+        void update(std::span<const color_t> pixelData) override
+        {
+            glBindTexture(GL_TEXTURE_2D, m_textureId);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_size.x, m_size.y, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelData.data());
             glBindTexture(GL_TEXTURE_2D, 0);
         }
 
@@ -60,5 +72,10 @@ namespace p5
     std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData)
     {
         return OpenGLTexture::create(width, height, imageData);
+    }
+
+    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height)
+    {
+        return OpenGLTexture::create(width, height, {});
     }
 } // namespace p5

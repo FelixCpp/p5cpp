@@ -7,6 +7,7 @@
 #include <span>
 #include <filesystem>
 #include <array>
+#include <vector>
 
 namespace p5
 {
@@ -360,19 +361,29 @@ namespace p5
         uint32_t lineCount;
     };
 
+    typedef uint32_t color_t;
+
+    struct Texture
+    {
+        virtual ~Texture() = default;
+        virtual void update(std::span<const uint8_t> imageData) = 0;
+        virtual void update(std::span<const color_t> pixelData) = 0;
+        virtual uint32_t getRendererId() const = 0;
+        virtual uint2 getSize() const = 0;
+    };
+
     struct Framebuffer
     {
         virtual ~Framebuffer() = default;
         virtual uint32_t getTextureId() const = 0;
         virtual uint32_t getRendererId() const = 0;
-        // Logical size — used for the projection matrix and user drawing coordinates.
         virtual uint2 getSize() const = 0;
-        // Physical pixel size — used for glViewport. Differs from getSize() on HiDPI/Retina displays.
-        // Default implementation assumes no DPI scaling (offscreen canvases).
-        virtual uint2 getViewportSize() const { return getSize(); }
+        virtual uint2 getViewportSize() const = 0;
+        virtual Texture* getColorTexture() = 0;
     };
 
     std::unique_ptr<Framebuffer> createCanvas(int width, int height);
+    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height);
 
     struct UniformVariable
     {
@@ -403,15 +414,6 @@ namespace p5
         virtual uint32_t getRendererId() const = 0;
     };
 
-    struct Texture
-    {
-        virtual ~Texture() = default;
-        virtual void update(std::span<const uint8_t> imageData) = 0;
-        virtual uint32_t getRendererId() const = 0;
-        virtual uint2 getSize() const = 0;
-    };
-
-    typedef uint32_t color_t;
     color_t rgba(int grey, int alpha = 255);
     color_t rgba(int red, int green, int blue, int alpha = 255);
     color_t lighten(color_t color, float amount);
@@ -530,4 +532,38 @@ namespace p5
     void quit(int exitCode);
     void exitCode(int code);
     float millis(); // Milliseconds since the application started
+
+    // ── Pixel manipulation ────────────────────────────────────────────────
+    // Call loadPixels() to capture the current canvas into a Pixels object.
+    // Modify pixel values freely via operator[] (index = y * pixels.width + x,
+    // with (0,0) at top-left), then pass the object to updatePixels() to commit.
+    struct Pixels
+    {
+        int width  = 0;
+        int height = 0;
+
+        color_t&       operator[](std::ptrdiff_t index)       { return m_data[static_cast<size_t>(index)]; }
+        const color_t& operator[](std::ptrdiff_t index) const { return m_data[static_cast<size_t>(index)]; }
+
+        color_t*       data()        { return m_data.data(); }
+        const color_t* data()  const { return m_data.data(); }
+        std::size_t    size()  const { return m_data.size(); }
+
+        color_t*       begin()       { return m_data.data(); }
+        color_t*       end()         { return m_data.data() + m_data.size(); }
+        const color_t* begin() const { return m_data.data(); }
+        const color_t* end()   const { return m_data.data() + m_data.size(); }
+
+    private:
+        explicit Pixels(int w, int h, std::vector<color_t> data)
+            : width(w), height(h), m_data(std::move(data))
+        {}
+
+        std::vector<color_t> m_data;
+
+        friend Pixels loadPixels();
+    };
+
+    Pixels loadPixels();
+    void   updatePixels(Pixels& pixels);
 } // namespace p5
