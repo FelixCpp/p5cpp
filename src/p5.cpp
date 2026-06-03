@@ -759,10 +759,10 @@ namespace p5
             transformPoint(peekMatrix(), {left, top + height}),
         };
         const std::array<float2, 4> texcoords = {
-            float2 {0.0f, 1.0f},
-            float2 {1.0f, 1.0f},
+            float2 {0.0f, 0.0f},
             float2 {1.0f, 0.0f},
-            float2 {0.0f, 0.0f}
+            float2 {1.0f, 1.0f},
+            float2 {0.0f, 1.0f}
         };
         const std::array<color_t, 4> colors = {
             state.tintColor,
