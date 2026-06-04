@@ -33,5 +33,7 @@ namespace p5
     void window_set_resizable(AppWindow* win, bool resizable);
     int  window_logical_width(const AppWindow* win);
     int  window_logical_height(const AppWindow* win);
+    int  window_physical_width(const AppWindow* win);
+    int  window_physical_height(const AppWindow* win);
 
 } // namespace p5

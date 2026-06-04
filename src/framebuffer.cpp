@@ -8,9 +8,9 @@ namespace p5
     class OpenGLFramebuffer : public Framebuffer
     {
     public:
-        static std::unique_ptr<OpenGLFramebuffer> create(uint32_t width, uint32_t height)
+        static std::unique_ptr<OpenGLFramebuffer> create(uint32_t physWidth, uint32_t physHeight, uint2 logicalSize = {0, 0})
         {
-            auto colorTexture = createTexture(width, height);
+            std::unique_ptr<Texture> colorTexture = createTexture(physWidth, physHeight);
             if (!colorTexture) {
                 error("Failed to create color texture for framebuffer");
                 return nullptr;
@@ -19,7 +19,7 @@ namespace p5
             GLuint rboId = 0;
             glGenRenderbuffers(1, &rboId);
             glBindRenderbuffer(GL_RENDERBUFFER, rboId);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, physWidth, physHeight);
             glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
             GLuint fboId = 0;
@@ -38,7 +38,8 @@ namespace p5
                 return nullptr;
             }
 
-            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(fboId, rboId, std::move(colorTexture), {width, height}));
+            const uint2 logical = (logicalSize.x > 0 && logicalSize.y > 0) ? logicalSize : uint2 {physWidth, physHeight};
+            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(fboId, rboId, std::move(colorTexture), {physWidth, physHeight}, logical));
         }
 
         ~OpenGLFramebuffer() override
@@ -59,12 +60,12 @@ namespace p5
 
         uint2 getSize() const override
         {
-            return m_size;
+            return m_logicalSize;
         }
 
         uint2 getViewportSize() const override
         {
-            return m_size;
+            return m_physicalSize;
         }
 
         Texture* getColorTexture() override
@@ -73,8 +74,8 @@ namespace p5
         }
 
     private:
-        explicit OpenGLFramebuffer(GLuint fbo, GLuint rbo, std::unique_ptr<Texture> colorTexture, uint2 size)
-            : m_fbo(fbo), m_rbo(rbo), m_colorTexture(std::move(colorTexture)), m_size(size)
+        explicit OpenGLFramebuffer(GLuint fbo, GLuint rbo, std::unique_ptr<Texture> colorTexture, uint2 physicalSize, uint2 logicalSize)
+            : m_fbo(fbo), m_rbo(rbo), m_colorTexture(std::move(colorTexture)), m_physicalSize(physicalSize), m_logicalSize(logicalSize)
         {
         }
 
@@ -82,7 +83,8 @@ namespace p5
         GLuint m_rbo;
         std::unique_ptr<Texture> m_colorTexture;
 
-        uint2 m_size;
+        uint2 m_physicalSize;
+        uint2 m_logicalSize;
     };
 } // namespace p5
 
@@ -92,14 +94,28 @@ namespace p5
     {
         return OpenGLFramebuffer::create(width, height);
     }
+
+    std::unique_ptr<Framebuffer> createWindowCanvas(int physWidth, int physHeight, int logicalWidth, int logicalHeight)
+    {
+        return OpenGLFramebuffer::create(physWidth, physHeight, {static_cast<uint32_t>(logicalWidth), static_cast<uint32_t>(logicalHeight)});
+    }
 } // namespace p5
 
 namespace p5
 {
-    void blitRenderbufferToScreen(const Framebuffer& source, uint32_t width, uint32_t height)
+    void blitDefaultCanvasToScreen(const Framebuffer& source)
     {
+        const auto [w, h] = source.getViewportSize();
+
+        GLint prevReadFBO = 0, prevDrawFBO = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+
         glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(0, 0, width, height, 0, height, width, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prevDrawFBO));
     }
 } // namespace p5

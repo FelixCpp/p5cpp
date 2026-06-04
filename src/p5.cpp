@@ -1,5 +1,6 @@
 #include "p5.hpp"
 #include "window.hpp"
+#include "framebuffer.hpp"
 #include "shader.hpp"
 #include "canvas.hpp"
 #include "rendering.hpp"
@@ -163,9 +164,19 @@ namespace p5
 
     inline static AppWindow* appWindow = nullptr;
 
-    inline static std::vector<color_t> pixelScratch;              // reusable GL-order scratch buffer
-    inline static std::unique_ptr<Framebuffer> pixelUploadCanvas; // scratch canvas for the window-FBO blit path
-    inline static uint2 pixelUploadSize = {0, 0};                 // dimensions of pixelUploadCanvas
+    inline static std::vector<color_t> pixelScratch; // reusable GL-order scratch buffer for pixel ops
+    inline static bool needsDefaultCanvasRecreation = false;
+
+    static void recreateDefaultCanvas()
+    {
+        const int physW = window_physical_width(appWindow);
+        const int physH = window_physical_height(appWindow);
+        if (physW <= 0 || physH <= 0)
+            return;
+
+        defaultFramebuffer = createWindowCanvas(physW, physH, width, height);
+        needsDefaultCanvasRecreation = false;
+    }
 
     inline RenderStateStack& get_render_state_stack() { return canvas_stack_peek(canvasStack).renderStates; }
     inline RenderState& peekState() { return render_state_stack_peek(get_render_state_stack()); }
@@ -987,6 +998,11 @@ namespace p5
             return;
 
         Canvas& canvas = canvas_stack_peek(canvasStack);
+
+        const auto [vpW, vpH] = canvas.framebuffer->getViewportSize();
+        if (static_cast<uint32_t>(px.width) != vpW || static_cast<uint32_t>(px.height) != vpH)
+            return; // Pixels was loaded from a different canvas size (e.g. after a resize); skip.
+
         renderer_flush(renderer, uniformCache, canvas, drawBuffer);
 
         const auto w = static_cast<uint32_t>(px.width);
@@ -997,29 +1013,7 @@ namespace p5
         for (uint32_t y = 0; y < h; ++y)
             std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
 
-        if (Texture* colorTexture = canvas.framebuffer->getColorTexture()) {
-            // Offscreen canvas: update the attached texture directly
-            colorTexture->update(std::span<const color_t>(pixelScratch));
-        } else {
-            // Window canvas: upload via a scratch offscreen canvas, then blit to FBO 0
-            if (!pixelUploadCanvas || pixelUploadSize.x != w || pixelUploadSize.y != h) {
-                pixelUploadCanvas = createCanvas(static_cast<int>(w), static_cast<int>(h));
-                pixelUploadSize = {w, h};
-            }
-
-            pixelUploadCanvas->getColorTexture()->update(std::span<const color_t>(pixelScratch));
-
-            GLint prevReadFBO = 0, prevDrawFBO = 0;
-            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
-            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
-
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, pixelUploadCanvas->getRendererId());
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, canvas.framebuffer->getRendererId());
-            glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prevDrawFBO));
-        }
+        canvas.framebuffer->getColorTexture()->update(std::span<const color_t>(pixelScratch));
     }
 
 } // namespace p5
@@ -1041,6 +1035,10 @@ int main()
         if (e.type == EventType::windowResize) {
             width = e.windowResize.width;
             height = e.windowResize.height;
+            needsDefaultCanvasRecreation = true;
+        }
+        if (e.type == EventType::framebufferResize) {
+            needsDefaultCanvasRecreation = true;
         }
         sketch->event(e);
     });
@@ -1060,7 +1058,7 @@ int main()
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     uniformCache = uniform_cache_create();
-    defaultFramebuffer = window_default_framebuffer(appWindow);
+    defaultFramebuffer = createWindowCanvas(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
 
     {
         renderer_begin_frame(renderer);
@@ -1084,6 +1082,9 @@ int main()
 
         window_poll_events(appWindow);
 
+        if (needsDefaultCanvasRecreation)
+            recreateDefaultCanvas();
+
         if (not s_isAppPaused) {
             renderer_begin_frame(renderer);
             pushCanvas(defaultFramebuffer);
@@ -1091,6 +1092,7 @@ int main()
             popCanvas();
             renderer_end_frame(renderer, drawBuffer);
 
+            blitDefaultCanvasToScreen(*defaultFramebuffer);
             window_swap_buffers(appWindow);
             frameCount++;
 

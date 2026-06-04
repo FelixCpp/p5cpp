@@ -213,11 +213,16 @@ namespace p5
             win->onEvent(e);
         });
 
-        // Physical pixel size changed → DefaultWindowFramebuffer::getViewportSize() picks it up.
+        // Physical pixel size changed → fire framebufferResize event for default canvas recreation.
         glfwSetFramebufferSizeCallback(win->handle, [](GLFWwindow* h, int w, int ht) {
             auto* win = static_cast<AppWindow*>(glfwGetWindowUserPointer(h));
             win->physicalWidth = w;
             win->physicalHeight = ht;
+
+            WindowEvent e;
+            e.type = EventType::framebufferResize;
+            e.framebufferResize = {w, ht};
+            win->onEvent(e);
         });
 
         glfwSetMouseButtonCallback(win->handle, [](GLFWwindow* h, int button, int action, int) {
@@ -309,5 +314,7 @@ namespace p5
 
     int window_logical_width(const AppWindow* win) { return win->logicalWidth; }
     int window_logical_height(const AppWindow* win) { return win->logicalHeight; }
+    int window_physical_width(const AppWindow* win) { return win->physicalWidth; }
+    int window_physical_height(const AppWindow* win) { return win->physicalHeight; }
 
 } // namespace p5

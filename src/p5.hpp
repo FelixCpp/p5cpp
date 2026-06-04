@@ -194,6 +194,7 @@ namespace p5
         keyRepeat,
         character,
         windowResize,
+        framebufferResize,
     };
 
     // ── Unified window event (SDL-style: type tag + data union) ──────────
@@ -241,6 +242,7 @@ namespace p5
             KeyData keyEvent; // used for keyPress, keyRelease and keyRepeat
             CharData charEvent;
             ResizeData windowResize;
+            ResizeData framebufferResize;
         };
     };
 } // namespace p5
