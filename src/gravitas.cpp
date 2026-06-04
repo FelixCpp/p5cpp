@@ -128,7 +128,7 @@ struct Orbit
     float2 acceleration;
     float maxSpeed = 300.0f;
     float minSpeed = 50.0f;
-    float maxForce = 300.0f;
+    float maxForce = 500.0f;
     float radius = 10.0f;
     float spawnT = 0.0f; // 0→1 spawn flash
 
@@ -451,20 +451,108 @@ struct PulseWave
     }
 };
 
+void drawSpiral(float2 center, float maxRadius, float angleOffset)
+{
+    const int segments = 100;
+    beginShape();
+    for (int i = 0; i <= segments; ++i) {
+        const float t = static_cast<float>(i) / segments;
+        const float angle = t * 4.0f * std::numbers::pi_v<float> + angleOffset;
+        const float radius = t * maxRadius;
+        vertex(center.x + std::cos(angle) * radius, center.y + std::sin(angle) * radius);
+    }
+    endShape(ShapeType::lineStrip, false);
+}
+
+struct BlackHole
+{
+    float2 position;
+    float2 direction;
+    float speed;
+    float lifeTime;
+    float timeAlive;
+
+    BlackHole(float2 spawn)
+        : position(spawn),
+          direction(randomDirection<float>()),
+          speed(random(10.0f, 30.0f)),
+          lifeTime(random(4.0f, 7.0f)),
+          timeAlive(0.0f)
+    {
+    }
+
+    static float easedFade(float t)
+    {
+        // t im Bereich [0.0, 1.0]
+        // Alpha bleibt bei 1.0 bis 80%, danach linearer Fade auf 0.0
+        constexpr float FADE_START = 0.8f;
+
+        if (t < FADE_START)
+            return 1.0f;
+
+        // Normalisiere den Fade-Bereich [0.8, 1.0] → [0.0, 1.0]
+        float fadeT = (t - FADE_START) / (1.0f - FADE_START);
+
+        return 1.0f - fadeT;
+    }
+
+    void update(float deltaTime)
+    {
+        timeAlive += deltaTime;
+
+        position += direction * speed * deltaTime;
+    }
+
+    bool isDead() const
+    {
+        return timeAlive >= lifeTime;
+    }
+
+    void draw() const
+    {
+        const float alphaFactor = easedFade(timeAlive / lifeTime);
+        const color_t purple = rgba(180, 50, 220, static_cast<uint8_t>(alphaFactor * 200.0f));
+
+        stroke(purple);
+        strokeWeight(2.0f);
+        noFill();
+        drawSpiral(position, 50.0f, timeAlive * 5.0f);
+
+        noStroke();
+        beginShape();
+        fill(darken(purple, 0.1f));
+        vertex(position.x, position.y);
+        fill(withAlpha(purple, 50));
+        for (int i = 0; i <= 20; ++i) {
+            const float angle = static_cast<float>(i) / 20.0f * 2.0f * std::numbers::pi_v<float>;
+            const float radius = 50.0f;
+            vertex(position.x + std::cos(angle) * radius, position.y + std::sin(angle) * radius);
+        }
+        endShape(ShapeType::triangleFan, true);
+        noFill();
+        stroke(purple);
+        strokeWeight(1.0f);
+        circle(position.x, position.y, 50.0f * 2.0f);
+    }
+};
+
 // ─── Gravitas ─────────────────────────────────────────────────────────────────
 struct Gravitas : Sketch
 {
     inline static constexpr float IMPULSE_COOLDOWN = 5.0f;
+    inline static constexpr int maxHealthPoints = 5;
 
     Player player {20.0f};
     std::vector<Orbit> orbits;
     std::vector<Star> stars;
+    std::vector<BlackHole> blackHoles;
     std::vector<PulseWave> pulseWaves;
     std::vector<ScorePopup> scorePopups;
     std::vector<BackgroundStar> bgStars;
     float spawnTimer = 0.0f;
     uint32_t points = 0;
     float impulseTimer = 0.0f;
+    int healthPoints = 3;
 
     void setup() override
     {
@@ -485,6 +573,8 @@ struct Gravitas : Sketch
 
         for (int i = 0; i < 3; ++i)
             stars.emplace_back(positions[i], 25.0f, types[i]);
+
+        // blackHoles.push_back(BlackHole({width * 0.5f, height * 0.5f}));
     }
 
     void event(const WindowEvent& e) override
@@ -523,11 +613,49 @@ struct Gravitas : Sketch
         // ── Base ──────────────────────────────────────────────────────────────
         background(8, 10, 18);
 
+        // const bool isGameOver = healthPoints <= 0;
+        // if (isGameOver) {
+        //     pushState();
+        //     blendMode(BlendMode::alpha);
+        //     fill(rgba(255, 255, 255, 220));
+        //     textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        //     textSize(48.0f);
+        //     text("GAME OVER", width / 2.0f, height / 2.0f - 20.0f);
+        //     textSize(22.0f);
+        //     text("Final Score: " + std::to_string(points), width / 2.0f, height / 2.0f + 30.0f);
+        //     popState();
+        // }
+
         // ── Background stars (additive) ───────────────────────────────────────
         pushState();
         blendMode(BlendMode::additive);
         for (const BackgroundStar& s : bgStars) s.show(time);
         popState();
+
+        const float hpPointSize = 15.0f;
+        const float hpBarSize = hpPointSize * maxHealthPoints;
+        for (int i = 0; i < maxHealthPoints; ++i) {
+            const color_t green = rgba(80, 255, 150);
+            const color_t red = rgba(255, 80, 60);
+
+            const bool isLostHp = (i + 1) > healthPoints;
+            strokeWeight(2.0f);
+            if (isLostHp) {
+                noFill();
+                stroke(red);
+            } else {
+                fill(green);
+                stroke(lighten(green, 0.2f));
+            }
+
+            circle(width / 2.0f - hpBarSize + (hpPointSize + 10.0f) * i, 20.0f, 15.0f);
+
+            if (isLostHp) {
+                stroke(255);
+                strokeWeight(2.0f);
+                line(width / 2.0f - hpBarSize + (hpPointSize + 10.0f) * i - hpPointSize * 0.5f, 20.0f - hpPointSize * 0.5f, width / 2.0f - hpBarSize + (hpPointSize + 10.0f) * i + hpPointSize * 0.5f, 20.0f + hpPointSize * 0.5f);
+            }
+        }
 
         // ── Stars / targets ───────────────────────────────────────────────────
         for (Star& s : stars) {
@@ -559,6 +687,18 @@ struct Gravitas : Sketch
         player.update(deltaTime);
         player.show();
 
+        for (BlackHole& b : blackHoles) {
+            b.update(deltaTime);
+            b.draw();
+        }
+
+        blackHoles.erase(
+            std::remove_if(blackHoles.begin(), blackHoles.end(), [](const BlackHole& b) {
+                return b.isDead();
+            }),
+            blackHoles.end()
+        );
+
         // ── Scoring (capture position before erase) ───────────────────────────
         for (const Star& s : stars) {
             for (int j = static_cast<int>(orbits.size()) - 1; j >= 0; --j) {
@@ -566,6 +706,23 @@ struct Gravitas : Sketch
                     scorePopups.push_back({orbits[j].position, 0.0f, 10});
                     orbits.erase(orbits.begin() + j);
                     points += 10;
+
+                    // Spawn a black hole at the stars position with a small random offset
+                    const float spawnChance = 0.3f; // 10% chance to spawn a black hole
+                    if (random(1.0f) < spawnChance) {
+                        const float2 offset = randomDirection<float>() * random(200.0f, 400.0f);
+                        blackHoles.push_back(BlackHole(s.position + offset));
+                    }
+                }
+            }
+        }
+
+        for (const BlackHole& b : blackHoles) {
+            for (int j = static_cast<int>(orbits.size()) - 1; j >= 0; --j) {
+                const float2 toOrbit = orbits[j].position - b.position;
+                if (lengthSquared(toOrbit) < 50.0f * 50.0f) {
+                    orbits.erase(orbits.begin() + j);
+                    healthPoints = std::max(healthPoints - 1, 0);
                 }
             }
         }

@@ -69,6 +69,11 @@ namespace p5
     template <typename T> inline constexpr value2<T> lerp(value2<T> a, value2<T> b, T t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
     template <typename T> inline constexpr T lengthSquared(value2<T> value) { return value.x * value.x + value.y * value.y; }
     template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
+    template <typename T> inline value2<T> randomDirection()
+    {
+        const float angle = random(0.0f, 6.28318f);
+        return value2<T> {std::cos(angle), std::sin(angle)};
+    }
     template <typename T> inline value2<T> limit(value2<T> value, T maxLength)
     {
         const T lenSq = lengthSquared(value);
@@ -268,6 +273,7 @@ namespace p5
     extern int frameCount;  // Number of draw() calls completed
     extern float fps;       // Smoothed frames per second
     extern float deltaTime; // Seconds elapsed since the previous draw() call
+    // extern float globalTime; //
 
     void info(std::string_view message);
     void debug(std::string_view message);

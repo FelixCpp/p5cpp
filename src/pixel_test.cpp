@@ -11,19 +11,16 @@ struct PixelTestSketch : Sketch
 
     void draw() override
     {
-        // background(255);
-        // fill(255, 0, 0);
-        // stroke(0, 255, 0);
-        // strokeWeight(5.0f);
-        // rect(10, 10, 100, 100);
         Pixels pixels = loadPixels();
-        for (unsigned int y = 0; y < pixels.height; ++y) {
-            for (unsigned int x = 0; x < pixels.width; ++x) {
-                pixels[y * width + x] = rgba(255, 0, 0);
+        for (uint32_t y = 0; y < pixels.height; ++y) {
+            for (uint32_t x = 0; x < pixels.width; ++x) {
+                int red = random(255);
+                int green = random(255);
+                int blue = random(255);
+                pixels[y * width + x] = rgba(red, green, blue);
             }
         }
         updatePixels(pixels);
-        // background(255);
     }
 };
 

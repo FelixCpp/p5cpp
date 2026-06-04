@@ -1008,18 +1008,10 @@ namespace p5
         const auto w = static_cast<uint32_t>(px.width);
         const auto h = static_cast<uint32_t>(px.height);
 
-        // Flip rows back to OpenGL bottom-up order
-        // pixelScratch.resize(static_cast<size_t>(w) * h);
-        // for (uint32_t y = 0; y < h; ++y)
-        //     std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
-
+        // Flip rows back to OpenGL bottom - up order
         pixelScratch.resize(static_cast<size_t>(w) * h);
-        for (uint32_t y = 0; y < h; ++y) {
-            for (uint32_t x = 0; x < w; ++x) {
-                const color_t c = px[y * w + x];
-                pixelScratch[(h - 1 - y) * w + x] = c;
-            }
-        }
+        for (uint32_t y = 0; y < h; ++y)
+            std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
 
         canvas.framebuffer->getColorTexture()->update(pixelScratch);
     }
@@ -1084,8 +1076,6 @@ int main()
     while (not s_isCloseRequested) {
         const TimePoint frameStart = Clock::now();
         deltaTime = std::chrono::duration<float>(frameStart - lastFrameTime).count();
-        // Cap deltaTime so frame drops don't cause large physics jumps
-        deltaTime = std::min(deltaTime, 1.0f / 20.0f);
         lastFrameTime = frameStart;
 
         window_poll_events(appWindow);

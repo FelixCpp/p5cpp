@@ -107,15 +107,8 @@ namespace p5
     {
         const auto [w, h] = source.getViewportSize();
 
-        // GLint prevReadFBO = 0, prevDrawFBO = 0;
-        // glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
-        // glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
-
         glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-        // glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
-        // glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prevDrawFBO));
     }
 } // namespace p5
