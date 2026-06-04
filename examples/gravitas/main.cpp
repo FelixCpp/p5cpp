@@ -1,4 +1,5 @@
-#include "p5.hpp"
+#include <p5.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cmath>

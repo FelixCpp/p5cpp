@@ -21,9 +21,8 @@ add_library(
 
 target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
-add_executable(
-  gravitas
-  src/gravitas.cpp
+add_library(
+  p5 STATIC
   src/canvas.cpp
   src/drawscope.cpp
   src/font.cpp
@@ -43,52 +42,6 @@ add_executable(
   src/uniform_cache.cpp
   src/window.cpp)
 
-target_link_libraries(gravitas PRIVATE glfw glad freetype libtess2)
-
-add_executable(
-  molds
-  src/molds.cpp
-  src/canvas.cpp
-  src/drawscope.cpp
-  src/font.cpp
-  src/framebuffer.cpp
-  src/linepath.cpp
-  src/math.cpp
-  src/matrixstack.cpp
-  src/noise.cpp
-  src/p5.cpp
-  src/rendering.cpp
-  src/renderstate.cpp
-  src/shader.cpp
-  src/stroker.cpp
-  src/tess.cpp
-  src/texture.cpp
-  src/timing.cpp
-  src/uniform_cache.cpp
-  src/window.cpp)
-
-target_link_libraries(molds PRIVATE glfw glad freetype libtess2)
-
-add_executable(
-  pixel_test
-  src/pixel_test.cpp
-  src/canvas.cpp
-  src/drawscope.cpp
-  src/font.cpp
-  src/framebuffer.cpp
-  src/linepath.cpp
-  src/math.cpp
-  src/matrixstack.cpp
-  src/noise.cpp
-  src/p5.cpp
-  src/rendering.cpp
-  src/renderstate.cpp
-  src/shader.cpp
-  src/stroker.cpp
-  src/tess.cpp
-  src/texture.cpp
-  src/timing.cpp
-  src/uniform_cache.cpp
-  src/window.cpp)
-
-target_link_libraries(pixel_test PRIVATE glfw glad freetype libtess2)
+target_link_libraries(p5 PRIVATE glfw glad freetype libtess2)
+target_include_directories(p5 PUBLIC include)
+add_subdirectory(examples)

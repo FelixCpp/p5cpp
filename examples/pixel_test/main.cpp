@@ -1,10 +1,9 @@
-#include "p5.hpp"
+#include <p5.hpp>
 
 using namespace p5;
 
 struct PixelTestSketch : Sketch
 {
-
     void setup() override
     {
     }
