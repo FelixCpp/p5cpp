@@ -539,27 +539,29 @@ namespace p5
     // Call loadPixels() to capture the current canvas into a Pixels object.
     // Modify pixel values freely via operator[] (index = y * pixels.width + x,
     // with (0,0) at top-left), then pass the object to updatePixels() to commit.
-    struct Pixels
+    class Pixels
     {
-        int width  = 0;
+    public:
+        int width = 0;
         int height = 0;
 
-        color_t&       operator[](std::ptrdiff_t index)       { return m_data[static_cast<size_t>(index)]; }
+        color_t& operator[](std::ptrdiff_t index) { return m_data[static_cast<size_t>(index)]; }
         const color_t& operator[](std::ptrdiff_t index) const { return m_data[static_cast<size_t>(index)]; }
 
-        color_t*       data()        { return m_data.data(); }
-        const color_t* data()  const { return m_data.data(); }
-        std::size_t    size()  const { return m_data.size(); }
+        color_t* data() { return m_data.data(); }
+        const color_t* data() const { return m_data.data(); }
+        std::size_t size() const { return m_data.size(); }
 
-        color_t*       begin()       { return m_data.data(); }
-        color_t*       end()         { return m_data.data() + m_data.size(); }
+        color_t* begin() { return m_data.data(); }
+        color_t* end() { return m_data.data() + m_data.size(); }
         const color_t* begin() const { return m_data.data(); }
-        const color_t* end()   const { return m_data.data() + m_data.size(); }
+        const color_t* end() const { return m_data.data() + m_data.size(); }
 
     private:
         explicit Pixels(int w, int h, std::vector<color_t> data)
             : width(w), height(h), m_data(std::move(data))
-        {}
+        {
+        }
 
         std::vector<color_t> m_data;
 
@@ -567,5 +569,5 @@ namespace p5
     };
 
     Pixels loadPixels();
-    void   updatePixels(Pixels& pixels);
+    void updatePixels(const Pixels& pixels);
 } // namespace p5

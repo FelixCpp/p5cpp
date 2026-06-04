@@ -95,7 +95,7 @@ namespace p5
         return OpenGLFramebuffer::create(width, height);
     }
 
-    std::unique_ptr<Framebuffer> createWindowCanvas(int physWidth, int physHeight, int logicalWidth, int logicalHeight)
+    std::unique_ptr<Framebuffer> create_window_framebuffer(int physWidth, int physHeight, int logicalWidth, int logicalHeight)
     {
         return OpenGLFramebuffer::create(physWidth, physHeight, {static_cast<uint32_t>(logicalWidth), static_cast<uint32_t>(logicalHeight)});
     }
@@ -103,19 +103,19 @@ namespace p5
 
 namespace p5
 {
-    void blitDefaultCanvasToScreen(const Framebuffer& source)
+    void blit_framebuffer_to_screen(const Framebuffer& source)
     {
         const auto [w, h] = source.getViewportSize();
 
-        GLint prevReadFBO = 0, prevDrawFBO = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+        // GLint prevReadFBO = 0, prevDrawFBO = 0;
+        // glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+        // glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getRendererId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prevDrawFBO));
+        // glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
+        // glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prevDrawFBO));
     }
 } // namespace p5

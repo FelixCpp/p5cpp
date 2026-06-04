@@ -71,7 +71,7 @@ struct PixelGrid
                         sum += getAtCell(column + dx, row + dy);
 
                 const uint8_t diffused = static_cast<uint8_t>(sum / 9);
-                const uint8_t decayed = static_cast<uint8_t>(diffused * 0.99995f); // fester Wert, unabhängig von deltaTime
+                const uint8_t decayed = static_cast<uint8_t>(diffused * 0.9995f); // fester Wert, unabhängig von deltaTime
 
                 const size_t idx = (row * columns + column) * 4;
                 next[idx + 0] = decayed;
@@ -106,7 +106,7 @@ struct Mold
     float radius;
 
     inline static const float SENSING_DISTANCE = 100.0f;
-    inline static const float SENSING_ANGLE = radians(55.0f);
+    inline static const float SENSING_ANGLE = radians(20.0f);
 
     void update(PixelGrid& pixelGrid, float deltaTime)
     {
@@ -205,6 +205,20 @@ struct SlimeMoldsSimulation : Sketch
                 .travelSpeed = 80.0f,
                 .radius = 0.5f,
             });
+        }
+    }
+
+    void event(const WindowEvent& e) override
+    {
+        if (e.type == EventType::mousePress) {
+            for (size_t i = 0; i < 1000; ++i) {
+                molds.push_back(Mold {
+                    .position = {static_cast<float>(e.mouseButton.x), static_cast<float>(e.mouseButton.y)},
+                    .direction = fixedLength(float2 {cos(random(TWO_PI)), sin(random(TWO_PI))}, 1.0f),
+                    .travelSpeed = 80.0f,
+                    .radius = 0.5f,
+                });
+            }
         }
     }
 

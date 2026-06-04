@@ -17,7 +17,6 @@
 #include <numbers>
 #include <algorithm>
 #include <chrono>
-#include <thread>
 
 namespace p5
 {
@@ -164,7 +163,7 @@ namespace p5
 
     inline static AppWindow* appWindow = nullptr;
 
-    inline static std::vector<color_t> pixelScratch; // reusable GL-order scratch buffer for pixel ops
+    inline static std::vector<color_t> pixelScratch;
     inline static bool needsDefaultCanvasRecreation = false;
 
     static void recreateDefaultCanvas()
@@ -174,8 +173,9 @@ namespace p5
         if (physW <= 0 || physH <= 0)
             return;
 
-        defaultFramebuffer = createWindowCanvas(physW, physH, width, height);
+        defaultFramebuffer = create_window_framebuffer(physW, physH, width, height);
         needsDefaultCanvasRecreation = false;
+        printf("Creating default canvas");
     }
 
     inline RenderStateStack& get_render_state_stack() { return canvas_stack_peek(canvasStack).renderStates; }
@@ -992,7 +992,7 @@ namespace p5
         return Pixels {static_cast<int>(w), static_cast<int>(h), std::move(buffer)};
     }
 
-    void updatePixels(Pixels& px)
+    void updatePixels(const Pixels& px)
     {
         if (px.size() == 0)
             return;
@@ -1001,7 +1001,7 @@ namespace p5
 
         const auto [vpW, vpH] = canvas.framebuffer->getViewportSize();
         if (static_cast<uint32_t>(px.width) != vpW || static_cast<uint32_t>(px.height) != vpH)
-            return; // Pixels was loaded from a different canvas size (e.g. after a resize); skip.
+            return;
 
         renderer_flush(renderer, uniformCache, canvas, drawBuffer);
 
@@ -1009,11 +1009,19 @@ namespace p5
         const auto h = static_cast<uint32_t>(px.height);
 
         // Flip rows back to OpenGL bottom-up order
-        pixelScratch.resize(static_cast<size_t>(w) * h);
-        for (uint32_t y = 0; y < h; ++y)
-            std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
+        // pixelScratch.resize(static_cast<size_t>(w) * h);
+        // for (uint32_t y = 0; y < h; ++y)
+        //     std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
 
-        canvas.framebuffer->getColorTexture()->update(std::span<const color_t>(pixelScratch));
+        pixelScratch.resize(static_cast<size_t>(w) * h);
+        for (uint32_t y = 0; y < h; ++y) {
+            for (uint32_t x = 0; x < w; ++x) {
+                const color_t c = px[y * w + x];
+                pixelScratch[(h - 1 - y) * w + x] = c;
+            }
+        }
+
+        canvas.framebuffer->getColorTexture()->update(pixelScratch);
     }
 
 } // namespace p5
@@ -1058,7 +1066,7 @@ int main()
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     uniformCache = uniform_cache_create();
-    defaultFramebuffer = createWindowCanvas(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
+    defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
 
     {
         renderer_begin_frame(renderer);
@@ -1092,7 +1100,7 @@ int main()
             popCanvas();
             renderer_end_frame(renderer, drawBuffer);
 
-            blitDefaultCanvasToScreen(*defaultFramebuffer);
+            blit_framebuffer_to_screen(*defaultFramebuffer);
             window_swap_buffers(appWindow);
             frameCount++;
 

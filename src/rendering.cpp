@@ -136,6 +136,8 @@ namespace p5
         if (drawBuffer.vertexCursor == 0 && canvas.drawCommands.empty())
             return;
 
+        printf("Rendering to canvas (Id: $u) with %u vertices, %zu indices and %zu draw calls\n", canvas.framebuffer->getRendererId(), drawBuffer.vertexCursor, drawBuffer.indexCursor, canvas.drawCommands.size());
+
         glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, drawBuffer.vertexCursor * sizeof(Vertex), drawBuffer.vertices.get());
 
@@ -143,6 +145,7 @@ namespace p5
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, drawBuffer.indexCursor * sizeof(uint32_t), drawBuffer.indices.get());
 
         render_canvas(renderer, cache, canvas);
+
         // Clear the already-rendered commands so a subsequent flush on the same
         // canvas does not re-render stale draw commands against a fresh buffer.
         canvas.drawCommands.clear();

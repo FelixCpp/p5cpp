@@ -122,48 +122,6 @@ namespace p5
     };
 
     // -----------------------------------------------------------------------
-    // DefaultWindowFramebuffer
-    //   Wraps FBO 0 (the real window framebuffer) so the renderer can bind it
-    //   like any other Framebuffer without a blit step.
-    //   getSize()         → logical points  (projection matrix, user coordinates)
-    //   getViewportSize() → physical pixels (glViewport, correct on Retina/HiDPI)
-    // -----------------------------------------------------------------------
-
-    class DefaultWindowFramebuffer : public Framebuffer
-    {
-    public:
-        explicit DefaultWindowFramebuffer(AppWindow* win) : m_win(win) {}
-
-        uint32_t getTextureId() const override
-        {
-            return 0;
-        }
-
-        uint32_t getRendererId() const override
-        {
-            return 0;
-        }
-
-        uint2 getSize() const override
-        {
-            return {static_cast<uint32_t>(m_win->logicalWidth), static_cast<uint32_t>(m_win->logicalHeight)};
-        }
-
-        uint2 getViewportSize() const override
-        {
-            return {static_cast<uint32_t>(m_win->physicalWidth), static_cast<uint32_t>(m_win->physicalHeight)};
-        }
-
-        Texture* getColorTexture() override
-        {
-            return nullptr;
-        }
-
-    private:
-        AppWindow* m_win;
-    };
-
-    // -----------------------------------------------------------------------
     // window_* implementations
     // -----------------------------------------------------------------------
 
@@ -295,11 +253,6 @@ namespace p5
     void window_poll_events(AppWindow*) { glfwPollEvents(); }
     void window_swap_buffers(AppWindow* win) { glfwSwapBuffers(win->handle); }
 
-    std::shared_ptr<Framebuffer> window_default_framebuffer(AppWindow* win)
-    {
-        return std::make_shared<DefaultWindowFramebuffer>(win);
-    }
-
     void window_set_size(AppWindow* win, int width, int height)
     {
         glfwSetWindowSize(win->handle, width, height);
@@ -316,5 +269,4 @@ namespace p5
     int window_logical_height(const AppWindow* win) { return win->logicalHeight; }
     int window_physical_width(const AppWindow* win) { return win->physicalWidth; }
     int window_physical_height(const AppWindow* win) { return win->physicalHeight; }
-
 } // namespace p5
