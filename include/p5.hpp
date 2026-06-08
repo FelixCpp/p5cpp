@@ -15,8 +15,10 @@ namespace p5
     float degrees(float radians);
     float remap(float value, float fromLow, float fromHigh, float toLow, float toHigh);
     void randomSeed(uint64_t seed);
-    float random(float max);
-    float random(float min, float max);
+    float randomFloat(float max);
+    float randomFloat(float min, float max);
+    int randomInt(int max);
+    int randomInt(int min, int max);
 
     float noise(float x);
     float noise(float x, float y);
@@ -71,7 +73,7 @@ namespace p5
     template <typename T> inline T length(value2<T> value) { return std::sqrt(lengthSquared(value)); }
     template <typename T> inline value2<T> randomDirection()
     {
-        const float angle = random(0.0f, 6.28318f);
+        const float angle = randomFloat(0.0f, 6.28318f);
         return value2<T> {std::cos(angle), std::sin(angle)};
     }
     template <typename T> inline value2<T> limit(value2<T> value, T maxLength)
@@ -448,6 +450,16 @@ namespace p5
 
     std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
 
+    struct Pixels
+    {
+        int width;
+        int height;
+        std::vector<color_t> colors;
+    };
+
+    Pixels loadPixels();
+    void updatePixels(const Pixels& pixels);
+
     color_t rgba(int grey, int alpha = 255);
     color_t rgba(int red, int green, int blue, int alpha = 255);
     color_t lighten(color_t color, float amount);
@@ -559,40 +571,4 @@ namespace p5
     void quit(int exitCode);
     void exitCode(int code);
     float millis(); // Milliseconds since the application started
-
-    // ── Pixel manipulation ────────────────────────────────────────────────
-    // Call loadPixels() to capture the current canvas into a Pixels object.
-    // Modify pixel values freely via operator[] (index = y * pixels.width + x,
-    // with (0,0) at top-left), then pass the object to updatePixels() to commit.
-    class Pixels
-    {
-    public:
-        int width = 0;
-        int height = 0;
-
-        color_t& operator[](std::ptrdiff_t index) { return m_data[static_cast<size_t>(index)]; }
-        const color_t& operator[](std::ptrdiff_t index) const { return m_data[static_cast<size_t>(index)]; }
-
-        color_t* data() { return m_data.data(); }
-        const color_t* data() const { return m_data.data(); }
-        std::size_t size() const { return m_data.size(); }
-
-        color_t* begin() { return m_data.data(); }
-        color_t* end() { return m_data.data() + m_data.size(); }
-        const color_t* begin() const { return m_data.data(); }
-        const color_t* end() const { return m_data.data() + m_data.size(); }
-
-    private:
-        explicit Pixels(int w, int h, std::vector<color_t> data)
-            : width(w), height(h), m_data(std::move(data))
-        {
-        }
-
-        std::vector<color_t> m_data;
-
-        friend Pixels loadPixels();
-    };
-
-    Pixels loadPixels();
-    void updatePixels(const Pixels& pixels);
 } // namespace p5

@@ -229,11 +229,11 @@ struct Orbit
 // ─── spawnOrbit ───────────────────────────────────────────────────────────────
 Orbit spawnOrbit()
 {
-    const float randomX = random(static_cast<float>(width));
-    const float randomY = random(static_cast<float>(height));
+    const float randomX = randomFloat(static_cast<float>(width));
+    const float randomY = randomFloat(static_cast<float>(height));
 
     const float2 orbitPosition = std::invoke([&]() {
-        const int edge = static_cast<int>(random(4.0f));
+        const int edge = static_cast<int>(randomFloat(4.0f));
         switch (edge) {
             case 0: return float2 {randomX, -SPAWN_MARGIN};
             case 1: return float2 {static_cast<float>(width) + SPAWN_MARGIN, randomY};
@@ -244,7 +244,7 @@ Orbit spawnOrbit()
 
     const float2 oppositePoint {static_cast<float>(width) - randomX, static_cast<float>(height) - randomY};
     const float2 direction = normalized(oppositePoint - orbitPosition);
-    return Orbit {orbitPosition, direction * random(60.0f, 160.0f)};
+    return Orbit {orbitPosition, direction * randomFloat(60.0f, 160.0f)};
 }
 
 // ─── Star ─────────────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ struct Star
 
     explicit Star(float2 pos, float r, StarType t) : position(pos), radius(r), type(t)
     {
-        pulsePhase = random(6.28318f);
+        pulsePhase = randomFloat(6.28318f);
     }
 
     bool contains(const Orbit& o) const
@@ -476,8 +476,8 @@ struct BlackHole
     BlackHole(float2 spawn)
         : position(spawn),
           direction(randomDirection<float>()),
-          speed(random(10.0f, 30.0f)),
-          lifeTime(random(4.0f, 7.0f)),
+          speed(randomFloat(10.0f, 30.0f)),
+          lifeTime(randomFloat(4.0f, 7.0f)),
           timeAlive(0.0f)
     {
     }
@@ -562,7 +562,7 @@ struct Gravitas : Sketch
 
         // Seed background stars after window size is set
         for (int i = 0; i < 220; ++i) {
-            bgStars.push_back({{random(static_cast<float>(width)), random(static_cast<float>(height))}, random(0.5f, 1.8f), random(100.0f)});
+            bgStars.push_back({{randomFloat(static_cast<float>(width)), randomFloat(static_cast<float>(height))}, randomFloat(0.5f, 1.8f), randomFloat(100.0f)});
         }
 
         const float2 positions[3] = {
@@ -710,8 +710,8 @@ struct Gravitas : Sketch
 
                     // Spawn a black hole at the stars position with a small random offset
                     const float spawnChance = 0.3f; // 10% chance to spawn a black hole
-                    if (random(1.0f) < spawnChance) {
-                        const float2 offset = randomDirection<float>() * random(200.0f, 400.0f);
+                    if (randomFloat(1.0f) < spawnChance) {
+                        const float2 offset = randomDirection<float>() * randomFloat(200.0f, 400.0f);
                         blackHoles.push_back(BlackHole(s.position + offset));
                     }
                 }

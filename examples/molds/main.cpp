@@ -200,9 +200,9 @@ struct SlimeMoldsSimulation : Sketch
 
         // for (size_t i = 0; i < 100000; ++i) {
         for (size_t i = 0; i < 100; ++i) {
-            const float px = static_cast<float>(width) * 0.5f + random(-50, 50);
-            const float py = static_cast<float>(height) * 0.5f + random(-50, 50);
-            const float angle = random(TWO_PI);
+            const float px = static_cast<float>(width) * 0.5f + randomFloat(-50, 50);
+            const float py = static_cast<float>(height) * 0.5f + randomFloat(-50, 50);
+            const float angle = randomFloat(TWO_PI);
 
             molds.push_back(Mold {
                 .position = {px, py},
@@ -219,7 +219,7 @@ struct SlimeMoldsSimulation : Sketch
             for (size_t i = 0; i < 10000; ++i) {
                 molds.push_back(Mold {
                     .position = {static_cast<float>(e.mouseButton.x), static_cast<float>(e.mouseButton.y)},
-                    .direction = fixedLength(float2 {cos(random(TWO_PI)), sin(random(TWO_PI))}, 1.0f),
+                    .direction = fixedLength(float2 {cos(randomFloat(TWO_PI)), sin(randomFloat(TWO_PI))}, 1.0f),
                     .travelSpeed = 80.0f,
                     .radius = 0.5f,
                 });

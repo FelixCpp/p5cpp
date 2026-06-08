@@ -3,8 +3,6 @@
 #include "window.hpp"
 #include "framebuffer.hpp"
 #include "shader.hpp"
-// #include "canvas.hpp"
-// #include "canvas_stack.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "render_state.hpp"
@@ -347,6 +345,67 @@ namespace p5
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         renderState.tintColor = rgba(255, 255, 255);
     }
+} // namespace p5
+
+namespace p5
+{
+    Pixels loadPixels()
+    {
+        renderer_flush(renderer);
+
+        const auto [w, h] = renderer.framebuffer->getViewportSize();
+        const size_t count = static_cast<size_t>(w) * h;
+
+        Pixels pixels = {
+            .width = static_cast<int>(w),
+            .height = static_cast<int>(h),
+            .colors = std::vector<color_t>(count),
+        };
+
+        pixelScratch.resize(count);
+
+        if (count == 0) {
+            return pixels;
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, renderer.framebuffer->getRendererId());
+        glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
+
+        for (uint32_t y = 0; y < h; ++y) {
+            const uint32_t flippedY = h - 1 - y;
+            std::copy_n(pixelScratch.data() + flippedY * w, w, pixels.colors.data() + y * w);
+        }
+
+        return pixels;
+    }
+
+    void updatePixels(const Pixels& pixels)
+    {
+        if (pixels.width <= 0 or pixels.height <= 0) {
+            return;
+        }
+
+        const auto [w, h] = renderer.framebuffer->getViewportSize();
+        if (static_cast<int>(w) != pixels.width || static_cast<int>(h) != pixels.height) {
+            error("updatePixels: Pixel data dimensions do not match the current canvas size.");
+            return;
+        }
+
+        const size_t width = static_cast<size_t>(pixels.width);
+        const size_t height = static_cast<size_t>(pixels.height);
+        const size_t count = width * height;
+
+        pixelScratch.resize(count);
+
+        for (uint32_t y = 0; y < height; ++y) {
+            const uint32_t flippedY = height - 1 - y;
+            std::copy_n(pixels.colors.data() + y * width, width, pixelScratch.data() + flippedY * width);
+        }
+
+        renderer_flush(renderer);
+        renderer.framebuffer->getColorTexture()->update(pixelScratch);
+    }
+
 } // namespace p5
 
 /// -----------------------------------------
@@ -985,51 +1044,6 @@ namespace p5
     {
         return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
     }
-
-    Pixels loadPixels()
-    {
-        renderer_flush(renderer);
-
-        const auto [w, h] = renderer.framebuffer->getViewportSize();
-        const size_t count = static_cast<size_t>(w) * h;
-
-        pixelScratch.resize(count);
-
-        GLint prevReadFBO = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, renderer.framebuffer->getRendererId());
-        glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
-
-        std::vector<color_t> buffer(count);
-        for (uint32_t y = 0; y < h; ++y)
-            std::copy_n(pixelScratch.data() + (h - 1 - y) * w, w, buffer.data() + y * w);
-
-        return Pixels {static_cast<int>(w), static_cast<int>(h), std::move(buffer)};
-    }
-
-    void updatePixels(const Pixels& px)
-    {
-        if (px.size() == 0)
-            return;
-
-        const auto [vpW, vpH] = renderer.framebuffer->getViewportSize();
-        if (static_cast<uint32_t>(px.width) != vpW || static_cast<uint32_t>(px.height) != vpH)
-            return;
-
-        renderer_flush(renderer);
-
-        const auto w = static_cast<uint32_t>(px.width);
-        const auto h = static_cast<uint32_t>(px.height);
-
-        // Flip rows back to OpenGL bottom - up order
-        pixelScratch.resize(static_cast<size_t>(w) * h);
-        for (uint32_t y = 0; y < h; ++y)
-            std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
-
-        renderer.framebuffer->getColorTexture()->update(pixelScratch);
-    }
-
 } // namespace p5
 
 namespace p5

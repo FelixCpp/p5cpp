@@ -232,6 +232,8 @@ namespace p5
     inline static XShiro256Random randomGenerator;
 
     void randomSeed(uint64_t seed) { randomGenerator = XShiro256Random(seed); }
-    float random(float max) { return randomGenerator.nextFloat(0.0f, max); }
-    float random(float min, float max) { return randomGenerator.nextFloat(min, max); }
+    float randomFloat(float max) { return randomGenerator.nextFloat(0.0f, max); }
+    float randomFloat(float min, float max) { return randomGenerator.nextFloat(min, max); }
+    int randomInt(int max) { return randomGenerator.nextInt(0, max); }
+    int randomInt(int min, int max) { return randomGenerator.nextInt(min, max); }
 } // namespace p5
