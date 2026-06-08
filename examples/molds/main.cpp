@@ -107,7 +107,7 @@ struct Mold
     float radius;
 
     inline static const float SENSING_DISTANCE = 100.0f;
-    inline static const float SENSING_ANGLE = radians(20.0f);
+    inline static const float SENSING_ANGLE = radians(45.0f);
 
     void update(PixelGrid& pixelGrid, float deltaTime)
     {
@@ -143,23 +143,26 @@ struct Mold
 
         const Sensors sensors = getSensors(SENSING_DISTANCE, SENSING_ANGLE);
 
+        strokeWeight(1.0f);
         fill(255, 0, 0);
-        stroke(255);
-        strokeWeight(2.0f);
-        circle(sensors.center.x, sensors.center.y, sensingIndicatorRadius * 2.0f);
+        noStroke();
+        // circle(sensors.center.x, sensors.center.y, sensingIndicatorRadius * 2.0f);
         circle(sensors.left.x, sensors.left.y, sensingIndicatorRadius * 2.0f);
+
+        fill(255, 0, 0);
+        noStroke();
         circle(sensors.right.x, sensors.right.y, sensingIndicatorRadius * 2.0f);
 
-        stroke(255);
-        strokeWeight(2.0f);
-        line(position.x, position.y, sensors.center.x, sensors.center.y);
-        line(position.x, position.y, sensors.left.x, sensors.left.y);
-        line(position.x, position.y, sensors.right.x, sensors.right.y);
+        // stroke(255);
+        // strokeWeight(1.0f);
+        // line(position.x, position.y, sensors.center.x, sensors.center.y);
+        // line(position.x, position.y, sensors.left.x, sensors.left.y);
+        // line(position.x, position.y, sensors.right.x, sensors.right.y);
 
-        fill(100);
-        stroke(255);
-        strokeWeight(2);
-        circle(position.x, position.y, radius * 2.0f);
+        // fill(100);
+        // stroke(255);
+        // strokeWeight(2);
+        // circle(position.x, position.y, radius * 2.0f);
     }
 
     Sensors getSensors(float sensingDistance, float sensingAngle) const
@@ -195,7 +198,8 @@ struct SlimeMoldsSimulation : Sketch
 
         grid = std::make_unique<PixelGrid>(gridColumns, gridRows);
 
-        for (size_t i = 0; i < 100000; ++i) {
+        // for (size_t i = 0; i < 100000; ++i) {
+        for (size_t i = 0; i < 100; ++i) {
             const float px = static_cast<float>(width) * 0.5f + random(-50, 50);
             const float py = static_cast<float>(height) * 0.5f + random(-50, 50);
             const float angle = random(TWO_PI);
@@ -212,7 +216,7 @@ struct SlimeMoldsSimulation : Sketch
     void event(const WindowEvent& e) override
     {
         if (e.type == EventType::mousePress) {
-            for (size_t i = 0; i < 1000; ++i) {
+            for (size_t i = 0; i < 10000; ++i) {
                 molds.push_back(Mold {
                     .position = {static_cast<float>(e.mouseButton.x), static_cast<float>(e.mouseButton.y)},
                     .direction = fixedLength(float2 {cos(random(TWO_PI)), sin(random(TWO_PI))}, 1.0f),

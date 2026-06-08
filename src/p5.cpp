@@ -3,9 +3,10 @@
 #include "framebuffer.hpp"
 #include "shader.hpp"
 #include "canvas.hpp"
-#include "rendering.hpp"
+#include "canvas_stack.hpp"
+#include "renderer.hpp"
 #include "linepath.hpp"
-#include "renderstate.hpp"
+#include "render_state.hpp"
 #include "tess.hpp"
 #include "dejavusans.hpp"
 #include "uniform_cache.hpp"
@@ -59,61 +60,6 @@ namespace p5
         return U'\uFFFD';
     }
 
-    color_t rgba(int grey, int alpha) { return rgba(grey, grey, grey, alpha); }
-    color_t rgba(int red, int green, int blue, int alpha)
-    {
-        const int r = std::clamp(red, 0, 255);
-        const int g = std::clamp(green, 0, 255);
-        const int b = std::clamp(blue, 0, 255);
-        const int a = std::clamp(alpha, 0, 255);
-        return (r << 24) | (g << 16) | (b << 8) | a;
-    }
-    color_t lighten(color_t color, float amount)
-    {
-        return rgba(
-            std::min(255, static_cast<int>(red(color) + amount * 255)),
-            std::min(255, static_cast<int>(green(color) + amount * 255)),
-            std::min(255, static_cast<int>(blue(color) + amount * 255)),
-            alpha(color)
-        );
-    }
-    color_t darken(color_t color, float amount)
-    {
-        return rgba(
-            std::max(0, static_cast<int>(red(color) - amount * 255)),
-            std::max(0, static_cast<int>(green(color) - amount * 255)),
-            std::max(0, static_cast<int>(blue(color) - amount * 255)),
-            alpha(color)
-        );
-    }
-    color_t lerp(color_t a, color_t b, float t)
-    {
-        return rgba(
-            static_cast<int>(red(a) + t * (red(b) - red(a))),
-            static_cast<int>(green(a) + t * (green(b) - green(a))),
-            static_cast<int>(blue(a) + t * (blue(b) - blue(a))),
-            static_cast<int>(alpha(a) + t * (alpha(b) - alpha(a)))
-        );
-    }
-    color_t withAlpha(color_t color, int alpha)
-    {
-        const int a = std::clamp(alpha, 0, 255);
-        return (color & 0xFFFFFF00) | a;
-    }
-
-    int red(color_t color) { return (color & 0xFF000000) >> 24; }
-    int green(color_t color) { return (color & 0x00FF0000) >> 16; }
-    int blue(color_t color) { return (color & 0x0000FF00) >> 8; }
-    int alpha(color_t color) { return (color & 0x000000FF) >> 0; }
-    int brightness(color_t color)
-    {
-        const int r = red(color);
-        const int g = green(color);
-        const int b = blue(color);
-
-        return static_cast<int>(0.299f * r + 0.587f * g + 0.114f * b);
-    }
-
     size_t computeCircleSegmentCount(float angle, float radius)
     {
         const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
@@ -158,8 +104,6 @@ namespace p5
     inline static std::unique_ptr<Texture> whiteTexture;
     inline static CanvasStack canvasStack;
     inline static Renderer renderer;
-    inline static DrawBuffer drawBuffer;
-    inline static UniformCache uniformCache;
 
     inline static AppWindow* appWindow = nullptr;
 
@@ -206,10 +150,10 @@ namespace p5
     {
         constexpr size_t SAFE_MARGIN_V = 4096;
         constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
-        if (drawBuffer.vertexCursor + SAFE_MARGIN_V >= drawBuffer.vertexCount ||
-            drawBuffer.indexCursor + SAFE_MARGIN_I >= drawBuffer.indexCount) {
+        if (renderer.drawBuffer.vertexCursor + SAFE_MARGIN_V >= renderer.drawBuffer.vertexCount ||
+            renderer.drawBuffer.indexCursor + SAFE_MARGIN_I >= renderer.drawBuffer.indexCount) {
             Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+            renderer_flush(renderer, canvas);
         }
     }
 
@@ -218,7 +162,7 @@ namespace p5
         // First we need to flush the renderer to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
         if (not canvas_stack_is_empty(canvasStack)) {
             Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+            renderer_flush(renderer, canvas);
         }
 
         canvas_stack_push(
@@ -236,7 +180,7 @@ namespace p5
         // FLush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
         if (not canvas_stack_is_empty(canvasStack)) {
             Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+            renderer_flush(renderer, canvas);
         }
 
         canvas_stack_pop(canvasStack);
@@ -282,7 +226,7 @@ namespace p5
 
         {
             flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(drawBuffer);
+            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
 
             tesselate_quads(
                 scope,
@@ -296,7 +240,7 @@ namespace p5
 
             draw_commands_submit(
                 canvas_stack_peek(canvasStack).drawCommands,
-                uniformCache,
+                renderer.uniformCache,
                 scope,
                 getCurrentShader(state),
                 state.blendMode,
@@ -365,7 +309,7 @@ namespace p5
         const RenderState& state = peekState();
 
         flushIfNeeded();
-        DrawScope scope = draw_buffer_get_scope(drawBuffer);
+        DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
 
         if (fillStyle.has_value()) {
             const PathPoints points = linepath->buildDrawPoints(fillStyle.value());
@@ -399,7 +343,7 @@ namespace p5
             }
         }
 
-        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, renderer.uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
 
         linepath->clear();
         curveVertexCount = 0;
@@ -468,7 +412,7 @@ namespace p5
 
     void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
     {
-        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(uniformCache, shader.get());
+        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(renderer.uniformCache, shader.get());
         shader_uniform_cache_insert_or_update(shaderCache, name, variable);
     }
 
@@ -788,7 +732,7 @@ namespace p5
 
         {
             flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(drawBuffer);
+            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
 
             tesselate_quads(
                 scope,
@@ -800,7 +744,7 @@ namespace p5
                 }
             );
 
-            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, getCurrentShader(state), state.blendMode, textureId);
+            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, renderer.uniformCache, scope, getCurrentShader(state), state.blendMode, textureId);
         }
     }
 
@@ -901,7 +845,7 @@ namespace p5
 
             {
                 flushIfNeeded();
-                DrawScope scope = draw_buffer_get_scope(drawBuffer);
+                DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
                 tesselate_quads(
                     scope,
                     PathPoints {
@@ -913,7 +857,7 @@ namespace p5
                 );
 
                 std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, uniformCache, scope, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
+                draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, renderer.uniformCache, scope, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
             }
 
             px += glyph->advance.x;
@@ -972,7 +916,7 @@ namespace p5
     Pixels loadPixels()
     {
         Canvas& canvas = canvas_stack_peek(canvasStack);
-        renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+        renderer_flush(renderer, canvas);
 
         const auto [w, h] = canvas.framebuffer->getViewportSize();
         const size_t count = static_cast<size_t>(w) * h;
@@ -1003,7 +947,7 @@ namespace p5
         if (static_cast<uint32_t>(px.width) != vpW || static_cast<uint32_t>(px.height) != vpH)
             return;
 
-        renderer_flush(renderer, uniformCache, canvas, drawBuffer);
+        renderer_flush(renderer, canvas);
 
         const auto w = static_cast<uint32_t>(px.width);
         const auto h = static_cast<uint32_t>(px.height);
@@ -1052,12 +996,10 @@ int main()
 
     renderer = renderer_create(MAX_VERTICES, MAX_INDICES);
     whiteTexture = loadTexture(1, 1, whitePixel);
-    drawBuffer = draw_buffer_create(MAX_VERTICES, MAX_INDICES);
     linepath = std::make_unique<LinePathBuilder>();
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    uniformCache = uniform_cache_create();
     defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
 
     {
@@ -1065,7 +1007,7 @@ int main()
         pushCanvas(defaultFramebuffer);
         sketch->setup();
         popCanvas();
-        renderer_end_frame(renderer, drawBuffer);
+        renderer_end_frame(renderer);
     }
 
     window_show(appWindow);
@@ -1088,7 +1030,7 @@ int main()
             pushCanvas(defaultFramebuffer);
             sketch->draw();
             popCanvas();
-            renderer_end_frame(renderer, drawBuffer);
+            renderer_end_frame(renderer);
 
             blit_framebuffer_to_screen(*defaultFramebuffer);
             window_swap_buffers(appWindow);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "linepath.hpp"
-#include "drawscope.hpp"
+#include "draw_scope.hpp"
 
 namespace p5
 {

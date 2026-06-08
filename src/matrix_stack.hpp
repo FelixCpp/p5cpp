@@ -2,7 +2,7 @@
 
 #include <stack>
 
-#include "p5.hpp"
+#include <p5.hpp>
 
 namespace p5
 {

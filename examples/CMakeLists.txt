@@ -1,3 +1,6 @@
 add_subdirectory(gravitas)
+add_subdirectory(gravitas_ai)
 add_subdirectory(molds)
 add_subdirectory(pixel_test)
+add_subdirectory(breakout)
+add_subdirectory(thetower)
