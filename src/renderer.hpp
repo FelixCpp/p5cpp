@@ -6,7 +6,7 @@
 #include "vertex.hpp"
 #include "draw_scope.hpp"
 #include "uniform_cache.hpp"
-#include "canvas.hpp"
+#include "draw_command_list.hpp"
 
 namespace p5
 {
@@ -37,10 +37,14 @@ namespace p5
 
         DrawBuffer drawBuffer;
         UniformCache uniformCache;
+        DrawCommandList drawCommands;
+
+        std::shared_ptr<Framebuffer> framebuffer;
     };
 
     Renderer renderer_create(size_t vertexCount, size_t indexCount);
-    void renderer_begin_frame(Renderer& renderer);
+    void renderer_begin_frame(Renderer& renderer, std::shared_ptr<Framebuffer> targetFramebuffer);
     void renderer_end_frame(Renderer& renderer);
-    void renderer_flush(Renderer& renderer, Canvas& canvasStack);
+    void renderer_flush(Renderer& renderer);
+    void renderer_submit(Renderer& renderer, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture);
 } // namespace p5

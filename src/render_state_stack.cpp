@@ -5,7 +5,7 @@ namespace p5
     RenderStateStack render_state_stack_create()
     {
         return RenderStateStack {
-            .renderStates = {RenderState()},
+            .renderStates = {render_state_create()},
             .activeRenderStateIndex = 0
         };
     }

@@ -69,7 +69,7 @@ namespace p5
         return nullptr;
     }
 
-    std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData)
+    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData)
     {
         return OpenGLTexture::create(width, height, imageData);
     }

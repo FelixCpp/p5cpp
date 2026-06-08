@@ -50,16 +50,16 @@ namespace p5
 
 namespace p5
 {
-    static void render_canvas(Renderer& renderer, Canvas& canvas)
+    static void render_canvas(Renderer& renderer)
     {
-        const uint2 canvasSize = canvas.framebuffer->getSize();           // logical (for projection)
-        const uint2 viewportSize = canvas.framebuffer->getViewportSize(); // physical pixels (for glViewport)
+        const uint2 canvasSize = renderer.framebuffer->getSize();           // logical (for projection)
+        const uint2 viewportSize = renderer.framebuffer->getViewportSize(); // physical pixels (for glViewport)
         const matrix4x4 orthoProjection = ortho(0.0f, static_cast<float>(canvasSize.y), static_cast<float>(canvasSize.x), 0.0f, -1.0f, 1.0f);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, canvas.framebuffer->getRendererId());
+        glBindFramebuffer(GL_FRAMEBUFFER, renderer.framebuffer->getRendererId());
         glViewport(0, 0, viewportSize.x, viewportSize.y);
 
-        for (const DrawCommand& drawCall : canvas.drawCommands) {
+        for (const DrawCommand& drawCall : renderer.drawCommands) {
             setBlendMode(drawCall.blendMode);
 
             for (size_t i = 0; i < drawCall.textureUnitCount; ++i) {
@@ -93,10 +93,9 @@ namespace p5
             }
 
             glDrawElements(GL_TRIANGLES, drawCall.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.drawBufferIndexStart * sizeof(uint32_t)));
-            // glDrawElements(GL_LINES, drawCall.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(drawCall.drawBufferIndexStart * sizeof(uint32_t)));
         }
 
-        draw_commands_clear(canvas.drawCommands);
+        draw_commands_clear(renderer.drawCommands);
     }
 
 } // namespace p5
@@ -139,11 +138,15 @@ namespace p5
             .ebo = ebo,
             .drawBuffer = draw_buffer_create(vertexCount, indexCount),
             .uniformCache = uniform_cache_create(),
+            .drawCommands = {},
+            .framebuffer = nullptr,
         };
     }
 
-    void renderer_begin_frame(Renderer& renderer)
+    void renderer_begin_frame(Renderer& renderer, std::shared_ptr<Framebuffer> targetFramebuffer)
     {
+        renderer.framebuffer = std::move(targetFramebuffer);
+
         glBindVertexArray(renderer.vao);
         glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer.ebo);
@@ -154,11 +157,19 @@ namespace p5
         glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        renderer.framebuffer = nullptr;
     }
 
-    void renderer_flush(Renderer& renderer, Canvas& canvas)
+    void renderer_flush(Renderer& renderer)
     {
-        if (renderer.drawBuffer.vertexCursor == 0 && canvas.drawCommands.empty())
+        if (renderer.framebuffer == nullptr)
+            return;
+
+        if (renderer.drawCommands.empty())
+            return;
+
+        if (renderer.drawBuffer.indexCursor == 0 or renderer.drawBuffer.vertexCursor == 0)
             return;
 
         glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo);
@@ -167,7 +178,15 @@ namespace p5
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer.ebo);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, renderer.drawBuffer.indexCursor * sizeof(uint32_t), renderer.drawBuffer.indices.get());
 
-        render_canvas(renderer, canvas);
+        render_canvas(renderer);
         draw_buffer_clear(renderer.drawBuffer);
+    }
+} // namespace p5
+
+namespace p5
+{
+    void renderer_submit(Renderer& renderer, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    {
+        draw_commands_submit(renderer.drawCommands, renderer.uniformCache, scope, std::move(shader), blendMode, texture);
     }
 } // namespace p5

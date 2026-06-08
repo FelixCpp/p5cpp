@@ -215,7 +215,7 @@ struct TowerSketch : p5::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<Framebuffer>(createCanvas(W, H).release());
+        bgCanvas = std::shared_ptr<Framebuffer>(createFramebuffer(W, H).release());
         initStars();
     }
 
@@ -870,12 +870,10 @@ struct TowerSketch : p5::Sketch
 
         // dashed ring
         static const std::array<float, 2> dashPat {10.f, 7.f};
-        strokePattern(dashPat);
         strokeWeight(1.2f + pulse * 1.5f);
         stroke(hasTarget ? 80 : 50, hasTarget ? 200 : 140, 255, (int)((hasTarget ? 90 : 55) + pulse * 60.f));
         circle(cx, cy, r * 2.f);
         static const std::array<float, 0> noPat {};
-        strokePattern(noPat);
 
         blendMode(BlendMode::alpha);
     }
@@ -1075,7 +1073,7 @@ struct TowerSketch : p5::Sketch
             int a = (int)(210.f * std::min(1.f, t * 4.f) * t);          // quick fade in, slow fade out
             fill(red(ft.col), green(ft.col), blue(ft.col), a);
             textSize(13.f * sc);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
             text(ft.text, ft.pos.x, ft.pos.y);
         }
         blendMode(BlendMode::alpha);
@@ -1121,31 +1119,31 @@ struct TowerSketch : p5::Sketch
 
         fill(170, 210, 255, 185);
         textSize(11.f);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         text("HP  " + std::to_string((int)towerHp) + " / " + std::to_string((int)towerMaxHp()), CX, by + bh * 0.5f);
 
         fill(160, 210, 255, 210);
         textSize(15.f);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::top});
         text("Wave  " + std::to_string(wave), 14.f, 14.f);
-        textAlign(HorizontalTextAlign::right, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::top});
         text("Score  " + std::to_string(score), (float)W - 14.f, 14.f);
 
         fill(255, 210, 50, 220);
         textSize(14.f);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::bottom);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::bottom});
         text("Coins:  " + std::to_string(coins) + " c", 14.f, (float)H - 14.f);
 
         fill(120, 160, 200, 140);
         textSize(10.f);
-        textAlign(HorizontalTextAlign::right, VerticalTextAlign::bottom);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::bottom});
         text("U = upgrades", (float)W - 14.f, (float)H - 14.f);
 
         if (speedIndicatorT > 0.f) {
             blendMode(BlendMode::additive);
             fill(80, 255, 190, (int)(220.f * speedIndicatorT));
             textSize(13.f);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
             text("SPEED SHOT!", CX, 14.f);
             blendMode(BlendMode::alpha);
         }
@@ -1173,7 +1171,7 @@ struct TowerSketch : p5::Sketch
         }
         fill(255, 210, 60, (int)(alphaT * 220.f));
         textSize(44.f * scaleT);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         text(waveBannerText, CX, CY);
         blendMode(BlendMode::alpha);
     }
@@ -1200,7 +1198,7 @@ struct TowerSketch : p5::Sketch
 
         fill(180, 220, 255, 230);
         textSize(22.f);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
         text("UPGRADES", CX, py + 14.f);
 
         fill(255, 210, 50, 230);
@@ -1238,7 +1236,7 @@ struct TowerSketch : p5::Sketch
 
             fill(mx ? 80 : 200, mx ? 255 : 220, mx ? 80 : 255, 220);
             textSize(13.f);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
             text(upgrades[id].name, cx + cardW * 0.5f, cy + 10.f);
 
             // level bar
@@ -1263,7 +1261,7 @@ struct TowerSketch : p5::Sketch
 
             fill(140, 180, 220, 180);
             textSize(10.f);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
             text("Lv " + std::to_string(upgrades[id].level) + " / " + std::to_string(upgrades[id].maxLevel), cx + cardW * 0.5f, cy + 42.f);
 
             fill(180, 210, 255, 190);
@@ -1299,7 +1297,7 @@ struct TowerSketch : p5::Sketch
 
         fill(120, 160, 200, 160);
         textSize(11.f);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::bottom);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::bottom});
         text("Arrow Keys  Navigate     Enter  Buy     U / ESC  Close", CX, py + ph - 12.f);
     }
 
@@ -1320,7 +1318,7 @@ struct TowerSketch : p5::Sketch
         blendMode(BlendMode::alpha);
         fill(200, 225, 255, 230);
         textSize(52.f);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         text("THE TOWER", CX, CY + 5.f);
         fill(120, 175, 220, 180);
         textSize(15.f);
@@ -1346,7 +1344,7 @@ struct TowerSketch : p5::Sketch
         blendMode(BlendMode::additive);
         fill(255, 50, 50, 210);
         textSize(52.f);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         text("GAME OVER", CX, CY - 65.f);
         blendMode(BlendMode::alpha);
         fill(200, 200, 255, 200);

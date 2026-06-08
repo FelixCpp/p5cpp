@@ -203,7 +203,7 @@ struct GravitasSketch : p5::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<Framebuffer>(createCanvas(W, H).release());
+        bgCanvas = std::shared_ptr<Framebuffer>(createFramebuffer(W, H).release());
 
         for (auto& s : bgStars) {
             s.x = fr(0.f, W);
@@ -966,7 +966,7 @@ struct GravitasSketch : p5::Sketch
     void drawHUD()
     {
         // Score (top center)
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
         fill(185, 215, 255, 190);
         textSize(12.f);
         text("SCORE", (float)W * 0.5f, 13.f);
@@ -983,7 +983,7 @@ struct GravitasSketch : p5::Sketch
         }
 
         // Hi-score (top right)
-        textAlign(HorizontalTextAlign::right, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::top});
         fill(130, 175, 255, 130);
         textSize(10.f);
         text("BEST  " + std::format("{:06d}", hiScore), (float)W - 13.f, 13.f);
@@ -1038,13 +1038,13 @@ struct GravitasSketch : p5::Sketch
 
         noStroke();
         fill(195, 215, 255, pulseCd <= 0.f ? 215 : 130);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         textSize(8.f);
         text("PULSE", pcX, pcY - 3.f);
         text("CLICK", pcX, pcY + 6.f);
 
         // Star mass indicator (bottom right)
-        textAlign(HorizontalTextAlign::right, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::top});
         fill(255, 200, 80, 150);
         textSize(10.f);
         text(std::format("MASS {:.1f}×", starMass), (float)W - 13.f, (float)H - 26.f);
@@ -1053,7 +1053,7 @@ struct GravitasSketch : p5::Sketch
     // ── Float texts ───────────────────────────────────────────────────────────
     void drawFloatTexts()
     {
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         for (auto& ft : floatTexts) {
             float t = ft.life / ft.maxLife;
             noStroke();
@@ -1070,7 +1070,7 @@ struct GravitasSketch : p5::Sketch
     // ─────────────────────────────────────────────────────────────────────────
     void drawMenu()
     {
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
 
         float pulse = 0.5f + 0.5f * std::sin(bgTime * 1.1f);
 
@@ -1130,7 +1130,7 @@ struct GravitasSketch : p5::Sketch
         fill(0, 0, 18, 165);
         rect(0.f, 0.f, W, H);
 
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
 
         blendMode(BlendMode::additive);
         for (int g = 4; g >= 0; --g) {

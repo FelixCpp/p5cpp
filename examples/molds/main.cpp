@@ -16,7 +16,7 @@ struct PixelGrid
         : columns(columns),
           rows(rows),
           pixels(columns * rows * 4, 0),
-          texture(loadTexture(static_cast<uint32_t>(columns), static_cast<uint32_t>(rows), pixels))
+          texture(createTexture(static_cast<uint32_t>(columns), static_cast<uint32_t>(rows), pixels))
     {
     }
 

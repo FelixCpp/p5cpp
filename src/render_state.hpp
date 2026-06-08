@@ -3,28 +3,22 @@
 #include "p5.hpp"
 #include "matrix_stack.hpp"
 
-#include <vector>
-
 namespace p5
 {
     struct RenderState
     {
         color_t fillColor;
-        color_t strokeColor;
-        color_t tintColor;
+        bool isFillDisabled;
 
+        color_t strokeColor;
+        bool isStrokeDisabled;
         float strokeWeight;
         StrokeCap strokeCap;
         StrokeJoin strokeJoin;
         float miterLimit;
         float roundJoinThreshold;
 
-        BlendMode blendMode;
-
-        MatrixStack metrics;
-
-        bool isFillDisabled;
-        bool isStrokeDisabled;
+        color_t tintColor;
 
         uint32_t bezierDetail;
         float invBezierDetail;
@@ -33,17 +27,14 @@ namespace p5
         uint32_t curveDetail;
         float invCurveDetail;
 
-        std::vector<float> strokePatternSegments;
-        float strokePatternOffset;
-
         std::shared_ptr<Font> font;
         float textSize;
+        TextAlign textAlign;
 
         std::shared_ptr<Shader> shader;
-
-        HorizontalTextAlign horizontalTextAlign;
-        VerticalTextAlign verticalTextAlign;
-
-        RenderState();
+        BlendMode blendMode;
+        MatrixStack metrics;
     };
+
+    RenderState render_state_create();
 } // namespace p5

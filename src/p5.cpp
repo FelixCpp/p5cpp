@@ -1,9 +1,10 @@
 #include "p5.hpp"
+#include "render_state_stack.hpp"
 #include "window.hpp"
 #include "framebuffer.hpp"
 #include "shader.hpp"
-#include "canvas.hpp"
-#include "canvas_stack.hpp"
+// #include "canvas.hpp"
+// #include "canvas_stack.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "render_state.hpp"
@@ -11,8 +12,8 @@
 #include "dejavusans.hpp"
 #include "uniform_cache.hpp"
 #include "timing.hpp"
-#include <cassert>
 
+#include <cassert>
 #include <iostream>
 #include <array>
 #include <numbers>
@@ -24,6 +25,18 @@ namespace p5
     const StrokeCap StrokeCap::butt = StrokeCap {.start = StrokeCapStyle::butt, .end = StrokeCapStyle::butt};
     const StrokeCap StrokeCap::square = StrokeCap {.start = StrokeCapStyle::square, .end = StrokeCapStyle::square};
     const StrokeCap StrokeCap::round = StrokeCap {.start = StrokeCapStyle::round, .end = StrokeCapStyle::round};
+
+    const TextAlign TextAlign::topLeft = TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::top};
+    const TextAlign TextAlign::topCenter = TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top};
+    const TextAlign TextAlign::topRight = TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::top};
+
+    const TextAlign TextAlign::centerLeft = TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::center};
+    const TextAlign TextAlign::center = TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center};
+    const TextAlign TextAlign::centerRight = TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::center};
+
+    const TextAlign TextAlign::bottomLeft = TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::bottom};
+    const TextAlign TextAlign::bottomCenter = TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::bottom};
+    const TextAlign TextAlign::bottomRight = TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::bottom};
 } // namespace p5
 
 namespace p5
@@ -102,28 +115,245 @@ namespace p5
     inline static std::shared_ptr<Font> defaultFont;
     inline static std::shared_ptr<Framebuffer> defaultFramebuffer;
     inline static std::unique_ptr<Texture> whiteTexture;
-    inline static CanvasStack canvasStack;
+    inline static std::vector<std::shared_ptr<Framebuffer>> framebufferStack;
+    inline static RenderStateStack renderStateStack;
     inline static Renderer renderer;
 
     inline static AppWindow* appWindow = nullptr;
 
     inline static std::vector<color_t> pixelScratch;
     inline static bool needsDefaultCanvasRecreation = false;
+} // namespace p5
 
-    static void recreateDefaultCanvas()
+/// --------------------------------------------
+///               RenderState Options
+/// --------------------------------------------
+namespace p5
+{
+    void pushState()
     {
-        const int physW = window_physical_width(appWindow);
-        const int physH = window_physical_height(appWindow);
-        if (physW <= 0 || physH <= 0)
-            return;
-
-        defaultFramebuffer = create_window_framebuffer(physW, physH, width, height);
-        needsDefaultCanvasRecreation = false;
-        printf("Creating default canvas");
+        render_state_stack_push(renderStateStack, render_state_stack_peek(renderStateStack));
     }
 
-    inline RenderStateStack& get_render_state_stack() { return canvas_stack_peek(canvasStack).renderStates; }
-    inline RenderState& peekState() { return render_state_stack_peek(get_render_state_stack()); }
+    void popState()
+    {
+        render_state_stack_pop(renderStateStack);
+    }
+
+    void pushMatrix()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_push(renderState.metrics, matrix_stack_peek(renderState.metrics));
+    }
+
+    void popMatrix()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_pop(renderState.metrics);
+    }
+
+    void resetMatrix()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_set(renderState.metrics, matrix4x4::identity);
+    }
+
+    void applyMatrix(const matrix4x4& matrix)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_apply(renderState.metrics, matrix);
+    }
+
+    void setMatrix(const matrix4x4& matrix)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_set(renderState.metrics, matrix);
+    }
+
+    matrix4x4& peekMatrix()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        return matrix_stack_peek(renderState.metrics);
+    }
+
+    void translate(float x, float y)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_apply(renderState.metrics, translation(x, y));
+    }
+
+    void scale(float x, float y)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_apply(renderState.metrics, scaling(x, y));
+    }
+
+    void rotate(float angle)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        matrix_stack_apply(renderState.metrics, rotation(angle));
+    }
+
+    void noFill()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.isFillDisabled = true;
+    }
+
+    void fill(int grey, int alpha) { fill(rgba(grey, grey, grey, alpha)); }
+    void fill(int red, int green, int blue, int alpha) { fill(rgba(red, green, blue, alpha)); }
+    void fill(color_t color)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.fillColor = color;
+        renderState.isFillDisabled = false;
+    }
+
+    void noStroke()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.isStrokeDisabled = true;
+    }
+
+    void stroke(int grey, int alpha) { stroke(rgba(grey, grey, grey, alpha)); }
+    void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
+    void stroke(color_t color)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.strokeColor = color;
+        renderState.isStrokeDisabled = false;
+    }
+
+    void strokeWeight(float strokeWeight)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.strokeWeight = strokeWeight;
+    }
+
+    void strokeCap(StrokeCap strokeCap)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.strokeCap = strokeCap;
+    }
+
+    void strokeJoin(StrokeJoin strokeJoin)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.strokeJoin = strokeJoin;
+    }
+
+    void miterLimit(float miterLimit)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.miterLimit = miterLimit;
+    }
+
+    void roundJoinThreshold(float angleThreshold)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.roundJoinThreshold = angleThreshold;
+    }
+
+    void blendMode(BlendMode blendMode)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.blendMode = blendMode;
+    }
+
+    void curveTightness(float tightness)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.curveTightness = tightness;
+    }
+
+    void curveDetail(uint32_t detail)
+    {
+        detail = std::max(detail, 1u);
+
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.curveDetail = detail;
+        renderState.invCurveDetail = 1.0f / static_cast<float>(detail);
+    }
+
+    void bezierDetail(uint32_t detail)
+    {
+        detail = std::max(detail, 1u);
+
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.bezierDetail = detail;
+        renderState.invBezierDetail = 1.0f / static_cast<float>(detail);
+    }
+
+    void shader(std::shared_ptr<Shader> shader)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.shader = std::move(shader);
+    }
+
+    void noShader()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.shader.reset();
+    }
+
+    void setUniform(const std::string& name, const UniformVariable& variable)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        if (renderState.shader != nullptr) {
+            setUniform(renderState.shader, name, variable);
+        }
+    }
+
+    void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
+    {
+        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(renderer.uniformCache, shader.get());
+        shader_uniform_cache_insert_or_update(shaderCache, name, variable);
+    }
+
+    void textAlign(TextAlign textAlign)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.textAlign = textAlign;
+    }
+
+    void textFont(std::shared_ptr<Font> font)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.font = font;
+    }
+
+    void noTextFont()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.font.reset();
+    }
+
+    void textSize(float size)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.textSize = size;
+    }
+
+    void tint(int grey, int alpha) { tint(rgba(grey, grey, grey, alpha)); }
+    void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
+    void tint(color_t color)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.tintColor = color;
+    }
+
+    void noTint()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.tintColor = rgba(255, 255, 255);
+    }
+} // namespace p5
+
+/// -----------------------------------------
+///             Rendering methods
+/// -----------------------------------------
+namespace p5
+{
     inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
@@ -138,73 +368,12 @@ namespace p5
         return result;
     }
 
-    UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
-    UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
-    UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
-    UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
-
-    // Flush the CPU draw buffer to the GPU if there is less than SAFE_MARGIN
-    // room left.  Must be called BEFORE draw_buffer_get_scope() so the new
-    // scope always starts at a valid (non-overflowed) base offset.
-    void flushIfNeeded()
-    {
-        constexpr size_t SAFE_MARGIN_V = 4096;
-        constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
-        if (renderer.drawBuffer.vertexCursor + SAFE_MARGIN_V >= renderer.drawBuffer.vertexCount ||
-            renderer.drawBuffer.indexCursor + SAFE_MARGIN_I >= renderer.drawBuffer.indexCount) {
-            Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, canvas);
-        }
-    }
-
-    void pushCanvas(std::shared_ptr<Framebuffer> framebuffer)
-    {
-        // First we need to flush the renderer to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
-        if (not canvas_stack_is_empty(canvasStack)) {
-            Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, canvas);
-        }
-
-        canvas_stack_push(
-            canvasStack,
-            Canvas {
-                .framebuffer = std::move(framebuffer),
-                .renderStates = render_state_stack_create(),
-                .drawCommands = {},
-            }
-        );
-    }
-
-    void popCanvas()
-    {
-        // FLush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
-        if (not canvas_stack_is_empty(canvasStack)) {
-            Canvas& canvas = canvas_stack_peek(canvasStack);
-            renderer_flush(renderer, canvas);
-        }
-
-        canvas_stack_pop(canvasStack);
-    }
-
-    void pushState() { render_state_stack_push(get_render_state_stack(), peekState()); }
-    void popState() { render_state_stack_pop(get_render_state_stack()); }
-
-    void pushMatrix() { matrix_stack_push(peekState().metrics, matrix_stack_peek(peekState().metrics)); }
-    void popMatrix() { matrix_stack_pop(peekState().metrics); }
-    void resetMatrix() { matrix_stack_reset(peekState().metrics); }
-    void applyMatrix(const matrix4x4& matrix) { matrix_stack_apply(peekState().metrics, matrix); }
-    void setMatrix(const matrix4x4& matrix) { matrix_stack_set(peekState().metrics, matrix); }
-    matrix4x4& peekMatrix() { return matrix_stack_peek(peekState().metrics); }
-    void translate(float x, float y) { applyMatrix(translation(x, y)); }
-    void scale(float x, float y) { applyMatrix(scaling(x, y)); }
-    void rotate(float angle) { applyMatrix(rotation(angle)); }
-
     void background(int grey, int alpha) { background(rgba(grey, alpha)); }
     void background(int red, int green, int blue, int alpha) { background(rgba(red, green, blue, alpha)); }
     void background(color_t color)
     {
-        RenderState& state = peekState();
-        const uint2 size = canvas_stack_peek(canvasStack).framebuffer->getSize();
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        const uint2 size = renderer.framebuffer->getSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -225,7 +394,7 @@ namespace p5
         };
 
         {
-            flushIfNeeded();
+            // flushIfNeeded();
             DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
 
             tesselate_quads(
@@ -238,63 +407,71 @@ namespace p5
                 }
             );
 
-            draw_commands_submit(
-                canvas_stack_peek(canvasStack).drawCommands,
-                renderer.uniformCache,
+            renderer_submit(
+                renderer,
                 scope,
-                getCurrentShader(state),
-                state.blendMode,
+                getCurrentShader(renderState),
+                renderState.blendMode,
                 whiteTexture->getRendererId()
             );
         }
     }
+} // namespace p5
 
-    void noFill() { peekState().isFillDisabled = true; }
-    void fill(int grey, int alpha) { fill(rgba(grey, grey, grey, alpha)); }
-    void fill(int red, int green, int blue, int alpha) { fill(rgba(red, green, blue, alpha)); }
-    void fill(color_t color)
+namespace p5
+{
+    static void recreateDefaultCanvas()
     {
-        RenderState& state = peekState();
-        state.fillColor = color;
-        state.isFillDisabled = false;
+        const int physW = window_physical_width(appWindow);
+        const int physH = window_physical_height(appWindow);
+        if (physW <= 0 || physH <= 0)
+            return;
+
+        defaultFramebuffer = create_window_framebuffer(physW, physH, width, height);
+        needsDefaultCanvasRecreation = false;
+        printf("Creating default canvas");
     }
 
-    void noStroke() { peekState().isStrokeDisabled = true; }
-    void stroke(int grey, int alpha) { stroke(rgba(grey, grey, grey, alpha)); }
-    void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
-    void stroke(color_t color)
+    UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
+    UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
+    UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
+    UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
+
+    // Flush the CPU draw buffer to the GPU if there is less than SAFE_MARGIN
+    // room left.  Must be called BEFORE draw_buffer_get_scope() so the new
+    // scope always starts at a valid (non-overflowed) base offset.
+    void flushIfNeeded()
     {
-        RenderState& state = peekState();
-        state.strokeColor = color;
-        state.isStrokeDisabled = false;
+        constexpr size_t SAFE_MARGIN_V = 4096;
+        constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
+        if (renderer.drawBuffer.vertexCursor + SAFE_MARGIN_V >= renderer.drawBuffer.vertexCount ||
+            renderer.drawBuffer.indexCursor + SAFE_MARGIN_I >= renderer.drawBuffer.indexCount) {
+            renderer_flush(renderer);
+        }
     }
 
-    void strokeWeight(float strokeWeight) { peekState().strokeWeight = strokeWeight; }
-    void strokeCap(StrokeCap strokeCap) { peekState().strokeCap = strokeCap; }
-    void strokeJoin(StrokeJoin strokeJoin) { peekState().strokeJoin = strokeJoin; }
-    void strokePattern(std::span<const float> pattern) { peekState().strokePatternSegments = std::vector<float>(pattern.begin(), pattern.end()); }
-    void strokePatternOffset(float offset) { peekState().strokePatternOffset = offset; }
-    void miterLimit(float miterLimit) { peekState().miterLimit = miterLimit; }
-    void roundJoinThreshold(float angleThreshold) { peekState().roundJoinThreshold = angleThreshold; }
-    void blendMode(BlendMode blendMode) { peekState().blendMode = blendMode; }
-    void curveTightness(float tightness) { peekState().curveTightness = tightness; }
-
-    void curveDetail(uint32_t detail)
+    void pushCanvas(std::shared_ptr<Framebuffer> framebuffer)
     {
-        detail = std::max(detail, 1u);
+        // First we need to flush the renderer to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
+        renderer_flush(renderer);
+        renderer_end_frame(renderer);
 
-        RenderState& state = peekState();
-        state.curveDetail = detail;
-        state.invCurveDetail = 1.0f / static_cast<float>(detail);
+        framebufferStack.push_back(framebuffer);
+        renderer_begin_frame(renderer, framebuffer);
+        render_state_stack_push(renderStateStack, render_state_stack_peek(renderStateStack));
     }
 
-    void bezierDetail(uint32_t detail)
+    void popCanvas()
     {
-        detail = std::max(detail, 1u);
+        // Flush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
+        renderer_flush(renderer);
+        renderer_end_frame(renderer);
+        render_state_stack_pop(renderStateStack);
 
-        RenderState& state = peekState();
-        state.bezierDetail = detail;
-        state.invBezierDetail = 1.0f / static_cast<float>(detail);
+        framebufferStack.pop_back();
+        if (not framebufferStack.empty()) {
+            renderer_begin_frame(renderer, framebufferStack.back());
+        }
     }
 
     void beginShape()
@@ -306,7 +483,7 @@ namespace p5
     // (e.g. fill a triangleFan but stroke only the outer lineLoop).
     void endShapeImpl(ShapeType fillType, ShapeType strokeType, std::optional<ColorStyle> fillStyle, std::optional<ColorStyle> strokeStyle, bool close)
     {
-        const RenderState& state = peekState();
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
 
         flushIfNeeded();
         DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
@@ -331,19 +508,19 @@ namespace p5
             const PathPoints points = linepath->buildDrawPoints(strokeStyle.value());
 
             switch (strokeType) {
-                case ShapeType::lines: stroke_lines(scope, points, state.strokeWeight, state.strokeCap, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::lineStrip: stroke_line_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::lineLoop: stroke_line_loop(scope, points, state.strokeWeight, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::triangles: stroke_triangles(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::triangleStrip: stroke_triangle_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::triangleFan: stroke_triangle_fan(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::quads: stroke_quads(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::quadStrip: stroke_quad_strip(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold); break;
-                case ShapeType::polygon: stroke_polygon(scope, points, state.strokeWeight, state.strokeCap, state.strokeJoin, state.miterLimit, state.roundJoinThreshold, close); break;
+                case ShapeType::lines: stroke_lines(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::lineStrip: stroke_line_strip(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::lineLoop: stroke_line_loop(scope, points, renderState.strokeWeight, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::triangles: stroke_triangles(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::triangleStrip: stroke_triangle_strip(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::triangleFan: stroke_triangle_fan(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::quads: stroke_quads(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::quadStrip: stroke_quad_strip(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::polygon: stroke_polygon(scope, points, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, close); break;
             }
         }
 
-        draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, renderer.uniformCache, scope, getCurrentShader(state), state.blendMode, whiteTexture->getRendererId());
+        renderer_submit(renderer, scope, getCurrentShader(renderState), renderState.blendMode, whiteTexture->getRendererId());
 
         linepath->clear();
         curveVertexCount = 0;
@@ -351,9 +528,9 @@ namespace p5
 
     void endShape(ShapeType type, bool close)
     {
-        const RenderState& state = peekState();
-        const std::optional<ColorStyle> fillStyle = state.isFillDisabled ? std::nullopt : std::make_optional(ColorStyle::fill);
-        const std::optional<ColorStyle> strokeStyle = state.isStrokeDisabled ? std::nullopt : std::make_optional(ColorStyle::stroke);
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        const std::optional<ColorStyle> fillStyle = renderState.isFillDisabled ? std::nullopt : std::make_optional(ColorStyle::fill);
+        const std::optional<ColorStyle> strokeStyle = renderState.isStrokeDisabled ? std::nullopt : std::make_optional(ColorStyle::stroke);
         endShapeImpl(type, type, fillStyle, strokeStyle, close);
     }
 
@@ -364,19 +541,18 @@ namespace p5
 
     void vertex(float x, float y, float u, float v)
     {
-        const RenderState& state = peekState();
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
         const float2 transformed = transformPoint(peekMatrix(), {x, y});
-        linepath->vertex(transformed.x, transformed.y, u, v, state.fillColor, state.strokeColor);
+        linepath->vertex(transformed.x, transformed.y, u, v, renderState.fillColor, renderState.strokeColor);
     }
 
     void curveVertex(float x, float y)
     {
-        const RenderState& state = peekState();
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
         curveVertexPositions[curveVertexCount++] = {x, y};
 
         if (curveVertexCount >= 4) {
-            const RenderState& state = peekState();
-            const float alpha = (1.0f - state.curveTightness) * 0.5f;
+            const float alpha = (1.0f - renderState.curveTightness) * 0.5f;
 
             for (size_t i = 0; i < curveVertexPositions.size() - 3; ++i) {
                 auto [x1, y1] = curveVertexPositions[i];
@@ -384,8 +560,8 @@ namespace p5
                 auto [x3, y3] = curveVertexPositions[i + 2];
                 auto [x4, y4] = curveVertexPositions[i + 3];
 
-                for (size_t j = 0; j <= state.curveDetail; ++j) {
-                    float t = static_cast<float>(j) * state.invCurveDetail;
+                for (size_t j = 0; j <= renderState.curveDetail; ++j) {
+                    float t = static_cast<float>(j) * renderState.invCurveDetail;
                     float t2 = t * t;
                     float t3 = t2 * t;
 
@@ -400,25 +576,468 @@ namespace p5
         }
     }
 
-    void shader(std::shared_ptr<Shader> shader) { peekState().shader = std::move(shader); }
-    void noShader() { peekState().shader.reset(); }
-    void setUniform(const std::string& name, const UniformVariable& variable)
+    void rect(float left, float top, float width, float height)
     {
-        const RenderState& state = peekState();
-        if (state.shader != nullptr) {
-            setUniform(state.shader, name, variable);
+        beginShape();
+        vertex(left, top);
+        vertex(left + width, top);
+        vertex(left + width, top + height);
+        vertex(left, top + height);
+        endShape(ShapeType::quads, true);
+    }
+
+    void rect(float left, float top, float width, float height, float cx, float cy)
+    {
+        rect(left, top, width, height, cx, cy, cx, cy, cx, cy, cx, cy);
+    }
+
+    void rect(float left, float top, float width, float height, float topLeftX, float topLeftY, float topRightX, float topRightY, float bottomRightX, float bottomRightY, float bottomLeftX, float bottomLeftY)
+    {
+        float maxRx = width * 0.5f;
+        float maxRy = height * 0.5f;
+        topLeftX = std::min(topLeftX, maxRx);
+        topLeftY = std::min(topLeftY, maxRy);
+        topRightX = std::min(topRightX, maxRx);
+        topRightY = std::min(topRightY, maxRy);
+        bottomRightX = std::min(bottomRightX, maxRx);
+        bottomRightY = std::min(bottomRightY, maxRy);
+        bottomLeftX = std::min(bottomLeftX, maxRx);
+        bottomLeftY = std::min(bottomLeftY, maxRy);
+
+        static constexpr float HALF_PI = std::numbers::pi_v<float> * 0.5f;
+
+        struct Corner
+        {
+            float cx, cy, rx, ry, startAngle;
+        };
+        const Corner corners[4] = {
+            {left + width - bottomRightX, top + height - bottomRightY, bottomRightX, bottomRightY, 0.0f}, // unten rechts
+            {left + bottomLeftX, top + height - bottomLeftY, bottomLeftX, bottomLeftY, HALF_PI},          // unten links
+            {left + topLeftX, top + topLeftY, topLeftX, topLeftY, HALF_PI * 2},                           // oben links
+            {left + width - topRightX, top + topRightY, topRightX, topRightY, HALF_PI * 3},               // oben rechts
+        };
+
+        // Emits all arc vertices for all 4 corners.
+        // Each arc uses i < segs (open end) so consecutive corners share no duplicate junction vertex.
+        // Zero-radius corners clamp to 1 segment, which emits exactly the corner point.
+        auto emitRim = [&] {
+            for (const auto& c : corners) {
+                const size_t segs = std::max(size_t(1), computeCircleSegmentCount(HALF_PI, std::max(c.rx, c.ry)));
+                for (size_t i = 0; i < segs; ++i) {
+                    const float angle = c.startAngle + HALF_PI * (float(i) / float(segs));
+                    vertex(c.cx + std::cos(angle) * c.rx, c.cy + std::sin(angle) * c.ry);
+                }
+            }
+        };
+
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+
+        // Fill: triangleFan from the centre – rounded rect is always convex, so no libtess2 needed.
+        if (!renderState.isFillDisabled) {
+            beginShape();
+            vertex(left + width * 0.5f, top + height * 0.5f); // fan centre
+            emitRim();
+            vertex(corners[0].cx + corners[0].rx, corners[0].cy); // re-emit first rim vertex to close the fan
+            endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
+        }
+
+        // Stroke: lineLoop around the rim only (no internal fan edges).
+        if (!renderState.isStrokeDisabled) {
+            beginShape();
+            emitRim();
+            endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
         }
     }
 
-    void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
+    void square(float left, float top, float size)
     {
-        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(renderer.uniformCache, shader.get());
-        shader_uniform_cache_insert_or_update(shaderCache, name, variable);
+        rect(left, top, size, size);
     }
 
+    void ellipse(float centerX, float centerY, float width, float height)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, std::max(width, height) * 0.5f);
+
+        // Fill: centre vertex + closed rim → triangleFan (no libtess2, O(n) vertices)
+        if (!renderState.isFillDisabled) {
+            beginShape();
+            vertex(centerX, centerY);
+            for (size_t i = 0; i <= segmentCount; ++i) {
+                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+                vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
+            }
+            endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
+        }
+
+        // Stroke: rim only → lineLoop, so only the outer edge is stroked, not the internal fan edges
+        if (!renderState.isStrokeDisabled) {
+            beginShape();
+            for (size_t i = 0; i < segmentCount; ++i) {
+                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+                vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
+            }
+            endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
+        }
+    }
+
+    void circle(float centerX, float centerY, float size)
+    {
+        ellipse(centerX, centerY, size, size);
+    }
+
+    void point(float x, float y)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        if (renderState.isStrokeDisabled) return;
+
+        const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, renderState.strokeWeight * 0.5f);
+
+        // Fill a disc with the stroke color as a triangleFan — no libtess2, no outline edges
+        beginShape();
+        vertex(x, y);
+        for (size_t i = 0; i <= segmentCount; ++i) {
+            float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+            vertex(x + std::cos(angle) * renderState.strokeWeight * 0.5f, y + std::sin(angle) * renderState.strokeWeight * 0.5f);
+        }
+        endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::stroke, std::nullopt, false);
+    }
+
+    void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
+    {
+        beginShape();
+        vertex(x1, y1);
+        vertex(x2, y2);
+        vertex(x3, y3);
+        endShape(ShapeType::triangles, true);
+    }
+
+    void line(float x1, float y1, float x2, float y2)
+    {
+        beginShape();
+        vertex(x1, y1);
+        vertex(x2, y2);
+        endShapeImpl(ShapeType::lines, ShapeType::lines, std::nullopt, ColorStyle::stroke, false);
+    }
+
+    void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
+    {
+        const bool clockwise = sweepAngle < 0.0f;
+        const float radius = std::max(width, height) * 0.5f;
+        const size_t segmentCount = computeCircleSegmentCount(sweepAngle, radius);
+
+        beginShape();
+
+        if (arcMode == ArcMode::pie) {
+            vertex(centerX, centerY);
+        }
+
+        for (size_t i = 0; i <= segmentCount; ++i) {
+            float t = static_cast<float>(i) / static_cast<float>(segmentCount);
+            float angle = startAngle + (clockwise ? -1.0f : 1.0f) * t * sweepAngle;
+            float x = centerX + std::cos(angle) * width * 0.5f;
+            float y = centerY + std::sin(angle) * height * 0.5f;
+            vertex(x, y);
+        }
+
+        endShape(ShapeType::polygon, arcMode != ArcMode::open);
+    }
+
+    void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+
+        beginShape();
+        for (size_t i = 0; i <= renderState.bezierDetail; ++i) {
+            float t = static_cast<float>(i) * renderState.invBezierDetail;
+
+            float mt = 1.0f - t;
+            float mt2 = mt * mt;
+            float mt3 = mt2 * mt;
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
+            float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
+
+            vertex(bx, by);
+        }
+        endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
+    }
+
+    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+
+        float alpha = (1.0f - renderState.curveTightness) * 0.5f;
+
+        beginShape();
+        for (size_t i = 0; i <= renderState.curveDetail; ++i) {
+            float t = static_cast<float>(i) * renderState.invCurveDetail;
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
+            float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
+
+            vertex(bx, by);
+        }
+        endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
+    }
+
+    void image(uint32_t textureId, float left, float top, float width, float height)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        const std::array<float2, 4> positions = {
+            transformPoint(peekMatrix(), {left, top}),
+            transformPoint(peekMatrix(), {left + width, top}),
+            transformPoint(peekMatrix(), {left + width, top + height}),
+            transformPoint(peekMatrix(), {left, top + height}),
+        };
+        const std::array<float2, 4> texcoords = {
+            float2 {0.0f, 0.0f},
+            float2 {1.0f, 0.0f},
+            float2 {1.0f, 1.0f},
+            float2 {0.0f, 1.0f}
+        };
+        const std::array<color_t, 4> colors = {
+            renderState.tintColor,
+            renderState.tintColor,
+            renderState.tintColor,
+            renderState.tintColor
+        };
+
+        {
+            flushIfNeeded();
+            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
+
+            tesselate_quads(
+                scope,
+                PathPoints {
+                    .size = 4,
+                    .positions = positions,
+                    .texcoords = texcoords,
+                    .colors = colors,
+                }
+            );
+
+            renderer_submit(renderer, scope, getCurrentShader(renderState), renderState.blendMode, textureId);
+        }
+    }
+
+    void text(std::string_view text, float x, float y)
+    {
+        if (text.empty()) return;
+
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        if (renderState.isFillDisabled) return; // fill color is the text color
+
+        Font* font = getCurrentFont(renderState).get();
+
+        TextMetrics metrics = measureText(text, font, renderState.textSize, 1.0f);
+
+        // The horizontal start position for every line (alignment is against the full text width).
+        float lineStartX;
+        switch (renderState.textAlign.horizontal) {
+            case HorizontalTextAlign::left: lineStartX = x; break;
+            case HorizontalTextAlign::center: lineStartX = x - metrics.width * 0.5f; break;
+            case HorizontalTextAlign::right: lineStartX = x - metrics.width; break;
+        }
+
+        float py;
+        switch (renderState.textAlign.vertical) {
+            case VerticalTextAlign::top: py = y + metrics.ascender; break;
+            case VerticalTextAlign::center: py = y + metrics.ascender - metrics.totalHeight * 0.5f; break;
+            case VerticalTextAlign::baseline: py = y; break;
+            case VerticalTextAlign::bottom: py = y - metrics.totalHeight + metrics.ascender; break;
+        }
+
+        const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(renderState.textSize));
+        float px = lineStartX;
+        bool isFirstCharOnLine = true; // tracks whether we need to apply bearing correction for this line
+
+        char32_t prevCh = 0;
+        for (size_t i = 0; i < text.length();) {
+            const char32_t ch = utf8NextCodepoint(text, i);
+
+            if (ch == U'\n') {
+                px = lineStartX; // reset to alignment-adjusted start, not raw x
+                py += font->getLineHeight(renderState.textSize);
+                isFirstCharOnLine = true;
+                prevCh = 0;
+                continue;
+            }
+
+            if (ch == U' ') {
+                if (spaceGlyph != nullptr) {
+                    px += spaceGlyph->advance.x;
+                    py += spaceGlyph->advance.y;
+                }
+                prevCh = U' ';
+                continue;
+            }
+
+            const Glyph* glyph = font->getGlyph(ch, static_cast<int>(renderState.textSize));
+            if (glyph == nullptr) {
+                prevCh = ch;
+                continue;
+            }
+
+            if (isFirstCharOnLine) {
+                // Shift the pen left so the first glyph's visual left edge starts exactly at lineStartX.
+                px -= glyph->bearing.x;
+                isFirstCharOnLine = false;
+            } else {
+                px += font->getKerning(prevCh, ch, static_cast<int>(renderState.textSize));
+            }
+
+            const float left = px + glyph->bearing.x;
+            const float top = py - glyph->bearing.y;
+            const float right = left + glyph->size.x;
+            const float bottom = top + glyph->size.y;
+
+            const std::array<float2, 4> positions = {
+                transformPoint(peekMatrix(), {left, top}),
+                transformPoint(peekMatrix(), {right, top}),
+                transformPoint(peekMatrix(), {right, bottom}),
+                transformPoint(peekMatrix(), {left, bottom}),
+            };
+            const rect2f uvRect = glyph->uvRect;
+            const std::array<float2, 4> texcoords = {
+                float2 {uvRect.left, uvRect.top},
+                float2 {uvRect.left + uvRect.width, uvRect.top},
+                float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
+                float2 {uvRect.left, uvRect.top + uvRect.height}
+            };
+            const std::array<color_t, 4> colors = {
+                renderState.fillColor,
+                renderState.fillColor,
+                renderState.fillColor,
+                renderState.fillColor
+            };
+
+            {
+                flushIfNeeded();
+                DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
+                tesselate_quads(
+                    scope,
+                    PathPoints {
+                        .size = 4,
+                        .positions = positions,
+                        .texcoords = texcoords,
+                        .colors = colors,
+                    }
+                );
+
+                std::shared_ptr<Shader> shader = renderState.shader != nullptr ? renderState.shader : textShader;
+                renderer_submit(renderer, scope, std::move(shader), renderState.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
+            }
+
+            px += glyph->advance.x;
+            py += glyph->advance.y;
+            prevCh = ch;
+        }
+    }
+} // namespace p5
+
+namespace p5
+{
+    int mouseX = 0;
+    int mouseY = 0;
+    int width = 0;
+    int height = 0;
+    int frameCount = 0;
+    float fps = 0.0f;
+    float deltaTime = 0.0f;
+
+    inline static float s_targetFrameTime = 0.0f;
+    inline static auto s_appStartTime = std::chrono::steady_clock::now();
+    inline static bool s_isAppPaused = false;
+    inline static bool s_isCloseRequested = false;
+    inline static int s_exitCode = 0;
+
+    void setWindowSize(int w, int h)
+    {
+        window_set_size(appWindow, w, h);
+        width = w;
+        height = h;
+    }
+    void setWindowTitle(std::string_view title) { window_set_title(appWindow, title); }
+    void setWindowResizable(bool resizable) { window_set_resizable(appWindow, resizable); }
+    int getWindowWidth() { return window_logical_width(appWindow); }
+    int getWindowHeight() { return window_logical_height(appWindow); }
+
+    void frameRate(float targetFps) { s_targetFrameTime = (targetFps > 0.0f) ? (1.0f / targetFps) : 0.0f; }
+    void loop() { s_isAppPaused = false; }
+    void noLoop() { s_isAppPaused = true; }
+    bool isLooping() { return !s_isAppPaused; }
+    void quit() { s_isCloseRequested = true; }
+
+    void quit(int exitCode)
+    {
+        p5::exitCode(exitCode);
+        quit();
+    }
+
+    void exitCode(int code) { s_exitCode = code; }
+
+    float millis()
+    {
+        return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
+    }
+
+    Pixels loadPixels()
+    {
+        renderer_flush(renderer);
+
+        const auto [w, h] = renderer.framebuffer->getViewportSize();
+        const size_t count = static_cast<size_t>(w) * h;
+
+        pixelScratch.resize(count);
+
+        GLint prevReadFBO = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, renderer.framebuffer->getRendererId());
+        glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
+
+        std::vector<color_t> buffer(count);
+        for (uint32_t y = 0; y < h; ++y)
+            std::copy_n(pixelScratch.data() + (h - 1 - y) * w, w, buffer.data() + y * w);
+
+        return Pixels {static_cast<int>(w), static_cast<int>(h), std::move(buffer)};
+    }
+
+    void updatePixels(const Pixels& px)
+    {
+        if (px.size() == 0)
+            return;
+
+        const auto [vpW, vpH] = renderer.framebuffer->getViewportSize();
+        if (static_cast<uint32_t>(px.width) != vpW || static_cast<uint32_t>(px.height) != vpH)
+            return;
+
+        renderer_flush(renderer);
+
+        const auto w = static_cast<uint32_t>(px.width);
+        const auto h = static_cast<uint32_t>(px.height);
+
+        // Flip rows back to OpenGL bottom - up order
+        pixelScratch.resize(static_cast<size_t>(w) * h);
+        for (uint32_t y = 0; y < h; ++y)
+            std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
+
+        renderer.framebuffer->getColorTexture()->update(pixelScratch);
+    }
+
+} // namespace p5
+
+namespace p5
+{
     TextMetrics measureText(std::string_view text)
     {
-        return measureText(text, getCurrentFont(peekState()).get(), peekState().textSize, 1.0f);
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        return measureText(text, getCurrentFont(renderState).get(), renderState.textSize, 1.0f);
     }
 
     TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale)
@@ -487,479 +1106,6 @@ namespace p5
             .lineCount = lineCount,
         };
     }
-
-    void textAlign(HorizontalTextAlign horizontalAlign, VerticalTextAlign verticalAlign)
-    {
-        RenderState& state = peekState();
-        state.horizontalTextAlign = horizontalAlign;
-        state.verticalTextAlign = verticalAlign;
-    }
-
-    void rect(float left, float top, float width, float height)
-    {
-        beginShape();
-        vertex(left, top);
-        vertex(left + width, top);
-        vertex(left + width, top + height);
-        vertex(left, top + height);
-        endShape(ShapeType::quads, true);
-    }
-
-    void rect(float left, float top, float width, float height, float cx, float cy)
-    {
-        rect(left, top, width, height, cx, cy, cx, cy, cx, cy, cx, cy);
-    }
-
-    void rect(float left, float top, float width, float height, float topLeftX, float topLeftY, float topRightX, float topRightY, float bottomRightX, float bottomRightY, float bottomLeftX, float bottomLeftY)
-    {
-        float maxRx = width * 0.5f;
-        float maxRy = height * 0.5f;
-        topLeftX = std::min(topLeftX, maxRx);
-        topLeftY = std::min(topLeftY, maxRy);
-        topRightX = std::min(topRightX, maxRx);
-        topRightY = std::min(topRightY, maxRy);
-        bottomRightX = std::min(bottomRightX, maxRx);
-        bottomRightY = std::min(bottomRightY, maxRy);
-        bottomLeftX = std::min(bottomLeftX, maxRx);
-        bottomLeftY = std::min(bottomLeftY, maxRy);
-
-        static constexpr float HALF_PI = std::numbers::pi_v<float> * 0.5f;
-
-        struct Corner
-        {
-            float cx, cy, rx, ry, startAngle;
-        };
-        const Corner corners[4] = {
-            {left + width - bottomRightX, top + height - bottomRightY, bottomRightX, bottomRightY, 0.0f}, // unten rechts
-            {left + bottomLeftX, top + height - bottomLeftY, bottomLeftX, bottomLeftY, HALF_PI},          // unten links
-            {left + topLeftX, top + topLeftY, topLeftX, topLeftY, HALF_PI * 2},                           // oben links
-            {left + width - topRightX, top + topRightY, topRightX, topRightY, HALF_PI * 3},               // oben rechts
-        };
-
-        // Emits all arc vertices for all 4 corners.
-        // Each arc uses i < segs (open end) so consecutive corners share no duplicate junction vertex.
-        // Zero-radius corners clamp to 1 segment, which emits exactly the corner point.
-        auto emitRim = [&] {
-            for (const auto& c : corners) {
-                const size_t segs = std::max(size_t(1), computeCircleSegmentCount(HALF_PI, std::max(c.rx, c.ry)));
-                for (size_t i = 0; i < segs; ++i) {
-                    const float angle = c.startAngle + HALF_PI * (float(i) / float(segs));
-                    vertex(c.cx + std::cos(angle) * c.rx, c.cy + std::sin(angle) * c.ry);
-                }
-            }
-        };
-
-        const RenderState& state = peekState();
-
-        // Fill: triangleFan from the centre – rounded rect is always convex, so no libtess2 needed.
-        if (!state.isFillDisabled) {
-            beginShape();
-            vertex(left + width * 0.5f, top + height * 0.5f); // fan centre
-            emitRim();
-            vertex(corners[0].cx + corners[0].rx, corners[0].cy); // re-emit first rim vertex to close the fan
-            endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
-        }
-
-        // Stroke: lineLoop around the rim only (no internal fan edges).
-        if (!state.isStrokeDisabled) {
-            beginShape();
-            emitRim();
-            endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
-        }
-    }
-
-    void square(float left, float top, float size)
-    {
-        rect(left, top, size, size);
-    }
-
-    void ellipse(float centerX, float centerY, float width, float height)
-    {
-        const RenderState& state = peekState();
-        const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, std::max(width, height) * 0.5f);
-
-        // Fill: centre vertex + closed rim → triangleFan (no libtess2, O(n) vertices)
-        if (!state.isFillDisabled) {
-            beginShape();
-            vertex(centerX, centerY);
-            for (size_t i = 0; i <= segmentCount; ++i) {
-                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
-                vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
-            }
-            endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
-        }
-
-        // Stroke: rim only → lineLoop, so only the outer edge is stroked, not the internal fan edges
-        if (!state.isStrokeDisabled) {
-            beginShape();
-            for (size_t i = 0; i < segmentCount; ++i) {
-                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
-                vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
-            }
-            endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
-        }
-    }
-
-    void circle(float centerX, float centerY, float size)
-    {
-        ellipse(centerX, centerY, size, size);
-    }
-
-    void point(float x, float y)
-    {
-        if (peekState().isStrokeDisabled) return;
-
-        const RenderState& state = peekState();
-        const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, state.strokeWeight * 0.5f);
-
-        // Fill a disc with the stroke color as a triangleFan — no libtess2, no outline edges
-        beginShape();
-        vertex(x, y);
-        for (size_t i = 0; i <= segmentCount; ++i) {
-            float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
-            vertex(x + std::cos(angle) * state.strokeWeight * 0.5f, y + std::sin(angle) * state.strokeWeight * 0.5f);
-        }
-        endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::stroke, std::nullopt, false);
-    }
-
-    void triangle(float x1, float y1, float x2, float y2, float x3, float y3)
-    {
-        beginShape();
-        vertex(x1, y1);
-        vertex(x2, y2);
-        vertex(x3, y3);
-        endShape(ShapeType::triangles, true);
-    }
-
-    void line(float x1, float y1, float x2, float y2)
-    {
-        beginShape();
-        vertex(x1, y1);
-        vertex(x2, y2);
-        endShapeImpl(ShapeType::lines, ShapeType::lines, std::nullopt, ColorStyle::stroke, false);
-    }
-
-    void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
-    {
-        const bool clockwise = sweepAngle < 0.0f;
-        const float radius = std::max(width, height) * 0.5f;
-        const size_t segmentCount = computeCircleSegmentCount(sweepAngle, radius);
-
-        beginShape();
-
-        if (arcMode == ArcMode::pie) {
-            vertex(centerX, centerY);
-        }
-
-        for (size_t i = 0; i <= segmentCount; ++i) {
-            float t = static_cast<float>(i) / static_cast<float>(segmentCount);
-            float angle = startAngle + (clockwise ? -1.0f : 1.0f) * t * sweepAngle;
-            float x = centerX + std::cos(angle) * width * 0.5f;
-            float y = centerY + std::sin(angle) * height * 0.5f;
-            vertex(x, y);
-        }
-
-        endShape(ShapeType::polygon, arcMode != ArcMode::open);
-    }
-
-    void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
-    {
-        const RenderState& state = peekState();
-
-        beginShape();
-        for (size_t i = 0; i <= state.bezierDetail; ++i) {
-            float t = static_cast<float>(i) * state.invBezierDetail;
-
-            float mt = 1.0f - t;
-            float mt2 = mt * mt;
-            float mt3 = mt2 * mt;
-            float t2 = t * t;
-            float t3 = t2 * t;
-
-            float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
-            float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
-
-            vertex(bx, by);
-        }
-        endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
-    }
-
-    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
-    {
-        const RenderState& state = peekState();
-
-        float alpha = (1.0f - state.curveTightness) * 0.5f;
-
-        beginShape();
-        for (size_t i = 0; i <= state.curveDetail; ++i) {
-            float t = static_cast<float>(i) * state.invCurveDetail;
-            float t2 = t * t;
-            float t3 = t2 * t;
-
-            float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
-            float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
-
-            vertex(bx, by);
-        }
-        endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
-    }
-
-    void tint(int grey, int alpha) { tint(rgba(grey, grey, grey, alpha)); }
-    void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
-    void tint(color_t color) { peekState().tintColor = color; }
-    void noTint() { peekState().tintColor = rgba(255, 255, 255); }
-    void image(uint32_t textureId, float left, float top, float width, float height)
-    {
-        RenderState& state = peekState();
-        const std::array<float2, 4> positions = {
-            transformPoint(peekMatrix(), {left, top}),
-            transformPoint(peekMatrix(), {left + width, top}),
-            transformPoint(peekMatrix(), {left + width, top + height}),
-            transformPoint(peekMatrix(), {left, top + height}),
-        };
-        const std::array<float2, 4> texcoords = {
-            float2 {0.0f, 0.0f},
-            float2 {1.0f, 0.0f},
-            float2 {1.0f, 1.0f},
-            float2 {0.0f, 1.0f}
-        };
-        const std::array<color_t, 4> colors = {
-            state.tintColor,
-            state.tintColor,
-            state.tintColor,
-            state.tintColor
-        };
-
-        {
-            flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
-
-            tesselate_quads(
-                scope,
-                PathPoints {
-                    .size = 4,
-                    .positions = positions,
-                    .texcoords = texcoords,
-                    .colors = colors,
-                }
-            );
-
-            draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, renderer.uniformCache, scope, getCurrentShader(state), state.blendMode, textureId);
-        }
-    }
-
-    void textFont(std::shared_ptr<Font> font) { peekState().font = font; }
-    void noTextFont() { peekState().font.reset(); }
-    void textSize(float size) { peekState().textSize = size; }
-
-    void text(std::string_view text, float x, float y)
-    {
-        if (text.empty()) return;
-
-        RenderState& state = peekState();
-        if (state.isFillDisabled) return; // fill color is the text color
-
-        Font* font = getCurrentFont(state).get();
-
-        TextMetrics metrics = measureText(text, font, state.textSize, 1.0f);
-
-        // The horizontal start position for every line (alignment is against the full text width).
-        float lineStartX;
-        switch (state.horizontalTextAlign) {
-            case HorizontalTextAlign::left: lineStartX = x; break;
-            case HorizontalTextAlign::center: lineStartX = x - metrics.width * 0.5f; break;
-            case HorizontalTextAlign::right: lineStartX = x - metrics.width; break;
-        }
-
-        float py;
-        switch (state.verticalTextAlign) {
-            case VerticalTextAlign::top: py = y + metrics.ascender; break;
-            case VerticalTextAlign::center: py = y + metrics.ascender - metrics.totalHeight * 0.5f; break;
-            case VerticalTextAlign::baseline: py = y; break;
-            case VerticalTextAlign::bottom: py = y - metrics.totalHeight + metrics.ascender; break;
-        }
-
-        const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(state.textSize));
-        float px = lineStartX;
-        bool isFirstCharOnLine = true; // tracks whether we need to apply bearing correction for this line
-
-        char32_t prevCh = 0;
-        for (size_t i = 0; i < text.length();) {
-            const char32_t ch = utf8NextCodepoint(text, i);
-
-            if (ch == U'\n') {
-                px = lineStartX; // reset to alignment-adjusted start, not raw x
-                py += font->getLineHeight(state.textSize);
-                isFirstCharOnLine = true;
-                prevCh = 0;
-                continue;
-            }
-
-            if (ch == U' ') {
-                if (spaceGlyph != nullptr) {
-                    px += spaceGlyph->advance.x;
-                    py += spaceGlyph->advance.y;
-                }
-                prevCh = U' ';
-                continue;
-            }
-
-            const Glyph* glyph = font->getGlyph(ch, static_cast<int>(state.textSize));
-            if (glyph == nullptr) {
-                prevCh = ch;
-                continue;
-            }
-
-            if (isFirstCharOnLine) {
-                // Shift the pen left so the first glyph's visual left edge starts exactly at lineStartX.
-                px -= glyph->bearing.x;
-                isFirstCharOnLine = false;
-            } else {
-                px += font->getKerning(prevCh, ch, static_cast<int>(state.textSize));
-            }
-
-            const float left = px + glyph->bearing.x;
-            const float top = py - glyph->bearing.y;
-            const float right = left + glyph->size.x;
-            const float bottom = top + glyph->size.y;
-
-            const std::array<float2, 4> positions = {
-                transformPoint(peekMatrix(), {left, top}),
-                transformPoint(peekMatrix(), {right, top}),
-                transformPoint(peekMatrix(), {right, bottom}),
-                transformPoint(peekMatrix(), {left, bottom}),
-            };
-            const rect2f uvRect = glyph->uvRect;
-            const std::array<float2, 4> texcoords = {
-                float2 {uvRect.left, uvRect.top},
-                float2 {uvRect.left + uvRect.width, uvRect.top},
-                float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
-                float2 {uvRect.left, uvRect.top + uvRect.height}
-            };
-            const std::array<color_t, 4> colors = {
-                state.fillColor,
-                state.fillColor,
-                state.fillColor,
-                state.fillColor
-            };
-
-            {
-                flushIfNeeded();
-                DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
-                tesselate_quads(
-                    scope,
-                    PathPoints {
-                        .size = 4,
-                        .positions = positions,
-                        .texcoords = texcoords,
-                        .colors = colors,
-                    }
-                );
-
-                std::shared_ptr<Shader> shader = state.shader != nullptr ? state.shader : textShader;
-                draw_commands_submit(canvas_stack_peek(canvasStack).drawCommands, renderer.uniformCache, scope, std::move(shader), state.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
-            }
-
-            px += glyph->advance.x;
-            py += glyph->advance.y;
-            prevCh = ch;
-        }
-    }
-} // namespace p5
-
-namespace p5
-{
-    int mouseX = 0;
-    int mouseY = 0;
-    int width = 0;
-    int height = 0;
-    int frameCount = 0;
-    float fps = 0.0f;
-    float deltaTime = 0.0f;
-
-    inline static float s_targetFrameTime = 0.0f;
-    inline static auto s_appStartTime = std::chrono::steady_clock::now();
-    inline static bool s_isAppPaused = false;
-    inline static bool s_isCloseRequested = false;
-    inline static int s_exitCode = 0;
-
-    void setWindowSize(int w, int h)
-    {
-        window_set_size(appWindow, w, h);
-        width = w;
-        height = h;
-    }
-    void setWindowTitle(std::string_view title) { window_set_title(appWindow, title); }
-    void setWindowResizable(bool resizable) { window_set_resizable(appWindow, resizable); }
-    int getWindowWidth() { return window_logical_width(appWindow); }
-    int getWindowHeight() { return window_logical_height(appWindow); }
-
-    void frameRate(float targetFps) { s_targetFrameTime = (targetFps > 0.0f) ? (1.0f / targetFps) : 0.0f; }
-    void loop() { s_isAppPaused = false; }
-    void noLoop() { s_isAppPaused = true; }
-    bool isLooping() { return !s_isAppPaused; }
-    void quit() { s_isCloseRequested = true; }
-
-    void quit(int exitCode)
-    {
-        p5::exitCode(exitCode);
-        quit();
-    }
-
-    void exitCode(int code) { s_exitCode = code; }
-
-    float millis()
-    {
-        return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
-    }
-
-    Pixels loadPixels()
-    {
-        Canvas& canvas = canvas_stack_peek(canvasStack);
-        renderer_flush(renderer, canvas);
-
-        const auto [w, h] = canvas.framebuffer->getViewportSize();
-        const size_t count = static_cast<size_t>(w) * h;
-
-        pixelScratch.resize(count);
-
-        GLint prevReadFBO = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.framebuffer->getRendererId());
-        glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prevReadFBO));
-
-        std::vector<color_t> buffer(count);
-        for (uint32_t y = 0; y < h; ++y)
-            std::copy_n(pixelScratch.data() + (h - 1 - y) * w, w, buffer.data() + y * w);
-
-        return Pixels {static_cast<int>(w), static_cast<int>(h), std::move(buffer)};
-    }
-
-    void updatePixels(const Pixels& px)
-    {
-        if (px.size() == 0)
-            return;
-
-        Canvas& canvas = canvas_stack_peek(canvasStack);
-
-        const auto [vpW, vpH] = canvas.framebuffer->getViewportSize();
-        if (static_cast<uint32_t>(px.width) != vpW || static_cast<uint32_t>(px.height) != vpH)
-            return;
-
-        renderer_flush(renderer, canvas);
-
-        const auto w = static_cast<uint32_t>(px.width);
-        const auto h = static_cast<uint32_t>(px.height);
-
-        // Flip rows back to OpenGL bottom - up order
-        pixelScratch.resize(static_cast<size_t>(w) * h);
-        for (uint32_t y = 0; y < h; ++y)
-            std::copy_n(px.data() + y * w, w, pixelScratch.data() + (h - 1 - y) * w);
-
-        canvas.framebuffer->getColorTexture()->update(pixelScratch);
-    }
-
 } // namespace p5
 
 int main()
@@ -995,19 +1141,18 @@ int main()
     static constexpr uint8_t whitePixel[] = {255, 255, 255, 255};
 
     renderer = renderer_create(MAX_VERTICES, MAX_INDICES);
-    whiteTexture = loadTexture(1, 1, whitePixel);
+    whiteTexture = createTexture(1, 1, whitePixel);
     linepath = std::make_unique<LinePathBuilder>();
     defaultShader = createDefaultShader();
     textShader = createTextShader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
+    renderStateStack = render_state_stack_create();
 
     {
-        renderer_begin_frame(renderer);
         pushCanvas(defaultFramebuffer);
         sketch->setup();
         popCanvas();
-        renderer_end_frame(renderer);
     }
 
     window_show(appWindow);
@@ -1026,11 +1171,9 @@ int main()
             recreateDefaultCanvas();
 
         if (not s_isAppPaused) {
-            renderer_begin_frame(renderer);
             pushCanvas(defaultFramebuffer);
             sketch->draw();
             popCanvas();
-            renderer_end_frame(renderer);
 
             blit_framebuffer_to_screen(*defaultFramebuffer);
             window_swap_buffers(appWindow);

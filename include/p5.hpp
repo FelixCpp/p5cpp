@@ -340,6 +340,24 @@ namespace p5
         right,
     };
 
+    struct TextAlign
+    {
+        HorizontalTextAlign horizontal;
+        VerticalTextAlign vertical;
+
+        static const TextAlign topLeft;
+        static const TextAlign topCenter;
+        static const TextAlign topRight;
+
+        static const TextAlign centerLeft;
+        static const TextAlign center;
+        static const TextAlign centerRight;
+
+        static const TextAlign bottomLeft;
+        static const TextAlign bottomCenter;
+        static const TextAlign bottomRight;
+    };
+
     typedef size_t GlyphPageIndex;
 
     struct Glyph
@@ -359,6 +377,9 @@ namespace p5
         virtual float getLineHeight(int textSize) const = 0;
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
     };
+
+    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
+    std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
 
     struct TextMetrics
     {
@@ -380,6 +401,10 @@ namespace p5
         virtual uint2 getSize() const = 0;
     };
 
+    std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
+    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);
+    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height);
+
     struct Framebuffer
     {
         virtual ~Framebuffer() = default;
@@ -390,8 +415,7 @@ namespace p5
         virtual Texture* getColorTexture() = 0;
     };
 
-    std::unique_ptr<Framebuffer> createCanvas(int width, int height);
-    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height);
+    std::unique_ptr<Framebuffer> createFramebuffer(int width, int height);
 
     struct UniformVariable
     {
@@ -421,6 +445,8 @@ namespace p5
         virtual int getUniformLocation(std::string_view name) = 0;
         virtual uint32_t getRendererId() const = 0;
     };
+
+    std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
 
     color_t rgba(int grey, int alpha = 255);
     color_t rgba(int red, int green, int blue, int alpha = 255);
@@ -453,10 +479,6 @@ namespace p5
     void scale(float x, float y);
     void rotate(float angle);
 
-    void background(int grey, int alpha = 255);
-    void background(int red, int green, int blue, int alpha = 255);
-    void background(color_t color);
-
     void noFill();
     void fill(int grey, int alpha = 255);
     void fill(int red, int green, int blue, int alpha = 255);
@@ -470,8 +492,6 @@ namespace p5
     void strokeWeight(float strokeWeight);
     void strokeCap(StrokeCap strokeCap);
     void strokeJoin(StrokeJoin strokeJoin);
-    void strokePattern(std::span<const float> pattern);
-    void strokePatternOffset(float offset);
     void miterLimit(float miterLimit);
     void roundJoinThreshold(float angleThreshold);
 
@@ -480,27 +500,30 @@ namespace p5
     void curveDetail(uint32_t detail);
     void bezierDetail(uint32_t detail);
 
-    void beginShape();
-    void endShape(ShapeType shapeType, bool close = true);
-    void vertex(float x, float y);
-    void vertex(float x, float y, float u, float v);
-    void curveVertex(float x, float y);
-
-    std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
-
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
     void setUniform(const std::string& name, const UniformVariable& variable);
     void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable);
 
-    std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
-    std::unique_ptr<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);
+    void textAlign(TextAlign textAlign);
+    void textFont(std::shared_ptr<Font> font);
+    void noTextFont();
+    void textSize(float size);
 
-    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
-    std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
-    TextMetrics measureText(std::string_view text);
-    TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale);
-    void textAlign(HorizontalTextAlign horizontalAlign, VerticalTextAlign verticalAlign);
+    void tint(int grey, int alpha = 255);
+    void tint(int red, int green, int blue, int alpha = 255);
+    void tint(color_t color);
+    void noTint();
+
+    void background(int grey, int alpha = 255);
+    void background(int red, int green, int blue, int alpha = 255);
+    void background(color_t color);
+
+    void beginShape();
+    void endShape(ShapeType shapeType, bool close = true);
+    void vertex(float x, float y);
+    void vertex(float x, float y, float u, float v);
+    void curveVertex(float x, float y);
 
     void rect(float left, float top, float width, float height);
     void rect(float left, float top, float width, float height, float cx, float cy);
@@ -514,15 +537,11 @@ namespace p5
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
-    void tint(int grey, int alpha = 255);
-    void tint(int red, int green, int blue, int alpha = 255);
-    void tint(color_t color);
-    void noTint();
     void image(uint32_t textureId, float left, float top, float width, float height);
-    void textFont(std::shared_ptr<Font> font);
-    void noTextFont();
-    void textSize(float size);
     void text(std::string_view text, float x, float y);
+
+    TextMetrics measureText(std::string_view text);
+    TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale);
 
     // ── Window management ─────────────────────────────────────────────────
     void setWindowSize(int width, int height);

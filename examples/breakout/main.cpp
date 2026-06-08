@@ -249,7 +249,7 @@ struct BreakoutSketch : p5::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<Framebuffer>(createCanvas(W, H).release());
+        bgCanvas = std::shared_ptr<Framebuffer>(createFramebuffer(W, H).release());
         initStars();
         initGame();
     }
@@ -1001,7 +1001,7 @@ struct BreakoutSketch : p5::Sketch
     {
         blendMode(BlendMode::additive);
         noStroke();
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         for (const auto& pp : popups) {
             const float a = pp.life / pp.maxLife;
             const float sz = 11.f + 6.f * (1.f - a);
@@ -1073,7 +1073,7 @@ struct BreakoutSketch : p5::Sketch
 
             // Label
             fill(20, 20, 20);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
             textSize(10.f);
             text(label, pu.x, pu.y);
         }
@@ -1083,17 +1083,17 @@ struct BreakoutSketch : p5::Sketch
     {
         noStroke();
         fill(255, 255, 255, 225);
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::top});
         textSize(20.f);
         text("SCORE " + std::to_string(score), 12.f, 10.f);
 
         fill(255, 85, 85, 225);
-        textAlign(HorizontalTextAlign::right, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::top});
         text("LIVES " + std::to_string(lives), float(W) - 12.f, 10.f);
 
         // Level indicator (centre-top)
         fill(180, 200, 255, 180);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
         textSize(14.f);
         text("LVL " + std::to_string(level) + " / " + std::to_string(MAX_LEVELS), float(W) * 0.5f, 10.f);
 
@@ -1102,7 +1102,7 @@ struct BreakoutSketch : p5::Sketch
             blendMode(BlendMode::additive);
             const float p = 0.5f + 0.5f * std::sin(t * 6.f);
             fill(255, int(220.f * p), 0, 220);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::top);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::top});
             textSize(16.f);
             text("COMBO x" + std::to_string(combo), float(W) * 0.5f, 30.f);
             blendMode(BlendMode::alpha);
@@ -1124,7 +1124,7 @@ struct BreakoutSketch : p5::Sketch
         for (const auto& tm : timers) {
             if (tm.t <= 0.f) continue;
             fill(tm.c);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::bottom);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::bottom});
             textSize(12.f);
             text(std::string(tm.label) + "  " + std::to_string(int(tm.t) + 1) + "s", float(W) * 0.5f, ty);
             ty -= 16.f;
@@ -1135,7 +1135,7 @@ struct BreakoutSketch : p5::Sketch
             const float p = 0.5f + 0.5f * std::sin(t * 6.f);
             blendMode(BlendMode::additive);
             fill(255, 160, 30, int(160.f * p));
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::bottom);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::bottom});
             textSize(11.f);
             text("[ CLICK TO FIRE ]", float(W) * 0.5f, ty);
             blendMode(BlendMode::alpha);
@@ -1146,7 +1146,7 @@ struct BreakoutSketch : p5::Sketch
             blendMode(BlendMode::additive);
             const float p = 0.5f + 0.5f * std::sin(t * 7.f);
             fill(0, 220, 255, int(150.f * p));
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::bottom);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::bottom});
             textSize(12.f);
             text("SHIELD  ACTIVE", float(W) * 0.5f, ty - 16.f);
             blendMode(BlendMode::alpha);
@@ -1163,7 +1163,7 @@ struct BreakoutSketch : p5::Sketch
         blendMode(BlendMode::additive);
         noStroke();
         fill(80, 255, 140, int(60.f * pulse));
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         textSize(62.f);
         text("LEVEL CLEAR!", float(W) * 0.5f + 4.f, float(H) * 0.5f - 60.f + 4.f);
         blendMode(BlendMode::alpha);
@@ -1188,7 +1188,7 @@ struct BreakoutSketch : p5::Sketch
         blendMode(BlendMode::additive);
         noStroke();
         fill(0, 90, 255, int(80.f * pulse));
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         textSize(72.f);
         text("BREAKOUT", float(W) * 0.5f + 4.f, float(H) * 0.5f - 115.f + 4.f);
         blendMode(BlendMode::alpha);
@@ -1226,7 +1226,7 @@ struct BreakoutSketch : p5::Sketch
         const float pulse = 0.5f + 0.5f * std::sin(t * 2.5f);
         noStroke();
         fill(titleCol);
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         textSize(58.f);
         text(title, float(W) * 0.5f, float(H) * 0.5f - 90.f);
 

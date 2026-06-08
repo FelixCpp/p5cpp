@@ -90,7 +90,7 @@ namespace p5
 
 namespace p5
 {
-    std::unique_ptr<Framebuffer> createCanvas(int width, int height)
+    std::unique_ptr<Framebuffer> createFramebuffer(int width, int height)
     {
         return OpenGLFramebuffer::create(width, height);
     }
