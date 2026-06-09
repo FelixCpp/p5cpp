@@ -267,15 +267,18 @@ namespace p5
 
     extern std::unique_ptr<Sketch> createSketch();
 
-    extern int mouseX;
-    extern int mouseY;
+    int getMouseX();
+    int getMouseY();
+    int getPMouseX();
+    int getPMouseY();
 
-    extern int width;       // Current window width in logical points
-    extern int height;      // Current window height in logical points
-    extern int frameCount;  // Number of draw() calls completed
-    extern float fps;       // Smoothed frames per second
-    extern float deltaTime; // Seconds elapsed since the previous draw() call
-    // extern float globalTime; //
+    int getWidth();
+    int getHeight();
+
+    int getFrameCount();
+    int getFrameRate();
+    float getDeltaTime();
+    float getGlobalTime();
 
     void info(std::string_view message);
     void debug(std::string_view message);
@@ -371,6 +374,16 @@ namespace p5
         GlyphPageIndex pageIndex;
     };
 
+    struct TextOutlinePoint
+    {
+        float2 position;
+        size_t contourIndex;
+    };
+
+    struct OutlineContext
+    {
+    };
+
     struct Font
     {
         virtual ~Font() = default;
@@ -378,10 +391,13 @@ namespace p5
         virtual const Glyph* getGlyph(char32_t codepoint, int textSize) = 0;
         virtual float getLineHeight(int textSize) const = 0;
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
+        virtual std::vector<TextOutlinePoint> getTextOutline(std::string_view text, int textSize, int curveSteps) = 0;
+        virtual OutlineContext getOutlineContext(char32_t character, int textSize, int curveSteps) = 0;
     };
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
     std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
+    std::shared_ptr<Font> getCurrentFont();
 
     struct TextMetrics
     {
@@ -554,6 +570,7 @@ namespace p5
 
     TextMetrics measureText(std::string_view text);
     TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale);
+    std::vector<TextOutlinePoint> queryTextOutline(std::stirng_view text, int textSize, int curveSteps, float pointSpacing);
 
     // ── Window management ─────────────────────────────────────────────────
     void setWindowSize(int width, int height);

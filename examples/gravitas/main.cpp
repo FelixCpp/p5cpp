@@ -1,11 +1,8 @@
+#include <numbers>
 #include <p5.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <numbers>
-#include <string>
-#include <vector>
 
 using namespace p5;
 
@@ -51,7 +48,7 @@ struct ScorePopup
         const float fade = (1.0f - t) * (1.0f - t);
         fill(rgba(255, 220, 80, static_cast<uint8_t>(fade * 240.0f)));
         noStroke();
-        textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
         textSize(22.0f);
         text("+" + std::to_string(value), position.x, position.y - t * 55.0f);
     }
@@ -746,7 +743,7 @@ struct Gravitas : Sketch
         blendMode(BlendMode::alpha);
         noStroke();
         fill(rgba(180, 205, 255, 160));
-        textAlign(HorizontalTextAlign::left, VerticalTextAlign::top);
+        textAlign(TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::top});
         textSize(18.0f);
         text("ORBITS  " + std::to_string(orbits.size()), 16, 16);
         text("SCORE   " + std::to_string(points), 16, 40);
@@ -791,7 +788,7 @@ struct Gravitas : Sketch
 
             fill(rgba(255, 255, 255));
             textSize(18.0f);
-            textAlign(HorizontalTextAlign::center, VerticalTextAlign::center);
+            textAlign(TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::center});
             if (impulseTimer > 0.0f) {
                 text(std::to_string(static_cast<int>(std::ceil(impulseTimer))), 0, 0);
             } else {

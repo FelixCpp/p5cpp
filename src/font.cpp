@@ -1,9 +1,43 @@
 #include "p5.hpp"
 #include <freetype/freetype.h>
 #include <freetype/ftstroke.h>
+#include <map>
 #include <unordered_map>
 #include <vector>
 #include <glad/glad.h>
+
+namespace p5
+{
+    // Hilfsfunktion: gleichmäßige Neuabtastung einer Kontur
+    static std::vector<float2> resampleContour(
+        const std::vector<float2>& contour, float spacing
+    )
+    {
+        if (contour.size() < 2) return {};
+
+        std::vector<float2> result;
+        float accumulated = 0.0f;
+
+        for (size_t i = 0; i < contour.size(); ++i) {
+            const float2& a = contour[i];
+            const float2& b = contour[(i + 1) % contour.size()]; // wrap around = geschlossene Kontur
+
+            const float2 delta = {b.x - a.x, b.y - a.y};
+            const float segLen = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+            if (segLen < 1e-6f) continue;
+
+            float t = (spacing - accumulated) / segLen;
+            while (t <= 1.0f) {
+                result.push_back({a.x + t * delta.x, a.y + t * delta.y});
+                t += spacing / segLen;
+            }
+
+            accumulated = (1.0f - (t - spacing / segLen)) * segLen;
+        }
+
+        return result;
+    }
+} // namespace p5
 
 namespace p5
 {
@@ -182,6 +216,137 @@ namespace p5
             const float kerningValue = queryKerningFromFreeType(leftCodepoint, rightCodepoint, textSize);
             kerningCache.insert(std::make_pair(cacheEntry, kerningValue));
             return kerningValue;
+        }
+
+        std::vector<TextOutlinePoint> getTextOutline(std::string_view text, int textSize, int curveSteps) override
+        {
+            if (FT_Set_Pixel_Sizes(face.get(), 0, textSize)) {
+                return {};
+            }
+
+            struct OutlineContext
+            {
+                std::vector<TextOutlinePoint> points;
+                float2 currentPos;
+                float offsetX;
+                int curveSteps;
+                size_t contourIndex;
+            };
+
+            static FT_Outline_Funcs funcs = {
+                // move_to – neue Kontur beginnt
+                .move_to = [](const FT_Vector* to, void* user) -> int {
+                    auto* ctx = static_cast<OutlineContext*>(user);
+                    if (!ctx->points.empty()) { // nicht beim allerersten Aufruf
+                        ctx->contourIndex++;
+                    }
+                    ctx->currentPos = {
+                        to->x / 64.0f + ctx->offsetX,
+                        -to->y / 64.0f // Y-Achse flippen: FreeType = Y-up, OpenGL/p5 = Y-down
+                    };
+                    return 0;
+                },
+                // line_to
+                .line_to = [](const FT_Vector* to, void* user) -> int {
+                    auto* ctx = static_cast<OutlineContext*>(user);
+                    ctx->currentPos = {
+                        to->x / 64.0f + ctx->offsetX,
+                        -to->y / 64.0f
+                    };
+                    ctx->points.push_back({ctx->currentPos, ctx->contourIndex});
+                    return 0;
+                },
+                // conic_to – quadratische Bézierkurve
+                .conic_to = [](const FT_Vector* ctrl, const FT_Vector* to, void* user) -> int {
+                    auto* ctx = static_cast<OutlineContext*>(user);
+                    const float2 p0 = ctx->currentPos;
+                    const float2 p1 = {ctrl->x / 64.0f + ctx->offsetX, -ctrl->y / 64.0f};
+                    const float2 p2 = {to->x / 64.0f + ctx->offsetX, -to->y / 64.0f};
+
+                    for (int i = 1; i <= ctx->curveSteps; ++i) {
+                        const float t = static_cast<float>(i) / ctx->curveSteps;
+                        const float u = 1.0f - t;
+                        ctx->points.push_back({{u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y}, ctx->contourIndex});
+                    }
+                    ctx->currentPos = p2;
+                    return 0;
+                },
+                // cubic_to – kubische Bézierkurve
+                .cubic_to = [](const FT_Vector* c1, const FT_Vector* c2, const FT_Vector* to, void* user) -> int {
+                    auto* ctx = static_cast<OutlineContext*>(user);
+                    const float2 p0 = ctx->currentPos;
+                    const float2 p1 = {c1->x / 64.0f + ctx->offsetX, -c1->y / 64.0f};
+                    const float2 p2 = {c2->x / 64.0f + ctx->offsetX, -c2->y / 64.0f};
+                    const float2 p3 = {to->x / 64.0f + ctx->offsetX, -to->y / 64.0f};
+
+                    for (int i = 1; i <= ctx->curveSteps; ++i) {
+                        const float t = static_cast<float>(i) / ctx->curveSteps;
+                        const float u = 1.0f - t;
+                        ctx->points.push_back({{u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x, u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y}, ctx->contourIndex});
+                    }
+                    ctx->currentPos = p3;
+                    return 0;
+                },
+                .shift = 0,
+                .delta = 0,
+            };
+
+            OutlineContext ctx {
+                .points = {},
+                .currentPos = {0.0f, 0.0f},
+                .offsetX = 0.0f,
+                .curveSteps = curveSteps,
+                .contourIndex = 0,
+            };
+
+            char32_t prevCodepoint = 0;
+            size_t globalContourIndex = 0;
+
+            for (char32_t codepoint : text) {
+                const FT_UInt glyphIndex = FT_Get_Char_Index(face.get(), codepoint);
+                if (glyphIndex == 0) continue;
+                if (FT_Load_Glyph(face.get(), glyphIndex, FT_LOAD_NO_BITMAP)) continue;
+
+                if (prevCodepoint != 0 && FT_HAS_KERNING(face.get())) {
+                    ctx.offsetX += queryKerningFromFreeType(prevCodepoint, codepoint, textSize);
+                }
+
+                // Für jede Kontur dieser Glyph: eigener Index
+                ctx.contourIndex = globalContourIndex;
+
+                FT_Outline_Decompose(&face->glyph->outline, &funcs, &ctx);
+
+                globalContourIndex += face->glyph->outline.n_contours;
+                ctx.offsetX += face->glyph->advance.x / 64.0f;
+                prevCodepoint = codepoint;
+            }
+
+            std::vector<TextOutlinePoint> result;
+
+            // Rohe Punkte nach contourIndex gruppieren
+            std::map<size_t, std::vector<float2>> contourMap;
+            for (const auto& p : ctx.points) {
+                contourMap[p.contourIndex].push_back(p.position);
+            }
+
+            float pointSpacing = 2.0f;
+
+            // Jede Kontur gleichmäßig neu abtasten
+            for (const auto& [contourIdx, contourPoints] : contourMap) {
+                const auto resampled = resampleContour(contourPoints, pointSpacing);
+                for (const auto& pos : resampled) {
+                    result.push_back({pos, contourIdx});
+                }
+            }
+
+            return result;
+        }
+
+        OutlineContext getOutlineContext(char32_t character, int textSize, int curveSteps) override
+        {
+            if (FT_Set_Pixel_Sizes(face.get(), 0, textSize)) {
+                return {};
+            }
         }
 
     private:

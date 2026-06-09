@@ -60,7 +60,6 @@ namespace p5
 
         return std::max<size_t>(segments, 4);
     }
-
 } // namespace p5
 
 namespace p5
@@ -69,6 +68,42 @@ namespace p5
     void debug(std::string_view message) { std::cout << "[DEBUG]: " << message << std::endl; }
     void warning(std::string_view message) { std::cout << "[WARNING]: " << message << std::endl; }
     void error(std::string_view message) { std::cerr << "[ERROR]: " << message << std::endl; }
+} // namespace p5
+
+namespace p5
+{
+    struct AppState
+    {
+        int mouseX;
+        int mouseY;
+        int pmouseX;
+        int pmouseY;
+
+        int width;
+        int height;
+
+        int frameCount;
+        int frameRate;
+
+        float deltaTime;
+        float globalTime;
+    };
+
+    inline static AppState appState;
+
+    int getMouseX() { return appState.mouseX; }
+    int getMouseY() { return appState.mouseY; }
+    int getPMouseX() { return appState.pmouseX; }
+    int getPMouseY() { return appState.pmouseY; }
+
+    int getWidth() { return appState.width; }
+    int getHeight() { return appState.height; }
+
+    int getFrameCount() { return appState.frameCount; }
+    int getFrameRate() { return appState.frameRate; }
+    float getDeltaTime() { return appState.deltaTime; }
+    float getGlobalTime() { return appState.globalTime; }
+
 } // namespace p5
 
 namespace p5
@@ -328,13 +363,6 @@ namespace p5
         return result;
     }
 
-    inline std::shared_ptr<Font> get_current_font(const RenderState& state)
-    {
-        auto result = (state.font != nullptr) ? state.font : defaultFont;
-        assert(result != nullptr && "Current font cannot be null");
-        return result;
-    }
-
     void background(int grey, int alpha) { background(rgba(grey, alpha)); }
     void background(int red, int green, int blue, int alpha) { background(rgba(red, green, blue, alpha)); }
     void background(color_t color)
@@ -387,6 +415,24 @@ namespace p5
 
 namespace p5
 {
+    inline static std::shared_ptr<Font> get_current_font(const RenderState& state)
+    {
+        if (state.font != nullptr) {
+            return state.font;
+        }
+
+        return defaultFont;
+    }
+
+    std::shared_ptr<Font> getCurrentFont()
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        return get_current_font(renderState);
+    }
+} // namespace p5
+
+namespace p5
+{
     static void recreateDefaultCanvas()
     {
         const int physW = window_physical_width(appWindow);
@@ -394,7 +440,7 @@ namespace p5
         if (physW <= 0 || physH <= 0)
             return;
 
-        defaultFramebuffer = create_window_framebuffer(physW, physH, width, height);
+        defaultFramebuffer = create_window_framebuffer(physW, physH, appState.width, appState.height);
         needsDefaultCanvasRecreation = false;
         printf("Creating default canvas");
     }
@@ -912,14 +958,6 @@ namespace p5
 
 namespace p5
 {
-    int mouseX = 0;
-    int mouseY = 0;
-    int width = 0;
-    int height = 0;
-    int frameCount = 0;
-    float fps = 0.0f;
-    float deltaTime = 0.0f;
-
     inline static float s_targetFrameTime = 0.0f;
     inline static auto s_appStartTime = std::chrono::steady_clock::now();
     inline static bool s_isAppPaused = false;
@@ -929,9 +967,10 @@ namespace p5
     void setWindowSize(int w, int h)
     {
         window_set_size(appWindow, w, h);
-        width = w;
-        height = h;
+        appState.width = w;
+        appState.height = h;
     }
+
     void setWindowTitle(std::string_view title) { window_set_title(appWindow, title); }
     void setWindowResizable(bool resizable) { window_set_resizable(appWindow, resizable); }
     int getWindowWidth() { return window_logical_width(appWindow); }
@@ -1082,6 +1121,10 @@ namespace p5
             .lineCount = lineCount,
         };
     }
+
+    std::vector<TextOutlinePoint> queryTextOutline(std::string_view text, int textSize, int curveSteps, float pointSpacing)
+    {
+    }
 } // namespace p5
 
 int main()
@@ -1095,12 +1138,12 @@ int main()
             quit();
         }
         if (e.type == EventType::mouseMove) {
-            mouseX = e.mouseMove.x;
-            mouseY = e.mouseMove.y;
+            appState.mouseX = e.mouseMove.x;
+            appState.mouseY = e.mouseMove.y;
         }
         if (e.type == EventType::windowResize) {
-            width = e.windowResize.width;
-            height = e.windowResize.height;
+            appState.width = e.windowResize.width;
+            appState.height = e.windowResize.height;
             needsDefaultCanvasRecreation = true;
         }
         if (e.type == EventType::framebufferResize) {
@@ -1109,8 +1152,8 @@ int main()
         sketch->event(e);
     });
 
-    width = window_logical_width(appWindow);
-    height = window_logical_height(appWindow);
+    appState.width = window_logical_width(appWindow);
+    appState.height = window_logical_height(appWindow);
 
     static constexpr size_t MAX_VERTICES = 65536;
     static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
@@ -1122,7 +1165,7 @@ int main()
     defaultShader = create_default_shader();
     textShader = create_text_shader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
+    defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), window_logical_width(appWindow), window_logical_height(appWindow));
     renderStateStack = render_state_stack_create();
 
     {
@@ -1138,7 +1181,7 @@ int main()
 
     while (not s_isCloseRequested) {
         const TimePoint frameStart = Clock::now();
-        deltaTime = std::chrono::duration<float>(frameStart - lastFrameTime).count();
+        appState.deltaTime = std::chrono::duration<float>(frameStart - lastFrameTime).count();
         lastFrameTime = frameStart;
 
         window_poll_events(appWindow);
@@ -1153,10 +1196,10 @@ int main()
 
             blit_framebuffer_to_screen(*defaultFramebuffer);
             window_swap_buffers(appWindow);
-            frameCount++;
+            appState.frameCount++;
 
             fpsCounter.tick();
-            fps = fpsCounter.fps();
+            appState.frameRate = fpsCounter.fps();
         }
 
         // FPS limiter: precise sleep for remainder of target frame duration

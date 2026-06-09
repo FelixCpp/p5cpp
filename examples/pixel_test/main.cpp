@@ -1,43 +1,44 @@
+#include <cfloat>
 #include <p5.hpp>
-
-#include <algorithm>
 
 using namespace p5;
 
 struct PixelTestSketch : Sketch
 {
+    std::vector<TextOutlinePoint> points;
+
     void setup() override
+    {
+        points = getCurrentFont()->getTextOutline("Test", 28, 4);
+
+        float minY = FLT_MAX, maxY = -FLT_MAX;
+        for (auto& p : points) {
+            minY = std::min(minY, p.position.y);
+            maxY = std::max(maxY, p.position.y);
+        }
+
+        std::printf("minY: %f, maxY: %f\n", minY, maxY);
+        std::fflush(stdout);
+    }
+
+    void event(const WindowEvent& e) override
     {
     }
 
     void draw() override
     {
-        constexpr float maxDistance = 200.0f;
+        background(0);
 
-        Pixels pixels = loadPixels();
-
-        for (int y = 0; y < pixels.height; ++y) {
-            for (int x = 0; x < pixels.width; ++x) {
-                int dx = x - mouseX;
-                int dy = y - mouseY;
-                float distanceSquared = static_cast<float>(dx * dx + dy * dy);
-                float distance = std::sqrt(distanceSquared);
-                float intensity = 1.0f - std::min(distance / maxDistance, 1.0f);
-
-                const size_t idx = static_cast<size_t>(y) * pixels.width + x;
-                const uint8_t r = randomInt(255) * intensity;
-                const uint8_t g = randomInt(255) * intensity;
-                const uint8_t b = randomInt(255) * intensity;
-                const uint8_t a = 255;
-                // const uint8_t r = static_cast<uint8_t>((x / static_cast<float>(pixels.width)) * 255);
-                // const uint8_t g = static_cast<uint8_t>((y / static_cast<float>(pixels.height)) * 255);
-                // const uint8_t b = 128;
-                // const uint8_t a = 255;
-                pixels.colors[idx] = rgba(r, g, b, a);
-            }
+        translate(100.0f, 220.0f);
+        for (const TextOutlinePoint& point : points) {
+            stroke(255);
+            strokeWeight(2.0f);
+            ::point(point.position.x, point.position.y);
         }
 
-        updatePixels(pixels);
+        translate(0.0f, 50.0f);
+        textSize(28.0f);
+        text("Test", 0, 0);
     }
 };
 

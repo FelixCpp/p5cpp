@@ -100,5 +100,4 @@ namespace p5
     {
         return m_current;
     }
-
 } // namespace p5
