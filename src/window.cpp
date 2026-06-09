@@ -165,6 +165,7 @@ namespace p5
             auto* win = static_cast<AppWindow*>(glfwGetWindowUserPointer(h));
             win->logicalWidth = w;
             win->logicalHeight = ht;
+
             WindowEvent e;
             e.type = EventType::windowResize;
             e.windowResize = {w, ht};

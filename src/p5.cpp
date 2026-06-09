@@ -1,5 +1,6 @@
 #include "p5.hpp"
 #include "render_state_stack.hpp"
+#include "utf8_view.hpp"
 #include "window.hpp"
 #include "framebuffer.hpp"
 #include "shader.hpp"
@@ -39,38 +40,6 @@ namespace p5
 
 namespace p5
 {
-    // Decodes the next UTF-8 codepoint from sv starting at byte index pos.
-    // Advances pos past all consumed bytes.
-    static char32_t utf8NextCodepoint(std::string_view sv, size_t& pos)
-    {
-        const auto b0 = static_cast<unsigned char>(sv[pos]);
-        if (b0 < 0x80) {
-            ++pos;
-            return static_cast<char32_t>(b0);
-        }
-        if ((b0 & 0xE0) == 0xC0 && pos + 1 < sv.size()) {
-            const auto b1 = static_cast<unsigned char>(sv[pos + 1]);
-            pos += 2;
-            return static_cast<char32_t>(((b0 & 0x1F) << 6) | (b1 & 0x3F));
-        }
-        if ((b0 & 0xF0) == 0xE0 && pos + 2 < sv.size()) {
-            const auto b1 = static_cast<unsigned char>(sv[pos + 1]);
-            const auto b2 = static_cast<unsigned char>(sv[pos + 2]);
-            pos += 3;
-            return static_cast<char32_t>(((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F));
-        }
-        if ((b0 & 0xF8) == 0xF0 && pos + 3 < sv.size()) {
-            const auto b1 = static_cast<unsigned char>(sv[pos + 1]);
-            const auto b2 = static_cast<unsigned char>(sv[pos + 2]);
-            const auto b3 = static_cast<unsigned char>(sv[pos + 3]);
-            pos += 4;
-            return static_cast<char32_t>(((b0 & 0x07) << 18) | ((b1 & 0x3F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F));
-        }
-        // Invalid or truncated sequence: skip byte
-        ++pos;
-        return U'\uFFFD';
-    }
-
     size_t computeCircleSegmentCount(float angle, float radius)
     {
         const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
@@ -347,80 +316,19 @@ namespace p5
     }
 } // namespace p5
 
-namespace p5
-{
-    Pixels loadPixels()
-    {
-        renderer_flush(renderer);
-
-        const auto [w, h] = renderer.framebuffer->getViewportSize();
-        const size_t count = static_cast<size_t>(w) * h;
-
-        Pixels pixels = {
-            .width = static_cast<int>(w),
-            .height = static_cast<int>(h),
-            .colors = std::vector<color_t>(count),
-        };
-
-        pixelScratch.resize(count);
-
-        if (count == 0) {
-            return pixels;
-        }
-
-        glBindFramebuffer(GL_FRAMEBUFFER, renderer.framebuffer->getRendererId());
-        glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
-
-        for (uint32_t y = 0; y < h; ++y) {
-            const uint32_t flippedY = h - 1 - y;
-            std::copy_n(pixelScratch.data() + flippedY * w, w, pixels.colors.data() + y * w);
-        }
-
-        return pixels;
-    }
-
-    void updatePixels(const Pixels& pixels)
-    {
-        if (pixels.width <= 0 or pixels.height <= 0) {
-            return;
-        }
-
-        const auto [w, h] = renderer.framebuffer->getViewportSize();
-        if (static_cast<int>(w) != pixels.width || static_cast<int>(h) != pixels.height) {
-            error("updatePixels: Pixel data dimensions do not match the current canvas size.");
-            return;
-        }
-
-        const size_t width = static_cast<size_t>(pixels.width);
-        const size_t height = static_cast<size_t>(pixels.height);
-        const size_t count = width * height;
-
-        pixelScratch.resize(count);
-
-        for (uint32_t y = 0; y < height; ++y) {
-            const uint32_t flippedY = height - 1 - y;
-            std::copy_n(pixels.colors.data() + y * width, width, pixelScratch.data() + flippedY * width);
-        }
-
-        renderer_flush(renderer);
-        renderer.framebuffer->getColorTexture()->update(pixelScratch);
-    }
-
-} // namespace p5
-
 /// -----------------------------------------
 ///             Rendering methods
 /// -----------------------------------------
 namespace p5
 {
-    inline std::shared_ptr<Shader> getCurrentShader(const RenderState& state)
+    inline std::shared_ptr<Shader> get_current_shader(const RenderState& state)
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
         assert(result != nullptr && "Current shader cannot be null");
         return result;
     }
 
-    inline std::shared_ptr<Font> getCurrentFont(const RenderState& state)
+    inline std::shared_ptr<Font> get_current_font(const RenderState& state)
     {
         auto result = (state.font != nullptr) ? state.font : defaultFont;
         assert(result != nullptr && "Current font cannot be null");
@@ -469,7 +377,7 @@ namespace p5
             renderer_submit(
                 renderer,
                 scope,
-                getCurrentShader(renderState),
+                get_current_shader(renderState),
                 renderState.blendMode,
                 whiteTexture->getRendererId()
             );
@@ -579,7 +487,7 @@ namespace p5
             }
         }
 
-        renderer_submit(renderer, scope, getCurrentShader(renderState), renderState.blendMode, whiteTexture->getRendererId());
+        renderer_submit(renderer, scope, get_current_shader(renderState), renderState.blendMode, whiteTexture->getRendererId());
 
         linepath->clear();
         curveVertexCount = 0;
@@ -880,7 +788,7 @@ namespace p5
                 }
             );
 
-            renderer_submit(renderer, scope, getCurrentShader(renderState), renderState.blendMode, textureId);
+            renderer_submit(renderer, scope, get_current_shader(renderState), renderState.blendMode, textureId);
         }
     }
 
@@ -888,10 +796,12 @@ namespace p5
     {
         if (text.empty()) return;
 
+        const std::u32string u32String = utf8ToUtf32(text);
+
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         if (renderState.isFillDisabled) return; // fill color is the text color
 
-        Font* font = getCurrentFont(renderState).get();
+        Font* font = get_current_font(renderState).get();
 
         TextMetrics metrics = measureText(text, font, renderState.textSize, 1.0f);
 
@@ -916,8 +826,8 @@ namespace p5
         bool isFirstCharOnLine = true; // tracks whether we need to apply bearing correction for this line
 
         char32_t prevCh = 0;
-        for (size_t i = 0; i < text.length();) {
-            const char32_t ch = utf8NextCodepoint(text, i);
+        for (size_t i = 0; i < u32String.length(); ++i) {
+            const char32_t ch = u32String.at(i);
 
             if (ch == U'\n') {
                 px = lineStartX; // reset to alignment-adjusted start, not raw x
@@ -932,6 +842,7 @@ namespace p5
                     px += spaceGlyph->advance.x;
                     py += spaceGlyph->advance.y;
                 }
+
                 prevCh = U' ';
                 continue;
             }
@@ -1044,6 +955,54 @@ namespace p5
     {
         return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
     }
+
+    Pixels loadPixels()
+    {
+        renderer_flush(renderer);
+
+        const auto [viewportWidth, viewportHeight] = renderer.framebuffer->getViewportSize();
+        const size_t count = static_cast<size_t>(viewportWidth) * static_cast<size_t>(viewportHeight);
+
+        pixelScratch.resize(count);
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, renderer.framebuffer->getRendererId());
+        glReadPixels(0, 0, static_cast<GLsizei>(viewportWidth), static_cast<GLsizei>(viewportHeight), GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
+
+        std::vector<color_t> buffer(count);
+        for (uint32_t y = 0; y < viewportHeight; ++y) {
+            const uint32_t flippedY = viewportHeight - 1 - y;
+            std::copy_n(pixelScratch.data() + flippedY * viewportWidth, viewportWidth, buffer.data() + y * viewportWidth);
+        }
+
+        return Pixels {static_cast<int>(viewportWidth), static_cast<int>(viewportHeight), std::move(buffer)};
+    }
+
+    void updatePixels(const Pixels& pixels)
+    {
+        if (pixels.width <= 0 or pixels.height <= 0) {
+            return;
+        }
+
+        const auto [viewportWidth, viewportHeight] = renderer.framebuffer->getViewportSize();
+        if (static_cast<uint32_t>(pixels.width) != viewportWidth or static_cast<uint32_t>(pixels.height) != viewportHeight) {
+            return;
+        }
+
+        const uint32_t canvasWidth = static_cast<uint32_t>(pixels.width);
+        const uint32_t canvasHeight = static_cast<uint32_t>(pixels.height);
+        const size_t count = static_cast<size_t>(canvasWidth) * static_cast<size_t>(canvasHeight);
+
+        // Flip rows back to OpenGL bottom - up order
+        pixelScratch.resize(count);
+        for (uint32_t y = 0; y < canvasHeight; ++y) {
+            const uint32_t flippedY = canvasHeight - 1 - y;
+            std::copy_n(pixels.colors.data() + y * canvasWidth, canvasWidth, pixelScratch.data() + flippedY * canvasWidth);
+        }
+
+        renderer_flush(renderer);
+        renderer.framebuffer->getColorTexture()->update(pixelScratch);
+    }
+
 } // namespace p5
 
 namespace p5
@@ -1051,7 +1010,7 @@ namespace p5
     TextMetrics measureText(std::string_view text)
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
-        return measureText(text, getCurrentFont(renderState).get(), renderState.textSize, 1.0f);
+        return measureText(text, get_current_font(renderState).get(), renderState.textSize, 1.0f);
     }
 
     TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale)
@@ -1074,9 +1033,11 @@ namespace p5
         float descender = 0.0f;
         uint32_t lineCount = 1;
 
+        const std::u32string u32String = utf8ToUtf32(text);
+
         char32_t prevCodepoint = 0;
-        for (size_t i = 0; i < text.length();) {
-            const char32_t codepoint = utf8NextCodepoint(text, i);
+        for (size_t i = 0; i < u32String.length(); ++i) {
+            const char32_t codepoint = u32String.at(i);
 
             if (codepoint == U'\n') {
                 maxWidth = std::max(maxWidth, lineWidth);
@@ -1090,6 +1051,7 @@ namespace p5
                 if (const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(textSize))) {
                     lineWidth += spaceGlyph->advance.x * scale;
                 }
+
                 prevCodepoint = U' ';
                 continue;
             }
@@ -1157,8 +1119,8 @@ int main()
     renderer = renderer_create(MAX_VERTICES, MAX_INDICES);
     whiteTexture = createTexture(1, 1, whitePixel);
     linepath = std::make_unique<LinePathBuilder>();
-    defaultShader = createDefaultShader();
-    textShader = createTextShader();
+    defaultShader = create_default_shader();
+    textShader = create_text_shader();
     defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
     defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), width, height);
     renderStateStack = render_state_stack_create();

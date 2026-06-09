@@ -25,7 +25,6 @@ add_library(
   p5 STATIC
   ./src/color.cpp
   ./src/draw_buffer.cpp
-  ./src/draw_command.cpp
   ./src/draw_command_list.cpp
   ./src/draw_scope.cpp
   ./src/font.cpp
@@ -44,6 +43,7 @@ add_library(
   ./src/texture.cpp
   ./src/timing.cpp
   ./src/uniform_cache.cpp
+  ./src/utf8_view.cpp
   ./src/window.cpp)
 
 target_link_libraries(p5 PRIVATE glfw glad freetype libtess2)
