@@ -1124,6 +1124,12 @@ namespace p5
 
     std::vector<TextOutlinePoint> queryTextOutline(std::string_view text, int textSize, int curveSteps, float pointSpacing)
     {
+        const std::u32string u32String = utf8ToUtf32(text);
+
+        char32_t prevCodepoint = 0;
+        for (size_t i = 0; i < u32String.length(); ++i) {
+            const char32_t codepoint = u32String.at(i);
+        }
     }
 } // namespace p5
 
