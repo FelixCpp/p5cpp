@@ -15,6 +15,17 @@ p5cpp is not affiliated with or endorsed by either project. It is a spiritual po
 
 ---
 
+## Dependencies
+
+p5cpp bundles the following third-party libraries under the `third_party/` directory. You do not need to install them separately — they are compiled as part of the build.
+
+| Library                                           | Purpose                                                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [FreeType](https://freetype.org/)                 | Font loading and glyph rasterisation — backs `loadFont()`, `getGlyph()`, and all text rendering                                 |
+| [GLAD](https://glad.dav1d.de/)                    | OpenGL function loader — resolves GL function pointers at runtime on all platforms                                              |
+| [GLFW](https://www.glfw.org/)                     | Window creation, OpenGL context management, and raw input events (mouse, keyboard, resize)                                      |
+| [libtess2](https://github.com/memononen/libtess2) | Polygon tessellation — used internally to triangulate concave and self-intersecting shapes drawn with `beginShape` / `endShape` |
+
 ## Concepts
 
 Every p5cpp program is a **Sketch**. You subclass `p5cpp::Sketch`, implement `setup()` (called once) and `draw()` (called every frame), and hand it to the framework via `createSketch()`. The framework manages the window, the render loop, and input — you just draw.

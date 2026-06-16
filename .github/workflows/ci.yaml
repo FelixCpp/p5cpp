@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build examples — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: linux
+          - os: windows-latest
+            preset: windows
+          - os: macos-latest
+            preset: macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ── Linux system deps (X11 / GL headers required by GLFW) ───────────
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libgl-dev
+
+      # ── Configure ────────────────────────────────────────────────────────
+      - name: Configure (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B build `
+            -DCMAKE_BUILD_TYPE=Release
+
+      # ── Build ────────────────────────────────────────────────────────────
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # ── Verify every example binary exists ──────────────────────────────
+      - name: Verify example binaries (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          for example in breakout gravitas gravitas_ai molds pixel_test thetower; do
+            bin="build/examples/${example}/${example}"
+            if [ ! -f "$bin" ]; then
+              echo "❌ Missing binary: $bin"
+              exit 1
+            fi
+            echo "✅ $bin"
+          done
+
+      - name: Verify example binaries (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $examples = @("breakout","gravitas","gravitas_ai","molds","pixel_test","thetower")
+          foreach ($ex in $examples) {
+            $bin = "build\examples\$ex\Release\$ex.exe"
+            if (-Not (Test-Path $bin)) {
+              Write-Error "Missing binary: $bin"
+              exit 1
+            }
+            Write-Host "✅ $bin"
+          }
