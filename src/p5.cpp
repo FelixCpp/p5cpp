@@ -318,6 +318,12 @@ namespace p5
         renderState.textAlign = textAlign;
     }
 
+    void textWrap(TextWrap textWrap)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.textWrap = textWrap;
+    }
+
     void textFont(std::shared_ptr<Font> font)
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
@@ -334,6 +340,18 @@ namespace p5
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         renderState.textSize = size;
+    }
+
+    void textLetterSpacing(float spacing)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.textLetterSpacing = spacing;
+    }
+
+    void textLineSpacing(float spacing)
+    {
+        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        renderState.textLineSpacing = spacing;
     }
 
     void tint(int grey, int alpha) { tint(rgba(grey, grey, grey, alpha)); }
@@ -360,6 +378,13 @@ namespace p5
     {
         auto result = (state.shader != nullptr) ? state.shader : defaultShader;
         assert(result != nullptr && "Current shader cannot be null");
+        return result;
+    }
+
+    inline std::shared_ptr<Shader> get_current_text_shader(const RenderState& state)
+    {
+        auto result = (state.shader != nullptr) ? state.shader : textShader;
+        assert(result != nullptr && "Current text shader cannot be null");
         return result;
     }
 
@@ -623,6 +648,7 @@ namespace p5
         {
             float cx, cy, rx, ry, startAngle;
         };
+
         const Corner corners[4] = {
             {left + width - bottomRightX, top + height - bottomRightY, bottomRightX, bottomRightY, 0.0f}, // unten rechts
             {left + bottomLeftX, top + height - bottomLeftY, bottomLeftX, bottomLeftY, HALF_PI},          // unten links
@@ -702,8 +728,6 @@ namespace p5
     void point(float x, float y)
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
-        if (renderState.isStrokeDisabled) return;
-
         const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, renderState.strokeWeight * 0.5f);
 
         // Fill a disc with the stroke color as a triangleFan — no libtess2, no outline edges
@@ -838,120 +862,58 @@ namespace p5
         }
     }
 
-    void text(std::string_view text, float x, float y)
+    void text(std::string_view text, float x, float y, std::optional<float> maxWidth)
     {
-        if (text.empty()) return;
-
-        const std::u32string u32String = utf8ToUtf32(text);
-
         RenderState& renderState = render_state_stack_peek(renderStateStack);
-        if (renderState.isFillDisabled) return; // fill color is the text color
-
         Font* font = get_current_font(renderState).get();
+        TextLayout layout = measureText(text, font, renderState.textSize, renderState.textLetterSpacing, renderState.textLineSpacing, renderState.textAlign, renderState.textWrap, maxWidth);
+        matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
 
-        TextMetrics metrics = measureText(text, font, renderState.textSize, 1.0f);
+        struct GlyphAtlasVertexBucket
+        {
+            std::vector<float2> positions;
+            std::vector<float2> texcoords;
+            std::vector<color_t> colors;
+        };
 
-        // The horizontal start position for every line (alignment is against the full text width).
-        float lineStartX;
-        switch (renderState.textAlign.horizontal) {
-            case HorizontalTextAlign::left: lineStartX = x; break;
-            case HorizontalTextAlign::center: lineStartX = x - metrics.width * 0.5f; break;
-            case HorizontalTextAlign::right: lineStartX = x - metrics.width; break;
+        std::unordered_map<uint32_t, GlyphAtlasVertexBucket> buckets;
+
+        for (size_t i = 0; i < layout.glyphs.size(); ++i) {
+            const GlyphQuad& quad = layout.glyphs.at(i);
+            const auto itr = buckets.try_emplace(quad.textureId, GlyphAtlasVertexBucket {});
+            GlyphAtlasVertexBucket& bucket = itr.first->second;
+
+            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left, y + quad.vertexRect.top}));
+            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left + quad.vertexRect.width, y + quad.vertexRect.top}));
+            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left + quad.vertexRect.width, y + quad.vertexRect.top + quad.vertexRect.height}));
+            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left, y + quad.vertexRect.top + quad.vertexRect.height}));
+
+            bucket.texcoords.push_back(float2 {quad.uvRect.left, quad.uvRect.top});
+            bucket.texcoords.push_back(float2 {quad.uvRect.left + quad.uvRect.width, quad.uvRect.top});
+            bucket.texcoords.push_back(float2 {quad.uvRect.left + quad.uvRect.width, quad.uvRect.top + quad.uvRect.height});
+            bucket.texcoords.push_back(float2 {quad.uvRect.left, quad.uvRect.top + quad.uvRect.height});
+
+            bucket.colors.push_back(renderState.fillColor);
+            bucket.colors.push_back(renderState.fillColor);
+            bucket.colors.push_back(renderState.fillColor);
+            bucket.colors.push_back(renderState.fillColor);
         }
 
-        float py;
-        switch (renderState.textAlign.vertical) {
-            case VerticalTextAlign::top: py = y + metrics.ascender; break;
-            case VerticalTextAlign::center: py = y + metrics.ascender - metrics.totalHeight * 0.5f; break;
-            case VerticalTextAlign::baseline: py = y; break;
-            case VerticalTextAlign::bottom: py = y - metrics.totalHeight + metrics.ascender; break;
-        }
+        for (const auto& [textureId, bucket] : buckets) {
+            flushIfNeeded();
+            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
 
-        const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(renderState.textSize));
-        float px = lineStartX;
-        bool isFirstCharOnLine = true; // tracks whether we need to apply bearing correction for this line
-
-        char32_t prevCh = 0;
-        for (size_t i = 0; i < u32String.length(); ++i) {
-            const char32_t ch = u32String.at(i);
-
-            if (ch == U'\n') {
-                px = lineStartX; // reset to alignment-adjusted start, not raw x
-                py += font->getLineHeight(renderState.textSize);
-                isFirstCharOnLine = true;
-                prevCh = 0;
-                continue;
-            }
-
-            if (ch == U' ') {
-                if (spaceGlyph != nullptr) {
-                    px += spaceGlyph->advance.x;
-                    py += spaceGlyph->advance.y;
+            tesselate_quads(
+                scope,
+                PathPoints {
+                    .size = static_cast<uint32_t>(bucket.positions.size()),
+                    .positions = bucket.positions,
+                    .texcoords = bucket.texcoords,
+                    .colors = bucket.colors,
                 }
+            );
 
-                prevCh = U' ';
-                continue;
-            }
-
-            const Glyph* glyph = font->getGlyph(ch, static_cast<int>(renderState.textSize));
-            if (glyph == nullptr) {
-                prevCh = ch;
-                continue;
-            }
-
-            if (isFirstCharOnLine) {
-                // Shift the pen left so the first glyph's visual left edge starts exactly at lineStartX.
-                px -= glyph->bearing.x;
-                isFirstCharOnLine = false;
-            } else {
-                px += font->getKerning(prevCh, ch, static_cast<int>(renderState.textSize));
-            }
-
-            const float left = px + glyph->bearing.x;
-            const float top = py - glyph->bearing.y;
-            const float right = left + glyph->size.x;
-            const float bottom = top + glyph->size.y;
-
-            const std::array<float2, 4> positions = {
-                transformPoint(peekMatrix(), {left, top}),
-                transformPoint(peekMatrix(), {right, top}),
-                transformPoint(peekMatrix(), {right, bottom}),
-                transformPoint(peekMatrix(), {left, bottom}),
-            };
-            const rect2f uvRect = glyph->uvRect;
-            const std::array<float2, 4> texcoords = {
-                float2 {uvRect.left, uvRect.top},
-                float2 {uvRect.left + uvRect.width, uvRect.top},
-                float2 {uvRect.left + uvRect.width, uvRect.top + uvRect.height},
-                float2 {uvRect.left, uvRect.top + uvRect.height}
-            };
-            const std::array<color_t, 4> colors = {
-                renderState.fillColor,
-                renderState.fillColor,
-                renderState.fillColor,
-                renderState.fillColor
-            };
-
-            {
-                flushIfNeeded();
-                DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
-                tesselate_quads(
-                    scope,
-                    PathPoints {
-                        .size = 4,
-                        .positions = positions,
-                        .texcoords = texcoords,
-                        .colors = colors,
-                    }
-                );
-
-                std::shared_ptr<Shader> shader = renderState.shader != nullptr ? renderState.shader : textShader;
-                renderer_submit(renderer, scope, std::move(shader), renderState.blendMode, font->getGlyphPageTextureId(glyph->pageIndex));
-            }
-
-            px += glyph->advance.x;
-            py += glyph->advance.y;
-            prevCh = ch;
+            renderer_submit(renderer, scope, get_current_text_shader(renderState), renderState.blendMode, textureId);
         }
     }
 } // namespace p5
@@ -1046,90 +1008,245 @@ namespace p5
 
 namespace p5
 {
-    TextMetrics measureText(std::string_view text)
+    TextLayout measureText(std::string_view text)
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
-        return measureText(text, get_current_font(renderState).get(), renderState.textSize, 1.0f);
+        return measureText(
+            text,
+            get_current_font(renderState).get(),
+            renderState.textSize,
+            renderState.textLetterSpacing,
+            renderState.textLineSpacing,
+            renderState.textAlign,
+            renderState.textWrap,
+            std::nullopt
+        );
     }
 
-    TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale)
+    TextLayout measureText(std::string_view text, Font* font, float textSize, float letterSpacing, float lineSpacing, TextAlign textAlign, TextWrap textWrap, std::optional<float> maxWidth)
     {
-        if (text.empty()) {
-            return TextMetrics {
-                .width = 0.0f,
-                .totalHeight = 0.0f,
-                .ascender = 0.0f,
-                .descender = 0.0f,
-                .lineCount = 0,
-            };
-        }
+        const std::u32string u32Text = utf8ToUtf32(text);
 
-        const float lineHeight = font->getLineHeight(static_cast<int>(textSize)) * scale;
-
-        float maxWidth = 0.0f;
-        float lineWidth = 0.0f;
-        float ascender = 0.0f;
-        float descender = 0.0f;
-        uint32_t lineCount = 1;
-
-        const std::u32string u32String = utf8ToUtf32(text);
-
-        char32_t prevCodepoint = 0;
-        for (size_t i = 0; i < u32String.length(); ++i) {
-            const char32_t codepoint = u32String.at(i);
-
-            if (codepoint == U'\n') {
-                maxWidth = std::max(maxWidth, lineWidth);
-                lineWidth = 0.0f;
-                lineCount++;
-                prevCodepoint = 0;
-                continue;
-            }
-
-            if (codepoint == U' ') {
-                if (const Glyph* spaceGlyph = font->getGlyph(U' ', static_cast<int>(textSize))) {
-                    lineWidth += spaceGlyph->advance.x * scale;
-                }
-
-                prevCodepoint = U' ';
-                continue;
-            }
-
-            if (prevCodepoint != 0) {
-                lineWidth += font->getKerning(prevCodepoint, codepoint, static_cast<int>(textSize)) * scale;
-            }
-
-            if (const Glyph* glyph = font->getGlyph(codepoint, static_cast<int>(textSize))) {
-                lineWidth += glyph->advance.x * scale;
-                if (lineCount == 1) {
-                    ascender = std::max(ascender, glyph->bearing.y * scale);
-                }
-                descender = std::max(descender, (glyph->size.y - glyph->bearing.y) * scale);
-            }
-
-            prevCodepoint = codepoint;
-        }
-
-        maxWidth = std::max(maxWidth, lineWidth);
-        const float totalHeight = ascender + (lineHeight * (lineCount - 1)) + descender;
-
-        return TextMetrics {
-            .width = maxWidth,
-            .totalHeight = totalHeight,
-            .ascender = ascender,
-            .descender = descender,
-            .lineCount = lineCount,
+        struct LineInfo
+        {
+            size_t startIndex;
+            size_t endIndex;
+            float width;
         };
-    }
 
-    std::vector<TextOutlinePoint> queryTextOutline(std::string_view text, int textSize, int curveSteps, float pointSpacing)
-    {
-        const std::u32string u32String = utf8ToUtf32(text);
+        auto lines = std::invoke([&]() {
+            std::vector<LineInfo> result;
 
-        char32_t prevCodepoint = 0;
-        for (size_t i = 0; i < u32String.length(); ++i) {
-            const char32_t codepoint = u32String.at(i);
+            // Hilfsfunktion: Breite eines Codepoint-Bereichs messen
+            auto measureRange = [&](size_t begin, size_t end) -> float {
+                float width = 0.0f;
+                for (size_t i = begin; i < end; ++i) {
+                    const Glyph* glyph = font->getGlyph(u32Text[i], textSize);
+                    if (!glyph) continue;
+                    if (i > begin) {
+                        width += font->getKerning(u32Text[i - 1], u32Text[i], textSize);
+                    }
+                    width += glyph->advanceX + letterSpacing;
+                }
+                // Letztes letterSpacing abziehen
+                if (begin < end) width -= letterSpacing;
+                return width;
+            };
+
+            // Wortgrenzen sammeln: jedes Wort ist ein [begin, end) Bereich ohne Leerzeichen
+            struct Word
+            {
+                size_t begin;
+                size_t end;
+            };
+
+            auto collectWords = [&](size_t lineBegin, size_t lineEnd) -> std::vector<Word> {
+                std::vector<Word> words;
+                size_t i = lineBegin;
+                while (i < lineEnd) {
+                    // Leerzeichen überspringen
+                    while (i < lineEnd && u32Text[i] == U' ') ++i;
+                    if (i >= lineEnd) break;
+                    // Wortende finden
+                    size_t wordEnd = i;
+                    while (wordEnd < lineEnd && u32Text[wordEnd] != U' ') ++wordEnd;
+                    words.push_back({i, wordEnd});
+                    i = wordEnd;
+                }
+                return words;
+            };
+
+            // Segmente anhand expliziter Newlines aufteilen
+            size_t segmentStart = 0;
+            for (size_t i = 0; i <= u32Text.size(); ++i) {
+                const bool isEnd = i == u32Text.size();
+                const bool isNewline = !isEnd && u32Text[i] == U'\n';
+                if (!isEnd && !isNewline) continue;
+
+                // Segment [segmentStart, i) in Zeilen aufteilen
+                if (not maxWidth.has_value() or textWrap == TextWrap::none) {
+                    // Kein Wrapping — ganzes Segment ist eine Zeile
+                    result.push_back({segmentStart, i, 0.0f});
+                } else if (textWrap == TextWrap::character) {
+                    // Zeichenweises Wrapping
+                    size_t lineStart = segmentStart;
+                    float lineWidth = 0.0f;
+
+                    for (size_t j = segmentStart; j < i; ++j) {
+                        const Glyph* glyph = font->getGlyph(u32Text[j], textSize);
+                        if (!glyph) continue;
+
+                        const float kerning = j > lineStart ? font->getKerning(u32Text[j - 1], u32Text[j], textSize) : 0.0f;
+                        const float glyphWidth = glyph->advanceX + letterSpacing + kerning;
+
+                        if (lineWidth + glyphWidth > maxWidth.value() && lineWidth > 0.0f) {
+                            result.push_back({lineStart, j, 0.0f});
+                            lineStart = j;
+                            lineWidth = 0.0f;
+                        }
+
+                        lineWidth += glyphWidth;
+                    }
+                    result.push_back({lineStart, i, 0.0f});
+                } else {
+                    const std::vector<Word> words = collectWords(segmentStart, i);
+
+                    size_t lineStart = segmentStart;
+                    float lineWidth = 0.0f;
+
+                    for (size_t w = 0; w < words.size(); ++w) {
+                        const Word& word = words.at(w);
+
+                        // Breite dieses Wortes inkl. Leerzeichen davor (falls nicht erstes Wort der Zeile)
+                        const float spaceWidth = (lineWidth > 0.0f)
+                                                     ? (font->getGlyph(U' ', textSize) ? font->getGlyph(U' ', textSize)->advanceX : 0.0f) + font->getKerning(u32Text[word.begin > 0 ? word.begin - 1 : 0], u32Text[word.begin], textSize)
+                                                     : 0.0f;
+                        const float wordWidth = measureRange(word.begin, word.end);
+                        const float totalWordWidth = spaceWidth + wordWidth;
+
+                        const bool fitsInLine = lineWidth + totalWordWidth <= maxWidth.value();
+                        const bool isFirstWord = lineWidth == 0.0f;
+
+                        if (not fitsInLine and not isFirstWord) {
+                            // Zeile abschließen vor diesem Wort
+                            result.push_back({lineStart, words[w - 1].end, 0.0f});
+                            lineStart = word.begin;
+                            lineWidth = wordWidth;
+                        } else {
+                            lineWidth += totalWordWidth;
+                        }
+                    }
+
+                    // Letzte Zeile des Segments
+                    result.push_back({lineStart, i, 0.0f});
+                }
+
+                segmentStart = i + 1;
+            }
+
+            return result;
+        });
+
+        for (LineInfo& line : lines) {
+            float x = 0.0f;
+            for (size_t i = line.startIndex; i < line.endIndex; ++i) {
+                const Glyph* glyph = font->getGlyph(u32Text.at(i), textSize);
+                if (glyph == nullptr) continue;
+
+                if (i > line.startIndex) {
+                    x += font->getKerning(u32Text.at(i - 1), u32Text.at(i), textSize);
+                }
+                x += glyph->advanceX + letterSpacing;
+            }
+            if (line.startIndex < line.endIndex) {
+                x -= letterSpacing;
+            }
+            line.width = x;
         }
+
+        const FontMetrics* fontMetrics = font->getMetrics(textSize);
+        const float lineStep = fontMetrics->lineHeight * lineSpacing;
+        const float totalHeight = lineStep * static_cast<float>(lines.size() - 1) + fontMetrics->lineHeight;
+
+        const float originY = std::invoke([textAlign, totalHeight, ascender = fontMetrics->ascender]() {
+            switch (textAlign.vertical) {
+                case VerticalTextAlign::top: return ascender;
+                case VerticalTextAlign::center: return ascender - totalHeight * 0.5f;
+                case VerticalTextAlign::bottom: return ascender - totalHeight;
+                case VerticalTextAlign::baseline: return 0.0f;
+            }
+        });
+
+        std::vector<GlyphQuad> quads;
+        std::vector<LineLayout> lineLayouts; // ← neu
+        lineLayouts.reserve(lines.size());
+
+        for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
+            const LineInfo& line = lines.at(lineIndex);
+
+            const float originX = std::invoke([textAlign, line]() {
+                switch (textAlign.horizontal) {
+                    case HorizontalTextAlign::left: return 0.0f;
+                    case HorizontalTextAlign::center: return -line.width * 0.5f;
+                    case HorizontalTextAlign::right: return -line.width;
+                }
+            });
+
+            float cursorX = originX;
+            float cursorY = originY + lineStep * static_cast<float>(lineIndex);
+
+            lineLayouts.push_back(LineLayout {
+                .codepointsStart = line.startIndex,
+                .codepointsEnd = line.endIndex,
+                .width = line.width,
+                .y = cursorY,
+            });
+
+            for (size_t i = line.startIndex; i < line.endIndex; ++i) {
+                if (i > line.startIndex) {
+                    cursorX += font->getKerning(u32Text.at(i - 1), u32Text.at(i), textSize);
+                }
+
+                const Glyph* glyph = font->getGlyph(u32Text.at(i), textSize);
+                if (glyph == nullptr) continue;
+
+                if (glyph->region.size.x == 0 or glyph->region.size.y == 0) {
+                    cursorX += glyph->advanceX + letterSpacing;
+                    continue;
+                }
+
+                quads.push_back(GlyphQuad {
+                    .vertexRect = rect2f {
+                        .left = cursorX + glyph->bearing.x,
+                        .top = cursorY - glyph->bearing.y,
+                        .width = static_cast<float>(glyph->region.size.x),
+                        .height = static_cast<float>(glyph->region.size.y),
+                    },
+                    .uvRect = glyph->region.uvRect,
+                    .textureId = font->getGlyphAtlasTextureId(glyph->glyphAtlasIndex),
+                    .codepointIndex = i, // ← neu
+                });
+
+                cursorX += glyph->advanceX + letterSpacing;
+            }
+        }
+
+        const float totalWidth = std::invoke([&lines]() {
+            float maxWidth = 0.0f;
+            for (const LineInfo& line : lines) {
+                maxWidth = std::max(maxWidth, line.width);
+            }
+            return maxWidth;
+        });
+
+        return TextLayout {
+            .totalWidth = totalWidth,
+            .totalHeight = totalHeight,
+            .ascender = fontMetrics->ascender,
+            .descender = fontMetrics->descender,
+            .glyphs = std::move(quads),
+            .lines = std::move(lineLayouts),
+        };
     }
 } // namespace p5
 

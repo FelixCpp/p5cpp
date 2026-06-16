@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <array>
 #include <vector>
+#include <optional>
 
 namespace p5
 {
@@ -34,6 +35,7 @@ namespace p5
     };
 
     typedef value2<float> float2;
+    typedef value2<int32_t> int2;
     typedef value2<uint32_t> uint2;
 
     template <typename T> inline constexpr value2<T> operator-(value2<T> value) { return {-value.x, -value.y}; }
@@ -120,6 +122,7 @@ namespace p5
     };
 
     typedef rect2<float> rect2f;
+    typedef rect2<int32_t> rect2i;
 
     struct matrix4x4
     {
@@ -335,14 +338,20 @@ namespace p5
     enum class VerticalTextAlign {
         top,
         center,
+        bottom,
         baseline,
-        bottom
     };
 
     enum class HorizontalTextAlign {
         left,
         center,
         right,
+    };
+
+    enum class TextWrap {
+        none,
+        word,
+        character,
     };
 
     struct TextAlign
@@ -365,47 +374,64 @@ namespace p5
 
     typedef size_t GlyphPageIndex;
 
+    struct GlyphRegion
+    {
+        int2 size;
+        rect2f uvRect;
+    };
+
     struct Glyph
     {
-        float2 size;
-        float2 bearing;
-        rect2f uvRect;
-        float2 advance;
-        GlyphPageIndex pageIndex;
+        GlyphRegion region;
+        int2 bearing;
+        float advanceX;
+        size_t glyphAtlasIndex;
     };
 
-    struct TextOutlinePoint
+    struct FontMetrics
     {
-        float2 position;
-        size_t contourIndex;
-    };
-
-    struct OutlineContext
-    {
+        float ascender;
+        float descender;
+        float lineHeight;
     };
 
     struct Font
     {
         virtual ~Font() = default;
-        virtual uint32_t getGlyphPageTextureId(GlyphPageIndex index) = 0;
         virtual const Glyph* getGlyph(char32_t codepoint, int textSize) = 0;
-        virtual float getLineHeight(int textSize) const = 0;
+        virtual const FontMetrics* getMetrics(int textSize) = 0;
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
-        virtual std::vector<TextOutlinePoint> getTextOutline(std::string_view text, int textSize, int curveSteps) = 0;
-        virtual OutlineContext getOutlineContext(char32_t character, int textSize, int curveSteps) = 0;
+        virtual uint32_t getGlyphAtlasTextureId(size_t glyphAtlasIndex) = 0;
     };
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
     std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
     std::shared_ptr<Font> getCurrentFont();
 
-    struct TextMetrics
+    struct LineLayout
     {
+        size_t codepointsStart;
+        size_t codepointsEnd;
         float width;
+        float y;
+    };
+
+    struct GlyphQuad
+    {
+        rect2f vertexRect;
+        rect2f uvRect;
+        uint32_t textureId;
+        size_t codepointIndex;
+    };
+
+    struct TextLayout
+    {
+        float totalWidth;
         float totalHeight;
         float ascender;
         float descender;
-        uint32_t lineCount;
+        std::vector<GlyphQuad> glyphs;
+        std::vector<LineLayout> lines;
     };
 
     typedef uint32_t color_t;
@@ -534,9 +560,12 @@ namespace p5
     void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable);
 
     void textAlign(TextAlign textAlign);
+    void textWrap(TextWrap textWrap);
     void textFont(std::shared_ptr<Font> font);
     void noTextFont();
     void textSize(float size);
+    void textLetterSpacing(float spacing);
+    void textLineSpacing(float spacing);
 
     void tint(int grey, int alpha = 255);
     void tint(int red, int green, int blue, int alpha = 255);
@@ -566,11 +595,10 @@ namespace p5
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void image(uint32_t textureId, float left, float top, float width, float height);
-    void text(std::string_view text, float x, float y);
+    void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
 
-    TextMetrics measureText(std::string_view text);
-    TextMetrics measureText(std::string_view text, Font* font, float textSize, float scale);
-    std::vector<TextOutlinePoint> queryTextOutline(std::stirng_view text, int textSize, int curveSteps, float pointSpacing);
+    TextLayout measureText(std::string_view text);
+    TextLayout measureText(std::string_view text, Font* font, float textSize, float letterSpacing, float lineSpacing, TextAlign textAlign, TextWrap textWrap, std::optional<float> maxWidth);
 
     // ── Window management ─────────────────────────────────────────────────
     void setWindowSize(int width, int height);

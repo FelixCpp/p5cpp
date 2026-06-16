@@ -29,7 +29,10 @@ namespace p5
 
         std::shared_ptr<Font> font;
         float textSize;
+        float textLetterSpacing;
+        float textLineSpacing;
         TextAlign textAlign;
+        TextWrap textWrap;
 
         std::shared_ptr<Shader> shader;
         BlendMode blendMode;
