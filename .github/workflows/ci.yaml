@@ -14,8 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            preset: linux
           - os: windows-latest
             preset: windows
           - os: macos-latest
@@ -26,15 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      # ── Linux system deps (X11 / GL headers required by GLFW) ───────────
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            libx11-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libgl-dev
 
       # ── Configure ────────────────────────────────────────────────────────
       - name: Configure (Linux / macOS)
