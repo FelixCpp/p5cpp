@@ -1,4 +1,4 @@
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
 #include <algorithm>
 #include <array>
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-using namespace p5;
+using namespace p5cpp;
 
 static constexpr float PI = std::numbers::pi_v<float>;
 static constexpr float TAU = 2.f * PI;
@@ -35,7 +35,7 @@ static constexpr float TAU = 2.f * PI;
 //   • Floating-text score pop uses a scale-bounce animation
 // =============================================================================
 
-struct TowerSketch : p5::Sketch
+struct TowerSketch : p5cpp::Sketch
 {
     // ── Layout ───────────────────────────────────────────────────────────────
     static constexpr int W = 800;
@@ -368,7 +368,7 @@ struct TowerSketch : p5::Sketch
     // ── Main draw / update ────────────────────────────────────────────────────
     void draw() override
     {
-        bgTime += deltaTime;
+        bgTime += getDeltaTime();
         renderBackground();
         if (state == State::Menu) drawMenu();
         else if (state == State::Playing) {
@@ -386,7 +386,7 @@ struct TowerSketch : p5::Sketch
     // ── Update ────────────────────────────────────────────────────────────────
     void update()
     {
-        const float dt = std::min(deltaTime, 0.05f);
+        const float dt = std::min(getDeltaTime(), 0.05f);
         scannerAngle += dt * (TAU / 3.f); // one full revolution per 3 s
 
         waveTimer += dt;
@@ -881,7 +881,7 @@ struct TowerSketch : p5::Sketch
     // ── Tower ─────────────────────────────────────────────────────────────────
     void drawTower()
     {
-        towerPulseT += deltaTime;
+        towerPulseT += getDeltaTime();
         float pulse = 1.f + 0.03f * std::sin(towerPulseT * 3.f);
         float charge = chargeFlashT;
         float cx = CX + shakeX, cy = CY + shakeY;
@@ -1362,7 +1362,7 @@ struct TowerSketch : p5::Sketch
     }
 };
 
-std::unique_ptr<p5::Sketch> p5::createSketch()
+std::unique_ptr<p5cpp::Sketch> p5cpp::createSketch()
 {
     return std::make_unique<TowerSketch>();
 }

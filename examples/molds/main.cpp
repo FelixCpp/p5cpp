@@ -1,4 +1,4 @@
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
 #include <algorithm>
 #include <vector>
@@ -22,8 +22,8 @@ struct PixelGrid
 
     uint2 getCellAtPosition(float x, float y) const
     {
-        const uint32_t column = static_cast<uint32_t>(x / (static_cast<float>(width) / columns));
-        const uint32_t row = static_cast<uint32_t>(y / (static_cast<float>(height) / rows));
+        const uint32_t column = static_cast<uint32_t>(x / (static_cast<float>(getWidth()) / columns));
+        const uint32_t row = static_cast<uint32_t>(y / (static_cast<float>(getHeight()) / rows));
         return {column, row};
     }
 
@@ -88,7 +88,7 @@ struct PixelGrid
     void show()
     {
         texture->update(pixels);
-        image(texture->getRendererId(), 0, 0, width, height);
+        image(texture->getRendererId(), 0, 0, getWidth(), getHeight());
     }
 };
 
@@ -112,8 +112,8 @@ struct Mold
     void update(PixelGrid& pixelGrid, float deltaTime)
     {
         position += direction * deltaTime;
-        position.x = fmod(position.x + width, width);
-        position.y = fmod(position.y + height, height);
+        position.x = fmod(position.x + getWidth(), getWidth());
+        position.y = fmod(position.y + getHeight(), getHeight());
 
         pixelGrid.markAtPosition(position.x, position.y, 255);
 
@@ -193,15 +193,15 @@ struct SlimeMoldsSimulation : Sketch
         setWindowTitle("Slime Molds Simulation");
 
         const size_t gridCellSize = 1;
-        const size_t gridColumns = width / gridCellSize;
-        const size_t gridRows = height / gridCellSize;
+        const size_t gridColumns = getWidth() / gridCellSize;
+        const size_t gridRows = getHeight() / gridCellSize;
 
         grid = std::make_unique<PixelGrid>(gridColumns, gridRows);
 
         // for (size_t i = 0; i < 100000; ++i) {
         for (size_t i = 0; i < 100; ++i) {
-            const float px = static_cast<float>(width) * 0.5f + randomFloat(-50, 50);
-            const float py = static_cast<float>(height) * 0.5f + randomFloat(-50, 50);
+            const float px = static_cast<float>(getWidth()) * 0.5f + randomFloat(-50, 50);
+            const float py = static_cast<float>(getHeight()) * 0.5f + randomFloat(-50, 50);
             const float angle = randomFloat(TWO_PI);
 
             molds.push_back(Mold {
@@ -231,11 +231,11 @@ struct SlimeMoldsSimulation : Sketch
     {
         background(21);
 
-        grid->update(deltaTime);
+        grid->update(getDeltaTime());
         grid->show();
 
         for (Mold& mold : molds) {
-            mold.update(*grid, deltaTime);
+            mold.update(*grid, getDeltaTime());
             // mold.show();
         }
     }

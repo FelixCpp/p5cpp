@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-using namespace p5;
+using namespace p5cpp;
 
 static constexpr float PI = std::numbers::pi_v<float>;
 static constexpr float TAU = 2.f * PI;
@@ -37,7 +37,7 @@ static constexpr float TAU = 2.f * PI;
 //    • No shooting – pure gravitational puzzle
 // =============================================================================
 
-struct GravitasSketch : p5::Sketch
+struct GravitasSketch : p5cpp::Sketch
 {
     // ── Layout ────────────────────────────────────────────────────────────────
     static constexpr int W = 800;
@@ -357,7 +357,7 @@ struct GravitasSketch : p5::Sketch
     // ─────────────────────────────────────────────────────────────────────────
     void draw() override
     {
-        bgTime += deltaTime;
+        bgTime += getDeltaTime();
         renderBg();
 
         if (state == State::Menu) {
@@ -372,7 +372,7 @@ struct GravitasSketch : p5::Sketch
             return;
         }
 
-        float dt = std::min(deltaTime, 0.05f);
+        float dt = std::min(getDeltaTime(), 0.05f);
         update(dt);
         drawBgStars();
         drawScene(true);
@@ -399,8 +399,8 @@ struct GravitasSketch : p5::Sketch
         }
 
         // Star follows mouse with smooth inertia
-        float mx = (float)p5::mouseX;
-        float my = (float)p5::mouseY;
+        float mx = (float)p5cpp::getMouseX();
+        float my = (float)p5cpp::getMouseY();
         float ff = std::min(1.f, STAR_FOLLOW * dt);
         starX += (mx - starX) * ff;
         starY += (my - starY) * ff;
@@ -1165,7 +1165,7 @@ struct GravitasSketch : p5::Sketch
     }
 };
 
-std::unique_ptr<p5::Sketch> p5::createSketch()
+std::unique_ptr<p5cpp::Sketch> p5cpp::createSketch()
 {
     return std::make_unique<GravitasSketch>();
 }

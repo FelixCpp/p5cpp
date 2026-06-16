@@ -67,7 +67,7 @@ struct Player
 
     void update(float dt)
     {
-        position = {static_cast<float>(mouseX), static_cast<float>(mouseY)};
+        position = {static_cast<float>(getMouseX()), static_cast<float>(getMouseY())};
         angle += dt * 1.4f;
     }
 
@@ -498,9 +498,9 @@ struct BlackHole
 
     void update(float deltaTime)
     {
-        timeAlive += deltaTime;
+        timeAlive += getDeltaTime();
 
-        position += direction * speed * deltaTime;
+        position += direction * speed * getDeltaTime();
     }
 
     bool isDead() const
@@ -584,7 +584,7 @@ struct Gravitas : Sketch
     {
         if (e.type != EventType::mousePress or impulseTimer > 0.0f) return;
 
-        const float2 cursor {static_cast<float>(mouseX), static_cast<float>(mouseY)};
+        const float2 cursor {static_cast<float>(getMouseX()), static_cast<float>(getMouseY())};
 
         for (Orbit& orbit : orbits) {
             const float2 toPlayer = cursor - orbit.position;
@@ -615,7 +615,7 @@ struct Gravitas : Sketch
             spawnTimer = 0.0f;
         }
 
-        impulseTimer = std::max(impulseTimer - deltaTime, 0.0f);
+        impulseTimer = std::max(impulseTimer - getDeltaTime(), 0.0f);
 
         // ── Base ──────────────────────────────────────────────────────────────
         background(8, 10, 18);
@@ -666,13 +666,13 @@ struct Gravitas : Sketch
 
         // ── Stars / targets ───────────────────────────────────────────────────
         for (Star& s : stars) {
-            s.update(deltaTime);
+            s.update(getDeltaTime());
             s.show();
         }
 
         // ── Pulse waves ───────────────────────────────────────────────────────
         for (PulseWave& w : pulseWaves) {
-            w.update(deltaTime);
+            w.update(getDeltaTime());
             w.show();
         }
 
@@ -685,17 +685,17 @@ struct Gravitas : Sketch
 
         // ── Orbits ────────────────────────────────────────────────────────────
         for (Orbit& o : orbits) {
-            o.attract(player.position, deltaTime);
-            o.update(deltaTime);
+            o.attract(player.position, getDeltaTime());
+            o.update(getDeltaTime());
             o.show();
         }
 
         // ── Player ────────────────────────────────────────────────────────────
-        player.update(deltaTime);
+        player.update(getDeltaTime());
         player.show();
 
         for (BlackHole& b : blackHoles) {
-            b.update(deltaTime);
+            b.update(getDeltaTime());
             b.draw();
         }
 
@@ -736,7 +736,7 @@ struct Gravitas : Sketch
 
         // ── Score popups ──────────────────────────────────────────────────────
         for (ScorePopup& p : scorePopups) {
-            p.update(deltaTime);
+            p.update(getDeltaTime());
             p.show();
         }
 

@@ -37,7 +37,7 @@ static constexpr float PI = std::numbers::pi_v<float>;
 //    • Scrolling star field behind everything
 // ─────────────────────────────────────────────────────────────────────────────
 
-struct BreakoutSketch : p5::Sketch
+struct BreakoutSketch : p5cpp::Sketch
 {
     // ── Window / layout ──────────────────────────────────────────────────────
     static constexpr int W = 800;
@@ -547,7 +547,7 @@ struct BreakoutSketch : p5::Sketch
 
         // Paddle follows mouse
         const float pHW = currentPaddleHW();
-        paddleX = std::clamp(float(mouseX), pHW, float(W) - pHW);
+        paddleX = std::clamp(float(getMouseX()), pHW, float(W) - pHW);
 
         // Screen-shake decay
         if (shakeAmt > 0.f) {
@@ -811,9 +811,9 @@ struct BreakoutSketch : p5::Sketch
     {
         for (const auto& br : bricks) {
             if (!br.alive) continue;
-            const int r = p5::red(br.col);
-            const int g = p5::green(br.col);
-            const int b = p5::blue(br.col);
+            const int r = p5cpp::red(br.col);
+            const int g = p5cpp::green(br.col);
+            const int b = p5cpp::blue(br.col);
             const float pu = 0.5f + 0.5f * std::sin(t * 1.8f + br.phase);
             const int dm = (br.hp < br.maxHp) ? 130 : 255;
 
@@ -991,7 +991,7 @@ struct BreakoutSketch : p5::Sketch
         noStroke();
         for (const auto& p : particles) {
             const float frac = p.life / p.maxLife;
-            fill(p5::red(p.col), p5::green(p.col), p5::blue(p.col), int(240.f * frac));
+            fill(p5cpp::red(p.col), p5cpp::green(p.col), p5cpp::blue(p.col), int(240.f * frac));
             circle(p.x, p.y, p.size * frac * 2.f);
         }
         blendMode(BlendMode::alpha);
@@ -1005,7 +1005,7 @@ struct BreakoutSketch : p5::Sketch
         for (const auto& pp : popups) {
             const float a = pp.life / pp.maxLife;
             const float sz = 11.f + 6.f * (1.f - a);
-            fill(p5::red(pp.col), p5::green(pp.col), p5::blue(pp.col), int(200.f * a));
+            fill(p5cpp::red(pp.col), p5cpp::green(pp.col), p5cpp::blue(pp.col), int(200.f * a));
             textSize(sz);
             text("+" + std::to_string(pp.value), pp.x, pp.y);
         }
@@ -1051,7 +1051,7 @@ struct BreakoutSketch : p5::Sketch
                     isBad = true;
                     break;
             }
-            const int cr = p5::red(c), cg = p5::green(c), cb = p5::blue(c);
+            const int cr = p5cpp::red(c), cg = p5cpp::green(c), cb = p5cpp::blue(c);
 
             // Outer glow
             blendMode(BlendMode::additive);
@@ -1254,9 +1254,9 @@ struct BreakoutSketch : p5::Sketch
     // ── Main draw ────────────────────────────────────────────────────────────
     void draw() override
     {
-        t += deltaTime;
+        t += getDeltaTime();
         if (state == State::Playing || state == State::LevelClear)
-            update(deltaTime);
+            update(getDeltaTime());
 
         drawBackground();
 
@@ -1302,7 +1302,7 @@ struct BreakoutSketch : p5::Sketch
 
 namespace p5cpp
 {
-    std::unique_ptr<p5::Sketch> createSketch()
+    std::unique_ptr<p5cpp::Sketch> createSketch()
     {
         return std::make_unique<BreakoutSketch>();
     }
