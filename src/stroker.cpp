@@ -165,8 +165,8 @@ namespace p5cpp::joins
         float angleEnd = std::atan2(endDir.y, endDir.x);
 
         float angleDiff = angleEnd - angleStart;
-        if (angleDiff > M_PI) angleDiff -= 2.0f * M_PI;
-        else if (angleDiff < -M_PI) angleDiff += 2.0f * M_PI;
+        if (angleDiff > PI) angleDiff -= 2.0f * PI;
+        else if (angleDiff < -PI) angleDiff += 2.0f * PI;
 
         if (std::abs(angleDiff) < roundJoinAngleThreshold) {
             return emit_bevel_join(scope, corner, points);
