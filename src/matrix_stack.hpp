@@ -2,9 +2,9 @@
 
 #include <stack>
 
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
-namespace p5
+namespace p5cpp
 {
     struct MatrixStack
     {
@@ -19,4 +19,4 @@ namespace p5
     void matrix_stack_set(MatrixStack& stack, const matrix4x4& matrix);
 
     matrix4x4& matrix_stack_peek(MatrixStack& stack);
-} // namespace p5
+} // namespace p5cpp

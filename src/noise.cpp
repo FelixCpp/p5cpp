@@ -1,7 +1,7 @@
 #include <cstddef> // size_t
 #include <cstdint>
 
-namespace p5
+namespace p5cpp
 {
     /**
      * @brief A Perlin Simplex Noise C++ Implementation (1D, 2D, 3D, 4D).
@@ -44,9 +44,9 @@ namespace p5
         float mLacunarity;  ///< Lacunarity specifies the frequency multiplier between successive octaves (default to 2.0).
         float mPersistence; ///< Persistence is the loss of amplitude between successive octaves (usually 1/lacunarity)
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     /**
      * Computes the largest integer value not greater than the float one
@@ -523,9 +523,9 @@ namespace p5
     }
 
     static SimplexNoise simplexNoise; // Default SimplexNoise instance with default parameters
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     float noise(float x)
     {
@@ -541,4 +541,4 @@ namespace p5
     {
         return simplexNoise.noise(x, y, z);
     }
-} // namespace p5
+} // namespace p5cpp

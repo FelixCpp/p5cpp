@@ -1,9 +1,9 @@
 #include "framebuffer.hpp"
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
 #include <glad/glad.h>
 
-namespace p5
+namespace p5cpp
 {
     class OpenGLFramebuffer : public Framebuffer
     {
@@ -86,9 +86,9 @@ namespace p5
         uint2 m_physicalSize;
         uint2 m_logicalSize;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Framebuffer> createFramebuffer(int width, int height)
     {
@@ -99,9 +99,9 @@ namespace p5
     {
         return OpenGLFramebuffer::create(physWidth, physHeight, {static_cast<uint32_t>(logicalWidth), static_cast<uint32_t>(logicalHeight)});
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     void blit_framebuffer_to_screen(const Framebuffer& source)
     {
@@ -111,4 +111,4 @@ namespace p5
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
-} // namespace p5
+} // namespace p5cpp

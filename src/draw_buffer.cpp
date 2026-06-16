@@ -1,6 +1,6 @@
 #include "draw_buffer.hpp"
 
-namespace p5
+namespace p5cpp
 {
     DrawBuffer draw_buffer_create(size_t maxVertices, size_t maxIndices)
     {
@@ -31,4 +31,4 @@ namespace p5
         buffer.vertexCursor = 0;
         buffer.indexCursor = 0;
     }
-} // namespace p5
+} // namespace p5cpp

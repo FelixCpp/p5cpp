@@ -1,7 +1,7 @@
 #include "draw_command_list.hpp"
 #include "uniform_cache.hpp"
 
-namespace p5
+namespace p5cpp
 {
     inline static bool draw_command_mergeable(const DrawCommand& command, const std::shared_ptr<Shader>& shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
     {
@@ -122,4 +122,4 @@ namespace p5
     {
         drawCommands.clear();
     }
-} // namespace p5
+} // namespace p5cpp

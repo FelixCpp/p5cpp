@@ -1,10 +1,11 @@
 #pragma once
 
-#include "p5.hpp"
+#include <p5cpp.hpp>
+
 #include <functional>
 #include <string_view>
 
-namespace p5
+namespace p5cpp
 {
     // Opaque handle to the application window. Not exposed to sketches.
     struct AppWindow;
@@ -30,4 +31,4 @@ namespace p5
     int window_physical_width(const AppWindow* win);
     int window_physical_height(const AppWindow* win);
 
-} // namespace p5
+} // namespace p5cpp

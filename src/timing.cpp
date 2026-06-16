@@ -6,7 +6,7 @@
 #include <mach/mach_time.h>
 #endif
 
-namespace p5
+namespace p5cpp
 {
 
     // ── precise_sleep_until ───────────────────────────────────────────────────────
@@ -100,4 +100,4 @@ namespace p5
     {
         return m_current;
     }
-} // namespace p5
+} // namespace p5cpp

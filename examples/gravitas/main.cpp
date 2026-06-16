@@ -1,10 +1,12 @@
 #include <numbers>
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
 #include <algorithm>
 #include <cmath>
 
-using namespace p5;
+using namespace p5cpp;
+
+int width = 0, height = 0;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 inline static constexpr float SPAWN_MARGIN = 100.0f;
@@ -554,6 +556,9 @@ struct Gravitas : Sketch
 
     void setup() override
     {
+        width = 800;
+        height = 600;
+
         setWindowSize(800, 600);
         setWindowResizable(false);
 
@@ -598,9 +603,13 @@ struct Gravitas : Sketch
 
     void draw() override
     {
+
+        width = getWidth();
+        height = getHeight();
+
         const float time = millis() / 1000.0f;
 
-        spawnTimer += deltaTime;
+        spawnTimer += getDeltaTime();
         if (spawnTimer >= 1.0f) {
             orbits.push_back(spawnOrbit());
             spawnTimer = 0.0f;
@@ -812,10 +821,10 @@ struct Gravitas : Sketch
     }
 };
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Sketch> createSketch()
     {
         return std::make_unique<Gravitas>();
     }
-} // namespace p5
+} // namespace p5cpp

@@ -1,9 +1,9 @@
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
 #include <numbers>
 #include <random>
 
-namespace p5
+namespace p5cpp
 {
     // clang-format off
     const matrix4x4 matrix4x4::identity = {
@@ -137,9 +137,9 @@ namespace p5
             matrix.m[1] * point.x + matrix.m[5] * point.y + matrix.m[13],
         };
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     float radians(float degrees) { return degrees * (std::numbers::pi_v<float> / 180.0f); }
     float degrees(float radians) { return radians * (180.0f / std::numbers::pi_v<float>); }
@@ -148,9 +148,9 @@ namespace p5
         const float t = (value - fromLow) / (fromHigh - fromLow);
         return std::lerp(toLow, toHigh, t);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     class XShiro256Random
     {
@@ -236,4 +236,4 @@ namespace p5
     float randomFloat(float min, float max) { return randomGenerator.nextFloat(min, max); }
     int randomInt(int max) { return randomGenerator.nextInt(0, max); }
     int randomInt(int min, int max) { return randomGenerator.nextInt(min, max); }
-} // namespace p5
+} // namespace p5cpp

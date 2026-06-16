@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(p5)
+project(p5cpp)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ add_library(
 target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(
-  p5 STATIC
+  p5cpp STATIC
   ./src/color.cpp
   ./src/draw_buffer.cpp
   ./src/draw_command_list.cpp
@@ -33,7 +33,7 @@ add_library(
   ./src/math.cpp
   ./src/matrix_stack.cpp
   ./src/noise.cpp
-  ./src/p5.cpp
+  ./src/p5cpp.cpp
   ./src/render_state.cpp
   ./src/render_state_stack.cpp
   ./src/renderer.cpp
@@ -46,6 +46,6 @@ add_library(
   ./src/utf8_view.cpp
   ./src/window.cpp)
 
-target_link_libraries(p5 PRIVATE glfw glad freetype libtess2)
-target_include_directories(p5 PUBLIC include)
+target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2)
+target_include_directories(p5cpp PUBLIC include)
 add_subdirectory(examples)

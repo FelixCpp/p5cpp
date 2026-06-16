@@ -1,8 +1,8 @@
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
 #include <glad/glad.h>
 
-namespace p5
+namespace p5cpp
 {
     class OpenGLTexture : public Texture
     {
@@ -60,9 +60,9 @@ namespace p5
         GLuint m_textureId;
         uint2 m_size;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath)
     {
@@ -78,4 +78,4 @@ namespace p5
     {
         return OpenGLTexture::create(width, height, {});
     }
-} // namespace p5
+} // namespace p5cpp

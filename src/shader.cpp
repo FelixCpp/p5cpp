@@ -1,11 +1,12 @@
 #include "shader.hpp"
-#include "p5.hpp"
+
+#include <p5cpp.hpp>
 #include <string>
 #include <unordered_map>
 
 #include <glad/glad.h>
 
-namespace p5
+namespace p5cpp
 {
     class OpenGLShader : public Shader
     {
@@ -114,17 +115,17 @@ namespace p5
         uint32_t programId;
         std::unordered_map<std::string, int> uniformLocationCache;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource)
     {
         return OpenGLShader::create(vertexSource, fragmentSource);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     inline static constexpr const char* defaultVSource = R"(
         #version 410 core
@@ -182,9 +183,9 @@ namespace p5
     {
         return loadShader(defaultVSource, defaultFSource);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     inline static constexpr const char* textVSource = R"(
         #version 410 core
@@ -243,4 +244,4 @@ namespace p5
     {
         return loadShader(textVSource, textFSource);
     }
-} // namespace p5
+} // namespace p5cpp

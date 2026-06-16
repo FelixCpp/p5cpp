@@ -1,4 +1,4 @@
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
 #include <optional>
 #include <algorithm>
@@ -8,7 +8,7 @@
 #include <freetype/freetype.h>
 #include <unordered_map>
 
-namespace p5
+namespace p5cpp
 {
     struct BinPackingStrategy
     {
@@ -16,9 +16,9 @@ namespace p5
         virtual std::optional<rect2i> insert(int width, int height) = 0;
         virtual void reset() = 0;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     class MaxRectsBinPacking : public BinPackingStrategy
     {
@@ -163,9 +163,9 @@ namespace p5
         int m_binHeight;
         std::vector<rect2i> m_freeRects;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     class GlyphAtlas
     {
@@ -234,9 +234,9 @@ namespace p5
 
         std::unique_ptr<BinPackingStrategy> m_packingStrategy;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     static struct FreetypeInitializer
     {
@@ -252,9 +252,9 @@ namespace p5
 
         FT_Library library;
     } freetype;
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct FreetypeDeleter
     {
@@ -265,9 +265,9 @@ namespace p5
     };
 
     using FreetypeFace = std::unique_ptr<std::remove_pointer_t<FT_Face>, FreetypeDeleter>;
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct KerningCacheKey
     {
@@ -320,9 +320,9 @@ namespace p5
     private:
         std::unordered_map<KerningCacheKey, float, KerningCacheKeyHasher> m_cache;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct FontMetricsCacheKey
     {
@@ -369,9 +369,9 @@ namespace p5
     private:
         std::unordered_map<FontMetricsCacheKey, FontMetrics, FontMetricsCacheKeyHasher> m_cache;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct GlyphCacheKey
     {
@@ -422,9 +422,9 @@ namespace p5
     private:
         std::unordered_map<GlyphCacheKey, Glyph, GlyphCacheKeyHasher> m_cache;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     class FreetypeFont : public Font
     {
@@ -573,9 +573,9 @@ namespace p5
         std::vector<std::unique_ptr<GlyphAtlas>> m_glyphAtlasPages;
         FreetypeFace m_face;
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath)
     {
@@ -586,4 +586,4 @@ namespace p5
     {
         return FreetypeFont::loadFromMemory(fontData);
     }
-} // namespace p5
+} // namespace p5cpp

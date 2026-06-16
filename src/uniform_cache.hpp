@@ -1,13 +1,13 @@
 #pragma once
 
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
 #include <functional>
 
-namespace p5
+namespace p5cpp
 {
     using UniformIds = std::unordered_set<size_t>;
 
@@ -40,4 +40,4 @@ namespace p5
 
     UniformCache uniform_cache_create();
     ShaderUniformCache& uniform_cache_get_shader_cache(UniformCache& cache, Shader* shader);
-} // namespace p5
+} // namespace p5cpp

@@ -1,6 +1,6 @@
 #include "render_state_stack.hpp"
 
-namespace p5
+namespace p5cpp
 {
     RenderStateStack render_state_stack_create()
     {
@@ -39,4 +39,4 @@ namespace p5
     {
         return stack.renderStates[stack.activeRenderStateIndex];
     }
-} // namespace p5
+} // namespace p5cpp

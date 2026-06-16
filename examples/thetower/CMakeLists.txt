@@ -1,2 +1,2 @@
 add_executable(thetower main.cpp)
-target_link_libraries(thetower PRIVATE p5)
+target_link_libraries(thetower PRIVATE p5cpp)

@@ -1,7 +1,7 @@
 #include "render_state.hpp"
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
-namespace p5
+namespace p5cpp
 {
     RenderState render_state_create()
     {
@@ -32,4 +32,4 @@ namespace p5
             .metrics = matrix_stack_create(),
         };
     }
-} // namespace p5
+} // namespace p5cpp

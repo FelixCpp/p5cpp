@@ -1,7 +1,7 @@
 #include <cfloat>
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
-using namespace p5;
+using namespace p5cpp;
 
 inline static constexpr std::string_view dummyText = R"(
 Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
@@ -32,10 +32,10 @@ struct PixelTestSketch : Sketch
     }
 };
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Sketch> createSketch()
     {
         return std::make_unique<PixelTestSketch>();
     }
-} // namespace p5
+} // namespace p5cpp

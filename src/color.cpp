@@ -1,8 +1,8 @@
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
 #include <algorithm>
 
-namespace p5
+namespace p5cpp
 {
     color_t rgba(int grey, int alpha)
     {
@@ -82,4 +82,4 @@ namespace p5
 
         return static_cast<int>(0.299f * r + 0.587f * g + 0.114f * b);
     }
-} // namespace p5
+} // namespace p5cpp

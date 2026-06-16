@@ -2,10 +2,10 @@
 
 #include <vector>
 
-#include "p5.hpp"
+#include <p5cpp.hpp>
 #include "vertex.hpp"
 
-namespace p5
+namespace p5cpp
 {
     struct PathPoints
     {
@@ -32,4 +32,4 @@ namespace p5
         std::vector<color_t> drawPointFillColors;
         std::vector<color_t> drawPointStrokeColors;
     };
-} // namespace p5
+} // namespace p5cpp

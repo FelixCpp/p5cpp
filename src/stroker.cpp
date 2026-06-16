@@ -4,7 +4,7 @@
 
 inline static constexpr float PI = std::numbers::pi_v<float>;
 
-namespace p5
+namespace p5cpp
 {
     struct StrokeCorner
     {
@@ -50,9 +50,9 @@ namespace p5
     static void push_vertex(DrawScope& scope, const float2& position, color_t color);
     static void push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c);
     static std::optional<float2> line_intersection(const float2& p1, const float2& d1, const float2& p2, const float2& d2);
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5::caps
+namespace p5cpp::caps
 {
     static void emit_stroke_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, StrokeCapStyle strokeCap, bool isEnd)
     {
@@ -109,9 +109,9 @@ namespace p5::caps
             push_triangle(scope, centerIndex + 0, centerIndex + i + 1, centerIndex + i + 2);
         }
     }
-} // namespace p5::caps
+} // namespace p5cpp::caps
 
-namespace p5::joins
+namespace p5cpp::joins
 {
     static void emit_stroke_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, StrokeJoin strokeJoin)
     {
@@ -194,9 +194,9 @@ namespace p5::joins
             );
         }
     }
-} // namespace p5::joins
+} // namespace p5cpp::joins
 
-namespace p5
+namespace p5cpp
 {
     StrokeCorner compute_stroke_corner(
         const StrokeSegment& previous,
@@ -280,9 +280,9 @@ namespace p5
         push_triangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
         push_triangle(scope, baseVertex + 2, baseVertex + 3, baseVertex + 0);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     static void push_vertex(DrawScope& scope, const float2& position, color_t color)
     {
@@ -314,9 +314,9 @@ namespace p5
         const float t = ((p3.x - p1.x) * d2.y - (p3.y - p1.y) * d2.x) / cross;
         return p1 + d1 * t;
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     void generate_solid_stroke(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
     {
@@ -357,4 +357,4 @@ namespace p5
             }
         }
     }
-} // namespace p5
+} // namespace p5cpp

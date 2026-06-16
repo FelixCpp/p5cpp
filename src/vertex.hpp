@@ -1,8 +1,8 @@
 #pragma once
 
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
-namespace p5
+namespace p5cpp
 {
     struct Vertex
     {
@@ -23,4 +23,4 @@ namespace p5
         std::span<const float> segments;
         float offset;
     };
-} // namespace p5
+} // namespace p5cpp

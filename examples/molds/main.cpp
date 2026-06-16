@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <vector>
 
-using namespace p5;
+using namespace p5cpp;
 
 struct PixelGrid
 {
@@ -241,10 +241,10 @@ struct SlimeMoldsSimulation : Sketch
     }
 };
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<Sketch> createSketch()
     {
         return std::make_unique<SlimeMoldsSimulation>();
     }
-} // namespace p5
+} // namespace p5cpp

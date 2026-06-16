@@ -3,9 +3,9 @@
 #include <chrono>
 #include <cstdint>
 
-namespace p5
+namespace p5cpp
 {
-    using Clock     = std::chrono::steady_clock;
+    using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
 
     // Blocks the calling thread until `target`, using a platform high-resolution
@@ -28,10 +28,10 @@ namespace p5
         float fps() const;
 
     private:
-        float     m_windowSeconds;
-        float     m_current        = 0.0f;
-        int       m_frames         = 0;
-        TimePoint m_windowStart    = Clock::now();
+        float m_windowSeconds;
+        float m_current = 0.0f;
+        int m_frames = 0;
+        TimePoint m_windowStart = Clock::now();
     };
 
-} // namespace p5
+} // namespace p5cpp

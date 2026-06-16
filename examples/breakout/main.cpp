@@ -1,4 +1,4 @@
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
 #include <algorithm>
 #include <array>
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-using namespace p5;
+using namespace p5cpp;
 
 static constexpr float PI = std::numbers::pi_v<float>;
 
@@ -1300,10 +1300,10 @@ struct BreakoutSketch : p5::Sketch
     }
 };
 
-namespace p5
+namespace p5cpp
 {
     std::unique_ptr<p5::Sketch> createSketch()
     {
         return std::make_unique<BreakoutSketch>();
     }
-} // namespace p5
+} // namespace p5cpp

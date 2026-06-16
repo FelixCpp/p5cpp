@@ -3,7 +3,7 @@
 #include "draw_scope.hpp"
 #include "vertex.hpp"
 
-namespace p5
+namespace p5cpp
 {
     struct DrawBuffer
     {
@@ -20,4 +20,4 @@ namespace p5
     DrawBuffer draw_buffer_create(size_t maxVertices, size_t maxIndices);
     DrawScope draw_buffer_get_scope(DrawBuffer& buffer);
     void draw_buffer_clear(DrawBuffer& buffer);
-} // namespace p5
+} // namespace p5cpp

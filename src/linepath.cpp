@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace p5
+namespace p5cpp
 {
     LinePathBuilder::LinePathBuilder()
         : drawPointCount(0),
@@ -41,4 +41,4 @@ namespace p5
     {
         drawPointCount = 0;
     }
-} // namespace p5
+} // namespace p5cpp

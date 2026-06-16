@@ -1,6 +1,6 @@
 #pragma once
 
-#include <p5.hpp>
+#include <p5cpp.hpp>
 #include <glad/glad.h>
 
 #include "vertex.hpp"
@@ -8,7 +8,7 @@
 #include "uniform_cache.hpp"
 #include "draw_command_list.hpp"
 
-namespace p5
+namespace p5cpp
 {
     struct DrawBuffer
     {
@@ -25,9 +25,9 @@ namespace p5
     DrawBuffer draw_buffer_create(size_t maxVertices, size_t maxIndices);
     DrawScope draw_buffer_get_scope(DrawBuffer& buffer);
     void draw_buffer_clear(DrawBuffer& buffer);
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct Renderer
     {
@@ -47,4 +47,4 @@ namespace p5
     void renderer_end_frame(Renderer& renderer);
     void renderer_flush(Renderer& renderer);
     void renderer_submit(Renderer& renderer, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture);
-} // namespace p5
+} // namespace p5cpp

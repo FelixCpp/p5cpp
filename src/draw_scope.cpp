@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-namespace p5
+namespace p5cpp
 {
     void draw_scope_push_vertex(DrawScope& scope, const float2& position, const float2& texcoord, const float4& color)
     {
@@ -31,4 +31,4 @@ namespace p5
         scope.indices[scope.indexCursor++] = scope.baseVertex + b;
         scope.indices[scope.indexCursor++] = scope.baseVertex + c;
     }
-} // namespace p5
+} // namespace p5cpp

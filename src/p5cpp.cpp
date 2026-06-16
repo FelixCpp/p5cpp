@@ -1,4 +1,5 @@
-#include "p5.hpp"
+#include <p5cpp.hpp>
+
 #include "render_state_stack.hpp"
 #include "utf8_view.hpp"
 #include "window.hpp"
@@ -19,7 +20,7 @@
 #include <algorithm>
 #include <chrono>
 
-namespace p5
+namespace p5cpp
 {
     const StrokeCap StrokeCap::butt = StrokeCap {.start = StrokeCapStyle::butt, .end = StrokeCapStyle::butt};
     const StrokeCap StrokeCap::square = StrokeCap {.start = StrokeCapStyle::square, .end = StrokeCapStyle::square};
@@ -36,9 +37,9 @@ namespace p5
     const TextAlign TextAlign::bottomLeft = TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::bottom};
     const TextAlign TextAlign::bottomCenter = TextAlign {.horizontal = HorizontalTextAlign::center, .vertical = VerticalTextAlign::bottom};
     const TextAlign TextAlign::bottomRight = TextAlign {.horizontal = HorizontalTextAlign::right, .vertical = VerticalTextAlign::bottom};
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     size_t computeCircleSegmentCount(float angle, float radius)
     {
@@ -60,17 +61,17 @@ namespace p5
 
         return std::max<size_t>(segments, 4);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     void info(std::string_view message) { std::cout << "[INFO]: " << message << std::endl; }
     void debug(std::string_view message) { std::cout << "[DEBUG]: " << message << std::endl; }
     void warning(std::string_view message) { std::cout << "[WARNING]: " << message << std::endl; }
     void error(std::string_view message) { std::cerr << "[ERROR]: " << message << std::endl; }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct AppState
     {
@@ -104,9 +105,9 @@ namespace p5
     float getDeltaTime() { return appState.deltaTime; }
     float getGlobalTime() { return appState.globalTime; }
 
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     inline static size_t curveVertexCount;
     inline static std::array<float2, 4> curveVertexPositions;
@@ -125,12 +126,12 @@ namespace p5
 
     inline static std::vector<color_t> pixelScratch;
     inline static bool needsDefaultCanvasRecreation = false;
-} // namespace p5
+} // namespace p5cpp
 
 /// --------------------------------------------
 ///               RenderState Options
 /// --------------------------------------------
-namespace p5
+namespace p5cpp
 {
     void pushState()
     {
@@ -367,12 +368,12 @@ namespace p5
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         renderState.tintColor = rgba(255, 255, 255);
     }
-} // namespace p5
+} // namespace p5cpp
 
 /// -----------------------------------------
 ///             Rendering methods
 /// -----------------------------------------
-namespace p5
+namespace p5cpp
 {
     inline std::shared_ptr<Shader> get_current_shader(const RenderState& state)
     {
@@ -436,9 +437,9 @@ namespace p5
             );
         }
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     inline static std::shared_ptr<Font> get_current_font(const RenderState& state)
     {
@@ -454,9 +455,9 @@ namespace p5
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         return get_current_font(renderState);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     static void recreateDefaultCanvas()
     {
@@ -916,9 +917,9 @@ namespace p5
             renderer_submit(renderer, scope, get_current_text_shader(renderState), renderState.blendMode, textureId);
         }
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     inline static float s_targetFrameTime = 0.0f;
     inline static auto s_appStartTime = std::chrono::steady_clock::now();
@@ -946,7 +947,7 @@ namespace p5
 
     void quit(int exitCode)
     {
-        p5::exitCode(exitCode);
+        p5cpp::exitCode(exitCode);
         quit();
     }
 
@@ -1004,9 +1005,9 @@ namespace p5
         renderer.framebuffer->getColorTexture()->update(pixelScratch);
     }
 
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     TextLayout measureText(std::string_view text)
     {
@@ -1248,11 +1249,11 @@ namespace p5
             .lines = std::move(lineLayouts),
         };
     }
-} // namespace p5
+} // namespace p5cpp
 
 int main()
 {
-    using namespace p5;
+    using namespace p5cpp;
 
     static std::unique_ptr sketch = createSketch();
 

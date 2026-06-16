@@ -10,7 +10,7 @@
 #include <vector>
 #include <optional>
 
-namespace p5
+namespace p5cpp
 {
     float radians(float degrees);
     float degrees(float radians);
@@ -24,9 +24,9 @@ namespace p5
     float noise(float x);
     float noise(float x, float y);
     float noise(float x, float y, float z);
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     template <typename T>
     struct value2
@@ -139,9 +139,9 @@ namespace p5
     matrix4x4 perspective(float fovY, float aspect, float near, float far);
     matrix4x4 lookAt(float2 eye, float2 center, float2 up);
     float2 transformPoint(const matrix4x4& matrix, float2 point);
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     // ── Mouse button ─────────────────────────────────────────────────────
     enum class MouseButton {
@@ -255,9 +255,9 @@ namespace p5
             ResizeData framebufferResize;
         };
     };
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     struct Sketch
     {
@@ -616,4 +616,4 @@ namespace p5
     void quit(int exitCode);
     void exitCode(int code);
     float millis(); // Milliseconds since the application started
-} // namespace p5
+} // namespace p5cpp

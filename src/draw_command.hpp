@@ -1,8 +1,8 @@
 #pragma once
 
-#include <p5.hpp>
+#include <p5cpp.hpp>
 
-namespace p5
+namespace p5cpp
 {
     struct UniformSnapshot
     {
@@ -23,4 +23,4 @@ namespace p5
         std::array<uint32_t, 8> textureUnits;  // Which texture units to bind for this draw command
         size_t textureUnitCount;               // The number of texture units used by this draw command
     };
-} // namespace p5
+} // namespace p5cpp

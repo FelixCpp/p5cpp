@@ -1,9 +1,10 @@
 #pragma once
 
-#include "p5.hpp"
+#include <p5cpp.hpp>
+
 #include "matrix_stack.hpp"
 
-namespace p5
+namespace p5cpp
 {
     struct RenderState
     {
@@ -40,4 +41,4 @@ namespace p5
     };
 
     RenderState render_state_create();
-} // namespace p5
+} // namespace p5cpp

@@ -7,7 +7,7 @@
 #include <iostream>
 #include <string>
 
-namespace p5
+namespace p5cpp
 {
     // -----------------------------------------------------------------------
     // GLFW key-code → Key enum mapping
@@ -270,4 +270,4 @@ namespace p5
     int window_logical_height(const AppWindow* win) { return win->logicalHeight; }
     int window_physical_width(const AppWindow* win) { return win->physicalWidth; }
     int window_physical_height(const AppWindow* win) { return win->physicalHeight; }
-} // namespace p5
+} // namespace p5cpp

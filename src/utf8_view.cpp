@@ -1,6 +1,6 @@
 #include "utf8_view.hpp"
 
-namespace p5
+namespace p5cpp
 {
     // Decodes the next UTF-8 codepoint from sv starting at byte index pos.
     // Advances pos past all consumed bytes.
@@ -44,4 +44,4 @@ namespace p5
 
         return result;
     }
-} // namespace p5
+} // namespace p5cpp

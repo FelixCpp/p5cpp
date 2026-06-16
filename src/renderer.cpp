@@ -1,6 +1,6 @@
 #include "renderer.hpp"
 
-namespace p5
+namespace p5cpp
 {
     static void setBlendMode(BlendMode mode)
     {
@@ -13,9 +13,9 @@ namespace p5
         }
         // clang-format on
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     static void render_canvas(Renderer& renderer)
     {
@@ -65,9 +65,9 @@ namespace p5
         draw_commands_clear(renderer.drawCommands);
     }
 
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     Renderer renderer_create(size_t vertexCount, size_t indexCount)
     {
@@ -148,12 +148,12 @@ namespace p5
         render_canvas(renderer);
         draw_buffer_clear(renderer.drawBuffer);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     void renderer_submit(Renderer& renderer, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
     {
         draw_commands_submit(renderer.drawCommands, renderer.uniformCache, scope, std::move(shader), blendMode, texture);
     }
-} // namespace p5
+} // namespace p5cpp

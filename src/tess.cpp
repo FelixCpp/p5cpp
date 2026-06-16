@@ -3,7 +3,7 @@
 #include <cassert>
 #include <tesselator.h>
 
-namespace p5
+namespace p5cpp
 {
     inline static float4 color_to_float4(color_t color)
     {
@@ -14,14 +14,14 @@ namespace p5
             .w = static_cast<float>(alpha(color)) / 255.0f,
         };
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     thread_local std::vector<uint32_t> s_tess_local;
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     void tesselate_quads(DrawScope& scope, const PathPoints& points)
     {
@@ -145,9 +145,9 @@ namespace p5
 
         tessDeleteTess(tess);
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     void stroke_quads(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
     {
@@ -243,4 +243,4 @@ namespace p5
         if (points.size < 2) return;
         generate_solid_stroke(scope, points, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, close);
     }
-} // namespace p5
+} // namespace p5cpp

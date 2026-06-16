@@ -1,6 +1,6 @@
 #include "matrix_stack.hpp"
 
-namespace p5
+namespace p5cpp
 {
     MatrixStack matrix_stack_create()
     {
@@ -46,4 +46,4 @@ namespace p5
     {
         return stack.metrics.top();
     }
-} // namespace p5
+} // namespace p5cpp

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "p5.hpp"
+#include <p5cpp.hpp>
 
-namespace p5
+namespace p5cpp
 {
     // Creates an off-screen canvas with separate physical (texture) and logical (user-coord) sizes.
     // Used internally for the default window canvas, where HiDPI causes them to differ.
@@ -10,4 +10,4 @@ namespace p5
 
     // Blit the off-screen default canvas to FBO 0 (the OS window surface) without Y-flip.
     void blit_framebuffer_to_screen(const Framebuffer& source);
-} // namespace p5
+} // namespace p5cpp

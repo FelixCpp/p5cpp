@@ -2,7 +2,7 @@
 
 #include "render_state.hpp"
 
-namespace p5
+namespace p5cpp
 {
     struct RenderStateStack
     {
@@ -15,4 +15,4 @@ namespace p5
     void render_state_stack_pop(RenderStateStack& stack);
     void render_state_stack_clear(RenderStateStack& stack);
     RenderState& render_state_stack_peek(RenderStateStack& stack);
-} // namespace p5
+} // namespace p5cpp

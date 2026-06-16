@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace p5
+namespace p5cpp
 {
     std::u32string utf8ToUtf32(std::string_view text);
-} // namespace p5
+} // namespace p5cpp

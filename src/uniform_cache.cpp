@@ -1,6 +1,6 @@
 #include "uniform_cache.hpp"
 
-namespace p5
+namespace p5cpp
 {
     ShaderUniformCache shader_uniform_cache_create()
     {
@@ -50,9 +50,9 @@ namespace p5
         cache.uniformNameToLocation.emplace(name, location);
         return location;
     }
-} // namespace p5
+} // namespace p5cpp
 
-namespace p5
+namespace p5cpp
 {
     UniformCache uniform_cache_create()
     {
@@ -65,4 +65,4 @@ namespace p5
     {
         return cache.shaderUniformCaches.try_emplace(shader, shader_uniform_cache_create()).first->second;
     }
-} // namespace p5
+} // namespace p5cpp
