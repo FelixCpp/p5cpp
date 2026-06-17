@@ -468,7 +468,6 @@ namespace p5cpp
 
         defaultFramebuffer = create_window_framebuffer(physW, physH, appState.width, appState.height);
         needsDefaultCanvasRecreation = false;
-        printf("Creating default canvas");
     }
 
     UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
@@ -760,7 +759,6 @@ namespace p5cpp
 
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
     {
-        const bool clockwise = sweepAngle < 0.0f;
         const float radius = std::max(width, height) * 0.5f;
         const size_t segmentCount = computeCircleSegmentCount(sweepAngle, radius);
 
@@ -772,7 +770,7 @@ namespace p5cpp
 
         for (size_t i = 0; i <= segmentCount; ++i) {
             float t = static_cast<float>(i) / static_cast<float>(segmentCount);
-            float angle = startAngle + (clockwise ? -1.0f : 1.0f) * t * sweepAngle;
+            float angle = startAngle + t * sweepAngle;
             float x = centerX + std::cos(angle) * width * 0.5f;
             float y = centerY + std::sin(angle) * height * 0.5f;
             vertex(x, y);
