@@ -26,6 +26,15 @@ p5cpp bundles the following third-party libraries under the `third_party/` direc
 | [GLFW](https://www.glfw.org/)                     | Window creation, OpenGL context management, and raw input events (mouse, keyboard, resize)                                      |
 | [libtess2](https://github.com/memononen/libtess2) | Polygon tessellation — used internally to triangulate concave and self-intersecting shapes drawn with `beginShape` / `endShape` |
 
+## Screenshots of [examples](./examples/)
+
+<p align="middle">
+    <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
+    <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
+    <img src="./gitassets/gravitas_ingame.jpg" alt="Grvaitas Gameplay" width="45%" />
+    <img src="./gitassets/molds.jpg" alt="Molds simulation" width="45%" />
+</p>
+
 ## Concepts
 
 Every p5cpp program is a **Sketch**. You subclass `p5cpp::Sketch`, implement `setup()` (called once) and `draw()` (called every frame), and hand it to the framework via `createSketch()`. The framework manages the window, the render loop, and input — you just draw.
