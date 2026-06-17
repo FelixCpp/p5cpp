@@ -37,6 +37,8 @@ p5cpp bundles the following third-party libraries under the `third_party/` direc
     <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
     <img src="./gitassets/gravitas_ingame.jpg" alt="Grvaitas Gameplay" width="45%" />
     <img src="./gitassets/molds.jpg" alt="Molds simulation" width="45%" />
+    <img src="./gitassets/predator_and_prey_ingame.jpg" alt="Predator and Prey Gameplay" width="45%" />
+    <img src="./gitassets/steering_behavior.jpg" alt="Steering Behavior" width="45%" />
 </p>
 
 ## Concepts

@@ -47,7 +47,7 @@ jobs:
       - name: Verify example binaries (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          for example in breakout gravitas gravitas_ai molds pixel_test thetower predator_and_prey; do
+          for example in breakout gravitas gravitas_ai molds steering_behavior thetower predator_and_prey; do
             bin="build/examples/${example}/${example}"
             if [ ! -f "$bin" ]; then
               echo "❌ Missing binary: $bin"
@@ -60,7 +60,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $examples = @("breakout","gravitas","gravitas_ai","molds","pixel_test","thetower","predator_and_prey")
+          $examples = @("breakout","gravitas","gravitas_ai","molds","steering_behavior","thetower","predator_and_prey")
           foreach ($ex in $examples) {
             $bin = "build\examples\$ex\Release\$ex.exe"
             if (-Not (Test-Path $bin)) {
