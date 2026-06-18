@@ -2,7 +2,7 @@
 
 ![Badge](https://github.com/FelixCpp/p5cpp/actions/workflows/ci.yaml/badge.svg)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/FelixCpp/p5cpp/graphs/commit-activity)
-[![GitHub license](https://badgen.net/github/license/FelixCpp/p5cpp)](https://github.com/FelixCpp/p5cpp/blob/main/LICENSE)
+[![GitHub license](https://badgen.net/github/license/FelixCpp/p5cpp)](https://github.com/FelixCpp/p5cpp/blob/main/LICENSE.txt)
 
 A C++ creative coding framework inspired by [Processing](https://processing.org/) and [p5.js](https://p5js.org/). If you've drawn circles with `ellipse()` or built particle systems in a JavaScript `draw()` loop, p5cpp will feel immediately familiar — just with the full power of native C++ underneath.
 
