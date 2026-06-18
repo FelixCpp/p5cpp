@@ -48,7 +48,7 @@ Every p5cpp program is a **Sketch**. You subclass `p5cpp::Sketch`, implement `se
 ```cpp
 #include <p5cpp/p5cpp.h>
 
-struct MySketch : p5cpp::Sketch
+struct MySketch : Sketch
 {
     void setup() override
     {
@@ -66,7 +66,7 @@ struct MySketch : p5cpp::Sketch
     }
 };
 
-std::unique_ptr<p5cpp::Sketch> p5cpp::createSketch()
+std::unique_ptr<Sketch> p5cpp::createSketch()
 {
     return std::make_unique<MySketch>();
 }
@@ -125,12 +125,12 @@ void draw() override
     strokeWeight(4.0f);
 
     // Open arc
-    arc(200, 200, 150, 150, 0.0f, p5cpp::radians(270), p5cpp::ArcMode::open);
+    arc(200, 200, 150, 150, 0.0f, radians(270), ArcMode::open);
 
     // Pie slice
     fill(255, 80, 80, 180);
     stroke(255, 80, 80);
-    arc(500, 200, 150, 150, p5cpp::radians(-30), p5cpp::radians(120), p5cpp::ArcMode::pie);
+    arc(500, 200, 150, 150, radians(-30), radians(120), ArcMode::pie);
 }
 ```
 
@@ -140,17 +140,17 @@ void draw() override
 
 ```cpp
 // Named RGBA construction
-p5cpp::color_t orange = p5cpp::rgba(255, 140, 0);
-p5cpp::color_t semiBlue = p5cpp::rgba(30, 100, 220, 180);
+color_t orange = rgba(255, 140, 0);
+color_t semiBlue = rgba(30, 100, 220, 180);
 
 // Derive colours
-p5cpp::color_t lighter = p5cpp::lighten(orange, 0.3f);
-p5cpp::color_t darker  = p5cpp::darken(orange, 0.4f);
-p5cpp::color_t faded   = p5cpp::withAlpha(orange, 80);
+color_t lighter = lighten(orange, 0.3f);
+color_t darker  = darken(orange, 0.4f);
+color_t faded   = withAlpha(orange, 80);
 
 // Interpolate between two colours
-float t = std::sin(p5cpp::getGlobalTime()) * 0.5f + 0.5f;
-p5cpp::color_t blended = p5cpp::lerp(semiBlue, orange, t);
+float t = std::sin(getGlobalTime()) * 0.5f + 0.5f;
+color_t blended = lerp(semiBlue, orange, t);
 
 void draw() override
 {
@@ -194,7 +194,7 @@ void draw() override
 ### 5. Mouse & Keyboard Input
 
 ```cpp
-struct InputSketch : p5cpp::Sketch
+struct InputSketch : Sketch
 {
     bool drawCircle = true;
 
@@ -211,19 +211,19 @@ struct InputSketch : p5cpp::Sketch
         }
     }
 
-    void event(const p5cpp::WindowEvent& e) override
+    void event(const WindowEvent& e) override
     {
-        if (e.type == p5cpp::EventType::keyPress)
+        if (e.type == EventType::keyPress)
         {
-            if (e.keyEvent.key == p5cpp::Key::space)
+            if (e.keyEvent.key == Key::space)
                 drawCircle = !drawCircle;
 
-            if (e.keyEvent.key == p5cpp::Key::escape)
+            if (e.keyEvent.key == Key::escape)
                 quit();
         }
 
-        if (e.type == p5cpp::EventType::mousePress &&
-            e.mouseButton.button == p5cpp::MouseButton::left)
+        if (e.type == EventType::mousePress &&
+            e.mouseButton.button == MouseButton::left)
         {
             // do something on left click
         }
@@ -247,11 +247,11 @@ void draw() override
     beginShape();
     for (int i = 0; i < 6; ++i)
     {
-        float angle = p5cpp::radians(60.0f * i - 30.0f);
+        float angle = radians(60.0f * i - 30.0f);
         vertex(400 + std::cos(angle) * 100,
                300 + std::sin(angle) * 100);
     }
-    endShape(p5cpp::ShapeType::polygon);
+    endShape(ShapeType::polygon);
 }
 ```
 
@@ -281,13 +281,13 @@ void draw() override
 ### 8. Textures & Images
 
 ```cpp
-struct TextureSketch : p5cpp::Sketch
+struct TextureSketch : Sketch
 {
-    std::unique_ptr<p5cpp::Texture> tex;
+    std::unique_ptr<Texture> tex;
 
     void setup() override
     {
-        tex = p5cpp::loadTexture("assets/photo.png");
+        tex = loadTexture("assets/photo.png");
         setWindowSize(800, 600);
     }
 
@@ -312,13 +312,13 @@ struct TextureSketch : p5cpp::Sketch
 ### 9. Render to a Framebuffer
 
 ```cpp
-struct FBOSketch : p5cpp::Sketch
+struct FBOSketch : Sketch
 {
-    std::shared_ptr<p5cpp::Framebuffer> canvas;
+    std::shared_ptr<Framebuffer> canvas;
 
     void setup() override
     {
-        canvas = p5cpp::createFramebuffer(512, 512);
+        canvas = createFramebuffer(512, 512);
         setWindowSize(800, 600);
     }
 
@@ -347,8 +347,10 @@ struct FBOSketch : p5cpp::Sketch
 const char* vert = R"(
     #version 330 core
     layout(location = 0) in vec2 aPos;
-    uniform mat4 uMVP;
-    void main() { gl_Position = uMVP * vec4(aPos, 0.0, 1.0); }
+    uniform mat4 u_ProjectionMatrix;
+    void main() {
+        gl_Position = u_ProjectionMatrix * vec4(aPos, 0.0, 1.0);
+    }
 )";
 
 const char* frag = R"(
@@ -362,13 +364,13 @@ const char* frag = R"(
     }
 )";
 
-struct ShaderSketch : p5cpp::Sketch
+struct ShaderSketch : Sketch
 {
-    std::shared_ptr<p5cpp::Shader> sh;
+    std::shared_ptr<Shader> sh;
 
     void setup() override
     {
-        sh = p5cpp::loadShader(vert, frag);
+        sh = loadShader(vert, frag);
         setWindowSize(800, 600);
     }
 
@@ -376,7 +378,7 @@ struct ShaderSketch : p5cpp::Sketch
     {
         background(0);
         shader(sh);
-        setUniform("uTime", p5cpp::uniform(getGlobalTime()));
+        setUniform("uTime", uniform(getGlobalTime()));
         rect(100, 100, 600, 400);
         noShader();
     }
@@ -388,14 +390,14 @@ struct ShaderSketch : p5cpp::Sketch
 ### 11. Text & Fonts
 
 ```cpp
-struct TextSketch : p5cpp::Sketch
+struct TextSketch : Sketch
 {
-    std::unique_ptr<p5cpp::Font> font;
+    std::shared_ptr<Font> font;
 
     void setup() override
     {
-        font = p5cpp::loadFont("assets/Inter-Regular.ttf");
-        textFont(std::shared_ptr<p5cpp::Font>(font.get(), [](auto*){}));
+        font = loadFont("assets/Inter-Regular.ttf");
+        textFont(font);
         textSize(32);
         setWindowSize(800, 600);
     }
@@ -406,14 +408,14 @@ struct TextSketch : p5cpp::Sketch
 
         // Centred headline
         fill(255);
-        textAlign(p5cpp::TextAlign::center);
+        textAlign(TextAlign::center);
         text("Hello, p5cpp!", getWidth() / 2.0f, 80);
 
         // Left-aligned body text with wrapping
         fill(180);
         textSize(16);
-        textAlign(p5cpp::TextAlign::topLeft);
-        textWrap(p5cpp::TextWrap::word);
+        textAlign(TextAlign::topLeft);
+        textWrap(TextWrap::word);
         text("This text will wrap at 400 px.", 50, 150, 400.0f);
     }
 };
@@ -428,18 +430,18 @@ A minimal particle system demonstrating `float2` maths, `randomFloat`, `noise`, 
 ```cpp
 struct Particle
 {
-    p5cpp::float2 pos;
-    p5cpp::float2 vel;
+    float2 pos;
+    float2 vel;
     float life; // 0..1
 };
 
-struct ParticleSketch : p5cpp::Sketch
+struct ParticleSketch : Sketch
 {
     std::vector<Particle> particles;
 
     void setup() override
     {
-        p5cpp::randomSeed(42);
+        randomSeed(42);
         setWindowSize(800, 600);
         frameRate(60);
     }
@@ -453,10 +455,10 @@ struct ParticleSketch : p5cpp::Sketch
         // Spawn
         for (int i = 0; i < 5; ++i)
         {
-            p5cpp::float2 dir = p5cpp::randomDirection<float>();
+            float2 dir = randomDirection<float>();
             particles.push_back({
                 {(float)getWidth() / 2, (float)getHeight() / 2},
-                dir * p5cpp::randomFloat(50.0f, 150.0f),
+                dir * randomFloat(50.0f, 150.0f),
                 1.0f
             });
         }
@@ -497,7 +499,7 @@ void draw() override
     {
         for (int y = 0; y < getHeight(); y += 20)
         {
-            float angle = p5cpp::noise(x * 0.005f, y * 0.005f, t) * 6.2832f * 2.0f;
+            float angle = noise(x * 0.005f, y * 0.005f, t) * 6.2832f * 2.0f;
             float len = 14.0f;
             line((float)x, (float)y,
                  x + std::cos(angle) * len,
@@ -589,10 +591,10 @@ void  quit();
 ### Logging
 
 ```cpp
-p5cpp::info("message");
-p5cpp::debug("message");
-p5cpp::warning("message");
-p5cpp::error("message");
+info("message");
+debug("message");
+warning("message");
+error("message");
 ```
 
 ---
