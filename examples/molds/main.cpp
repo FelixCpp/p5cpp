@@ -1,3 +1,4 @@
+#include <memory>
 #include <p5cpp.hpp>
 
 #include <algorithm>

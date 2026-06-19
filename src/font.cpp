@@ -429,6 +429,18 @@ namespace p5cpp
     class FreetypeFont : public Font
     {
     public:
+        static std::unique_ptr<FreetypeFont> loadFromFile(const std::filesystem::path& fontFilePath)
+        {
+            FT_Face rawFace;
+            FT_Error error = FT_New_Face(freetype.library, fontFilePath.string().c_str(), 0, &rawFace);
+            if (error) {
+                return nullptr;
+            }
+
+            FreetypeFace face(rawFace);
+            return std::unique_ptr<FreetypeFont>(new FreetypeFont(std::move(face)));
+        }
+
         static std::unique_ptr<FreetypeFont> loadFromMemory(std::span<const uint8_t> fontData)
         {
             FT_Face rawFace;
@@ -579,7 +591,7 @@ namespace p5cpp
 {
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath)
     {
-        return nullptr;
+        return FreetypeFont::loadFromFile(fontFilePath);
     }
 
     std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData)

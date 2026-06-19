@@ -1195,82 +1195,7 @@ namespace p5cpp
     TextLayout measureText(std::string_view text, Font* font, float textSize, float letterSpacing, float lineSpacing, TextAlign textAlign, TextWrap textWrap, std::optional<float> maxWidth)
     {
         const std::u32string u32Text = utf8ToUtf32(text);
-
-        // auto lines = std::invoke([&]() {
-        //     std::vector<LineInfo> result;
-        //
-        //     // Segmente anhand expliziter Newlines aufteilen
-        //     size_t segmentStart = 0;
-        //     for (size_t i = 0; i <= u32Text.size(); ++i) {
-        //         const bool isEnd = i == u32Text.size();
-        //         const bool isNewline = !isEnd && u32Text[i] == U'\n';
-        //         if (!isEnd && !isNewline) continue;
-        //
-        //         // Segment [segmentStart, i) in Zeilen aufteilen
-        //         if (not maxWidth.has_value() or textWrap == TextWrap::none) {
-        //             // Kein Wrapping — ganzes Segment ist eine Zeile
-        //             result.push_back({segmentStart, i, 0.0f});
-        //         } else if (textWrap == TextWrap::character) {
-        //             // Zeichenweises Wrapping
-        //             size_t lineStart = segmentStart;
-        //             float lineWidth = 0.0f;
-        //
-        //             for (size_t j = segmentStart; j < i; ++j) {
-        //                 const Glyph* glyph = font->getGlyph(u32Text[j], textSize);
-        //                 if (!glyph) continue;
-        //
-        //                 const float kerning = j > lineStart ? font->getKerning(u32Text[j - 1], u32Text[j], textSize) : 0.0f;
-        //                 const float glyphWidth = glyph->advanceX + letterSpacing + kerning;
-        //
-        //                 if (lineWidth + glyphWidth > maxWidth.value() && lineWidth > 0.0f) {
-        //                     result.push_back({lineStart, j, 0.0f});
-        //                     lineStart = j;
-        //                     lineWidth = 0.0f;
-        //                 }
-        //
-        //                 lineWidth += glyphWidth;
-        //             }
-        //             result.push_back({lineStart, i, 0.0f});
-        //         } else {
-        //             const std::vector<Word> words = collectWords(segmentStart, i);
-        //
-        //             size_t lineStart = segmentStart;
-        //             float lineWidth = 0.0f;
-        //
-        //             for (size_t w = 0; w < words.size(); ++w) {
-        //                 const Word& word = words.at(w);
-        //
-        //                 // Breite dieses Wortes inkl. Leerzeichen davor (falls nicht erstes Wort der Zeile)
-        //                 const float spaceWidth = (lineWidth > 0.0f)
-        //                                              ? (font->getGlyph(U' ', textSize) ? font->getGlyph(U' ', textSize)->advanceX : 0.0f) + font->getKerning(u32Text[word.begin > 0 ? word.begin - 1 : 0], u32Text[word.begin], textSize)
-        //                                              : 0.0f;
-        //                 const float wordWidth = measureRange(word.begin, word.end);
-        //                 const float totalWordWidth = spaceWidth + wordWidth;
-        //
-        //                 const bool fitsInLine = lineWidth + totalWordWidth <= maxWidth.value();
-        //                 const bool isFirstWord = lineWidth == 0.0f;
-        //
-        //                 if (not fitsInLine and not isFirstWord) {
-        //                     // Zeile abschließen vor diesem Wort
-        //                     result.push_back({lineStart, words[w - 1].end, 0.0f});
-        //                     lineStart = word.begin;
-        //                     lineWidth = wordWidth;
-        //                 } else {
-        //                     lineWidth += totalWordWidth;
-        //                 }
-        //             }
-        //
-        //             // Letzte Zeile des Segments
-        //             result.push_back({lineStart, i, 0.0f});
-        //         }
-        //
-        //         segmentStart = i + 1;
-        //     }
-        //
-        //     return result;
-        // });
-
-        auto lines = splitTextIntoLines(u32Text, font, textWrap, maxWidth, textSize, letterSpacing);
+        const std::vector<LineInfo> lines = splitTextIntoLines(u32Text, font, textWrap, maxWidth, textSize, letterSpacing);
 
         const FontMetrics* fontMetrics = font->getMetrics(textSize);
         const float lineStep = fontMetrics->lineHeight * lineSpacing;
@@ -1286,7 +1211,7 @@ namespace p5cpp
         });
 
         std::vector<GlyphQuad> quads;
-        std::vector<LineLayout> lineLayouts; // ← neu
+        std::vector<LineLayout> lineLayouts;
         lineLayouts.reserve(lines.size());
 
         for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
@@ -1332,7 +1257,7 @@ namespace p5cpp
                     },
                     .uvRect = glyph->region.uvRect,
                     .textureId = font->getGlyphAtlasTextureId(glyph->glyphAtlasIndex),
-                    .codepointIndex = i, // ← neu
+                    .codepointIndex = i,
                 });
 
                 cursorX += glyph->advanceX + letterSpacing;
