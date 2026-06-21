@@ -180,8 +180,6 @@ struct Mold
     }
 };
 
-inline static const float TWO_PI = 6.28318530718f;
-
 struct SlimeMoldsSimulation : Sketch
 {
     std::unique_ptr<PixelGrid> grid;

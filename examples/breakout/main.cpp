@@ -4,14 +4,11 @@
 #include <array>
 #include <cmath>
 #include <memory>
-#include <numbers>
 #include <random>
 #include <string>
 #include <vector>
 
 using namespace p5cpp;
-
-static constexpr float PI = std::numbers::pi_v<float>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  BreakoutSketch

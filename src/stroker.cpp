@@ -1,8 +1,5 @@
 #include "stroker.hpp"
-#include <numbers>
 #include <optional>
-
-inline static constexpr float PI = std::numbers::pi_v<float>;
 
 namespace p5cpp
 {

@@ -5,14 +5,12 @@
 #include <cmath>
 #include <format>
 #include <memory>
-#include <numbers>
 #include <random>
 #include <string>
 #include <vector>
 
 using namespace p5cpp;
 
-static constexpr float PI = std::numbers::pi_v<float>;
 static constexpr float TAU = 2.f * PI;
 
 // =============================================================================
