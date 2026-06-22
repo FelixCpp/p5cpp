@@ -703,7 +703,7 @@ namespace p5cpp
             beginShape();
             vertex(centerX, centerY);
             for (size_t i = 0; i <= segmentCount; ++i) {
-                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+                const float angle = TWO_PI / static_cast<float>(segmentCount) * static_cast<float>(i);
                 vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
             }
             endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::fill, std::nullopt, false);
@@ -713,7 +713,7 @@ namespace p5cpp
         if (!renderState.isStrokeDisabled) {
             beginShape();
             for (size_t i = 0; i < segmentCount; ++i) {
-                float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+                const float angle = TWO_PI / static_cast<float>(segmentCount) * static_cast<float>(i);
                 vertex(centerX + std::cos(angle) * width * 0.5f, centerY + std::sin(angle) * height * 0.5f);
             }
             endShapeImpl(ShapeType::lineLoop, ShapeType::lineLoop, std::nullopt, ColorStyle::stroke, false);
@@ -734,7 +734,7 @@ namespace p5cpp
         beginShape();
         vertex(x, y);
         for (size_t i = 0; i <= segmentCount; ++i) {
-            float angle = 2.0f * std::numbers::pi_v<float> / static_cast<float>(segmentCount) * static_cast<float>(i);
+            const float angle = TWO_PI / static_cast<float>(segmentCount) * static_cast<float>(i);
             vertex(x + std::cos(angle) * renderState.strokeWeight * 0.5f, y + std::sin(angle) * renderState.strokeWeight * 0.5f);
         }
         endShapeImpl(ShapeType::triangleFan, ShapeType::triangleFan, ColorStyle::stroke, std::nullopt, false);
@@ -831,10 +831,10 @@ namespace p5cpp
             transformPoint(peekMatrix(), {left, top + height}),
         };
         const std::array<float2, 4> texcoords = {
-            float2 {0.0f, 0.0f},
-            float2 {1.0f, 0.0f},
+            float2 {0.0f, 1.0f},
             float2 {1.0f, 1.0f},
-            float2 {0.0f, 1.0f}
+            float2 {1.0f, 0.0f},
+            float2 {0.0f, 0.0f}
         };
         const std::array<color_t, 4> colors = {
             renderState.tintColor,

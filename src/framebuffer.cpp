@@ -11,7 +11,7 @@ namespace p5cpp
         static std::unique_ptr<OpenGLFramebuffer> create(uint32_t physWidth, uint32_t physHeight, uint2 logicalSize = {0, 0})
         {
             std::unique_ptr<Texture> colorTexture = createTexture(physWidth, physHeight);
-            if (!colorTexture) {
+            if (colorTexture == nullptr) {
                 error("Failed to create color texture for framebuffer");
                 return nullptr;
             }
