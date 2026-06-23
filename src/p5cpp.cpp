@@ -825,10 +825,10 @@ namespace p5cpp
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         const std::array<float2, 4> positions = {
-            transformPoint(peekMatrix(), {left, top}),
-            transformPoint(peekMatrix(), {left + width, top}),
-            transformPoint(peekMatrix(), {left + width, top + height}),
-            transformPoint(peekMatrix(), {left, top + height}),
+            transformPoint(matrix_stack_peek(renderState.metrics), {left, top}),
+            transformPoint(matrix_stack_peek(renderState.metrics), {left + width, top}),
+            transformPoint(matrix_stack_peek(renderState.metrics), {left + width, top + height}),
+            transformPoint(matrix_stack_peek(renderState.metrics), {left, top + height}),
         };
         const std::array<float2, 4> texcoords = {
             float2 {0.0f, 1.0f},

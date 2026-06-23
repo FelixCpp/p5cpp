@@ -2,6 +2,8 @@
 #include <p5cpp.hpp>
 #include <span>
 
+#include "data.hpp"
+
 using namespace p5cpp;
 
 struct Sample
@@ -71,94 +73,253 @@ float2 cycle(float x, float y, float time, float rotation, const std::span<const
     return {x, y};
 }
 
-struct Demo : Sketch
+class Scratchpad
 {
-    std::vector<Sample> signalX;
-    std::vector<Sample> signalY;
-    std::vector<float2> output;
-    float globalTime = 0.0f;
+public:
+    std::shared_ptr<Framebuffer> framebuffer;
+    std::vector<int2> points;
 
-    std::shared_ptr<Framebuffer> scratchPad;
-    std::vector<float2> scratchPadStrokes;
-    bool isDrawing = false;
-    bool isScratchPadOpen = false;
-
-    void setup() override
+    explicit Scratchpad(int width, int height)
+        : framebuffer(createFramebuffer(width, height)),
+          points()
     {
-        setWindowSize(900, 900);
-        frameRate(60);
+    }
 
-        scratchPad = createFramebuffer(450, 450);
+    void paintAt(int mouseX, int mouseY)
+    {
+        points.push_back(int2 {.x = mouseX, .y = mouseY});
+    }
 
-        std::vector<float> inputX;
-        std::vector<float> inputY;
-        for (size_t i = 0; i < 500; ++i) {
-            const float x = 150.0f * noise(i / 50.0f);
-            const float y = 150.0f * noise((i + 1000) / 50.0f);
-            inputX.push_back(x);
-            inputY.push_back(y);
+    void erase()
+    {
+        points.clear();
+    }
+
+    void show()
+    {
+        pushCanvas(framebuffer);
+        {
+            background(21);
+
+            noFill();
+            stroke(255);
+            strokeWeight(2.0f);
+
+            beginShape();
+            for (const int2& point : points) {
+                vertex(static_cast<float>(point.x), static_cast<float>(point.y));
+            }
+            endShape(ShapeType::lineStrip, false);
         }
-
-        signalX = dft(inputX);
-        signalY = dft(inputY);
-
-        pushCanvas(scratchPad);
-        background(21);
         popCanvas();
     }
+};
 
-    void event(const WindowEvent& event) override
+class ScratchpadController
+{
+public:
+    explicit ScratchpadController(std::unique_ptr<Scratchpad> scratchpad)
+        : scratchpad(std::move(scratchpad))
     {
-        if (event.type == EventType::keyPress) {
-            if (event.keyEvent.key == Key::enter) {
-                isScratchPadOpen = !isScratchPadOpen;
+    }
 
-                if (not isScratchPadOpen) {
-                    std::vector<float> xs(scratchPadStrokes.size());
-                    std::vector<float> ys(scratchPadStrokes.size());
+    void open()
+    {
+        isScratchpadOpen = true;
+    }
 
-                    for (size_t i = 0; i < scratchPadStrokes.size(); ++i) {
-                        xs[i] = (scratchPadStrokes.at(i).x);
-                        ys[i] = (scratchPadStrokes.at(i).y);
-                    }
+    std::vector<int2> close()
+    {
+        std::vector<int2> points = scratchpad->points;
+        scratchpad->erase();
+        isScratchpadOpen = false;
+        return points;
+    }
 
-                    signalX = dft(xs);
-                    signalY = dft(ys);
-                    std::sort(signalX.begin(), signalX.end(), [](const Sample& a, const Sample& b) {
-                        return a.amplitude > b.amplitude;
-                    });
+    bool isOpen() const
+    {
+        return isScratchpadOpen;
+    }
 
-                    std::sort(signalY.begin(), signalY.end(), [](const Sample& a, const Sample& b) {
-                        return a.amplitude > b.amplitude;
-                    });
-
-                    output.clear();
-                }
-            }
+    void beginDrawing()
+    {
+        if (isScratchpadOpen) {
+            isDrawing = true;
         }
+    }
 
-        if (event.type == EventType::mousePress) {
-            if (event.mouseButton.button == MouseButton::left) {
-                isDrawing = true;
-            }
+    void endDrawing()
+    {
+        if (isScratchpadOpen) {
+            isDrawing = false;
         }
+    }
 
-        if (event.type == EventType::mouseRelease) {
-            if (event.mouseButton.button == MouseButton::left) {
-                isDrawing = false;
+    void update()
+    {
+        if (isDrawing) {
+            const auto [width, height] = scratchpad->framebuffer->getSize();
+            const int left = static_cast<float>(getWidth() - width) / 2;
+            const int top = static_cast<float>(getHeight() - height) / 2;
+            const int mouseX = getMouseX() - left;
+            const int mouseY = getMouseY() - top;
+            const bool isMouseInScratchPad = mouseX >= 0 and mouseX < width and mouseY >= 0 and mouseY < height;
+
+            if (isMouseInScratchPad) {
+                scratchpad->paintAt(mouseX, mouseY);
             }
         }
     }
 
-    void draw() override
+    void show()
     {
-        globalTime += TWO_PI / signalX.size() * static_cast<float>(not isScratchPadOpen);
+        if (isScratchpadOpen) {
+            scratchpad->show();
 
-        background(31);
+            const auto [width, height] = scratchpad->framebuffer->getSize();
+            const float left = (static_cast<float>(getWidth()) - static_cast<float>(width)) * 0.5f;
+            const float top = (static_cast<float>(getHeight()) - static_cast<float>(height)) * 0.5f;
 
-        const float2 machineX = cycle(500.0f, 100.0f, globalTime, 0.0f, signalX);
-        const float2 machineY = cycle(100.0f, 500.0f, globalTime, HALF_PI, signalY);
-        output.push_back({machineX.x, machineY.y});
+            image(scratchpad->framebuffer->getTextureId(), left, top, static_cast<float>(width), static_cast<float>(height));
+
+            noFill();
+            stroke(255);
+            strokeWeight(2.0f);
+            rect(left, top, static_cast<float>(width), static_cast<float>(height), 25.0f, 25.0f);
+        }
+    }
+
+private:
+    std::unique_ptr<Scratchpad> scratchpad;
+    bool isDrawing = false;
+    bool isScratchpadOpen = false;
+};
+
+class DrawingMotor
+{
+public:
+    explicit DrawingMotor(float2 position, float rotation)
+        : position(std::move(position)), rotation(rotation)
+    {
+    }
+
+    void setSignal(std::span<const float> values)
+    {
+        signal = dft(values);
+
+        std::sort(signal.begin(), signal.end(), [](const Sample& a, const Sample& b) {
+            return a.amplitude > b.amplitude;
+        });
+    }
+
+    void update(float animationTime)
+    {
+        this->animationTime = animationTime;
+    }
+
+    void resetAnimation()
+    {
+        animationTime = 0.0f;
+    }
+
+    float2 getPosition() const
+    {
+        float x = position.x;
+        float y = position.y;
+
+        for (const Sample& sample : signal) {
+            const float freq = sample.frequency;
+            const float radius = sample.amplitude;
+            const float phase = sample.phase;
+
+            x += radius * std::cos(freq * animationTime + phase + rotation);
+            y += radius * std::sin(freq * animationTime + phase + rotation);
+        }
+
+        return {x, y};
+    }
+
+    void show()
+    {
+        float x = position.x;
+        float y = position.y;
+
+        for (const Sample& sample : signal) {
+            float prevx = x;
+            float prevy = y;
+
+            const float freq = sample.frequency;
+            const float radius = sample.amplitude;
+            const float phase = sample.phase;
+
+            x += radius * std::cos(freq * animationTime + phase + rotation);
+            y += radius * std::sin(freq * animationTime + phase + rotation);
+
+            stroke(255, 100);
+            noFill();
+            circle(prevx, prevy, radius * 2.0f);
+
+            stroke(255);
+            line(prevx, prevy, x, y);
+        }
+    }
+
+private:
+    std::vector<Sample> signal;
+    float2 position;
+    float animationTime = 0.0f;
+    float rotation;
+};
+
+class DrawingMachine
+{
+public:
+    explicit DrawingMachine(std::span<const float2> points)
+        : motorX({500.0f, 100.0f}, 0.0f),
+          motorY({100.0f, 500.0f}, HALF_PI)
+    {
+        consumeDrawing(points);
+    }
+
+    void consumeDrawing(std::span<const float2> points)
+    {
+        output.clear();
+        signalLength = points.size();
+
+        std::vector<float> scratchX(signalLength);
+        std::vector<float> scratchY(signalLength);
+        for (size_t i = 0; i < signalLength; ++i) {
+            const float2& point = points[i];
+            scratchX[i] = static_cast<float>(point.x);
+            scratchY[i] = static_cast<float>(point.y);
+        }
+
+        motorX.setSignal(scratchX);
+        motorY.setSignal(scratchY);
+    }
+
+    void update(float deltaTime)
+    {
+        animationTime += TWO_PI / static_cast<float>(signalLength);
+        if (animationTime > TWO_PI) {
+            output.clear();
+            animationTime = 0.0f;
+        }
+
+        motorX.update(animationTime);
+        motorY.update(animationTime);
+
+        const float2 px = motorX.getPosition();
+        const float2 py = motorY.getPosition();
+        drawingPoint = {px.x, py.y};
+
+        output.push_back(drawingPoint);
+    }
+
+    void show()
+    {
+        motorX.show();
+        motorY.show();
 
         stroke(255);
         strokeWeight(2.0f);
@@ -169,57 +330,94 @@ struct Demo : Sketch
         }
         endShape(ShapeType::lineStrip, false);
 
-        line(machineX.x, machineX.y, machineX.x, machineY.y);
-        line(machineY.x, machineY.y, machineX.x, machineY.y);
+        const float2 px = motorX.getPosition();
+        const float2 py = motorY.getPosition();
 
-        if (isScratchPadOpen) {
-            const float scratchPadWidth = static_cast<float>(scratchPad->getSize().x);
-            const float scratchPadHeight = static_cast<float>(scratchPad->getSize().y);
+        line(px.x, px.y, drawingPoint.x, drawingPoint.y);
+        line(py.x, py.y, drawingPoint.x, drawingPoint.y);
+    }
 
-            const float scratchPadLeft = (static_cast<float>(getWidth()) - scratchPadWidth) * 0.5f;
-            const float scratchPadTop = (static_cast<float>(getHeight()) - scratchPadHeight) * 0.5f;
+private:
+    std::vector<Sample> signalX;
+    std::vector<Sample> signalY;
+    std::vector<float2> output;
 
-            fill(0, 150);
-            noStroke();
-            rect(0.0f, 0.0f, static_cast<float>(getWidth()), static_cast<float>(getHeight()));
+    size_t signalLength = 0;
+    bool isAnimating = false;
+    float animationTime = 0.0f;
+    float2 drawingPoint = {0.0f, 0.0f};
 
-            textSize(48.0f);
-            fill(255);
-            textAlign(TextAlign::center);
-            text("Draw Something", static_cast<float>(getWidth()) * 0.5f, scratchPadTop * 0.5f);
+    DrawingMotor motorX;
+    DrawingMotor motorY;
+};
 
-            pushCanvas(scratchPad);
+struct Demo : Sketch
+{
+    std::unique_ptr<DrawingMachine> drawingMachine;
+    std::unique_ptr<ScratchpadController> scratchPadController;
 
-            if (isDrawing) {
-                // TODO(Felix): Handle drawing logic
+    void setup() override
+    {
+        setWindowSize(900, 900);
+        frameRate(60);
 
-                const int mouseX = getMouseX();
-                const int mouseY = getMouseY();
+        scratchPadController = std::make_unique<ScratchpadController>(
+            std::make_unique<Scratchpad>(450, 450)
+        );
 
-                const bool isMouseInScratchPad = mouseX >= scratchPadLeft && mouseX <= scratchPadLeft + scratchPadWidth && mouseY >= scratchPadTop && mouseY <= scratchPadTop + scratchPadHeight;
-                if (isMouseInScratchPad) {
-                    const int cursorX = mouseX - scratchPadLeft;
-                    const int cursorY = mouseY - scratchPadTop;
+        std::vector<float2> transformedData;
+        for (int i = 0; i < data.size(); i += 5) {
+            transformedData.push_back(float2 {data[i].x, data[i].y});
+        }
 
-                    scratchPadStrokes.push_back({static_cast<float>(cursorX), static_cast<float>(cursorY)});
+        drawingMachine = std::make_unique<DrawingMachine>(transformedData);
+    }
+
+    void event(const WindowEvent& event) override
+    {
+        if (event.type == EventType::keyPress) {
+            if (event.keyEvent.key == Key::enter) {
+                if (scratchPadController->isOpen()) {
+                    const std::vector<int2> scratchPoints = scratchPadController->close();
+                    std::vector<float2> scratchPointsFloat(scratchPoints.size());
+                    for (size_t i = 0; i < scratchPoints.size(); ++i) {
+                        const int2& point = scratchPoints.at(i);
+                        scratchPointsFloat[i] = {static_cast<float>(point.x), static_cast<float>(point.y)};
+                    }
+                    drawingMachine->consumeDrawing(scratchPointsFloat);
+                } else {
+                    scratchPadController->open();
                 }
             }
-
-            stroke(255);
-            strokeWeight(2.0f);
-            beginShape();
-            for (const float2& stroke : scratchPadStrokes) {
-                vertex(stroke.x, stroke.y);
-            }
-            endShape(ShapeType::lineStrip, false);
-            popCanvas();
-
-            image(scratchPad->getTextureId(), scratchPadLeft, scratchPadTop, scratchPadWidth, scratchPadHeight);
-            stroke(255);
-            strokeWeight(2.0f);
-            noFill();
-            rect(scratchPadLeft, scratchPadTop, scratchPadWidth, scratchPadHeight, 20.0f, 20.0f);
         }
+
+        if (event.type == EventType::mousePress) {
+            if (event.mouseButton.button == MouseButton::left) {
+                scratchPadController->beginDrawing();
+            }
+        }
+
+        if (event.type == EventType::mouseRelease) {
+            if (event.mouseButton.button == MouseButton::left) {
+                scratchPadController->endDrawing();
+            }
+        }
+    }
+
+    void draw() override
+    {
+        background(31);
+
+        const float deltaTime = getDeltaTime();
+
+        if (not scratchPadController->isOpen()) {
+            drawingMachine->update(deltaTime);
+        }
+
+        drawingMachine->show();
+
+        scratchPadController->update();
+        scratchPadController->show();
     }
 };
 
