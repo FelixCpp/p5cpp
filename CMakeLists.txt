@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(external/glfw)
 add_subdirectory(external/freetype)
 add_subdirectory(external/glad)
+add_subdirectory(external/miniaudio)
 
 add_library(
   libtess2 STATIC
@@ -23,6 +24,7 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(
   p5cpp STATIC
+  ./src/audio.cpp
   ./src/color.cpp
   ./src/draw_buffer.cpp
   ./src/draw_command_list.cpp
@@ -46,6 +48,6 @@ add_library(
   ./src/utf8_view.cpp
   ./src/window.cpp)
 
-target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2)
+target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio)
 target_include_directories(p5cpp PUBLIC include)
 add_subdirectory(examples)

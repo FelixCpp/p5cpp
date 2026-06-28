@@ -623,3 +623,20 @@ namespace p5cpp
     void exitCode(int code);
     float millis(); // Milliseconds since the application started
 } // namespace p5cpp
+
+namespace p5cpp
+{
+    typedef struct
+    {
+        size_t id;
+    } Sound;
+
+    Sound loadSound(const std::filesystem::path& soundFilePath);
+    void playSound(Sound sound);
+    void setSoundVolume(Sound sound, float volume);
+    void setSoundLoop(Sound sound, bool loop);
+    void setSoundPitch(Sound sound, float pitch);
+    void setSoundPan(Sound sound, float pan);
+    void setSoundPosition(Sound sound, float position);
+
+} // namespace p5cpp
