@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <span>
@@ -626,17 +627,57 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    typedef struct
+    inline static constexpr size_t INVALID_SOUND_ID = static_cast<size_t>(-1);
+
+    struct Sound
     {
         size_t id;
-    } Sound;
+    };
 
-    Sound loadSound(const std::filesystem::path& soundFilePath);
+    struct Music
+    {
+        size_t id;
+    };
+
+    // AudioStream: for procedurally generated audio (synthesizers, real time effects, etc.).
+    // The user pushes raw PCM frames into it.
+    struct AudioStream
+    {
+        size_t id;
+    };
+
+    // Callback type for DSP processors and AudioStream data supply.
+    // @param samples: Interleaved audio samples (left, right, left, right, ...)
+    // @param frame: The current frame number (one frame = one sample per channel)
+    using AudioCallback = std::function<void>(std::span<float> samples, uint32_t frame);
+
+    Sound loadSound(const std::filesystem::path& filepath);
+    Sound loadSoundAlias(Sound sound);
+    void unloadSound(Sound souns);
+
     void playSound(Sound sound);
-    void setSoundVolume(Sound sound, float volume);
-    void setSoundLoop(Sound sound, bool loop);
-    void setSoundPitch(Sound sound, float pitch);
-    void setSoundPan(Sound sound, float pan);
-    void setSoundPosition(Sound sound, float position);
+    void stopSound(Sound sound);
+    void pauseSound(Sound sound);
+    void resumeSound(Sound sound);
 
+    bool isSoundPlaying(Sound sound);
+    bool isSoundPaused(Sound sound);
+    bool isSoundValid(Sound sound);
+
+    void setSoundVolume(Sound sound, float volume); // 0.0 = silent, 1.0 = full volume
+    void setSoundPitch(Sound sound, float pitch); // 1.0 = normal pitch, 2.0 = one octave up, 0.5 = one octave down
+    void setSoundPan(Sound sound, float pan); // -1.0 = left, 0.0 = center, 1.0 = right
+    void setSoundLooping(Sound sound, bool looping);
+
+    float getSoundVolume(Sound sound);
+    float getSoundPitch(Sound sound);
+    float getSoundPan(Sound sound);
+    bool isSoundLooping(Sound sound);
+
+    float getSoundDuration(Sound sound); // Duration in seconds
+    float getSoundPosition(Sound sound); // Current position in seconds
+    void seekSound(Sound sound, float position); // Seek to position in seconds
+
+    void setMasterVolume(float volume); // 0.0 = silent, 1.0 = full volume
+    float getMasterVolume();
 } // namespace p5cpp

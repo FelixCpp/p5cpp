@@ -1,5 +1,6 @@
 #include <p5cpp.hpp>
 
+#include "audio.hpp"
 #include "render_state_stack.hpp"
 #include "utf8_view.hpp"
 #include "window.hpp"
@@ -123,6 +124,7 @@ namespace p5cpp
     inline static Renderer renderer;
 
     inline static AppWindow* appWindow = nullptr;
+    inline static std::unique_ptr<AudioEngine> audioEngine;
 
     inline static std::vector<color_t> pixelScratch;
     inline static bool needsDefaultCanvasRecreation = false;
@@ -1310,6 +1312,11 @@ int main()
 
     appState.width = window_logical_width(appWindow);
     appState.height = window_logical_height(appWindow);
+
+    std::unique_ptr<AudioDevice> device = AudioDevice::getDefaultDevice();
+    audioEngine = AudioEngine::create(*device);
+    audioEngine.reset();
+    device.reset();
 
     static constexpr size_t MAX_VERTICES = 65536;
     static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
