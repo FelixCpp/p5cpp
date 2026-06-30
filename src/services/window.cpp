@@ -26,6 +26,20 @@ namespace p5cpp
             glfwTerminate();
         }
 
+        void setEventCallback(std::function<void(const WindowEvent&)> callback) override
+        {
+            eventCallback = std::move(callback);
+        }
+
+        void setVisible(bool visible) override
+        {
+            if (visible) {
+                glfwShowWindow(window);
+            } else {
+                glfwHideWindow(window);
+            }
+        }
+
         void swapBuffers() override
         {
             glfwSwapBuffers(window);
@@ -43,19 +57,19 @@ namespace p5cpp
             glfwSetErrorCallback(&errorCallback);
 
             // Initialize GLFW and create a window
-            if (!glfwInit()) {
+            if (not glfwInit()) {
                 throw std::runtime_error("Failed to initialize GLFW");
             }
 
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-            glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-            glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+            // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+            // glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+            glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
             window = glfwCreateWindow(width, height, title.data(), nullptr, nullptr);
-            if (!window) {
+            if (window == nullptr) {
                 glfwTerminate();
                 throw std::runtime_error("Failed to create GLFW window");
             }
@@ -313,49 +327,8 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    bool WindowPlugin::load()
+    std::unique_ptr<Window> Window::create(int width, int height, std::string_view title)
     {
-        window = GLFWWindow::create(800, 600, "p5cpp");
-        return true;
-    }
-
-    void WindowPlugin::unload()
-    {
-        window.reset();
-    }
-
-    void WindowPlugin::preFrame()
-    {
-        window->pollEvents();
-    }
-
-    void WindowPlugin::postFrame()
-    {
-        window->pollEvents();
-    }
-
-    void WindowPlugin::event(const WindowEvent& event)
-    {
-        // Handle window events here
-    }
-
-    void WindowPlugin::setup()
-    {
-        // Setup window here
-    }
-
-    void WindowPlugin::draw(float deltaTime)
-    {
-        // Draw window contents here
-    }
-
-    void WindowPlugin::destroy()
-    {
-        // Cleanup window resources here
-    }
-
-    Window& WindowPlugin::getWindow()
-    {
-        return *window;
+        return GLFWWindow::create(width, height, title);
     }
 } // namespace p5cpp

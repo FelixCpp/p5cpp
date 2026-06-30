@@ -1,6 +1,12 @@
 #include <p5cpp.hpp>
 
+#include "engine.hpp"
+#include "framebuffer.hpp"
+#include "modules/lifecycle_module.hpp"
+#include "modules/sketch_module.hpp"
+#include "modules/window_module.hpp"
 #include "render_state_stack.hpp"
+#include "services/window.hpp"
 #include "utf8_view.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
@@ -1190,5 +1196,14 @@ namespace p5cpp
 
 int main()
 {
+    using namespace p5cpp;
+
+    std::unique_ptr<Engine> engine = Engine::create();
+    engine->addModule(std::make_unique<LifecycleModule>());
+    engine->addModule(std::make_unique<WindowModule>());
+    engine->addModule(std::make_unique<SketchModule>());
+
+    engine->run();
+
     return 0;
 }
