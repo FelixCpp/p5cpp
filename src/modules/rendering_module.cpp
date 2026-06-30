@@ -14,7 +14,7 @@ namespace p5cpp
         static constexpr size_t MAX_VERTICES = 65536;
         static constexpr size_t MAX_INDICES = 65536 * 3;
 
-        renderer = renderer_create(MAX_VERTICES, MAX_INDICES);
+        renderer = Renderer::create(MAX_VERTICES, MAX_INDICES);
         renderStateStack = render_state_stack_create();
 
         const uint8_t whitePixel[4] = {255, 255, 255, 255};
@@ -36,7 +36,7 @@ namespace p5cpp
         context.renderingInfo.defaultFont = defaultFont.get();
         context.renderingInfo.defaultFramebuffer = defaultFramebuffer.get();
         context.renderingInfo.whiteTexture = whiteTexture.get();
-        context.renderingInfo.renderer = &renderer;
+        context.renderingInfo.renderer = renderer.get();
         context.renderingInfo.renderStateStack = &renderStateStack;
 
         pushCanvas(defaultFramebuffer);

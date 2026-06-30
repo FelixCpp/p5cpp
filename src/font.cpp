@@ -167,14 +167,14 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    class GlyphAtlas
+    class GlyphAtlasTexture : public Texture
     {
     public:
-        explicit GlyphAtlas(int width, int height, int paddingX, int paddingY)
-            : m_width(width), m_height(height), m_paddingX(paddingX), m_paddingY(paddingY), m_textureId(0), m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
+        static std::unique_ptr<GlyphAtlasTexture> create(int width, int height)
         {
-            glGenTextures(1, &m_textureId);
-            glBindTexture(GL_TEXTURE_2D, m_textureId);
+            GLuint textureId = 0;
+            glGenTextures(1, &textureId);
+            glBindTexture(GL_TEXTURE_2D, textureId);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -183,6 +183,65 @@ namespace p5cpp
 
             constexpr GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
             glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+
+            return std::unique_ptr<GlyphAtlasTexture>(new GlyphAtlasTexture(textureId, width, height));
+        }
+
+        void store(int x, int y, int width, int height, std::span<const uint8_t> bitmapData)
+        {
+            glBindTexture(GL_TEXTURE_2D, textureId);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
+        }
+
+        void update(std::span<const uint8_t> imageData)
+        {
+            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture with image data.");
+        }
+
+        void update(std::span<const color_t> pixelData)
+        {
+            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture with pixel data.");
+        }
+
+        uint32_t getRendererId() const
+        {
+            return textureId;
+        }
+        uint2 getSize() const
+        {
+            return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+        }
+
+    private:
+        explicit GlyphAtlasTexture(GLuint textureId, int width, int height)
+            : textureId(textureId), width(width), height(height)
+        {
+        }
+
+        GLuint textureId;
+        int width, height;
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    class GlyphAtlas
+    {
+    public:
+        explicit GlyphAtlas(int width, int height, int paddingX, int paddingY)
+            : m_width(width), m_height(height), m_paddingX(paddingX), m_paddingY(paddingY), m_texture(GlyphAtlasTexture::create(width, height)), m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
+        {
+            // glGenTextures(1, &m_textureId);
+            // glBindTexture(GL_TEXTURE_2D, m_textureId);
+            // glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            //
+            // constexpr GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
+            // glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
         }
 
         std::optional<GlyphRegion> store(int bitmapWidth, int bitmapHeight, std::span<const uint8_t> bitmapData)
@@ -200,9 +259,10 @@ namespace p5cpp
                 return std::nullopt;
             }
 
-            glBindTexture(GL_TEXTURE_2D, m_textureId);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, placed->left, placed->top, static_cast<GLsizei>(bitmapWidth), static_cast<GLsizei>(bitmapHeight), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
+            // glBindTexture(GL_TEXTURE_2D, m_textureId);
+            // glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            // glTexSubImage2D(GL_TEXTURE_2D, 0, placed->left, placed->top, static_cast<GLsizei>(bitmapWidth), static_cast<GLsizei>(bitmapHeight), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
+            m_texture->store(placed->left, placed->top, bitmapWidth, bitmapHeight, bitmapData);
 
             const float uvLeft = static_cast<float>(placed->left) / static_cast<float>(m_width);
             const float uvTop = static_cast<float>(placed->top) / static_cast<float>(m_height);
@@ -220,9 +280,9 @@ namespace p5cpp
             };
         }
 
-        GLuint getTextureId() const
+        Texture* getTexture()
         {
-            return m_textureId;
+            return m_texture.get();
         }
 
     private:
@@ -230,7 +290,7 @@ namespace p5cpp
         int m_height;
         int m_paddingX;
         int m_paddingY;
-        GLuint m_textureId;
+        std::unique_ptr<GlyphAtlasTexture> m_texture;
 
         std::unique_ptr<BinPackingStrategy> m_packingStrategy;
     };
@@ -563,13 +623,13 @@ namespace p5cpp
             return kerningValue;
         }
 
-        uint32_t getGlyphAtlasTextureId(size_t glyphAtlasIndex) override
+        Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override
         {
             if (glyphAtlasIndex >= m_glyphAtlasPages.size()) {
                 return 0; // Invalid atlas index.
             }
 
-            return m_glyphAtlasPages[glyphAtlasIndex]->getTextureId();
+            return m_glyphAtlasPages[glyphAtlasIndex]->getTexture();
         }
 
     private:

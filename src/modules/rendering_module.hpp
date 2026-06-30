@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../module.hpp"
-#include "../renderer.hpp"
 #include "../render_state_stack.hpp"
-#include "p5cpp.hpp"
+#include "../services/renderer.hpp"
 
 namespace p5cpp
 {
@@ -16,7 +15,7 @@ namespace p5cpp
         void destroy(AppContext& context, Next next) override;
 
     private:
-        Renderer renderer;
+        std::unique_ptr<Renderer> renderer;
         RenderStateStack renderStateStack;
 
         std::shared_ptr<Shader> defaultShader;

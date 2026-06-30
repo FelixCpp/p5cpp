@@ -2,57 +2,50 @@
 
 #include <p5cpp.hpp>
 
-#include <memory>
+#include "../vertex.hpp"
+
+#include <unordered_map>
+#include <unordered_set>
+
+namespace p5cpp
+{
+    struct DrawScope
+    {
+        size_t baseIndex;
+        size_t baseVertex;
+        size_t& indexCursor;
+        size_t& vertexCursor;
+
+        size_t maxVertexCount;
+        size_t maxIndexCount;
+
+        std::span<Vertex> vertices;
+        std::span<uint32_t> indices;
+
+        void pushVertex(const float2& position, const float2& texcoord, const float4& color);
+        void pushTriangle(uint32_t a, uint32_t b, uint32_t c);
+    };
+} // namespace p5cpp
 
 namespace p5cpp
 {
     struct UniformSnapshot
     {
-        std::string name;
+        int32_t location;
         UniformVariable variable;
     };
-} // namespace p5cpp
 
-namespace p5cpp
-{
-    struct UniformSnapshotCollection
+    class GlobalUniformCache
     {
-        std::vector<UniformSnapshot> snapshots;
-    };
-} // namespace p5cpp
+    public:
+        void setUniform(Shader* shader, const std::string& name, const UniformVariable& variable);
+        void markShaderClean(Shader* shader);
+        bool isShaderDirty(Shader* shader) const;
 
-namespace p5cpp
-{
-    struct TextureLookup
-    {
-        std::array<std::weak_ptr<Texture>, 8> textures;
-        size_t textureUnitCount;
-    };
-} // namespace p5cpp
+        std::vector<UniformSnapshot> getUniforms(Shader* shader);
 
-namespace p5cpp
-{
-    struct DrawCommand
-    {
-        size_t indexStart;
-        size_t indexCount;
-
-        BlendMode blendMode;
-        TextureLookup textureLookup;
-        UniformSnapshotCollection uniformSnapshots;
-
-        std::weak_ptr<Shader> shader;
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    struct DrawCommandList
-    {
-        static std::unique_ptr<DrawCommandList> create();
-
-        virtual ~DrawCommandList() = default;
-        virtual void submit(const DrawCommand& command) = 0;
+        std::unordered_map<Shader*, std::vector<UniformSnapshot>> uniformsByShader;
+        std::unordered_set<Shader*> dirtyShaders;
     };
 } // namespace p5cpp
 
@@ -64,8 +57,12 @@ namespace p5cpp
 
         virtual ~Renderer() = default;
 
-        virtual void begin(std::weak_ptr<Framebuffer> framebuffer) = 0;
+        virtual void begin(Framebuffer* framebuffer) = 0;
         virtual void end() = 0;
         virtual void flush() = 0;
+
+        virtual void submit(DrawScope scope, GlobalUniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) = 0;
+
+        virtual DrawScope getDrawScope() = 0;
     };
 } // namespace p5cpp

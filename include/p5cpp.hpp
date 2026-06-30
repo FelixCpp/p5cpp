@@ -378,6 +378,17 @@ namespace p5cpp
         static const TextAlign bottomRight;
     };
 
+    typedef uint32_t color_t;
+
+    struct Texture
+    {
+        virtual ~Texture() = default;
+        virtual void update(std::span<const uint8_t> imageData) = 0;
+        virtual void update(std::span<const color_t> pixelData) = 0;
+        virtual uint32_t getRendererId() const = 0;
+        virtual uint2 getSize() const = 0;
+    };
+
     typedef size_t GlyphPageIndex;
 
     struct GlyphRegion
@@ -407,7 +418,7 @@ namespace p5cpp
         virtual const Glyph* getGlyph(char32_t codepoint, int textSize) = 0;
         virtual const FontMetrics* getMetrics(int textSize) = 0;
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
-        virtual uint32_t getGlyphAtlasTextureId(size_t glyphAtlasIndex) = 0;
+        virtual Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) = 0;
     };
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
@@ -426,7 +437,7 @@ namespace p5cpp
     {
         rect2f vertexRect;
         rect2f uvRect;
-        uint32_t textureId;
+        Texture* texture;
         size_t codepointIndex;
     };
 
@@ -438,17 +449,6 @@ namespace p5cpp
         float descender;
         std::vector<GlyphQuad> glyphs;
         std::vector<LineLayout> lines;
-    };
-
-    typedef uint32_t color_t;
-
-    struct Texture
-    {
-        virtual ~Texture() = default;
-        virtual void update(std::span<const uint8_t> imageData) = 0;
-        virtual void update(std::span<const color_t> pixelData) = 0;
-        virtual uint32_t getRendererId() const = 0;
-        virtual uint2 getSize() const = 0;
     };
 
     std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
@@ -600,7 +600,7 @@ namespace p5cpp
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
-    void image(uint32_t textureId, float left, float top, float width, float height);
+    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
     void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
 
     TextLayout measureText(std::string_view text);

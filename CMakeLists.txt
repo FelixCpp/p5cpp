@@ -32,10 +32,11 @@ add_library(
   ./src/engine.cpp
   ./src/module.cpp
   ./src/services/window.cpp
+  ./src/services/renderer.cpp
   ./src/color.cpp
-  ./src/draw_buffer.cpp
-  ./src/draw_command_list.cpp
-  ./src/draw_scope.cpp
+  # ./src/draw_buffer.cpp
+  # ./src/draw_command_list.cpp
+  # ./src/draw_scope.cpp
   ./src/font.cpp
   ./src/framebuffer.cpp
   ./src/linepath.cpp
@@ -45,13 +46,13 @@ add_library(
   ./src/p5cpp.cpp
   ./src/render_state.cpp
   ./src/render_state_stack.cpp
-  ./src/renderer.cpp
+  # ./src/renderer.cpp
   ./src/shader.cpp
   ./src/stroker.cpp
   ./src/tess.cpp
   ./src/texture.cpp
   ./src/timing.cpp
-  ./src/uniform_cache.cpp
+  # ./src/uniform_cache.cpp
   ./src/utf8_view.cpp
   ./src/window.cpp)
 

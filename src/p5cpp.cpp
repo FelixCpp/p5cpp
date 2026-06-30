@@ -9,11 +9,9 @@
 #include "modules/window_module.hpp"
 #include "render_state_stack.hpp"
 #include "utf8_view.hpp"
-#include "renderer.hpp"
 #include "linepath.hpp"
 #include "render_state.hpp"
 #include "tess.hpp"
-#include "uniform_cache.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -116,16 +114,7 @@ namespace p5cpp
 
     inline static std::unique_ptr<LinePathBuilder> linepath;
     inline static std::vector<std::shared_ptr<Framebuffer>> framebufferStack;
-    // inline static std::shared_ptr<Shader> defaultShader;
-    // inline static std::shared_ptr<Shader> textShader;
-    // inline static std::shared_ptr<Font> defaultFont;
-    // inline static std::shared_ptr<Framebuffer> defaultFramebuffer;
-    // inline static std::unique_ptr<Texture> whiteTexture;
-    // inline static RenderStateStack renderStateStack;
-    // inline static Renderer renderer;
-
-    // inline static std::vector<color_t> pixelScratch;
-    // inline static bool needsDefaultCanvasRecreation = false;
+    inline static std::unique_ptr<GlobalUniformCache> globalUniformCache;
 } // namespace p5cpp
 
 /// --------------------------------------------
@@ -309,8 +298,7 @@ namespace p5cpp
 
     void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
     {
-        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(getRenderer().uniformCache, shader.get());
-        shader_uniform_cache_insert_or_update(shaderCache, name, variable);
+        globalUniformCache->setUniform(shader.get(), name, variable);
     }
 
     void textAlign(TextAlign textAlign)
@@ -394,7 +382,7 @@ namespace p5cpp
     void background(color_t color)
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        const uint2 size = getRenderer().framebuffer->getSize();
+        const uint2 size = framebufferStack.back()->getSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -416,7 +404,7 @@ namespace p5cpp
 
         {
             // flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
+            DrawScope scope = getRenderer().getDrawScope();
 
             tesselate_quads(
                 scope,
@@ -428,12 +416,12 @@ namespace p5cpp
                 }
             );
 
-            renderer_submit(
-                getRenderer(),
+            getRenderer().submit(
                 scope,
+                *globalUniformCache,
                 get_current_shader(renderState),
                 renderState.blendMode,
-                getAppContext().renderingInfo.whiteTexture->getRendererId()
+                getAppContext().renderingInfo.whiteTexture
             );
         }
     }
@@ -459,17 +447,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    // static void recreateDefaultCanvas()
-    // {
-    //     const int physW = window_physical_width(appWindow);
-    //     const int physH = window_physical_height(appWindow);
-    //     if (physW <= 0 || physH <= 0)
-    //         return;
-    //
-    //     defaultFramebuffer = create_window_framebuffer(physW, physH, appState.width, appState.height);
-    //     needsDefaultCanvasRecreation = false;
-    // }
-
     UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
     UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
     UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
@@ -478,37 +455,40 @@ namespace p5cpp
     // Flush the CPU draw buffer to the GPU if there is less than SAFE_MARGIN
     // room left.  Must be called BEFORE draw_buffer_get_scope() so the new
     // scope always starts at a valid (non-overflowed) base offset.
-    void flushIfNeeded()
+    void flushIfNeeded(const DrawScope& drawScope)
     {
         constexpr size_t SAFE_MARGIN_V = 4096;
         constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
-        if (getRenderer().drawBuffer.vertexCursor + SAFE_MARGIN_V >= getRenderer().drawBuffer.vertexCount ||
-            getRenderer().drawBuffer.indexCursor + SAFE_MARGIN_I >= getRenderer().drawBuffer.indexCount) {
-            renderer_flush(getRenderer());
+        if (drawScope.vertexCursor + SAFE_MARGIN_V >= drawScope.maxVertexCount ||
+            drawScope.indexCursor + SAFE_MARGIN_I >= drawScope.maxIndexCount) {
+            getRenderer().flush();
         }
     }
 
     void pushCanvas(std::shared_ptr<Framebuffer> framebuffer)
     {
         // First we need to flush the getRenderer() to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
-        renderer_flush(getRenderer());
-        renderer_end_frame(getRenderer());
+        Renderer& renderer = getRenderer();
+        renderer.flush();
+        renderer.end();
 
         framebufferStack.push_back(framebuffer);
-        renderer_begin_frame(getRenderer(), framebuffer);
+        renderer.begin(framebuffer.get());
         render_state_stack_push(getRenderStateStack(), render_state_stack_peek(getRenderStateStack()));
     }
 
     void popCanvas()
     {
         // Flush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
-        renderer_flush(getRenderer());
-        renderer_end_frame(getRenderer());
+        Renderer& renderer = getRenderer();
+        renderer.flush();
+        renderer.end();
+
         render_state_stack_pop(getRenderStateStack());
 
         framebufferStack.pop_back();
         if (not framebufferStack.empty()) {
-            renderer_begin_frame(getRenderer(), framebufferStack.back());
+            renderer.begin(framebufferStack.back().get());
         }
     }
 
@@ -521,10 +501,10 @@ namespace p5cpp
     // (e.g. fill a triangleFan but stroke only the outer lineLoop).
     void endShapeImpl(ShapeType fillType, ShapeType strokeType, std::optional<ColorStyle> fillStyle, std::optional<ColorStyle> strokeStyle, bool close)
     {
+        Renderer& renderer = getRenderer();
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-
-        flushIfNeeded();
-        DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
+        DrawScope scope = renderer.getDrawScope();
+        flushIfNeeded(scope);
 
         if (fillStyle.has_value()) {
             const PathPoints points = linepath->buildDrawPoints(fillStyle.value());
@@ -558,7 +538,7 @@ namespace p5cpp
             }
         }
 
-        renderer_submit(getRenderer(), scope, get_current_shader(renderState), renderState.blendMode, getAppContext().renderingInfo.whiteTexture->getRendererId());
+        renderer.submit(scope, *globalUniformCache, get_current_shader(renderState), renderState.blendMode, getAppContext().renderingInfo.whiteTexture);
 
         linepath->clear();
         curveVertexCount = 0;
@@ -821,8 +801,9 @@ namespace p5cpp
         endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
-    void image(uint32_t textureId, float left, float top, float width, float height)
+    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height)
     {
+        Renderer& renderer = getRenderer();
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const std::array<float2, 4> positions = {
             transformPoint(matrix_stack_peek(renderState.metrics), {left, top}),
@@ -844,8 +825,8 @@ namespace p5cpp
         };
 
         {
-            flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
+            DrawScope scope = renderer.getDrawScope();
+            flushIfNeeded(scope);
 
             tesselate_quads(
                 scope,
@@ -857,12 +838,13 @@ namespace p5cpp
                 }
             );
 
-            renderer_submit(getRenderer(), scope, get_current_shader(renderState), renderState.blendMode, textureId);
+            renderer.submit(scope, *globalUniformCache, get_current_shader(renderState), renderState.blendMode, texture.get());
         }
     }
 
     void text(std::string_view text, float x, float y, std::optional<float> maxWidth)
     {
+        Renderer& renderer = getRenderer();
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         Font* font = get_current_font(renderState);
         TextLayout layout = measureText(text, font, renderState.textSize, renderState.textLetterSpacing, renderState.textLineSpacing, renderState.textAlign, renderState.textWrap, maxWidth);
@@ -875,11 +857,11 @@ namespace p5cpp
             std::vector<color_t> colors;
         };
 
-        std::unordered_map<uint32_t, GlyphAtlasVertexBucket> buckets;
+        std::unordered_map<Texture*, GlyphAtlasVertexBucket> buckets;
 
         for (size_t i = 0; i < layout.glyphs.size(); ++i) {
             const GlyphQuad& quad = layout.glyphs.at(i);
-            const auto itr = buckets.try_emplace(quad.textureId, GlyphAtlasVertexBucket {});
+            const auto itr = buckets.try_emplace(quad.texture, GlyphAtlasVertexBucket {});
             GlyphAtlasVertexBucket& bucket = itr.first->second;
 
             bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left, y + quad.vertexRect.top}));
@@ -898,9 +880,9 @@ namespace p5cpp
             bucket.colors.push_back(renderState.fillColor);
         }
 
-        for (const auto& [textureId, bucket] : buckets) {
-            flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
+        for (const auto& [texture, bucket] : buckets) {
+            DrawScope scope = getRenderer().getDrawScope();
+            flushIfNeeded(scope);
 
             tesselate_quads(
                 scope,
@@ -912,7 +894,7 @@ namespace p5cpp
                 }
             );
 
-            renderer_submit(getRenderer(), scope, get_current_text_shader(renderState), renderState.blendMode, textureId);
+            renderer.submit(scope, *globalUniformCache, get_current_text_shader(renderState), renderState.blendMode, texture);
         }
     }
 } // namespace p5cpp
@@ -1168,7 +1150,7 @@ namespace p5cpp
                         .height = static_cast<float>(glyph->region.size.y),
                     },
                     .uvRect = glyph->region.uvRect,
-                    .textureId = font->getGlyphAtlasTextureId(glyph->glyphAtlasIndex),
+                    .texture = font->getGlyphAtlasTexture(glyph->glyphAtlasIndex),
                     .codepointIndex = i,
                 });
 
@@ -1201,6 +1183,7 @@ int main()
 
     linepath = std::make_unique<LinePathBuilder>();
     framebufferStack = {};
+    globalUniformCache = std::make_unique<GlobalUniformCache>();
 
     engine = Engine::create();
     engine->addModule(std::make_unique<LifecycleModule>());
