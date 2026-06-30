@@ -34,7 +34,7 @@ namespace p5cpp
                 glBindTexture(GL_TEXTURE_2D, drawCall.textureUnits[i]);
             }
 
-            ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(renderer.uniformCache, drawCall.shader.get());
+            ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(renderer.uniformCache, drawCall.shader);
             glUseProgram(drawCall.shader->getRendererId());
             for (const UniformSnapshot& uniform : drawCall.uniforms) {
                 const UniformVariable& entry = uniform.variable;
@@ -152,7 +152,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void renderer_submit(Renderer& renderer, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    void renderer_submit(Renderer& renderer, const DrawScope& scope, Shader* shader, BlendMode blendMode, uint32_t texture)
     {
         draw_commands_submit(renderer.drawCommands, renderer.uniformCache, scope, std::move(shader), blendMode, texture);
     }

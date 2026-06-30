@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string_view>
 #include <span>
@@ -413,7 +412,7 @@ namespace p5cpp
 
     std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
     std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
-    std::shared_ptr<Font> getCurrentFont();
+    Font* getCurrentFont();
 
     struct LineLayout
     {
@@ -623,8 +622,4 @@ namespace p5cpp
     void quit(int exitCode);
     void exitCode(int code);
     float millis(); // Milliseconds since the application started
-} // namespace p5cpp
-
-namespace p5cpp
-{
 } // namespace p5cpp

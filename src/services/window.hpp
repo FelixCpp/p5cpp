@@ -18,5 +18,9 @@ namespace p5cpp
         virtual void setVisible(bool visible) = 0;
         virtual void swapBuffers() = 0;
         virtual void pollEvents() = 0;
+
+        virtual int2 getMousePosition() = 0;
+        virtual int2 getLogicalSize() = 0;
+        virtual int2 getPhysicalSize() = 0;
     };
 } // namespace p5cpp

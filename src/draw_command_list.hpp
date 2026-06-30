@@ -11,6 +11,6 @@ namespace p5cpp
     typedef std::vector<DrawCommand> DrawCommandList;
 
     // This function is responsible for submitting the draw commands to the renderer, it takes care of merging draw commands together when possible, and also resolves texture units for each draw command.
-    void draw_commands_submit(DrawCommandList& drawCommands, UniformCache& uniformCache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture);
+    void draw_commands_submit(DrawCommandList& drawCommands, UniformCache& uniformCache, const DrawScope& scope, Shader* shader, BlendMode blendMode, uint32_t texture);
     void draw_commands_clear(DrawCommandList& drawCommands);
 } // namespace p5cpp

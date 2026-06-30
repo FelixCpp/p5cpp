@@ -1,7 +1,9 @@
 #include "window.hpp"
 #include <p5cpp.hpp>
 
-#include <glfw/glfw3.h>
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+#include <glad/glad.h>
 
 namespace p5cpp
 {
@@ -50,6 +52,27 @@ namespace p5cpp
             glfwPollEvents();
         }
 
+        int2 getMousePosition() override
+        {
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            return int2 {static_cast<int>(xpos), static_cast<int>(ypos)};
+        }
+
+        int2 getLogicalSize() override
+        {
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            return int2 {width, height};
+        }
+
+        int2 getPhysicalSize() override
+        {
+            int width, height;
+            glfwGetFramebufferSize(window, &width, &height);
+            return int2 {width, height};
+        }
+
     private:
         GLFWWindow(int width, int height, std::string_view title)
             : window(nullptr)
@@ -63,8 +86,8 @@ namespace p5cpp
 
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-            // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-            // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
             // glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
             glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
@@ -75,6 +98,12 @@ namespace p5cpp
             }
 
             glfwMakeContextCurrent(window);
+            if (not gladLoadGLLoader(reinterpret_cast<GLADloadproc>(&glfwGetProcAddress))) {
+                glfwDestroyWindow(window);
+                glfwTerminate();
+                throw std::runtime_error("Failed to initialize GLAD");
+            }
+
             glfwSwapInterval(1);
             glfwSetWindowUserPointer(window, this);
 

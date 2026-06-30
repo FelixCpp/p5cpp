@@ -1,18 +1,18 @@
 #include <p5cpp.hpp>
 
+#include "app_context.hpp"
 #include "engine.hpp"
-#include "framebuffer.hpp"
+#include "modules/input_module.hpp"
 #include "modules/lifecycle_module.hpp"
+#include "modules/rendering_module.hpp"
 #include "modules/sketch_module.hpp"
 #include "modules/window_module.hpp"
 #include "render_state_stack.hpp"
-#include "services/window.hpp"
 #include "utf8_view.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "render_state.hpp"
 #include "tess.hpp"
-#include "dejavusans.hpp"
 #include "uniform_cache.hpp"
 
 #include <cassert>
@@ -74,37 +74,38 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    struct AppState
+    std::unique_ptr<Engine> engine;
+
+    inline AppContext& getAppContext()
     {
-        int mouseX;
-        int mouseY;
-        int pmouseX;
-        int pmouseY;
+        return engine->getContext();
+    }
 
-        int width;
-        int height;
+    inline Renderer& getRenderer()
+    {
+        return *engine->getContext().renderingInfo.renderer;
+    }
 
-        int frameCount;
-        int frameRate;
+    inline RenderStateStack& getRenderStateStack()
+    {
+        return *engine->getContext().renderingInfo.renderStateStack;
+    } // namespace p5cpp
+} // namespace p5cpp
 
-        float deltaTime;
-        float globalTime;
-    };
+namespace p5cpp
+{
+    int getMouseX() { return getAppContext().inputInfo.mouseX; }
+    int getMouseY() { return getAppContext().inputInfo.mouseY; }
+    int getPMouseX() { return getAppContext().inputInfo.pmouseX; }
+    int getPMouseY() { return getAppContext().inputInfo.pmouseY; }
 
-    inline static AppState appState;
+    int getWidth() { return getAppContext().inputInfo.logicalWidth; }
+    int getHeight() { return getAppContext().inputInfo.logicalHeight; }
 
-    int getMouseX() { return appState.mouseX; }
-    int getMouseY() { return appState.mouseY; }
-    int getPMouseX() { return appState.pmouseX; }
-    int getPMouseY() { return appState.pmouseY; }
-
-    int getWidth() { return appState.width; }
-    int getHeight() { return appState.height; }
-
-    int getFrameCount() { return appState.frameCount; }
-    int getFrameRate() { return appState.frameRate; }
-    float getDeltaTime() { return appState.deltaTime; }
-    float getGlobalTime() { return appState.globalTime; }
+    int getFrameCount() { return getAppContext().frameInfo.frameCount; }
+    int getFrameRate() { return getAppContext().frameInfo.framesPerSecond; }
+    float getDeltaTime() { return getAppContext().frameInfo.deltaTime; }
+    float getGlobalTime() { return getAppContext().frameInfo.globalTime; }
 
 } // namespace p5cpp
 
@@ -114,17 +115,17 @@ namespace p5cpp
     inline static std::array<float2, 4> curveVertexPositions;
 
     inline static std::unique_ptr<LinePathBuilder> linepath;
-    inline static std::shared_ptr<Shader> defaultShader;
-    inline static std::shared_ptr<Shader> textShader;
-    inline static std::shared_ptr<Font> defaultFont;
-    inline static std::shared_ptr<Framebuffer> defaultFramebuffer;
-    inline static std::unique_ptr<Texture> whiteTexture;
     inline static std::vector<std::shared_ptr<Framebuffer>> framebufferStack;
-    inline static RenderStateStack renderStateStack;
-    inline static Renderer renderer;
+    // inline static std::shared_ptr<Shader> defaultShader;
+    // inline static std::shared_ptr<Shader> textShader;
+    // inline static std::shared_ptr<Font> defaultFont;
+    // inline static std::shared_ptr<Framebuffer> defaultFramebuffer;
+    // inline static std::unique_ptr<Texture> whiteTexture;
+    // inline static RenderStateStack renderStateStack;
+    // inline static Renderer renderer;
 
-    inline static std::vector<color_t> pixelScratch;
-    inline static bool needsDefaultCanvasRecreation = false;
+    // inline static std::vector<color_t> pixelScratch;
+    // inline static bool needsDefaultCanvasRecreation = false;
 } // namespace p5cpp
 
 /// --------------------------------------------
@@ -134,71 +135,71 @@ namespace p5cpp
 {
     void pushState()
     {
-        render_state_stack_push(renderStateStack, render_state_stack_peek(renderStateStack));
+        render_state_stack_push(getRenderStateStack(), render_state_stack_peek(getRenderStateStack()));
     }
 
     void popState()
     {
-        render_state_stack_pop(renderStateStack);
+        render_state_stack_pop(getRenderStateStack());
     }
 
     void pushMatrix()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_push(renderState.metrics, matrix_stack_peek(renderState.metrics));
     }
 
     void popMatrix()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_pop(renderState.metrics);
     }
 
     void resetMatrix()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_set(renderState.metrics, matrix4x4::identity);
     }
 
     void applyMatrix(const matrix4x4& matrix)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_apply(renderState.metrics, matrix);
     }
 
     void setMatrix(const matrix4x4& matrix)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_set(renderState.metrics, matrix);
     }
 
     matrix4x4& peekMatrix()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         return matrix_stack_peek(renderState.metrics);
     }
 
     void translate(float x, float y)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_apply(renderState.metrics, translation(x, y));
     }
 
     void scale(float x, float y)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_apply(renderState.metrics, scaling(x, y));
     }
 
     void rotate(float angle)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         matrix_stack_apply(renderState.metrics, rotation(angle));
     }
 
     void noFill()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.isFillDisabled = true;
     }
 
@@ -206,14 +207,14 @@ namespace p5cpp
     void fill(int red, int green, int blue, int alpha) { fill(rgba(red, green, blue, alpha)); }
     void fill(color_t color)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.fillColor = color;
         renderState.isFillDisabled = false;
     }
 
     void noStroke()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.isStrokeDisabled = true;
     }
 
@@ -221,50 +222,50 @@ namespace p5cpp
     void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
     void stroke(color_t color)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.strokeColor = color;
         renderState.isStrokeDisabled = false;
     }
 
     void strokeWeight(float strokeWeight)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.strokeWeight = strokeWeight;
     }
 
     void strokeCap(StrokeCap strokeCap)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.strokeCap = strokeCap;
     }
 
     void strokeJoin(StrokeJoin strokeJoin)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.strokeJoin = strokeJoin;
     }
 
     void miterLimit(float miterLimit)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.miterLimit = miterLimit;
     }
 
     void roundJoinThreshold(float angleThreshold)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.roundJoinThreshold = angleThreshold;
     }
 
     void blendMode(BlendMode blendMode)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.blendMode = blendMode;
     }
 
     void curveTightness(float tightness)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.curveTightness = tightness;
     }
 
@@ -272,7 +273,7 @@ namespace p5cpp
     {
         detail = std::max(detail, 1u);
 
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.curveDetail = detail;
         renderState.invCurveDetail = 1.0f / static_cast<float>(detail);
     }
@@ -281,26 +282,26 @@ namespace p5cpp
     {
         detail = std::max(detail, 1u);
 
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.bezierDetail = detail;
         renderState.invBezierDetail = 1.0f / static_cast<float>(detail);
     }
 
     void shader(std::shared_ptr<Shader> shader)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.shader = std::move(shader);
     }
 
     void noShader()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.shader.reset();
     }
 
     void setUniform(const std::string& name, const UniformVariable& variable)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         if (renderState.shader != nullptr) {
             setUniform(renderState.shader, name, variable);
         }
@@ -308,49 +309,49 @@ namespace p5cpp
 
     void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
     {
-        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(renderer.uniformCache, shader.get());
+        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(getRenderer().uniformCache, shader.get());
         shader_uniform_cache_insert_or_update(shaderCache, name, variable);
     }
 
     void textAlign(TextAlign textAlign)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.textAlign = textAlign;
     }
 
     void textWrap(TextWrap textWrap)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.textWrap = textWrap;
     }
 
     void textFont(std::shared_ptr<Font> font)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.font = font;
     }
 
     void noTextFont()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.font.reset();
     }
 
     void textSize(float size)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.textSize = size;
     }
 
     void textLetterSpacing(float spacing)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.textLetterSpacing = spacing;
     }
 
     void textLineSpacing(float spacing)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.textLineSpacing = spacing;
     }
 
@@ -358,13 +359,13 @@ namespace p5cpp
     void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
     void tint(color_t color)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.tintColor = color;
     }
 
     void noTint()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         renderState.tintColor = rgba(255, 255, 255);
     }
 } // namespace p5cpp
@@ -374,16 +375,16 @@ namespace p5cpp
 /// -----------------------------------------
 namespace p5cpp
 {
-    inline std::shared_ptr<Shader> get_current_shader(const RenderState& state)
+    inline Shader* get_current_shader(const RenderState& state)
     {
-        auto result = (state.shader != nullptr) ? state.shader : defaultShader;
+        auto result = (state.shader != nullptr) ? state.shader.get() : getAppContext().renderingInfo.defaultShader;
         assert(result != nullptr && "Current shader cannot be null");
         return result;
     }
 
-    inline std::shared_ptr<Shader> get_current_text_shader(const RenderState& state)
+    inline Shader* get_current_text_shader(const RenderState& state)
     {
-        auto result = (state.shader != nullptr) ? state.shader : textShader;
+        auto result = (state.shader != nullptr) ? state.shader.get() : getAppContext().renderingInfo.textShader;
         assert(result != nullptr && "Current text shader cannot be null");
         return result;
     }
@@ -392,8 +393,8 @@ namespace p5cpp
     void background(int red, int green, int blue, int alpha) { background(rgba(red, green, blue, alpha)); }
     void background(color_t color)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
-        const uint2 size = renderer.framebuffer->getSize();
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
+        const uint2 size = getRenderer().framebuffer->getSize();
         const std::array<float2, 4> positions = {
             float2 {0.0f, 0.0f},
             float2 {static_cast<float>(size.x), 0.0f},
@@ -415,7 +416,7 @@ namespace p5cpp
 
         {
             // flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
+            DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
 
             tesselate_quads(
                 scope,
@@ -428,11 +429,11 @@ namespace p5cpp
             );
 
             renderer_submit(
-                renderer,
+                getRenderer(),
                 scope,
                 get_current_shader(renderState),
                 renderState.blendMode,
-                whiteTexture->getRendererId()
+                getAppContext().renderingInfo.whiteTexture->getRendererId()
             );
         }
     }
@@ -440,18 +441,18 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    inline static std::shared_ptr<Font> get_current_font(const RenderState& state)
+    inline static Font* get_current_font(const RenderState& state)
     {
         if (state.font != nullptr) {
-            return state.font;
+            return state.font.get();
         }
 
-        return defaultFont;
+        return getAppContext().renderingInfo.defaultFont;
     }
 
-    std::shared_ptr<Font> getCurrentFont()
+    Font* getCurrentFont()
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         return get_current_font(renderState);
     }
 } // namespace p5cpp
@@ -481,33 +482,33 @@ namespace p5cpp
     {
         constexpr size_t SAFE_MARGIN_V = 4096;
         constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
-        if (renderer.drawBuffer.vertexCursor + SAFE_MARGIN_V >= renderer.drawBuffer.vertexCount ||
-            renderer.drawBuffer.indexCursor + SAFE_MARGIN_I >= renderer.drawBuffer.indexCount) {
-            renderer_flush(renderer);
+        if (getRenderer().drawBuffer.vertexCursor + SAFE_MARGIN_V >= getRenderer().drawBuffer.vertexCount ||
+            getRenderer().drawBuffer.indexCursor + SAFE_MARGIN_I >= getRenderer().drawBuffer.indexCount) {
+            renderer_flush(getRenderer());
         }
     }
 
     void pushCanvas(std::shared_ptr<Framebuffer> framebuffer)
     {
-        // First we need to flush the renderer to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
-        renderer_flush(renderer);
-        renderer_end_frame(renderer);
+        // First we need to flush the getRenderer() to make sure that all draw calls for the current canvas are submitted before we switch to the new canvas.
+        renderer_flush(getRenderer());
+        renderer_end_frame(getRenderer());
 
         framebufferStack.push_back(framebuffer);
-        renderer_begin_frame(renderer, framebuffer);
-        render_state_stack_push(renderStateStack, render_state_stack_peek(renderStateStack));
+        renderer_begin_frame(getRenderer(), framebuffer);
+        render_state_stack_push(getRenderStateStack(), render_state_stack_peek(getRenderStateStack()));
     }
 
     void popCanvas()
     {
         // Flush the current canvas before we pop it, to make sure that all draw calls for the current canvas are submitted before we switch back to the previous canvas.
-        renderer_flush(renderer);
-        renderer_end_frame(renderer);
-        render_state_stack_pop(renderStateStack);
+        renderer_flush(getRenderer());
+        renderer_end_frame(getRenderer());
+        render_state_stack_pop(getRenderStateStack());
 
         framebufferStack.pop_back();
         if (not framebufferStack.empty()) {
-            renderer_begin_frame(renderer, framebufferStack.back());
+            renderer_begin_frame(getRenderer(), framebufferStack.back());
         }
     }
 
@@ -520,10 +521,10 @@ namespace p5cpp
     // (e.g. fill a triangleFan but stroke only the outer lineLoop).
     void endShapeImpl(ShapeType fillType, ShapeType strokeType, std::optional<ColorStyle> fillStyle, std::optional<ColorStyle> strokeStyle, bool close)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
 
         flushIfNeeded();
-        DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
+        DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
 
         if (fillStyle.has_value()) {
             const PathPoints points = linepath->buildDrawPoints(fillStyle.value());
@@ -557,7 +558,7 @@ namespace p5cpp
             }
         }
 
-        renderer_submit(renderer, scope, get_current_shader(renderState), renderState.blendMode, whiteTexture->getRendererId());
+        renderer_submit(getRenderer(), scope, get_current_shader(renderState), renderState.blendMode, getAppContext().renderingInfo.whiteTexture->getRendererId());
 
         linepath->clear();
         curveVertexCount = 0;
@@ -565,7 +566,7 @@ namespace p5cpp
 
     void endShape(ShapeType type, bool close)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const std::optional<ColorStyle> fillStyle = renderState.isFillDisabled ? std::nullopt : std::make_optional(ColorStyle::fill);
         const std::optional<ColorStyle> strokeStyle = renderState.isStrokeDisabled ? std::nullopt : std::make_optional(ColorStyle::stroke);
         endShapeImpl(type, type, fillStyle, strokeStyle, close);
@@ -578,14 +579,14 @@ namespace p5cpp
 
     void vertex(float x, float y, float u, float v)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const float2 transformed = transformPoint(peekMatrix(), {x, y});
         linepath->vertex(transformed.x, transformed.y, u, v, renderState.fillColor, renderState.strokeColor);
     }
 
     void curveVertex(float x, float y)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         curveVertexPositions[curveVertexCount++] = {x, y};
 
         if (curveVertexCount >= 4) {
@@ -668,7 +669,7 @@ namespace p5cpp
             }
         };
 
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
 
         // Fill: triangleFan from the centre – rounded rect is always convex, so no libtess2 needed.
         if (!renderState.isFillDisabled) {
@@ -694,7 +695,7 @@ namespace p5cpp
 
     void ellipse(float centerX, float centerY, float width, float height)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, std::max(width, height) * 0.5f);
 
         // Fill: centre vertex + closed rim → triangleFan (no libtess2, O(n) vertices)
@@ -726,7 +727,7 @@ namespace p5cpp
 
     void point(float x, float y)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const size_t segmentCount = computeCircleSegmentCount(2.0f * std::numbers::pi_v<float>, renderState.strokeWeight * 0.5f);
 
         // Fill a disc with the stroke color as a triangleFan — no libtess2, no outline edges
@@ -780,7 +781,7 @@ namespace p5cpp
 
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
 
         beginShape();
         for (size_t i = 0; i <= renderState.bezierDetail; ++i) {
@@ -802,7 +803,7 @@ namespace p5cpp
 
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
 
         float alpha = (1.0f - renderState.curveTightness) * 0.5f;
 
@@ -822,7 +823,7 @@ namespace p5cpp
 
     void image(uint32_t textureId, float left, float top, float width, float height)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const std::array<float2, 4> positions = {
             transformPoint(matrix_stack_peek(renderState.metrics), {left, top}),
             transformPoint(matrix_stack_peek(renderState.metrics), {left + width, top}),
@@ -844,7 +845,7 @@ namespace p5cpp
 
         {
             flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
+            DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
 
             tesselate_quads(
                 scope,
@@ -856,14 +857,14 @@ namespace p5cpp
                 }
             );
 
-            renderer_submit(renderer, scope, get_current_shader(renderState), renderState.blendMode, textureId);
+            renderer_submit(getRenderer(), scope, get_current_shader(renderState), renderState.blendMode, textureId);
         }
     }
 
     void text(std::string_view text, float x, float y, std::optional<float> maxWidth)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
-        Font* font = get_current_font(renderState).get();
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
+        Font* font = get_current_font(renderState);
         TextLayout layout = measureText(text, font, renderState.textSize, renderState.textLetterSpacing, renderState.textLineSpacing, renderState.textAlign, renderState.textWrap, maxWidth);
         matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
 
@@ -899,7 +900,7 @@ namespace p5cpp
 
         for (const auto& [textureId, bucket] : buckets) {
             flushIfNeeded();
-            DrawScope scope = draw_buffer_get_scope(renderer.drawBuffer);
+            DrawScope scope = draw_buffer_get_scope(getRenderer().drawBuffer);
 
             tesselate_quads(
                 scope,
@@ -911,7 +912,7 @@ namespace p5cpp
                 }
             );
 
-            renderer_submit(renderer, scope, get_current_text_shader(renderState), renderState.blendMode, textureId);
+            renderer_submit(getRenderer(), scope, get_current_text_shader(renderState), renderState.blendMode, textureId);
         }
     }
 } // namespace p5cpp
@@ -920,10 +921,10 @@ namespace p5cpp
 {
     TextLayout measureText(std::string_view text)
     {
-        RenderState& renderState = render_state_stack_peek(renderStateStack);
+        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         return measureText(
             text,
-            get_current_font(renderState).get(),
+            get_current_font(renderState),
             renderState.textSize,
             renderState.textLetterSpacing,
             renderState.textLineSpacing,
@@ -1198,9 +1199,14 @@ int main()
 {
     using namespace p5cpp;
 
-    std::unique_ptr<Engine> engine = Engine::create();
+    linepath = std::make_unique<LinePathBuilder>();
+    framebufferStack = {};
+
+    engine = Engine::create();
     engine->addModule(std::make_unique<LifecycleModule>());
     engine->addModule(std::make_unique<WindowModule>());
+    engine->addModule(std::make_unique<InputModule>());
+    engine->addModule(std::make_unique<RenderingModule>());
     engine->addModule(std::make_unique<SketchModule>());
 
     engine->run();

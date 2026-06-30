@@ -3,7 +3,7 @@
 
 namespace p5cpp
 {
-    inline static bool draw_command_mergeable(const DrawCommand& command, const std::shared_ptr<Shader>& shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
+    inline static bool draw_command_mergeable(const DrawCommand& command, Shader* shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
     {
         // We can not merge draw commands if they use different shaders.
         if (command.shader != shader) {
@@ -41,13 +41,13 @@ namespace p5cpp
         return true;
     }
 
-    inline static DrawCommand& create_draw_command(DrawCommandList& commands, const DrawScope& scope, std::shared_ptr<Shader> shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
+    inline static DrawCommand& create_draw_command(DrawCommandList& commands, const DrawScope& scope, Shader* shader, ShaderUniformCache& cache, BlendMode blendMode, uint32_t texture)
     {
         return commands.emplace_back(
             DrawCommand {
                 .drawBufferIndexStart = scope.baseIndex,
                 .drawBufferIndexCount = 0,
-                .shader = std::move(shader),
+                .shader = shader,
                 .uniforms = {},
                 .blendMode = blendMode,
                 .textureUnits = {texture},
@@ -56,7 +56,7 @@ namespace p5cpp
         );
     }
 
-    inline static DrawCommand& draw_commands_get_or_create(DrawCommandList& commands, ShaderUniformCache& shaderCache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    inline static DrawCommand& draw_commands_get_or_create(DrawCommandList& commands, ShaderUniformCache& shaderCache, const DrawScope& scope, Shader* shader, BlendMode blendMode, uint32_t texture)
     {
         if (not commands.empty() and draw_command_mergeable(commands.back(), shader, shaderCache, blendMode, texture)) {
             return commands.back();
@@ -76,9 +76,9 @@ namespace p5cpp
         return std::nullopt;
     }
 
-    void draw_commands_submit(DrawCommandList& commands, UniformCache& cache, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture)
+    void draw_commands_submit(DrawCommandList& commands, UniformCache& cache, const DrawScope& scope, Shader* shader, BlendMode blendMode, uint32_t texture)
     {
-        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, shader.get());
+        ShaderUniformCache& shaderCache = uniform_cache_get_shader_cache(cache, shader);
 
         // Get or create a draw command for this draw call, and update its draw buffer index count to include the new indices from this draw call.
         DrawCommand& command = draw_commands_get_or_create(commands, shaderCache, scope, shader, blendMode, texture);

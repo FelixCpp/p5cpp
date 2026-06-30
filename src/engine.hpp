@@ -15,5 +15,7 @@ namespace p5cpp
         virtual void addModule(std::unique_ptr<Module> module) = 0;
         virtual void dispatch(const WindowEvent& event) = 0;
         virtual void run() = 0;
+
+        virtual AppContext& getContext() = 0;
     };
 } // namespace p5cpp

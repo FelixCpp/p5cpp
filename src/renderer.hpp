@@ -46,5 +46,5 @@ namespace p5cpp
     void renderer_begin_frame(Renderer& renderer, std::shared_ptr<Framebuffer> targetFramebuffer);
     void renderer_end_frame(Renderer& renderer);
     void renderer_flush(Renderer& renderer);
-    void renderer_submit(Renderer& renderer, const DrawScope& scope, std::shared_ptr<Shader> shader, BlendMode blendMode, uint32_t texture);
+    void renderer_submit(Renderer& renderer, const DrawScope& scope, Shader* shader, BlendMode blendMode, uint32_t texture);
 } // namespace p5cpp

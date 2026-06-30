@@ -30,6 +30,11 @@ namespace p5cpp
             destroyModules();
         }
 
+        AppContext& getContext() override
+        {
+            return context;
+        }
+
     private:
         void setupModules(size_t i = 0)
         {

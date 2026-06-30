@@ -10,6 +10,8 @@ struct LaneKeepingAssistentSimulation : Sketch
 
     void draw() override
     {
+        background(21);
+        rect(100, 100, 200, 200);
     }
 };
 

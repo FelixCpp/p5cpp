@@ -1,7 +1,5 @@
 #include "timing.hpp"
 
-#include <thread>
-
 #ifdef __APPLE__
 #include <mach/mach_time.h>
 #endif
@@ -74,30 +72,4 @@ namespace p5cpp
     }
 
 #endif // __APPLE__
-
-    // ── FpsCounter ────────────────────────────────────────────────────────────────
-
-    FpsCounter::FpsCounter(float windowSeconds)
-        : m_windowSeconds(windowSeconds)
-    {
-    }
-
-    void FpsCounter::tick()
-    {
-        ++m_frames;
-
-        const TimePoint now = Clock::now();
-        const float elapsed = std::chrono::duration<float>(now - m_windowStart).count();
-
-        if (elapsed >= m_windowSeconds) {
-            m_current = static_cast<float>(m_frames) / elapsed;
-            m_frames = 0;
-            m_windowStart = now;
-        }
-    }
-
-    float FpsCounter::fps() const
-    {
-        return m_current;
-    }
 } // namespace p5cpp

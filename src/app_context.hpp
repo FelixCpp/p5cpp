@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <p5cpp.hpp>
 
 namespace p5cpp
@@ -10,7 +9,26 @@ namespace p5cpp
     {
         float deltaTime;
         float globalTime;
+        float framesPerSecond;
         uint64_t frameCount;
+
+        int targetFrameRate;
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    struct InputInfo
+    {
+        int mouseX;
+        int mouseY;
+        int pmouseX;
+        int pmouseY;
+
+        int logicalWidth;
+        int logicalHeight;
+        int physicalWidth;
+        int physicalHeight;
     };
 } // namespace p5cpp
 
@@ -18,20 +36,25 @@ namespace p5cpp
 {
     struct LifecycleInfo
     {
-        bool closeRequested;
-        bool isPaused;
+        bool closeRequested = false;
+        bool isPaused = false;
     };
 } // namespace p5cpp
 
 namespace p5cpp
 {
+    struct Renderer;
+    struct RenderStateStack;
+
     struct RenderingInfo
     {
-        std::shared_ptr<Shader> defaultShader;
-        std::shared_ptr<Shader> textShader;
-        std::shared_ptr<Font> defaultFont;
-        std::shared_ptr<Framebuffer> defaultFramebuffer;
-        std::shared_ptr<Texture> whiteTexture;
+        Shader* defaultShader;
+        Shader* textShader;
+        Font* defaultFont;
+        Framebuffer* defaultFramebuffer;
+        Texture* whiteTexture;
+        Renderer* renderer;
+        RenderStateStack* renderStateStack;
     };
 } // namespace p5cpp
 
@@ -39,12 +62,12 @@ namespace p5cpp
 {
     struct Sketch;
     struct Window;
-    struct Renderer;
     struct Engine;
 
     struct AppContext
     {
         FrameInfo frameInfo;
+        InputInfo inputInfo;
         LifecycleInfo lifecycleInfo;
         RenderingInfo renderingInfo;
 

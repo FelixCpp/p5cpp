@@ -24,9 +24,11 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(
   p5cpp STATIC
+  ./src/modules/input_module.cpp
   ./src/modules/lifecycle_module.cpp
   ./src/modules/window_module.cpp
   ./src/modules/sketch_module.cpp
+  ./src/modules/rendering_module.cpp
   ./src/engine.cpp
   ./src/module.cpp
   ./src/services/window.cpp

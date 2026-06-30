@@ -17,7 +17,7 @@ namespace p5cpp
     {
         size_t drawBufferIndexStart;           // Where in the global DrawBuffer this draw command starts
         size_t drawBufferIndexCount;           // How many indices this draw command has in the global DrawBuffer
-        std::shared_ptr<Shader> shader;        // Which shader to use for this draw command
+        Shader* shader;                        // Which shader to use for this draw command
         std::vector<UniformSnapshot> uniforms; // A snapshot of the uniform cache at the time this draw command was created, this is used to upload the correct uniform values when this draw command is executed by the renderer
         BlendMode blendMode;                   // Which blend mode to use for this draw command
         std::array<uint32_t, 8> textureUnits;  // Which texture units to bind for this draw command
