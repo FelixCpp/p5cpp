@@ -1,25 +1,19 @@
 #include <p5cpp.hpp>
 
-#include "audio.hpp"
 #include "render_state_stack.hpp"
 #include "utf8_view.hpp"
-#include "window.hpp"
-#include "framebuffer.hpp"
-#include "shader.hpp"
 #include "renderer.hpp"
 #include "linepath.hpp"
 #include "render_state.hpp"
 #include "tess.hpp"
 #include "dejavusans.hpp"
 #include "uniform_cache.hpp"
-#include "timing.hpp"
 
 #include <cassert>
 #include <iostream>
 #include <array>
 #include <numbers>
 #include <algorithm>
-#include <chrono>
 
 namespace p5cpp
 {
@@ -122,9 +116,6 @@ namespace p5cpp
     inline static std::vector<std::shared_ptr<Framebuffer>> framebufferStack;
     inline static RenderStateStack renderStateStack;
     inline static Renderer renderer;
-
-    inline static AppWindow* appWindow = nullptr;
-    inline static std::unique_ptr<AudioEngine> audioEngine;
 
     inline static std::vector<color_t> pixelScratch;
     inline static bool needsDefaultCanvasRecreation = false;
@@ -461,16 +452,16 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    static void recreateDefaultCanvas()
-    {
-        const int physW = window_physical_width(appWindow);
-        const int physH = window_physical_height(appWindow);
-        if (physW <= 0 || physH <= 0)
-            return;
-
-        defaultFramebuffer = create_window_framebuffer(physW, physH, appState.width, appState.height);
-        needsDefaultCanvasRecreation = false;
-    }
+    // static void recreateDefaultCanvas()
+    // {
+    //     const int physW = window_physical_width(appWindow);
+    //     const int physH = window_physical_height(appWindow);
+    //     if (physW <= 0 || physH <= 0)
+    //         return;
+    //
+    //     defaultFramebuffer = create_window_framebuffer(physW, physH, appState.width, appState.height);
+    //     needsDefaultCanvasRecreation = false;
+    // }
 
     UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
     UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
@@ -921,94 +912,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    inline static float s_targetFrameTime = 0.0f;
-    inline static auto s_appStartTime = std::chrono::steady_clock::now();
-    inline static bool s_isAppPaused = false;
-    inline static bool s_isCloseRequested = false;
-    inline static int s_exitCode = 0;
-
-    void setWindowSize(int w, int h)
-    {
-        window_set_size(appWindow, w, h);
-        appState.width = w;
-        appState.height = h;
-    }
-
-    void setWindowTitle(std::string_view title) { window_set_title(appWindow, title); }
-    void setWindowResizable(bool resizable) { window_set_resizable(appWindow, resizable); }
-    int getWindowWidth() { return window_logical_width(appWindow); }
-    int getWindowHeight() { return window_logical_height(appWindow); }
-
-    void frameRate(float targetFps) { s_targetFrameTime = (targetFps > 0.0f) ? (1.0f / targetFps) : 0.0f; }
-    void loop() { s_isAppPaused = false; }
-    void noLoop() { s_isAppPaused = true; }
-    bool isLooping() { return !s_isAppPaused; }
-    void quit() { s_isCloseRequested = true; }
-
-    void quit(int exitCode)
-    {
-        p5cpp::exitCode(exitCode);
-        quit();
-    }
-
-    void exitCode(int code) { s_exitCode = code; }
-
-    float millis()
-    {
-        return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - s_appStartTime).count();
-    }
-
-    Pixels loadPixels()
-    {
-        renderer_flush(renderer);
-
-        const auto [viewportWidth, viewportHeight] = renderer.framebuffer->getViewportSize();
-        const size_t count = static_cast<size_t>(viewportWidth) * static_cast<size_t>(viewportHeight);
-
-        pixelScratch.resize(count);
-
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, renderer.framebuffer->getRendererId());
-        glReadPixels(0, 0, static_cast<GLsizei>(viewportWidth), static_cast<GLsizei>(viewportHeight), GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, pixelScratch.data());
-
-        std::vector<color_t> buffer(count);
-        for (uint32_t y = 0; y < viewportHeight; ++y) {
-            const uint32_t flippedY = viewportHeight - 1 - y;
-            std::copy_n(pixelScratch.data() + flippedY * viewportWidth, viewportWidth, buffer.data() + y * viewportWidth);
-        }
-
-        return Pixels {static_cast<int>(viewportWidth), static_cast<int>(viewportHeight), std::move(buffer)};
-    }
-
-    void updatePixels(const Pixels& pixels)
-    {
-        if (pixels.width <= 0 or pixels.height <= 0) {
-            return;
-        }
-
-        const auto [viewportWidth, viewportHeight] = renderer.framebuffer->getViewportSize();
-        if (static_cast<uint32_t>(pixels.width) != viewportWidth or static_cast<uint32_t>(pixels.height) != viewportHeight) {
-            return;
-        }
-
-        const uint32_t canvasWidth = static_cast<uint32_t>(pixels.width);
-        const uint32_t canvasHeight = static_cast<uint32_t>(pixels.height);
-        const size_t count = static_cast<size_t>(canvasWidth) * static_cast<size_t>(canvasHeight);
-
-        // Flip rows back to OpenGL bottom - up order
-        pixelScratch.resize(count);
-        for (uint32_t y = 0; y < canvasHeight; ++y) {
-            const uint32_t flippedY = canvasHeight - 1 - y;
-            std::copy_n(pixels.colors.data() + y * canvasWidth, canvasWidth, pixelScratch.data() + flippedY * canvasWidth);
-        }
-
-        renderer_flush(renderer);
-        renderer.framebuffer->getColorTexture()->update(pixelScratch);
-    }
-
-} // namespace p5cpp
-
-namespace p5cpp
-{
     TextLayout measureText(std::string_view text)
     {
         RenderState& renderState = render_state_stack_peek(renderStateStack);
@@ -1287,94 +1190,5 @@ namespace p5cpp
 
 int main()
 {
-    using namespace p5cpp;
-
-    static std::unique_ptr sketch = createSketch();
-
-    appWindow = window_create(800, 600, "p5", [&](const WindowEvent& e) {
-        if (e.type == EventType::close) {
-            quit();
-        }
-        if (e.type == EventType::mouseMove) {
-            appState.mouseX = e.mouseMove.x;
-            appState.mouseY = e.mouseMove.y;
-        }
-        if (e.type == EventType::windowResize) {
-            appState.width = e.windowResize.width;
-            appState.height = e.windowResize.height;
-            needsDefaultCanvasRecreation = true;
-        }
-        if (e.type == EventType::framebufferResize) {
-            needsDefaultCanvasRecreation = true;
-        }
-        sketch->event(e);
-    });
-
-    appState.width = window_logical_width(appWindow);
-    appState.height = window_logical_height(appWindow);
-
-    std::unique_ptr<AudioDevice> device = AudioDevice::getDefaultDevice();
-    audioEngine = AudioEngine::create(*device);
-    audioEngine.reset();
-    device.reset();
-
-    static constexpr size_t MAX_VERTICES = 65536;
-    static constexpr size_t MAX_INDICES = MAX_VERTICES * 3;
-    static constexpr uint8_t whitePixel[] = {255, 255, 255, 255};
-
-    renderer = renderer_create(MAX_VERTICES, MAX_INDICES);
-    whiteTexture = createTexture(1, 1, whitePixel);
-    linepath = std::make_unique<LinePathBuilder>();
-    defaultShader = create_default_shader();
-    textShader = create_text_shader();
-    defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
-    defaultFramebuffer = create_window_framebuffer(window_physical_width(appWindow), window_physical_height(appWindow), window_logical_width(appWindow), window_logical_height(appWindow));
-    renderStateStack = render_state_stack_create();
-
-    {
-        pushCanvas(defaultFramebuffer);
-        sketch->setup();
-        popCanvas();
-    }
-
-    window_show(appWindow);
-
-    FpsCounter fpsCounter;
-    auto lastFrameTime = Clock::now();
-
-    while (not s_isCloseRequested) {
-        const TimePoint frameStart = Clock::now();
-        appState.deltaTime = std::chrono::duration<float>(frameStart - lastFrameTime).count();
-        lastFrameTime = frameStart;
-
-        window_poll_events(appWindow);
-
-        if (needsDefaultCanvasRecreation)
-            recreateDefaultCanvas();
-
-        if (not s_isAppPaused) {
-            pushCanvas(defaultFramebuffer);
-            sketch->draw();
-            popCanvas();
-
-            blit_framebuffer_to_screen(*defaultFramebuffer);
-            window_swap_buffers(appWindow);
-            appState.frameCount++;
-
-            fpsCounter.tick();
-            appState.frameRate = fpsCounter.fps();
-        }
-
-        // FPS limiter: precise sleep for remainder of target frame duration
-        if (s_targetFrameTime > 0.0f) {
-            const auto targetDuration = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<float>(s_targetFrameTime));
-            precise_sleep_until(frameStart + targetDuration);
-        }
-    }
-
-    sketch->destroy();
-    sketch.reset();
-    window_destroy(appWindow);
-
-    return s_exitCode;
+    return 0;
 }

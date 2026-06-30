@@ -24,7 +24,6 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(
   p5cpp STATIC
-  ./src/audio.cpp
   ./src/color.cpp
   ./src/draw_buffer.cpp
   ./src/draw_command_list.cpp
