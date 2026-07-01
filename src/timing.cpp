@@ -2,6 +2,8 @@
 
 #ifdef __APPLE__
 #include <mach/mach_time.h>
+#else
+#include <thread>
 #endif
 
 namespace p5cpp
