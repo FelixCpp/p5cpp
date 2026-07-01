@@ -3,6 +3,8 @@
 #include "../../application/engine.hpp"
 #include "../../application/app_context.hpp"
 
+#include <p5cpp/application/logging.hpp>
+
 namespace p5cpp
 {
     void WindowModule::setup(AppContext& context, Next next)

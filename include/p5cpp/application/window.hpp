@@ -1,10 +1,10 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/application/window_event.hpp>
+#include <p5cpp/math/value2.hpp>
 
-#include <functional>
-#include <memory>
 #include <string_view>
+#include <functional>
 
 namespace p5cpp
 {

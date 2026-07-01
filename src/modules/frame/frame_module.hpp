@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../module.hpp"
+#include <p5cpp/application/module.hpp>
+
 #include "frame_data.hpp"
 
 #include <chrono>

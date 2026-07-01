@@ -31,7 +31,10 @@ add_library(
   ./src/modules/rendering/rendering_module.cpp
   ./src/modules/sketch/sketch_module.cpp
   ./src/modules/window/window_module.cpp
-  ./src/modules/module.cpp
+
+  ./src/p5cpp/application/window.cpp
+  ./src/p5cpp/application/logging.cpp
+  ./src/p5cpp/application/module.cpp
 
   ./src/p5cpp/math/matrix4x4.cpp
   ./src/p5cpp/math/noise.cpp
@@ -39,7 +42,6 @@ add_library(
 
   ./src/services/renderer.cpp
   ./src/services/uniform_cache.cpp
-  ./src/services/window.cpp
 
   ./src/font.cpp
   ./src/framebuffer.cpp

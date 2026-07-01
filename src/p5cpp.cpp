@@ -3,7 +3,6 @@
 #include "application/engine.hpp"
 #include "application/app_context.hpp"
 
-#include "services/window.hpp"
 #include "modules/input/input_data.hpp"
 #include "modules/frame/frame_data.hpp"
 
@@ -14,7 +13,6 @@
 #include "modules/sketch/sketch_module.hpp"
 
 #include <cassert>
-#include <iostream>
 
 namespace p5cpp
 {
@@ -24,14 +22,6 @@ namespace p5cpp
     {
         return engine->getContext();
     }
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    void info(std::string_view message) { std::cout << "[INFO]: " << message << std::endl; }
-    void debug(std::string_view message) { std::cout << "[DEBUG]: " << message << std::endl; }
-    void warning(std::string_view message) { std::cout << "[WARNING]: " << message << std::endl; }
-    void error(std::string_view message) { std::cerr << "[ERROR]: " << message << std::endl; }
 } // namespace p5cpp
 
 namespace p5cpp

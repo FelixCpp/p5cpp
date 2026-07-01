@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../modules/module.hpp"
+#include <p5cpp/application/module.hpp>
 
 #include <memory>
 

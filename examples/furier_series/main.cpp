@@ -87,7 +87,7 @@ public:
 
     void paintAt(int mouseX, int mouseY)
     {
-        points.push_back(int2 { mouseX,  mouseY});
+        points.push_back(int2 {mouseX, mouseY});
     }
 
     void erase()

@@ -1,8 +1,11 @@
-#include "window.hpp"
+#include <p5cpp/application/window.hpp>
+#include <p5cpp/application/logging.hpp>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
+
+#include <string>
 
 namespace p5cpp
 {
@@ -254,10 +257,10 @@ namespace p5cpp
             }
         }
 
-        static void errorCallback(int error, const char* description)
+        static void errorCallback(int errorCode, const char* description)
         {
-            const std::string message = "GLFW Error (" + std::to_string(error) + "): " + description;
-            p5cpp::error(message);
+            const std::string message = "GLFW Error (" + std::to_string(errorCode) + "): " + description;
+            error(message);
         }
 
         static MouseButton convertMouseButton(int button)

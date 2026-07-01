@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../module.hpp"
-#include "../../services/window.hpp"
+#include <p5cpp/application/window.hpp>
+#include <p5cpp/application/module.hpp>
 
 namespace p5cpp
 {

@@ -2,6 +2,9 @@
 
 #include <p5cpp/application/sketch.hpp>
 #include <p5cpp/application/window_event.hpp>
+#include <p5cpp/application/window.hpp>
+#include <p5cpp/application/logging.hpp>
+#include <p5cpp/application/module.hpp>
 
 #include <p5cpp/math/angle.hpp>
 #include <p5cpp/math/constants.hpp>
@@ -39,14 +42,6 @@ namespace p5cpp
 
     typedef rect2<float> rect2f;
     typedef rect2<int32_t> rect2i;
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    void info(std::string_view message);
-    void debug(std::string_view message);
-    void warning(std::string_view message);
-    void error(std::string_view message);
 } // namespace p5cpp
 
 namespace p5cpp

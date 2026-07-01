@@ -1,4 +1,4 @@
-#include "module.hpp"
+#include <p5cpp/application/module.hpp>
 
 namespace p5cpp
 {
