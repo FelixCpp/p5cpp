@@ -34,7 +34,7 @@ namespace p5cpp
 
     void matrix_stack_apply(MatrixStack& stack, const matrix4x4& matrix)
     {
-        stack.metrics.top() = combine(stack.metrics.top(), matrix);
+        stack.metrics.top() *= matrix;
     }
 
     void matrix_stack_set(MatrixStack& stack, const matrix4x4& matrix)

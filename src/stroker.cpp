@@ -158,8 +158,8 @@ namespace p5cpp::joins
         const color_t color = points.colors[corner.index];
         const float2 cornerPos = points.positions[corner.index];
 
-        const float2 startDir = normalized(corner.joinStart - cornerPos);
-        const float2 endDir = normalized(corner.joinEnd - cornerPos);
+        const float2 startDir = (corner.joinStart - cornerPos).normalized();
+        const float2 endDir = (corner.joinEnd - cornerPos).normalized();
 
         float angleStart = std::atan2(startDir.y, startDir.x);
         float angleEnd = std::atan2(endDir.y, endDir.x);
@@ -209,7 +209,7 @@ namespace p5cpp
     {
         const size_t cornerIndex = current.endIndex;
 
-        const float turn = cross(current.direction, next.direction);
+        const float turn = current.direction.cross(next.direction);
         const bool leftTurn = (turn > 0.0f);
 
         const float2 joinStart = !leftTurn ? current.innerEnd : current.outerEnd;
@@ -224,15 +224,15 @@ namespace p5cpp
         bool exceedsMiterLimit = false;
         {
             const float2 AB = joinEnd - joinStart;
-            const float denom = cross(current.direction, next.direction);
+            const float denom = current.direction.cross(next.direction);
 
             if (std::abs(denom) < 1e-6f) {
                 outerHit = (joinStart + joinEnd) * 0.5f;
                 exceedsMiterLimit = true;
             } else {
-                outerHit = joinStart + current.direction * (cross(AB, next.direction) / denom);
+                outerHit = joinStart + current.direction * (AB.cross(next.direction) / denom);
 
-                const float miterLength = length(outerHit - innerHit);
+                const float miterLength = (outerHit - innerHit).length();
                 exceedsMiterLimit = (miterLength / halfStrokeWeight) > miterLimit;
             }
         }
@@ -252,8 +252,8 @@ namespace p5cpp
         const float2& start = points.positions[startIndex];
         const float2& end = points.positions[endIndex];
         const float2 delta = end - start;
-        const float2 direction = normalized(delta);
-        const float2 normal = perp(direction);
+        const float2 direction = delta.normalized();
+        const float2 normal = direction.perpendicular();
         return StrokeSegment {
             .startIndex = startIndex,
             .endIndex = endIndex,

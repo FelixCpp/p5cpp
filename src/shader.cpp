@@ -1,6 +1,6 @@
 #include "shader.hpp"
 
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 #include <string>
 #include <unordered_map>
 

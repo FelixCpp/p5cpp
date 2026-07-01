@@ -1,4 +1,4 @@
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include <algorithm>
 #include <array>
@@ -448,7 +448,7 @@ struct TowerSketch : p5cpp::Sketch
         std::uniform_real_distribution<float> speedVar(-12.f, 12.f);
         float angle = angleDist(rng);
         float2 pos = {CX + std::cos(angle) * SPAWN_RADIUS, CY + std::sin(angle) * SPAWN_RADIUS};
-        float2 dir = normalized(float2 {CX, CY} - pos);
+        float2 dir = (float2 {CX, CY} - pos).normalized();
         float spd = 55.f + wave * 6.f + speedVar(rng);
         Enemy e;
         e.pos = pos;
@@ -470,13 +470,13 @@ struct TowerSketch : p5cpp::Sketch
                 for (int i = 0; i < (int)e.trail.size() - 1; ++i) e.trail[i] = e.trail[i + 1];
                 e.trail.back() = e.pos;
             }
-            float2 toTower = normalized(float2 {CX, CY} - e.pos);
-            float spd = length(e.vel);
-            e.vel = normalized(e.vel + toTower * dt * 80.f) * spd;
+            float2 toTower = (float2 {CX, CY} - e.pos).normalized();
+            float spd = e.vel.length();
+            e.vel = (e.vel + toTower * dt * 80.f).normalized() * spd;
             e.pos = e.pos + e.vel * dt;
             e.angle += dt * 2.5f;
             e.flashTimer = std::max(0.f, e.flashTimer - dt * 6.f);
-            if (length(e.pos - float2 {CX, CY}) < TOWER_RADIUS + e.size * 0.6f) {
+            if ((e.pos - float2 {CX, CY}).length() < TOWER_RADIUS + e.size * 0.6f) {
                 e.alive = false;
                 float dmg = 5.f + wave * 0.4f;
                 towerHp -= dmg;
@@ -497,10 +497,10 @@ struct TowerSketch : p5cpp::Sketch
         float r = shootRadius();
         std::vector<Enemy*> result;
         for (auto& e : enemies)
-            if (e.alive && length(e.pos - float2 {CX, CY}) <= r)
+            if (e.alive && (e.pos - float2 {CX, CY}).length() <= r)
                 result.push_back(&e);
         std::sort(result.begin(), result.end(), [](const Enemy* a, const Enemy* b) {
-            return length(a->pos - float2 {CX, CY}) < length(b->pos - float2 {CX, CY});
+            return (a->pos - float2 {CX, CY}).length() < (b->pos - float2 {CX, CY}).length();
         });
         return result;
     }
@@ -508,9 +508,9 @@ struct TowerSketch : p5cpp::Sketch
     float2 intercept(float2 tp, float2 tv) const
     {
         float2 d = tp - float2 {CX, CY};
-        float a = dot(tv, tv) - BULLET_SPEED * BULLET_SPEED;
-        float b = 2.f * dot(d, tv);
-        float c = dot(d, d);
+        float a = tv.dot(tv) - BULLET_SPEED * BULLET_SPEED;
+        float b = 2.f * d.dot(tv);
+        float c = d.dot(d);
         float t = -1.f;
         if (std::abs(a) < 1e-4f) {
             if (std::abs(b) > 1e-4f) t = -c / b;
@@ -524,7 +524,7 @@ struct TowerSketch : p5cpp::Sketch
             }
         }
         float2 aim = (t > 0.f) ? tp + tv * t : tp;
-        return normalized(aim - float2 {CX, CY});
+        return (aim - float2 {CX, CY}).normalized();
     }
 
     void fireBullet(float2 dir, BulletType type)
@@ -606,7 +606,7 @@ struct TowerSketch : p5cpp::Sketch
             }
             for (auto& e : enemies) {
                 if (!e.alive) continue;
-                if (length(b.pos - e.pos) < e.size * 0.75f + BULLET_R) {
+                if ((b.pos - e.pos).length() < e.size * 0.75f + BULLET_R) {
                     b.alive = false;
                     e.flashTimer = 1.f;
                     e.hp -= bulletDamage();
@@ -981,7 +981,7 @@ struct TowerSketch : p5cpp::Sketch
             // colour shifts orange->red as HP drops
             color_t col = rgba(255, (int)(70.f * hpRatio), 40);
             // proximity danger: glow intensifies when close to tower
-            float proxRatio = 1.f - std::min(1.f, length(e.pos - float2 {CX, CY}) / shootRadius());
+            float proxRatio = 1.f - std::min(1.f, (e.pos - float2 {CX, CY}).length() / shootRadius());
             if (e.flashTimer > 0.f) col = lerp(col, rgba(255, 255, 255), e.flashTimer);
 
             pushMatrix();

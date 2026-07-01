@@ -1,4 +1,4 @@
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include "application/engine.hpp"
 #include "application/app_context.hpp"

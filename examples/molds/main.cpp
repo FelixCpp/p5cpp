@@ -1,5 +1,5 @@
 #include <memory>
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include <algorithm>
 #include <vector>
@@ -205,7 +205,7 @@ struct SlimeMoldsSimulation : Sketch
 
             molds.push_back(Mold {
                 .position = {px, py},
-                .direction = fixedLength(float2 {cos(angle), sin(angle)}, 1.0f),
+                .direction = float2 {cos(angle), sin(angle)}.fixedLength(1.0f),
                 .travelSpeed = 80.0f,
                 .radius = 0.5f,
             });
@@ -218,7 +218,7 @@ struct SlimeMoldsSimulation : Sketch
             for (size_t i = 0; i < 10000; ++i) {
                 molds.push_back(Mold {
                     .position = {static_cast<float>(e.mouseButton.x), static_cast<float>(e.mouseButton.y)},
-                    .direction = fixedLength(float2 {cos(randomFloat(TWO_PI)), sin(randomFloat(TWO_PI))}, 1.0f),
+                    .direction = float2 {cos(randomFloat(TWO_PI)), sin(randomFloat(TWO_PI))}.fixedLength(1.0f),
                     .travelSpeed = 80.0f,
                     .radius = 0.5f,
                 });

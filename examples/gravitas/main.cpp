@@ -1,5 +1,5 @@
 #include <numbers>
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -146,7 +146,7 @@ struct Orbit
     void attract(const float2& target, float dt)
     {
         const float2 toTarget = target - position;
-        const float dist = length(toTarget);
+        const float dist = toTarget.length();
         if (dist > INFLUENCE_RADIUS || dist < 1.0f) return;
 
         const float t = 1.0f - (dist / INFLUENCE_RADIUS);
@@ -169,9 +169,9 @@ struct Orbit
         }
 
         velocity += acceleration * dt;
-        velocity = limit(velocity, maxSpeed);
+        velocity = velocity.limited(maxSpeed);
 
-        const float speed = length(velocity);
+        const float speed = velocity.length();
         if (speed < minSpeed)
             velocity = (speed > 0.001f ? velocity / speed : float2 {1, 0}) * minSpeed;
 
@@ -242,7 +242,7 @@ Orbit spawnOrbit()
     });
 
     const float2 oppositePoint {static_cast<float>(width) - randomX, static_cast<float>(height) - randomY};
-    const float2 direction = normalized(oppositePoint - orbitPosition);
+    const float2 direction = (oppositePoint - orbitPosition).normalized();
     return Orbit {orbitPosition, direction * randomFloat(60.0f, 160.0f)};
 }
 
@@ -266,7 +266,7 @@ struct Star
 
     bool contains(const Orbit& o) const
     {
-        return lengthSquared(o.position - position) < radius * radius;
+        return (o.position - position).lengthSquared() < radius * radius;
     }
 
     void update(float dt)
@@ -474,7 +474,7 @@ struct BlackHole
 
     BlackHole(float2 spawn)
         : position(spawn),
-          direction(randomDirection<float>()),
+          direction(float2::randomUnit()),
           speed(randomFloat(10.0f, 30.0f)),
           lifeTime(randomFloat(4.0f, 7.0f)),
           timeAlive(0.0f)
@@ -588,10 +588,10 @@ struct Gravitas : Sketch
 
         for (Orbit& orbit : orbits) {
             const float2 toPlayer = cursor - orbit.position;
-            const float dist = length(toPlayer);
+            const float dist = toPlayer.length();
             if (dist > PULL_RADIUS || dist < 1.0f) continue;
 
-            const float newSpeed = std::max(length(orbit.velocity), PULL_STRENGTH);
+            const float newSpeed = std::max(orbit.velocity.length(), PULL_STRENGTH);
             orbit.velocity = (toPlayer / dist) * newSpeed;
         }
 
@@ -717,7 +717,7 @@ struct Gravitas : Sketch
                     // Spawn a black hole at the stars position with a small random offset
                     const float spawnChance = 0.3f; // 10% chance to spawn a black hole
                     if (randomFloat(1.0f) < spawnChance) {
-                        const float2 offset = randomDirection<float>() * randomFloat(200.0f, 400.0f);
+                        const float2 offset = float2::randomUnit() * randomFloat(200.0f, 400.0f);
                         blackHoles.push_back(BlackHole(s.position + offset));
                     }
                 }
@@ -727,7 +727,7 @@ struct Gravitas : Sketch
         for (const BlackHole& b : blackHoles) {
             for (int j = static_cast<int>(orbits.size()) - 1; j >= 0; --j) {
                 const float2 toOrbit = orbits[j].position - b.position;
-                if (lengthSquared(toOrbit) < 50.0f * 50.0f) {
+                if (toOrbit.lengthSquared() < 50.0f * 50.0f) {
                     orbits.erase(orbits.begin() + j);
                     healthPoints = std::max(healthPoints - 1, 0);
                 }

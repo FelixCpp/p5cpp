@@ -25,35 +25,40 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 add_library(
   p5cpp STATIC
   ./src/application/engine.cpp
-  ./src/modules/module.cpp
-  ./src/modules/input/input_module.cpp
+
   ./src/modules/frame/frame_module.cpp
-  ./src/modules/window/window_module.cpp
-  ./src/modules/sketch/sketch_module.cpp
+  ./src/modules/input/input_module.cpp
   ./src/modules/rendering/rendering_module.cpp
-  ./src/services/window.cpp
+  ./src/modules/sketch/sketch_module.cpp
+  ./src/modules/window/window_module.cpp
+  ./src/modules/module.cpp
+
+  ./src/p5cpp/math/matrix4x4.cpp
+  ./src/p5cpp/math/noise.cpp
+  ./src/p5cpp/math/random.cpp
+
   ./src/services/renderer.cpp
   ./src/services/uniform_cache.cpp
-  ./src/color.cpp
+  ./src/services/window.cpp
+
   ./src/font.cpp
   ./src/framebuffer.cpp
+  ./src/graphics.cpp
   ./src/linepath.cpp
-  ./src/math.cpp
   ./src/matrix_stack.cpp
   ./src/noise.cpp
   ./src/p5cpp.cpp
   ./src/render_state.cpp
   ./src/render_state_stack.cpp
   ./src/shader.cpp
+  ./src/state_management.cpp
   ./src/stroker.cpp
   ./src/tess.cpp
   ./src/texture.cpp
   ./src/timing.cpp
   ./src/utf8_view.cpp
-  ./src/graphics.cpp
-  ./src/state_management.cpp
 )
 
 target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio)
-target_include_directories(p5cpp PUBLIC include)
+target_include_directories(p5cpp PUBLIC include src)
 add_subdirectory(examples)

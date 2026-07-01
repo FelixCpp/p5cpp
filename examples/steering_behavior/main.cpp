@@ -1,5 +1,5 @@
 #include <cfloat>
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 using namespace p5cpp;
 
@@ -67,7 +67,7 @@ public:
         timeAlive += deltaTime;
 
         velocity += acceleration * deltaTime;
-        velocity = limit(velocity, maxSpeed);
+        velocity = velocity.limited(maxSpeed);
 
         position += velocity * deltaTime;
         acceleration = float2(0.0f, 0.0f);
@@ -155,17 +155,17 @@ private:
     float2 seek(float2 target)
     {
         float2 desired = target - position;
-        desired = normalized(desired) * maxSpeed;
+        desired = desired.normalized() * maxSpeed;
 
         float2 steer = desired - velocity;
-        steer = limit(steer, maxForce);
+        steer = steer.limited(maxForce);
 
         return steer;
     }
 
     bool consume(std::vector<float2>& targets, size_t index)
     {
-        const float distance = length(targets[index] - position);
+        const float distance = (targets[index] - position).length();
         if (distance < size) {
             targets.erase(targets.begin() + index);
             return true;
@@ -180,7 +180,7 @@ private:
         float closestDistance = FLT_MAX;
 
         for (size_t i = 0; i < targets.size(); ++i) {
-            const float distance = length(targets[i] - position);
+            const float distance = (targets[i] - position).length();
             if (distance > viewRadius) {
                 continue;
             }

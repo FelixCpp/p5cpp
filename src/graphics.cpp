@@ -1,4 +1,4 @@
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include "application/engine.hpp"
 #include "application/app_context.hpp"
@@ -279,7 +279,7 @@ namespace p5cpp
         RenderStateStack& renderStateStack = renderingData.renderStateStack;
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         const matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
-        const float2 transformed = transformPoint(matrix, {x, y});
+        const float2 transformed = matrix.transformPoint(x, y);
 
         linepath.vertex(transformed.x, transformed.y, u, v, renderState.fillColor, renderState.strokeColor);
     }
@@ -536,10 +536,10 @@ namespace p5cpp
         const matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
 
         const std::array<float2, 4> positions = {
-            transformPoint(matrix, {left, top}),
-            transformPoint(matrix, {left + width, top}),
-            transformPoint(matrix, {left + width, top + height}),
-            transformPoint(matrix, {left, top + height}),
+            matrix.transformPoint(left, top),
+            matrix.transformPoint(left + width, top),
+            matrix.transformPoint(left + width, top + height),
+            matrix.transformPoint(left, top + height),
         };
         const std::array<float2, 4> texcoords = {
             float2 {0.0f, 1.0f},
@@ -880,10 +880,10 @@ namespace p5cpp
             const auto itr = buckets.try_emplace(quad.texture, GlyphAtlasVertexBucket {});
             GlyphAtlasVertexBucket& bucket = itr.first->second;
 
-            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left, y + quad.vertexRect.top}));
-            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left + quad.vertexRect.width, y + quad.vertexRect.top}));
-            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left + quad.vertexRect.width, y + quad.vertexRect.top + quad.vertexRect.height}));
-            bucket.positions.push_back(transformPoint(matrix, {x + quad.vertexRect.left, y + quad.vertexRect.top + quad.vertexRect.height}));
+            bucket.positions.push_back(matrix.transformPoint(x + quad.vertexRect.left, y + quad.vertexRect.top));
+            bucket.positions.push_back(matrix.transformPoint(x + quad.vertexRect.left + quad.vertexRect.width, y + quad.vertexRect.top));
+            bucket.positions.push_back(matrix.transformPoint(x + quad.vertexRect.left + quad.vertexRect.width, y + quad.vertexRect.top + quad.vertexRect.height));
+            bucket.positions.push_back(matrix.transformPoint(x + quad.vertexRect.left, y + quad.vertexRect.top + quad.vertexRect.height));
 
             bucket.texcoords.push_back(float2 {quad.uvRect.left, quad.uvRect.top});
             bucket.texcoords.push_back(float2 {quad.uvRect.left + quad.uvRect.width, quad.uvRect.top});

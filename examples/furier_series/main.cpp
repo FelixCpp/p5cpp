@@ -1,5 +1,5 @@
 #include <algorithm>
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 #include <span>
 
 #include "data.hpp"
@@ -87,7 +87,7 @@ public:
 
     void paintAt(int mouseX, int mouseY)
     {
-        points.push_back(int2 {.x = mouseX, .y = mouseY});
+        points.push_back(int2 { mouseX,  mouseY});
     }
 
     void erase()

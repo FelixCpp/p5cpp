@@ -1,4 +1,4 @@
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include "application/engine.hpp"
 #include "application/app_context.hpp"
@@ -75,19 +75,19 @@ namespace p5cpp
     void translate(float x, float y)
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, translation(x, y));
+        matrix_stack_apply(renderState.metrics, matrix4x4::translation(x, y));
     }
 
     void scale(float x, float y)
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, scaling(x, y));
+        matrix_stack_apply(renderState.metrics, matrix4x4::scaling(x, y));
     }
 
     void rotate(float angle)
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, rotation(angle));
+        matrix_stack_apply(renderState.metrics, matrix4x4::rotation(angle));
     }
 
     void noFill()

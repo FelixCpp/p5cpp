@@ -100,7 +100,7 @@ namespace p5cpp
         void begin(Framebuffer* framebuffer) override
         {
             const uint2 logicalSize = framebuffer->getSize();
-            orthoProjection = ortho(0.0f, static_cast<float>(logicalSize.y), static_cast<float>(logicalSize.x), 0.0f, -1.0f, 1.0f);
+            orthoProjection = matrix4x4::ortho(0.0f, static_cast<float>(logicalSize.y), static_cast<float>(logicalSize.x), 0.0f, -1.0f, 1.0f);
 
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getRendererId());
             glViewport(0, 0, logicalSize.x, logicalSize.y);
@@ -142,13 +142,13 @@ namespace p5cpp
                         case UniformVariable::Type::float1: glUniform1f(snapshot.location, snapshot.variable.floatValue); break;
                         case UniformVariable::Type::float2: glUniform2f(snapshot.location, snapshot.variable.float2Value.x, snapshot.variable.float2Value.y); break;
                         case UniformVariable::Type::float4: glUniform4f(snapshot.location, snapshot.variable.float4Value.x, snapshot.variable.float4Value.y, snapshot.variable.float4Value.z, snapshot.variable.float4Value.w); break;
-                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(snapshot.location, 1, GL_FALSE, snapshot.variable.matrix4x4Value.m.data()); break;
+                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(snapshot.location, 1, GL_FALSE, snapshot.variable.matrix4x4Value.data()); break;
                     }
                 }
 
                 static constexpr GLint samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
                 glUniform1iv(command.shader->getUniformLocation("u_Textures"), static_cast<GLsizei>(command.textureCount), samplers);
-                glUniformMatrix4fv(command.shader->getUniformLocation("u_ProjectionMatrix"), 1, GL_FALSE, orthoProjection.m.data());
+                glUniformMatrix4fv(command.shader->getUniformLocation("u_ProjectionMatrix"), 1, GL_FALSE, orthoProjection.data());
 
                 for (size_t i = 0; i < command.textureCount; ++i) {
                     glActiveTexture(GL_TEXTURE0 + i);

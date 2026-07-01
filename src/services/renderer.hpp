@@ -1,8 +1,8 @@
 #pragma once
 
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
-#include "../vertex.hpp"
+#include "vertex.hpp"
 
 namespace p5cpp
 {

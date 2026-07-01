@@ -1,6 +1,6 @@
 #pragma once
 
-#include <p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp>
 
 #include <unordered_map>
 #include <unordered_set>

@@ -1,5 +1,4 @@
 #include "window.hpp"
-#include <p5cpp.hpp>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
