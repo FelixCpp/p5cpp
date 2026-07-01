@@ -2,7 +2,7 @@
 
 #include <p5cpp.hpp>
 
-#include "../../module.hpp"
+#include "../module.hpp"
 
 namespace p5cpp
 {

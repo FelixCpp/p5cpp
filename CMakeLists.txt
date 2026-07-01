@@ -24,13 +24,13 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(
   p5cpp STATIC
+  ./src/application/engine.cpp
+  ./src/modules/module.cpp
   ./src/modules/input/input_module.cpp
   ./src/modules/frame/frame_module.cpp
   ./src/modules/window/window_module.cpp
   ./src/modules/sketch/sketch_module.cpp
   ./src/modules/rendering/rendering_module.cpp
-  ./src/engine.cpp
-  ./src/module.cpp
   ./src/services/window.cpp
   ./src/services/renderer.cpp
   ./src/services/uniform_cache.cpp
@@ -50,6 +50,8 @@ add_library(
   ./src/texture.cpp
   ./src/timing.cpp
   ./src/utf8_view.cpp
+  ./src/graphics.cpp
+  ./src/state_management.cpp
 )
 
 target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio)

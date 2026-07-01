@@ -11,7 +11,10 @@ struct LaneKeepingAssistentSimulation : Sketch
     void draw() override
     {
         background(21);
-        rect(100, 100, 200, 200);
+        rect(0.0f, 0.0f, 100.0f, 100.0f);
+        strokeWeight(15.0f);
+        stroke(255, 0, 0);
+        circle(getMouseX(), getMouseY(), 50.0f);
     }
 };
 

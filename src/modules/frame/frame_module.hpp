@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../module.hpp"
+#include "../module.hpp"
 #include "frame_data.hpp"
 
 #include <chrono>

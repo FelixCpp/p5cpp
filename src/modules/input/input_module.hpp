@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../module.hpp"
+#include "../module.hpp"
 #include "input_data.hpp"
 
 namespace p5cpp

@@ -1,6 +1,7 @@
 #include "window_module.hpp"
-#include "../../app_context.hpp"
-#include "../../engine.hpp"
+
+#include "../../application/engine.hpp"
+#include "../../application/app_context.hpp"
 
 namespace p5cpp
 {

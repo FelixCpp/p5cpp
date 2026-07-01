@@ -19,6 +19,7 @@ namespace p5cpp
         std::shared_ptr<Texture> whiteTexture;
         std::shared_ptr<Renderer> renderer;
         std::shared_ptr<UniformCache> uniformCache;
+        std::vector<Framebuffer*> framebufferStack;
 
         RenderStateStack renderStateStack;
     };

@@ -1,5 +1,6 @@
 #include "rendering_module.hpp"
-#include "../../app_context.hpp"
+
+#include "../../application/app_context.hpp"
 #include "../../shader.hpp"
 #include "../../framebuffer.hpp"
 

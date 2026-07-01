@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../module.hpp"
+#include "../module.hpp"
 #include "../../services/window.hpp"
 
 namespace p5cpp

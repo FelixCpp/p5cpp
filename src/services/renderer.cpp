@@ -100,7 +100,7 @@ namespace p5cpp
         void begin(Framebuffer* framebuffer) override
         {
             const uint2 logicalSize = framebuffer->getSize();
-            orthoProjection = ortho(0.0f, 0.0f, static_cast<float>(logicalSize.x), static_cast<float>(logicalSize.y), -1.0f, 1.0f);
+            orthoProjection = ortho(0.0f, static_cast<float>(logicalSize.y), static_cast<float>(logicalSize.x), 0.0f, -1.0f, 1.0f);
 
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getRendererId());
             glViewport(0, 0, logicalSize.x, logicalSize.y);
