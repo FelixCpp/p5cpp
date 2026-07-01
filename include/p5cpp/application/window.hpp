@@ -5,6 +5,7 @@
 
 #include <string_view>
 #include <functional>
+#include <memory>
 
 namespace p5cpp
 {
