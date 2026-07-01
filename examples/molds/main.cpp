@@ -89,7 +89,7 @@ struct PixelGrid
     void show()
     {
         texture->update(pixels);
-        image(texture->getRendererId(), 0, 0, getWidth(), getHeight());
+        image(texture.get(), 0, 0, getWidth(), getHeight());
     }
 };
 

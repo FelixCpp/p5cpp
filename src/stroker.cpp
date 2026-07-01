@@ -1,4 +1,7 @@
 #include "stroker.hpp"
+#include "linepath.hpp"
+#include "services/renderer.hpp"
+
 #include <optional>
 
 namespace p5cpp
@@ -290,12 +293,12 @@ namespace p5cpp
             .w = static_cast<float>(alpha(color)) / 255.0f,
         };
 
-        draw_scope_push_vertex(scope, position, float2 {}, col);
+        scope.pushVertex(position, float2 {}, col);
     }
 
     static void push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
     {
-        draw_scope_push_triangle(scope, a, b, c);
+        scope.pushTriangle(a, b, c);
     }
 
     static std::optional<float2> line_intersection(const float2& p1, const float2& p2, const float2& p3, const float2& p4)

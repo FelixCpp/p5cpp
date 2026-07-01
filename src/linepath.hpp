@@ -1,9 +1,10 @@
 #pragma once
 
-#include <vector>
-
 #include <p5cpp.hpp>
+
 #include "vertex.hpp"
+
+#include <vector>
 
 namespace p5cpp
 {

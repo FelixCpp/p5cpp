@@ -697,7 +697,7 @@ struct GravitasSketch : p5cpp::Sketch
         popCanvas();
         blendMode(BlendMode::alpha);
         noTint();
-        image(bgCanvas->getTextureId(), 0.f, 0.f, (float)W, (float)H);
+        image(bgCanvas->getColorTexture(), 0.f, 0.f, (float)W, (float)H);
     }
 
     // ── Twinkling background stars ────────────────────────────────────────────

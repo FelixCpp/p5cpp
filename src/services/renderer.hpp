@@ -4,9 +4,6 @@
 
 #include "../vertex.hpp"
 
-#include <unordered_map>
-#include <unordered_set>
-
 namespace p5cpp
 {
     struct DrawScope
@@ -15,9 +12,6 @@ namespace p5cpp
         size_t baseVertex;
         size_t& indexCursor;
         size_t& vertexCursor;
-
-        size_t maxVertexCount;
-        size_t maxIndexCount;
 
         std::span<Vertex> vertices;
         std::span<uint32_t> indices;
@@ -29,28 +23,8 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    struct UniformSnapshot
-    {
-        int32_t location;
-        UniformVariable variable;
-    };
+    struct UniformCache;
 
-    class GlobalUniformCache
-    {
-    public:
-        void setUniform(Shader* shader, const std::string& name, const UniformVariable& variable);
-        void markShaderClean(Shader* shader);
-        bool isShaderDirty(Shader* shader) const;
-
-        std::vector<UniformSnapshot> getUniforms(Shader* shader);
-
-        std::unordered_map<Shader*, std::vector<UniformSnapshot>> uniformsByShader;
-        std::unordered_set<Shader*> dirtyShaders;
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
     struct Renderer
     {
         static std::unique_ptr<Renderer> create(size_t vertexCount, size_t indexCount);
@@ -61,7 +35,7 @@ namespace p5cpp
         virtual void end() = 0;
         virtual void flush() = 0;
 
-        virtual void submit(DrawScope scope, GlobalUniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) = 0;
+        virtual void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) = 0;
 
         virtual DrawScope getDrawScope() = 0;
     };

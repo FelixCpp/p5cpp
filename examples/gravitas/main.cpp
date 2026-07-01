@@ -607,7 +607,7 @@ struct Gravitas : Sketch
         width = getWidth();
         height = getHeight();
 
-        const float time = millis() / 1000.0f;
+        const float time = getGlobalTime();
 
         spawnTimer += getDeltaTime();
         if (spawnTimer >= 1.0f) {

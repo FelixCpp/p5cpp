@@ -28,6 +28,26 @@ namespace p5cpp
             glfwTerminate();
         }
 
+        void setSize(int width, int height) override
+        {
+            glfwSetWindowSize(window, width, height);
+        }
+
+        void setPosition(int x, int y) override
+        {
+            glfwSetWindowPos(window, x, y);
+        }
+
+        void setTitle(std::string_view title) override
+        {
+            glfwSetWindowTitle(window, title.data());
+        }
+
+        void setResizable(bool resizable) override
+        {
+            glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable ? GLFW_TRUE : GLFW_FALSE);
+        }
+
         void setEventCallback(std::function<void(const WindowEvent&)> callback) override
         {
             eventCallback = std::move(callback);

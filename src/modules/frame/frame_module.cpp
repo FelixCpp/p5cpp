@@ -1,12 +1,14 @@
-#include "lifecycle_module.hpp"
-#include "../app_context.hpp"
-#include "../timing.hpp"
+#include "frame_module.hpp"
+#include "../../app_context.hpp"
+#include "../../timing.hpp"
+
+#include <p5cpp.hpp>
 
 namespace p5cpp
 {
-    void LifecycleModule::setup(AppContext& context, Next next)
+    void FrameModule::setup(AppContext& context, Next next)
     {
-        info("LifecycleModule setup");
+        info("FrameModule setup");
 
         fpsCalculationInterval = 1.0f;
         framesPerCalculation = 0;
@@ -14,36 +16,38 @@ namespace p5cpp
         frameStartTimestamp = std::chrono::steady_clock::now();
         lastFrameStart = std::chrono::steady_clock::now();
 
+        context.registerService(&data);
+
         next();
     }
 
-    void LifecycleModule::event(AppContext& context, WindowEvent& event, Next next)
+    void FrameModule::event(AppContext& context, WindowEvent& event, Next next)
     {
         if (event.type == EventType::close) {
-            context.lifecycleInfo.closeRequested = true;
+            data.closeRequested = true;
         }
 
         next();
     }
 
-    void LifecycleModule::draw(AppContext& context, Next next)
+    void FrameModule::draw(AppContext& context, Next next)
     {
         frameStartTimestamp = std::chrono::steady_clock::now();
         const float deltaTime = std::chrono::duration<float>(frameStartTimestamp - lastFrameStart).count();
         lastFrameStart = frameStartTimestamp;
 
-        context.frameInfo.deltaTime = deltaTime;
-        context.frameInfo.globalTime += deltaTime;
+        data.deltaTime = deltaTime;
+        data.globalTime += deltaTime;
 
-        if (not context.lifecycleInfo.isPaused) {
+        if (not data.isPaused) {
             ++framesPerCalculation;
-            context.frameInfo.frameCount++;
+            data.frameCount++;
 
             const auto now = std::chrono::steady_clock::now();
             const float elapsed = std::chrono::duration<float>(now - lastCalculationTimestamp).count();
 
             if (elapsed >= fpsCalculationInterval) {
-                context.frameInfo.framesPerSecond = static_cast<float>(framesPerCalculation) / elapsed;
+                data.framesPerSecond = static_cast<float>(framesPerCalculation) / elapsed;
                 framesPerCalculation = 0;
                 lastCalculationTimestamp = now;
             }
@@ -51,7 +55,7 @@ namespace p5cpp
             next();
         }
 
-        const int desiredFrameRate = context.frameInfo.targetFrameRate;
+        const int desiredFrameRate = data.targetFrameRate;
         if (desiredFrameRate > 0) {
             const auto frameEndTimestamp = std::chrono::steady_clock::now();
             const float frameDuration = std::chrono::duration<float>(frameEndTimestamp - frameStartTimestamp).count();
@@ -63,5 +67,12 @@ namespace p5cpp
                 precise_sleep_until(sleepUntilTimestamp);
             }
         }
+    }
+
+    void FrameModule::destroy(AppContext& context, Next next)
+    {
+        next();
+
+        context.unregisterService<FrameData>();
     }
 } // namespace p5cpp

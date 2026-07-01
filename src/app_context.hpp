@@ -1,78 +1,67 @@
 #pragma once
 
-#include <cstdint>
-#include <p5cpp.hpp>
+#include <atomic>
+#include <vector>
+#include <cassert>
 
 namespace p5cpp
 {
-    struct FrameInfo
+    class AppContext
     {
-        float deltaTime;
-        float globalTime;
-        float framesPerSecond;
-        uint64_t frameCount;
+    public:
+        template <typename T>
+        inline void registerService(T* instance)
+        {
+            const size_t typeId = getUniqueTypeId<T>();
+            if (typeId >= services.size()) {
+                services.resize(typeId + 1, nullptr);
+            }
 
-        int targetFrameRate;
-    };
-} // namespace p5cpp
+            services[typeId] = instance;
+        }
 
-namespace p5cpp
-{
-    struct InputInfo
-    {
-        int mouseX;
-        int mouseY;
-        int pmouseX;
-        int pmouseY;
+        template <typename T>
+        inline void unregisterService()
+        {
+            const size_t typeId = getUniqueTypeId<T>();
+            if (typeId < services.size()) {
+                services[typeId] = nullptr;
+            }
+        }
 
-        int logicalWidth;
-        int logicalHeight;
-        int physicalWidth;
-        int physicalHeight;
-    };
-} // namespace p5cpp
+        template <typename T>
+        T* getOrNull() const
+        {
+            const size_t typeId = getUniqueTypeId<T>();
+            if (typeId >= services.size()) {
+                return nullptr;
+            }
 
-namespace p5cpp
-{
-    struct LifecycleInfo
-    {
-        bool closeRequested = false;
-        bool isPaused = false;
-    };
-} // namespace p5cpp
+            return static_cast<T*>(services[typeId]);
+        }
 
-namespace p5cpp
-{
-    struct Renderer;
-    struct RenderStateStack;
+        template <typename T>
+        T& require() const
+        {
+            T* instance = getOrNull<T>();
+            assert(instance != nullptr && "Required service not found");
+            return *instance;
+        }
 
-    struct RenderingInfo
-    {
-        Shader* defaultShader;
-        Shader* textShader;
-        Font* defaultFont;
-        Framebuffer* defaultFramebuffer;
-        Texture* whiteTexture;
-        Renderer* renderer;
-        RenderStateStack* renderStateStack;
-    };
-} // namespace p5cpp
+    private:
+        inline static size_t nextTypeId()
+        {
+            static std::atomic<size_t> nextTypeId {0};
+            return nextTypeId++;
+        }
 
-namespace p5cpp
-{
-    struct Sketch;
-    struct Window;
-    struct Engine;
+        template <typename T>
+        inline static size_t getUniqueTypeId()
+        {
+            static size_t typeId = nextTypeId();
+            return typeId;
+        }
 
-    struct AppContext
-    {
-        FrameInfo frameInfo;
-        InputInfo inputInfo;
-        LifecycleInfo lifecycleInfo;
-        RenderingInfo renderingInfo;
-
-        Engine* engine;
-        Sketch* sketch;
-        Window* window;
+        std::vector<void*> services;
     };
 } // namespace p5cpp

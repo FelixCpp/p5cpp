@@ -1,5 +1,7 @@
 #include "engine.hpp"
 #include "app_context.hpp"
+#include "modules/frame/frame_data.hpp"
+#include "p5cpp.hpp"
 
 namespace p5cpp
 {
@@ -19,11 +21,12 @@ namespace p5cpp
 
         void run() override
         {
-            context.engine = this;
+            context.registerService<Engine>(this);
 
             setupModules();
 
-            while (not context.lifecycleInfo.closeRequested) {
+            FrameData& frameData = context.require<FrameData>();
+            while (not frameData.closeRequested) {
                 drawModules();
             }
 

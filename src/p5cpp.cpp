@@ -2,12 +2,17 @@
 
 #include "app_context.hpp"
 #include "engine.hpp"
-#include "modules/input_module.hpp"
-#include "modules/lifecycle_module.hpp"
-#include "modules/rendering_module.hpp"
-#include "modules/sketch_module.hpp"
-#include "modules/window_module.hpp"
+#include "modules/frame/frame_data.hpp"
+#include "modules/frame/frame_module.hpp"
+#include "modules/input/input_data.hpp"
+#include "modules/input/input_module.hpp"
+#include "modules/rendering/rendering_data.hpp"
+#include "modules/rendering/rendering_module.hpp"
+#include "modules/sketch/sketch_module.hpp"
+#include "modules/window/window_module.hpp"
 #include "render_state_stack.hpp"
+#include "services/renderer.hpp"
+#include "services/window.hpp"
 #include "utf8_view.hpp"
 #include "linepath.hpp"
 #include "render_state.hpp"
@@ -18,6 +23,56 @@
 #include <array>
 #include <numbers>
 #include <algorithm>
+
+namespace p5cpp
+{
+    static std::unique_ptr<Engine> engine;
+
+    inline AppContext& getAppContext()
+    {
+        return engine->getContext();
+    }
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void info(std::string_view message) { std::cout << "[INFO]: " << message << std::endl; }
+    void debug(std::string_view message) { std::cout << "[DEBUG]: " << message << std::endl; }
+    void warning(std::string_view message) { std::cout << "[WARNING]: " << message << std::endl; }
+    void error(std::string_view message) { std::cerr << "[ERROR]: " << message << std::endl; }
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void setWindowSize(int width, int height) { getAppContext().require<Window>().setSize(width, height); }
+    void setWindowTitle(std::string_view title) { getAppContext().require<Window>().setTitle(title); }
+    void setWindowResizable(bool resizable) { getAppContext().require<Window>().setResizable(resizable); }
+
+    int getMouseX() { return getAppContext().require<InputData>().mouseX; }
+    int getMouseY() { return getAppContext().require<InputData>().mouseY; }
+    int getPMouseX() { return getAppContext().require<InputData>().pmouseX; }
+    int getPMouseY() { return getAppContext().require<InputData>().pmouseY; }
+
+    int getWidth() { return getAppContext().require<InputData>().logicalWidth; }
+    int getHeight() { return getAppContext().require<InputData>().logicalHeight; }
+    int getWindowWidth() { return getAppContext().require<InputData>().physicalWidth; }
+    int getWindowHeight() { return getAppContext().require<InputData>().physicalHeight; }
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void frameRate(int targetFps) { getAppContext().require<FrameData>().targetFrameRate = targetFps; }
+    void loop() { getAppContext().require<FrameData>().isPaused = false; }
+    void noLoop() { getAppContext().require<FrameData>().isPaused = true; }
+    bool isLooping() { return not getAppContext().require<FrameData>().isPaused; }
+    void quit() { getAppContext().require<FrameData>().closeRequested = true; }
+    void quit(int code) { exitCode(code), quit(); }
+    void exitCode(int code) { getAppContext().require<FrameData>().exitCode = code; }
+    int getFrameCount() { return getAppContext().require<FrameData>().frameCount; }
+    int getFrameRate() { return getAppContext().require<FrameData>().framesPerSecond; }
+    float getDeltaTime() { return getAppContext().require<FrameData>().deltaTime; }
+    float getGlobalTime() { return getAppContext().require<FrameData>().globalTime; }
+} // namespace p5cpp
 
 namespace p5cpp
 {
@@ -64,47 +119,19 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void info(std::string_view message) { std::cout << "[INFO]: " << message << std::endl; }
-    void debug(std::string_view message) { std::cout << "[DEBUG]: " << message << std::endl; }
-    void warning(std::string_view message) { std::cout << "[WARNING]: " << message << std::endl; }
-    void error(std::string_view message) { std::cerr << "[ERROR]: " << message << std::endl; }
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    std::unique_ptr<Engine> engine;
-
-    inline AppContext& getAppContext()
-    {
-        return engine->getContext();
-    }
-
     inline Renderer& getRenderer()
     {
-        return *engine->getContext().renderingInfo.renderer;
+        return *engine->getContext().require<RenderingData>().renderer;
     }
 
     inline RenderStateStack& getRenderStateStack()
     {
-        return *engine->getContext().renderingInfo.renderStateStack;
+        return engine->getContext().require<RenderingData>().renderStateStack;
     } // namespace p5cpp
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    int getMouseX() { return getAppContext().inputInfo.mouseX; }
-    int getMouseY() { return getAppContext().inputInfo.mouseY; }
-    int getPMouseX() { return getAppContext().inputInfo.pmouseX; }
-    int getPMouseY() { return getAppContext().inputInfo.pmouseY; }
-
-    int getWidth() { return getAppContext().inputInfo.logicalWidth; }
-    int getHeight() { return getAppContext().inputInfo.logicalHeight; }
-
-    int getFrameCount() { return getAppContext().frameInfo.frameCount; }
-    int getFrameRate() { return getAppContext().frameInfo.framesPerSecond; }
-    float getDeltaTime() { return getAppContext().frameInfo.deltaTime; }
-    float getGlobalTime() { return getAppContext().frameInfo.globalTime; }
-
 } // namespace p5cpp
 
 namespace p5cpp
@@ -114,7 +141,6 @@ namespace p5cpp
 
     inline static std::unique_ptr<LinePathBuilder> linepath;
     inline static std::vector<std::shared_ptr<Framebuffer>> framebufferStack;
-    inline static std::unique_ptr<GlobalUniformCache> globalUniformCache;
 } // namespace p5cpp
 
 /// --------------------------------------------
@@ -298,7 +324,7 @@ namespace p5cpp
 
     void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable)
     {
-        globalUniformCache->setUniform(shader.get(), name, variable);
+        getAppContext().require<RenderingData>().uniformCache->setUniform(shader.get(), name, variable);
     }
 
     void textAlign(TextAlign textAlign)
@@ -365,14 +391,14 @@ namespace p5cpp
 {
     inline Shader* get_current_shader(const RenderState& state)
     {
-        auto result = (state.shader != nullptr) ? state.shader.get() : getAppContext().renderingInfo.defaultShader;
+        auto result = (state.shader != nullptr) ? state.shader.get() : getAppContext().require<RenderingData>().defaultShader.get();
         assert(result != nullptr && "Current shader cannot be null");
         return result;
     }
 
     inline Shader* get_current_text_shader(const RenderState& state)
     {
-        auto result = (state.shader != nullptr) ? state.shader.get() : getAppContext().renderingInfo.textShader;
+        auto result = (state.shader != nullptr) ? state.shader.get() : getAppContext().require<RenderingData>().textShader.get();
         assert(result != nullptr && "Current text shader cannot be null");
         return result;
     }
@@ -381,6 +407,7 @@ namespace p5cpp
     void background(int red, int green, int blue, int alpha) { background(rgba(red, green, blue, alpha)); }
     void background(color_t color)
     {
+        Renderer& renderer = getRenderer();
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
         const uint2 size = framebufferStack.back()->getSize();
         const std::array<float2, 4> positions = {
@@ -416,12 +443,12 @@ namespace p5cpp
                 }
             );
 
-            getRenderer().submit(
+            renderer.submit(
                 scope,
-                *globalUniformCache,
+                *getAppContext().require<RenderingData>().uniformCache,
                 get_current_shader(renderState),
                 renderState.blendMode,
-                getAppContext().renderingInfo.whiteTexture
+                getAppContext().require<RenderingData>().whiteTexture.get()
             );
         }
     }
@@ -435,7 +462,7 @@ namespace p5cpp
             return state.font.get();
         }
 
-        return getAppContext().renderingInfo.defaultFont;
+        return getAppContext().require<RenderingData>().defaultFont.get();
     }
 
     Font* getCurrentFont()
@@ -459,8 +486,10 @@ namespace p5cpp
     {
         constexpr size_t SAFE_MARGIN_V = 4096;
         constexpr size_t SAFE_MARGIN_I = SAFE_MARGIN_V * 3;
-        if (drawScope.vertexCursor + SAFE_MARGIN_V >= drawScope.maxVertexCount ||
-            drawScope.indexCursor + SAFE_MARGIN_I >= drawScope.maxIndexCount) {
+
+        const bool verticesOverflow = drawScope.vertexCursor + SAFE_MARGIN_V >= drawScope.vertices.size();
+        const bool indicesOverflow = drawScope.indexCursor + SAFE_MARGIN_I >= drawScope.indices.size();
+        if (verticesOverflow or indicesOverflow) {
             getRenderer().flush();
         }
     }
@@ -538,7 +567,7 @@ namespace p5cpp
             }
         }
 
-        renderer.submit(scope, *globalUniformCache, get_current_shader(renderState), renderState.blendMode, getAppContext().renderingInfo.whiteTexture);
+        renderer.submit(scope, *getAppContext().require<RenderingData>().uniformCache, get_current_shader(renderState), renderState.blendMode, getAppContext().require<RenderingData>().whiteTexture.get());
 
         linepath->clear();
         curveVertexCount = 0;
@@ -801,7 +830,7 @@ namespace p5cpp
         endShapeImpl(ShapeType::lineStrip, ShapeType::lineStrip, std::nullopt, ColorStyle::stroke, false);
     }
 
-    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height)
+    void image(Texture* texture, float left, float top, float width, float height)
     {
         Renderer& renderer = getRenderer();
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
@@ -838,7 +867,7 @@ namespace p5cpp
                 }
             );
 
-            renderer.submit(scope, *globalUniformCache, get_current_shader(renderState), renderState.blendMode, texture.get());
+            renderer.submit(scope, *getAppContext().require<RenderingData>().uniformCache, get_current_shader(renderState), renderState.blendMode, texture);
         }
     }
 
@@ -894,7 +923,7 @@ namespace p5cpp
                 }
             );
 
-            renderer.submit(scope, *globalUniformCache, get_current_text_shader(renderState), renderState.blendMode, texture);
+            renderer.submit(scope, *getAppContext().require<RenderingData>().uniformCache, get_current_text_shader(renderState), renderState.blendMode, texture);
         }
     }
 } // namespace p5cpp
@@ -1183,10 +1212,9 @@ int main()
 
     linepath = std::make_unique<LinePathBuilder>();
     framebufferStack = {};
-    globalUniformCache = std::make_unique<GlobalUniformCache>();
 
     engine = Engine::create();
-    engine->addModule(std::make_unique<LifecycleModule>());
+    engine->addModule(std::make_unique<FrameModule>());
     engine->addModule(std::make_unique<WindowModule>());
     engine->addModule(std::make_unique<InputModule>());
     engine->addModule(std::make_unique<RenderingModule>());

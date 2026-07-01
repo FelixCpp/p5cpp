@@ -1,12 +1,16 @@
 #include "sketch_module.hpp"
+#include "../../app_context.hpp"
 
 namespace p5cpp
 {
     void SketchModule::setup(AppContext& context, Next next)
     {
         info("SketchModule setup");
+
         sketch = createSketch();
         sketch->setup();
+
+        context.registerService(sketch.get());
         next();
     }
 
@@ -25,6 +29,8 @@ namespace p5cpp
     void SketchModule::destroy(AppContext& context, Next next)
     {
         next();
+
+        context.unregisterService<Sketch>();
 
         sketch->destroy();
         sketch.reset();

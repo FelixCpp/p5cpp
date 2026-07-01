@@ -275,6 +275,21 @@ namespace p5cpp
     };
 
     extern std::unique_ptr<Sketch> createSketch();
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void info(std::string_view message);
+    void debug(std::string_view message);
+    void warning(std::string_view message);
+    void error(std::string_view message);
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void setWindowSize(int width, int height);
+    void setWindowTitle(std::string_view title);
+    void setWindowResizable(bool resizable);
 
     int getMouseX();
     int getMouseY();
@@ -283,17 +298,29 @@ namespace p5cpp
 
     int getWidth();
     int getHeight();
+    int getWindowWidth();
+    int getWindowHeight();
+
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void frameRate(int targetFps);
+    void loop();
+    void noLoop();
+    bool isLooping();
+    void quit();
+    void quit(int code);
+    void exitCode(int code);
 
     int getFrameCount();
     int getFrameRate();
     float getDeltaTime();
     float getGlobalTime();
+} // namespace p5cpp
 
-    void info(std::string_view message);
-    void debug(std::string_view message);
-    void warning(std::string_view message);
-    void error(std::string_view message);
-
+namespace p5cpp
+{
     enum class ShapeType {
         lines,
         lineStrip,
@@ -600,26 +627,9 @@ namespace p5cpp
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
-    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
+    void image(Texture* texture, float left, float top, float width, float height);
     void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
 
     TextLayout measureText(std::string_view text);
     TextLayout measureText(std::string_view text, Font* font, float textSize, float letterSpacing, float lineSpacing, TextAlign textAlign, TextWrap textWrap, std::optional<float> maxWidth);
-
-    // ── Window management ─────────────────────────────────────────────────
-    void setWindowSize(int width, int height);
-    void setWindowTitle(std::string_view title);
-    void setWindowResizable(bool resizable);
-    int getWindowWidth();
-    int getWindowHeight();
-
-    // ── Timing & frame rate ───────────────────────────────────────────────
-    void frameRate(float targetFps); // Limit to N fps; 0 = unlimited (default)
-    void loop();
-    void noLoop();
-    bool isLooping();
-    void quit();
-    void quit(int exitCode);
-    void exitCode(int code);
-    float millis(); // Milliseconds since the application started
 } // namespace p5cpp

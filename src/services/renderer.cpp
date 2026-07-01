@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "uniform_cache.hpp"
 #include "../vertex.hpp"
 
 #include <glad/glad.h>
@@ -31,64 +32,6 @@ namespace p5cpp
         indices[indexCursor++] = baseVertex + a;
         indices[indexCursor++] = baseVertex + b;
         indices[indexCursor++] = baseVertex + c;
-    }
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    void GlobalUniformCache::setUniform(Shader* shader, const std::string& name, const UniformVariable& variable)
-    {
-        const int32_t location = shader->getUniformLocation(name);
-        if (location == -1) {
-            return;
-        }
-
-        const UniformSnapshot newSnapshot {
-            .location = location,
-            .variable = variable,
-        };
-
-        const auto insertion = uniformsByShader.try_emplace(
-            shader,
-            std::vector<UniformSnapshot> {newSnapshot}
-        );
-
-        const bool hasBeenInserted = insertion.second;
-        if (not hasBeenInserted) {
-            std::vector<UniformSnapshot>& snapshots = insertion.first->second;
-            const auto variableItr = std::find_if(snapshots.begin(), snapshots.end(), [location](const UniformSnapshot& snapshot) {
-                return snapshot.location == location;
-            });
-
-            const bool variableExists = variableItr != snapshots.end();
-            if (variableExists) {
-                variableItr->variable = variable;
-            } else {
-                snapshots.push_back(newSnapshot);
-            }
-        }
-
-        dirtyShaders.insert(shader);
-    }
-
-    void GlobalUniformCache::markShaderClean(Shader* shader)
-    {
-        dirtyShaders.erase(shader);
-    }
-
-    bool GlobalUniformCache::isShaderDirty(Shader* shader) const
-    {
-        return dirtyShaders.contains(shader);
-    }
-
-    std::vector<UniformSnapshot> GlobalUniformCache::getUniforms(Shader* shader)
-    {
-        const auto itr = uniformsByShader.find(shader);
-        if (itr != uniformsByShader.end()) {
-            return itr->second;
-        }
-
-        return {};
     }
 } // namespace p5cpp
 
@@ -220,7 +163,7 @@ namespace p5cpp
             indexCursor = 0;
         }
 
-        void submit(DrawScope scope, GlobalUniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) override
+        void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) override
         {
             DrawCommand* targetCommand = nullptr;
 
@@ -310,8 +253,6 @@ namespace p5cpp
                 .baseVertex = vertexCursor,
                 .indexCursor = indexCursor,
                 .vertexCursor = vertexCursor,
-                .maxVertexCount = vertices.size(),
-                .maxIndexCount = indices.size(),
                 .vertices = vertices,
                 .indices = indices,
             };

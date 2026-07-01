@@ -1,5 +1,9 @@
 #include "tess.hpp"
 #include "stroker.hpp"
+#include "linepath.hpp"
+
+#include "services/renderer.hpp"
+
 #include <cassert>
 #include <tesselator.h>
 
@@ -19,6 +23,19 @@ namespace p5cpp
 namespace p5cpp
 {
     thread_local std::vector<uint32_t> s_tess_local;
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    void draw_scope_push_vertex(DrawScope& scope, const float2& position, const float2& texcoord, const float4& color)
+    {
+        scope.pushVertex(position, texcoord, color);
+    }
+
+    void draw_scope_push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
+    {
+        scope.pushTriangle(a, b, c);
+    }
 } // namespace p5cpp
 
 namespace p5cpp

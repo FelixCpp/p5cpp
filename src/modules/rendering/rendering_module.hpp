@@ -1,8 +1,7 @@
 #pragma once
 
-#include "../module.hpp"
-#include "../render_state_stack.hpp"
-#include "../services/renderer.hpp"
+#include "../../module.hpp"
+#include "rendering_data.hpp"
 
 namespace p5cpp
 {
@@ -15,14 +14,7 @@ namespace p5cpp
         void destroy(AppContext& context, Next next) override;
 
     private:
-        std::unique_ptr<Renderer> renderer;
-        RenderStateStack renderStateStack;
-
-        std::shared_ptr<Shader> defaultShader;
-        std::shared_ptr<Shader> textShader;
-        std::shared_ptr<Font> defaultFont;
-        std::shared_ptr<Framebuffer> defaultFramebuffer;
-        std::shared_ptr<Texture> whiteTexture;
+        RenderingData data;
 
         bool needsDefaultCanvasRecreation;
     };

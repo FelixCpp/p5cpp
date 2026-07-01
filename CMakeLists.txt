@@ -24,19 +24,17 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(
   p5cpp STATIC
-  ./src/modules/input_module.cpp
-  ./src/modules/lifecycle_module.cpp
-  ./src/modules/window_module.cpp
-  ./src/modules/sketch_module.cpp
-  ./src/modules/rendering_module.cpp
+  ./src/modules/input/input_module.cpp
+  ./src/modules/frame/frame_module.cpp
+  ./src/modules/window/window_module.cpp
+  ./src/modules/sketch/sketch_module.cpp
+  ./src/modules/rendering/rendering_module.cpp
   ./src/engine.cpp
   ./src/module.cpp
   ./src/services/window.cpp
   ./src/services/renderer.cpp
+  ./src/services/uniform_cache.cpp
   ./src/color.cpp
-  # ./src/draw_buffer.cpp
-  # ./src/draw_command_list.cpp
-  # ./src/draw_scope.cpp
   ./src/font.cpp
   ./src/framebuffer.cpp
   ./src/linepath.cpp
@@ -46,15 +44,13 @@ add_library(
   ./src/p5cpp.cpp
   ./src/render_state.cpp
   ./src/render_state_stack.cpp
-  # ./src/renderer.cpp
   ./src/shader.cpp
   ./src/stroker.cpp
   ./src/tess.cpp
   ./src/texture.cpp
   ./src/timing.cpp
-  # ./src/uniform_cache.cpp
   ./src/utf8_view.cpp
-  ./src/window.cpp)
+)
 
 target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio)
 target_include_directories(p5cpp PUBLIC include)

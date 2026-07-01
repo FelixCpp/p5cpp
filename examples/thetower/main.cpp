@@ -789,7 +789,7 @@ struct TowerSketch : p5cpp::Sketch
         popCanvas();
         blendMode(BlendMode::alpha);
         noTint();
-        image(bgCanvas->getTextureId(), 0, 0, (float)W, (float)H);
+        image(bgCanvas->getColorTexture(), 0, 0, (float)W, (float)H);
     }
 
     // ── drawGame ─────────────────────────────────────────────────────────────

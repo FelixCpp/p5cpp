@@ -180,7 +180,7 @@ public:
             const float left = (static_cast<float>(getWidth()) - static_cast<float>(width)) * 0.5f;
             const float top = (static_cast<float>(getHeight()) - static_cast<float>(height)) * 0.5f;
 
-            image(scratchpad->framebuffer->getTextureId(), left, top, static_cast<float>(width), static_cast<float>(height));
+            image(scratchpad->framebuffer->getColorTexture(), left, top, static_cast<float>(width), static_cast<float>(height));
 
             noFill();
             stroke(255);

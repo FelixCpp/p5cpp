@@ -14,6 +14,11 @@ namespace p5cpp
 
         virtual ~Window() = default;
 
+        virtual void setSize(int width, int height) = 0;
+        virtual void setPosition(int x, int y) = 0;
+        virtual void setTitle(std::string_view title) = 0;
+        virtual void setResizable(bool resizable) = 0;
+
         virtual void setEventCallback(std::function<void(const WindowEvent&)> callback) = 0;
         virtual void setVisible(bool visible) = 0;
         virtual void swapBuffers() = 0;

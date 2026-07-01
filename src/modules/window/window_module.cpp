@@ -1,6 +1,6 @@
 #include "window_module.hpp"
-#include "../app_context.hpp"
-#include "../engine.hpp"
+#include "../../app_context.hpp"
+#include "../../engine.hpp"
 
 namespace p5cpp
 {
@@ -8,12 +8,13 @@ namespace p5cpp
     {
         info("WindowModule setup");
 
+        Engine& engine = context.require<Engine>();
         window = Window::create(800, 600, "p5cpp");
-        window->setEventCallback([this, engine = context.engine](const WindowEvent& event) {
-            engine->dispatch(event);
+        window->setEventCallback([this, &engine](const WindowEvent& event) {
+            engine.dispatch(event);
         });
 
-        context.window = window.get();
+        context.registerService<Window>(window.get());
 
         next();
 
@@ -31,7 +32,8 @@ namespace p5cpp
     {
         next();
 
-        context.window = nullptr;
+        context.unregisterService<Window>();
+
         window.reset();
     }
 } // namespace p5cpp

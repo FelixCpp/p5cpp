@@ -1,7 +1,12 @@
 #pragma once
 
-#include "linepath.hpp"
-#include "draw_scope.hpp"
+#include <p5cpp.hpp>
+
+namespace p5cpp
+{
+    struct PathPoints;
+    struct DrawScope;
+} // namespace p5cpp
 
 namespace p5cpp
 {
