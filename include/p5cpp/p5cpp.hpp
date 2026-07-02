@@ -6,6 +6,8 @@
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/module.hpp>
 
+#include <p5cpp/graphics/shader.hpp>
+
 #include <p5cpp/math/angle.hpp>
 #include <p5cpp/math/constants.hpp>
 #include <p5cpp/math/matrix4x4.hpp>
@@ -13,6 +15,7 @@
 #include <p5cpp/math/random.hpp>
 #include <p5cpp/math/utility.hpp>
 #include <p5cpp/math/value2.hpp>
+#include <p5cpp/math/rectangle.hpp>
 
 #include <p5cpp/graphics/color.hpp>
 
@@ -33,15 +36,6 @@ namespace p5cpp
     };
 
     typedef value4<float> float4;
-
-    template <typename T>
-    struct rect2
-    {
-        T left, top, width, height;
-    };
-
-    typedef rect2<float> rect2f;
-    typedef rect2<int32_t> rect2i;
 } // namespace p5cpp
 
 namespace p5cpp
@@ -178,7 +172,7 @@ namespace p5cpp
     struct GlyphRegion
     {
         int2 size;
-        rect2f uvRect;
+        float_rect uvRect;
     };
 
     struct Glyph
@@ -219,8 +213,8 @@ namespace p5cpp
 
     struct GlyphQuad
     {
-        rect2f vertexRect;
-        rect2f uvRect;
+        float_rect vertexRect;
+        float_rect uvRect;
         Texture* texture;
         size_t codepointIndex;
     };
@@ -260,7 +254,8 @@ namespace p5cpp
             matrix4x4
         } type;
 
-        union {
+        union
+        {
             float floatValue;
             float2 float2Value;
             float4 float4Value;
@@ -272,15 +267,6 @@ namespace p5cpp
     UniformVariable uniform(float x, float y);
     UniformVariable uniform(float x, float y, float z, float w);
     UniformVariable uniform(const matrix4x4& value);
-
-    struct Shader
-    {
-        virtual ~Shader() = default;
-        virtual int getUniformLocation(std::string_view name) = 0;
-        virtual uint32_t getRendererId() const = 0;
-    };
-
-    std::unique_ptr<Shader> loadShader(std::string_view vertexSource, std::string_view fragmentSource);
 
     struct Pixels
     {

@@ -1,6 +1,7 @@
 #include "rendering_module.hpp"
 
-#include "../../shader.hpp"
+#include <p5cpp/graphics/internal_shaders.hpp>
+
 #include "../../framebuffer.hpp"
 
 #include "../../dejavusans.hpp"
@@ -25,8 +26,8 @@ namespace p5cpp
 
         InputData& inputData = context.require<InputData>();
 
-        data.defaultShader = create_default_shader();
-        data.textShader = create_text_shader();
+        data.defaultShader = createPrimitiveShader();
+        data.textShader = createTextShader();
         data.defaultFont = loadFont({DejaVuSans_ttf, DejaVuSans_ttf_len});
         data.defaultFramebuffer = create_window_framebuffer(
             inputData.physicalWidth,

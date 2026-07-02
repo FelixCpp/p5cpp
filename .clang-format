@@ -37,3 +37,4 @@ BraceWrapping:
   AfterStruct: true
   AfterClass: true
   AfterFunction: true
+  AfterUnion: true

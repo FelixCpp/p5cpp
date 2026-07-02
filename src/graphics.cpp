@@ -278,7 +278,7 @@ namespace p5cpp
         RenderingData& renderingData = engine->getContext().require<RenderingData>();
         RenderStateStack& renderStateStack = renderingData.renderStateStack;
         RenderState& renderState = render_state_stack_peek(renderStateStack);
-        const matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
+        const matrix4x4& matrix = renderState.metrics.peek();
         const float2 transformed = matrix.transformPoint(x, y);
 
         linepath.vertex(transformed.x, transformed.y, u, v, renderState.fillColor, renderState.strokeColor);
@@ -533,7 +533,7 @@ namespace p5cpp
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         UniformCache& uniformCache = *renderingData.uniformCache;
 
-        const matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
+        const matrix4x4& matrix = renderState.metrics.peek();
 
         const std::array<float2, 4> positions = {
             matrix.transformPoint(left, top),
@@ -821,11 +821,11 @@ namespace p5cpp
                 }
 
                 quads.push_back(GlyphQuad {
-                    .vertexRect = rect2f {
-                        .left = cursorX + glyph->bearing.x,
-                        .top = cursorY - glyph->bearing.y,
-                        .width = static_cast<float>(glyph->region.size.x),
-                        .height = static_cast<float>(glyph->region.size.y),
+                    .vertexRect = float_rect {
+                        cursorX + glyph->bearing.x,
+                        cursorY - glyph->bearing.y,
+                        static_cast<float>(glyph->region.size.x),
+                        static_cast<float>(glyph->region.size.y),
                     },
                     .uvRect = glyph->region.uvRect,
                     .texture = font->getGlyphAtlasTexture(glyph->glyphAtlasIndex),
@@ -864,7 +864,7 @@ namespace p5cpp
         Font* font = get_current_font(renderingData, renderState);
         Shader* textShader = (renderState.shader != nullptr) ? renderState.shader.get() : renderingData.textShader.get();
         TextLayout layout = measureText(text, font, renderState.textSize, renderState.textLetterSpacing, renderState.textLineSpacing, renderState.textAlign, renderState.textWrap, maxWidth);
-        matrix4x4& matrix = matrix_stack_peek(renderState.metrics);
+        matrix4x4& matrix = renderState.metrics.peek();
 
         struct GlyphAtlasVertexBucket
         {

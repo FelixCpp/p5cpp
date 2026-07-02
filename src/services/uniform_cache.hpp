@@ -9,7 +9,7 @@ namespace p5cpp
 {
     struct UniformSnapshot
     {
-        int32_t location;
+        UniformLocation location;
         UniformVariable variable;
     };
 

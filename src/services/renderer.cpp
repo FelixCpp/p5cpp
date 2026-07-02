@@ -136,19 +136,24 @@ namespace p5cpp
             for (const DrawCommand& command : drawCommands) {
                 activateBlendMode(command.blendMode);
 
-                glUseProgram(command.shader->getRendererId());
+                glUseProgram(command.shader->getShaderId().value);
                 for (const UniformSnapshot& snapshot : command.uniforms) {
                     switch (snapshot.variable.type) {
-                        case UniformVariable::Type::float1: glUniform1f(snapshot.location, snapshot.variable.floatValue); break;
-                        case UniformVariable::Type::float2: glUniform2f(snapshot.location, snapshot.variable.float2Value.x, snapshot.variable.float2Value.y); break;
-                        case UniformVariable::Type::float4: glUniform4f(snapshot.location, snapshot.variable.float4Value.x, snapshot.variable.float4Value.y, snapshot.variable.float4Value.z, snapshot.variable.float4Value.w); break;
-                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(snapshot.location, 1, GL_FALSE, snapshot.variable.matrix4x4Value.data()); break;
+                        case UniformVariable::Type::float1: glUniform1f(snapshot.location.value, snapshot.variable.floatValue); break;
+                        case UniformVariable::Type::float2: glUniform2f(snapshot.location.value, snapshot.variable.float2Value.x, snapshot.variable.float2Value.y); break;
+                        case UniformVariable::Type::float4: glUniform4f(snapshot.location.value, snapshot.variable.float4Value.x, snapshot.variable.float4Value.y, snapshot.variable.float4Value.z, snapshot.variable.float4Value.w); break;
+                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(snapshot.location.value, 1, GL_FALSE, snapshot.variable.matrix4x4Value.data()); break;
                     }
                 }
 
                 static constexpr GLint samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-                glUniform1iv(command.shader->getUniformLocation("u_Textures"), static_cast<GLsizei>(command.textureCount), samplers);
-                glUniformMatrix4fv(command.shader->getUniformLocation("u_ProjectionMatrix"), 1, GL_FALSE, orthoProjection.data());
+                if (const auto location = command.shader->getUniformLocation("u_Textures")) {
+                    glUniform1iv(location->value, static_cast<GLsizei>(command.textureCount), samplers);
+                }
+
+                if (const auto location = command.shader->getUniformLocation("u_ProjectionMatrix")) {
+                    glUniformMatrix4fv(location->value, 1, GL_FALSE, orthoProjection.data());
+                }
 
                 for (size_t i = 0; i < command.textureCount; ++i) {
                     glActiveTexture(GL_TEXTURE0 + i);

@@ -13,7 +13,7 @@ namespace p5cpp
     struct BinPackingStrategy
     {
         virtual ~BinPackingStrategy() = default;
-        virtual std::optional<rect2i> insert(int width, int height) = 0;
+        virtual std::optional<int_rect> insert(int width, int height) = 0;
         virtual void reset() = 0;
     };
 } // namespace p5cpp
@@ -29,18 +29,13 @@ namespace p5cpp
             m_freeRects.push_back({0, 0, binWidth, binHeight});
         }
 
-        std::optional<rect2i> insert(int width, int height) override
+        std::optional<int_rect> insert(int width, int height) override
         {
             if (width <= 0 || height <= 0) {
-                return rect2i {
-                    .left = 0,
-                    .top = 0,
-                    .width = width,
-                    .height = height,
-                };
+                return int_rect {0, 0, width, height};
             }
 
-            const std::optional<rect2i> placed = findBestShortSideFit(width, height);
+            const std::optional<int_rect> placed = findBestShortSideFit(width, height);
             if (!placed.has_value()) {
                 return std::nullopt;
             }
@@ -59,20 +54,20 @@ namespace p5cpp
 
     private:
         // Best Short Side Fit: places the rectangle where the smaller leftover side is minimized.
-        std::optional<rect2i> findBestShortSideFit(int width, int height) const
+        std::optional<int_rect> findBestShortSideFit(int width, int height) const
         {
-            std::optional<rect2i> bestRect;
+            std::optional<int_rect> bestRect;
             int bestShortSide = std::numeric_limits<int>::max();
             int bestLongSide = std::numeric_limits<int>::max();
 
-            for (const rect2i& freeRect : m_freeRects) {
+            for (const int_rect& freeRect : m_freeRects) {
                 if (freeRect.width >= width && freeRect.height >= height) {
                     const int leftoverShort = std::min(freeRect.width - width, freeRect.height - height);
                     const int leftoverLong = std::max(freeRect.width - width, freeRect.height - height);
 
                     if (leftoverShort < bestShortSide ||
                         (leftoverShort == bestShortSide && leftoverLong < bestLongSide)) {
-                        bestRect = rect2i {.left = freeRect.left, .top = freeRect.top, .width = width, .height = height};
+                        bestRect = int_rect {freeRect.left, freeRect.top, width, height};
                         bestShortSide = leftoverShort;
                         bestLongSide = leftoverLong;
                     }
@@ -83,16 +78,16 @@ namespace p5cpp
         }
 
         // After placing a rectangle, split all free rectangles that overlap with it.
-        void splitFreeRects(const rect2i& placed)
+        void splitFreeRects(const int_rect& placed)
         {
-            std::vector<rect2i> newFreeRects;
+            std::vector<int_rect> newFreeRects;
 
             for (int i = 0; i < static_cast<int>(m_freeRects.size()); ++i) {
                 if (!overlaps(m_freeRects[i], placed)) {
                     continue;
                 }
 
-                const rect2i& free = m_freeRects[i];
+                const int_rect& free = m_freeRects[i];
 
                 // Left slice
                 if (placed.left > free.left) {
@@ -117,7 +112,7 @@ namespace p5cpp
                 --i;
             }
 
-            for (rect2i& r : newFreeRects) {
+            for (int_rect& r : newFreeRects) {
                 m_freeRects.push_back(r);
             }
         }
@@ -142,7 +137,7 @@ namespace p5cpp
             }
         }
 
-        static bool overlaps(const rect2i& a, const rect2i& b)
+        static bool overlaps(const int_rect& a, const int_rect& b)
         {
             return a.left < b.left + b.width &&
                    a.left + a.width > b.left &&
@@ -151,7 +146,7 @@ namespace p5cpp
         }
 
         // Returns true if 'outer' ful.top contains 'inner'.
-        static bool contains(const rect2i& outer, const rect2i& inner)
+        static bool contains(const int_rect& outer, const int_rect& inner)
         {
             return inner.left >= outer.left &&
                    inner.top >= outer.top &&
@@ -161,7 +156,7 @@ namespace p5cpp
 
         int m_binWidth;
         int m_binHeight;
-        std::vector<rect2i> m_freeRects;
+        std::vector<int_rect> m_freeRects;
     };
 } // namespace p5cpp
 
@@ -254,7 +249,7 @@ namespace p5cpp
                 };
             }
 
-            const std::optional<rect2i> placed = m_packingStrategy->insert(bitmapWidth + m_paddingX, bitmapHeight + m_paddingY);
+            const std::optional<int_rect> placed = m_packingStrategy->insert(bitmapWidth + m_paddingX, bitmapHeight + m_paddingY);
             if (not placed.has_value()) {
                 return std::nullopt;
             }
@@ -272,10 +267,10 @@ namespace p5cpp
             return GlyphRegion {
                 .size = int2 {bitmapWidth, bitmapHeight},
                 .uvRect = {
-                    .left = uvLeft,
-                    .top = uvTop,
-                    .width = uvRight - uvLeft,
-                    .height = uvBottom - uvTop,
+                    uvLeft,
+                    uvTop,
+                    uvRight - uvLeft,
+                    uvBottom - uvTop,
                 },
             };
         }

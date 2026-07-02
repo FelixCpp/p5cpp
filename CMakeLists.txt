@@ -36,6 +36,10 @@ add_library(
   ./src/p5cpp/application/logging.cpp
   ./src/p5cpp/application/module.cpp
 
+  ./src/p5cpp/graphics/internal_shaders.cpp
+  ./src/p5cpp/graphics/shader.cpp
+  ./src/p5cpp/graphics/matrix_stack.cpp
+
   ./src/p5cpp/math/matrix4x4.cpp
   ./src/p5cpp/math/noise.cpp
   ./src/p5cpp/math/random.cpp
@@ -47,11 +51,9 @@ add_library(
   ./src/framebuffer.cpp
   ./src/graphics.cpp
   ./src/linepath.cpp
-  ./src/matrix_stack.cpp
   ./src/p5cpp.cpp
   ./src/render_state.cpp
   ./src/render_state_stack.cpp
-  ./src/shader.cpp
   ./src/state_management.cpp
   ./src/stroker.cpp
   ./src/tess.cpp

@@ -29,7 +29,7 @@ namespace p5cpp
             .textWrap = TextWrap::none,
             .shader = nullptr,
             .blendMode = BlendMode::alpha,
-            .metrics = matrix_stack_create(),
+            .metrics = {}
         };
     }
 } // namespace p5cpp

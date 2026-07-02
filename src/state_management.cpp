@@ -39,55 +39,53 @@ namespace p5cpp
     void pushMatrix()
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_push(renderState.metrics, matrix_stack_peek(renderState.metrics));
+        renderState.metrics.push(renderState.metrics.peek());
     }
 
     void popMatrix()
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_pop(renderState.metrics);
+        renderState.metrics.pop();
     }
 
     void resetMatrix()
     {
-        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_set(renderState.metrics, matrix4x4::identity);
+        setMatrix(matrix4x4::identity);
     }
 
     void applyMatrix(const matrix4x4& matrix)
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, matrix);
+        matrix4x4& currentMatrix = renderState.metrics.peek();
+        currentMatrix *= matrix;
     }
 
     void setMatrix(const matrix4x4& matrix)
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_set(renderState.metrics, matrix);
+        matrix4x4& currentMatrix = renderState.metrics.peek();
+        currentMatrix = matrix;
     }
 
     matrix4x4& peekMatrix()
     {
         RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        return matrix_stack_peek(renderState.metrics);
+        return renderState.metrics.peek();
     }
 
     void translate(float x, float y)
     {
-        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, matrix4x4::translation(x, y));
+        applyMatrix(matrix4x4::translation(x, y));
     }
 
     void scale(float x, float y)
     {
-        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, matrix4x4::scaling(x, y));
+        applyMatrix(matrix4x4::scaling(x, y));
     }
 
-    void rotate(float angle)
+    void rotate(float radians)
     {
-        RenderState& renderState = render_state_stack_peek(getRenderStateStack());
-        matrix_stack_apply(renderState.metrics, matrix4x4::rotation(angle));
+        applyMatrix(matrix4x4::rotation(radians));
     }
 
     void noFill()

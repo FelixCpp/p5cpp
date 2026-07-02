@@ -1,8 +1,7 @@
 #pragma once
 
 #include <p5cpp/p5cpp.hpp>
-
-#include "matrix_stack.hpp"
+#include <p5cpp/graphics/matrix_stack.hpp>
 
 namespace p5cpp
 {

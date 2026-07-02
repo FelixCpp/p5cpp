@@ -4,13 +4,13 @@ namespace p5cpp
 {
     void UniformCache::setUniform(Shader* shader, const std::string& name, const UniformVariable& variable)
     {
-        const int32_t location = shader->getUniformLocation(name);
-        if (location == -1) {
+        const std::optional<UniformLocation> location = shader->getUniformLocation(name);
+        if (not location.has_value()) {
             return;
         }
 
         const UniformSnapshot newSnapshot {
-            .location = location,
+            .location = location.value(),
             .variable = variable,
         };
 
