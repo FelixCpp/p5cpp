@@ -1,9 +1,8 @@
 #include "input_module.hpp"
 
-#include "../../application/app_context.hpp"
-
 #include <p5cpp/application/window.hpp>
 #include <p5cpp/application/logging.hpp>
+#include <p5cpp/application/app_context.hpp>
 
 namespace p5cpp
 {

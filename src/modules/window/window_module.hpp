@@ -3,6 +3,8 @@
 #include <p5cpp/application/window.hpp>
 #include <p5cpp/application/module.hpp>
 
+#include <memory>
+
 namespace p5cpp
 {
     class WindowModule : public Module

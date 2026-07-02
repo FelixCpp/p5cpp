@@ -1,12 +1,13 @@
 #include "rendering_module.hpp"
 
-#include "../../application/app_context.hpp"
 #include "../../shader.hpp"
 #include "../../framebuffer.hpp"
 
 #include "../../dejavusans.hpp"
 
 #include "../input/input_data.hpp"
+
+#include <p5cpp/application/app_context.hpp>
 
 namespace p5cpp
 {

@@ -9,6 +9,37 @@ struct Particle
     float life; // 0..1
 };
 
+class MyCustomPlugin : public Module
+{
+public:
+    void setup(AppContext& context, Next next) override
+    {
+        blurCanvas = createFramebuffer(getWidth(), getHeight());
+
+        next();
+    }
+
+    void event(AppContext& context, WindowEvent& event, Next next) override
+    {
+        next();
+    }
+
+    void draw(AppContext& context, Next next) override
+    {
+        pushCanvas(blurCanvas);
+        next();
+        popCanvas();
+    }
+
+    void destroy(AppContext& context, Next next) override
+    {
+        next();
+    }
+
+private:
+    std::shared_ptr<Framebuffer> blurCanvas;
+};
+
 struct ParticleSketch : Sketch
 {
     std::vector<Particle> particles;
