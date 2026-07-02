@@ -14,7 +14,7 @@ struct TextWrappingSketch : p5cpp::Sketch
         background(30);
 
         {
-            rect2f box = {100.0f, 50.0f, 600.0f, 200.0f};
+            float_rect box = {100.0f, 50.0f, 600.0f, 200.0f};
             noFill();
             stroke(255);
             strokeWeight(2.0f);
@@ -28,7 +28,7 @@ struct TextWrappingSketch : p5cpp::Sketch
         }
 
         {
-            rect2f box = {100.0f, 300.0f, 600.0f, 200.0f};
+            float_rect box = {100.0f, 300.0f, 600.0f, 200.0f};
             // rect2f box = {100.0f, 350.0f, getMouseX() - 100.0f, 200.0f};
             noFill();
             stroke(255);
@@ -43,7 +43,7 @@ struct TextWrappingSketch : p5cpp::Sketch
         }
 
         {
-            rect2f box = {100.0f, 550.0f, 600.0f, 200.0f};
+            float_rect box = {100.0f, 550.0f, 600.0f, 200.0f};
             noFill();
             stroke(255);
             strokeWeight(2.0f);

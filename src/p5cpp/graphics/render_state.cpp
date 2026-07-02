@@ -1,5 +1,4 @@
-#include "render_state.hpp"
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/graphics/render_state.hpp>
 
 namespace p5cpp
 {

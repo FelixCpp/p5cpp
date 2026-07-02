@@ -16,6 +16,7 @@ namespace p5cpp
         void reset();
 
         matrix4x4& peek();
+        const matrix4x4& peek() const;
 
     private:
         std::stack<matrix4x4> metrics;

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/p5cpp.hpp> // TODO(Felix): This should be removed in the future
+
+#include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/matrix_stack.hpp>
 
 namespace p5cpp

@@ -7,6 +7,8 @@
 #include <p5cpp/application/module.hpp>
 
 #include <p5cpp/graphics/shader.hpp>
+#include <p5cpp/graphics/shaping.hpp>
+#include <p5cpp/graphics/color.hpp>
 
 #include <p5cpp/math/angle.hpp>
 #include <p5cpp/math/constants.hpp>
@@ -16,8 +18,6 @@
 #include <p5cpp/math/utility.hpp>
 #include <p5cpp/math/value2.hpp>
 #include <p5cpp/math/rectangle.hpp>
-
-#include <p5cpp/graphics/color.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -74,18 +74,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    enum class ShapeType {
-        lines,
-        lineStrip,
-        lineLoop,
-        triangles,
-        triangleStrip,
-        triangleFan,
-        quads,
-        quadStrip,
-        polygon,
-    };
-
     enum class StrokeCapStyle {
         butt,
         square,

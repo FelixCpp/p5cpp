@@ -31,4 +31,9 @@ namespace p5cpp
     {
         return metrics.top();
     }
+
+    const matrix4x4& MatrixStack::peek() const
+    {
+        return metrics.top();
+    }
 } // namespace p5cpp
