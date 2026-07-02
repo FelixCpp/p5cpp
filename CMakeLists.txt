@@ -48,7 +48,6 @@ add_library(
   ./src/graphics.cpp
   ./src/linepath.cpp
   ./src/matrix_stack.cpp
-  ./src/noise.cpp
   ./src/p5cpp.cpp
   ./src/render_state.cpp
   ./src/render_state_stack.cpp
