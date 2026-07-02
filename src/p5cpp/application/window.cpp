@@ -6,7 +6,7 @@
 #include <glad/glad.h>
 
 #include <string>
-#include <memory>
+#include <stdexcept>
 
 namespace p5cpp
 {
