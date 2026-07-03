@@ -58,12 +58,13 @@ namespace p5cpp
     class Font
     {
     public:
+        Font();
         Font(std::shared_ptr<FontImpl> impl);
 
-        const Glyph* getGlyph(char32_t codepoint, int textSize);
-        const FontMetrics* getMetrics(int textSize);
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize);
-        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex);
+        const Glyph* getGlyph(char32_t codepoint, int textSize) const;
+        const FontMetrics* getMetrics(int textSize) const;
+        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const;
+        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) const;
 
     private:
         std::shared_ptr<FontImpl> impl;

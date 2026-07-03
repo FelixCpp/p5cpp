@@ -154,7 +154,7 @@ struct BreakoutSketch : p5cpp::Sketch
     std::vector<ScorePopup> popups;
     std::vector<Star> stars;
 
-    std::shared_ptr<Shader> bgShader;
+    std::shared_ptr<ShaderImpl> bgShader;
     std::shared_ptr<FramebufferImpl> bgCanvas;
 
     std::mt19937 rng {std::random_device {}()};
@@ -307,7 +307,7 @@ struct BreakoutSketch : p5cpp::Sketch
             }
         )";
 
-        bgShader = std::shared_ptr<Shader>(loadShader(VERT, FRAG).release());
+        bgShader = std::shared_ptr<ShaderImpl>(loadShader(VERT, FRAG).release());
     }
 
     void initStars()

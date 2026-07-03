@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <optional>
 #include <vector>
+#include <cassert>
 
 namespace p5cpp
 {
@@ -648,28 +649,37 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    Font::Font()
+        : impl(nullptr)
+    {
+    }
+
     Font::Font(std::shared_ptr<FontImpl> impl)
         : impl(std::move(impl))
     {
     }
 
-    const Glyph* Font::getGlyph(char32_t codepoint, int textSize)
+    const Glyph* Font::getGlyph(char32_t codepoint, int textSize) const
     {
+        assert(impl != nullptr && "Font implementation is not initialized.");
         return impl->getGlyph(codepoint, textSize);
     }
 
-    const FontMetrics* Font::getMetrics(int textSize)
+    const FontMetrics* Font::getMetrics(int textSize) const
     {
+        assert(impl != nullptr && "Font implementation is not initialized.");
         return impl->getMetrics(textSize);
     }
 
-    float Font::getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize)
+    float Font::getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const
     {
+        assert(impl != nullptr && "Font implementation is not initialized.");
         return impl->getKerning(leftCodepoint, rightCodepoint, textSize);
     }
 
-    const Texture* Font::getGlyphAtlasTexture(size_t glyphAtlasIndex)
+    const Texture* Font::getGlyphAtlasTexture(size_t glyphAtlasIndex) const
     {
+        assert(impl != nullptr && "Font implementation is not initialized.");
         return impl->getGlyphAtlasTexture(glyphAtlasIndex);
     }
 } // namespace p5cpp

@@ -26,6 +26,7 @@ namespace p5cpp
     class Framebuffer
     {
     public:
+        Framebuffer();
         Framebuffer(std::shared_ptr<FramebufferImpl> impl);
 
         uint2 getSize() const;

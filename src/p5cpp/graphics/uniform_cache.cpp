@@ -2,9 +2,9 @@
 
 namespace p5cpp
 {
-    void UniformCache::setUniform(Shader* shader, const std::string& name, const UniformVariable& variable)
+    void UniformCache::setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable)
     {
-        const std::optional<UniformLocation> location = shader->getUniformLocation(name);
+        const std::optional<UniformLocation> location = shader.getUniformLocation(name);
         if (not location.has_value()) {
             return;
         }
@@ -15,7 +15,7 @@ namespace p5cpp
         };
 
         const auto insertion = uniformsByShader.try_emplace(
-            shader,
+            shader.getShaderId(),
             std::vector<UniformSnapshot> {newSnapshot}
         );
 
@@ -34,22 +34,22 @@ namespace p5cpp
             }
         }
 
-        dirtyShaders.insert(shader);
+        dirtyShaders.insert(shader.getShaderId());
     }
 
-    void UniformCache::markShaderClean(Shader* shader)
+    void UniformCache::markShaderClean(const Shader& shader)
     {
-        dirtyShaders.erase(shader);
+        dirtyShaders.erase(shader.getShaderId());
     }
 
-    bool UniformCache::isShaderDirty(Shader* shader) const
+    bool UniformCache::isShaderDirty(const Shader& shader) const
     {
-        return dirtyShaders.contains(shader);
+        return dirtyShaders.contains(shader.getShaderId());
     }
 
-    std::vector<UniformSnapshot> UniformCache::getUniforms(Shader* shader)
+    std::vector<UniformSnapshot> UniformCache::getUniforms(const Shader& shader)
     {
-        const auto itr = uniformsByShader.find(shader);
+        const auto itr = uniformsByShader.find(shader.getShaderId());
         if (itr != uniformsByShader.end()) {
             return itr->second;
         }

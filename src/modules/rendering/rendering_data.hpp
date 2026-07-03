@@ -13,8 +13,8 @@ namespace p5cpp
 {
     struct RenderingData
     {
-        std::shared_ptr<Shader> defaultShader;
-        std::shared_ptr<Shader> textShader;
+        std::shared_ptr<ShaderImpl> defaultShader;
+        std::shared_ptr<ShaderImpl> textShader;
         std::shared_ptr<Font> defaultFont;
         std::shared_ptr<FramebufferImpl> defaultFramebuffer;
         std::shared_ptr<Texture> whiteTexture;

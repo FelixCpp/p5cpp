@@ -208,7 +208,7 @@ namespace p5cpp
 
     size_t computeCircleSegmentCount(float angle, float radius);
 
-    void pushCanvas(std::shared_ptr<FramebufferImpl> canvas);
+    void pushCanvas(const Framebuffer& framebuffer);
     void popCanvas();
 
     void pushState();
@@ -217,51 +217,52 @@ namespace p5cpp
     void pushMatrix();
     void popMatrix();
     void resetMatrix();
+    matrix4x4& peekMatrix();
     void applyMatrix(const matrix4x4& matrix);
     void setMatrix(const matrix4x4& matrix);
-    matrix4x4& peekMatrix();
     void translate(float x, float y);
     void scale(float x, float y);
-    void rotate(float angle);
+    void rotate(float radians);
 
-    void noFill();
     void fill(int grey, int alpha = 255);
     void fill(int red, int green, int blue, int alpha = 255);
     void fill(color_t color);
+    void noFill();
 
-    void noStroke();
     void stroke(int grey, int alpha = 255);
     void stroke(int red, int green, int blue, int alpha = 255);
     void stroke(color_t color);
+    void noStroke();
 
     void strokeWeight(float strokeWeight);
     void strokeCap(StrokeCap strokeCap);
     void strokeJoin(StrokeJoin strokeJoin);
     void miterLimit(float miterLimit);
-    void roundJoinThreshold(float angleThreshold);
-
-    void blendMode(BlendMode blendMode);
-    void curveTightness(float tightness);
-    void curveDetail(uint32_t detail);
-    void bezierDetail(uint32_t detail);
-
-    void shader(std::shared_ptr<Shader> shader);
-    void noShader();
-    void setUniform(const std::string& name, const UniformVariable& variable);
-    void setUniform(std::shared_ptr<Shader> shader, const std::string& name, const UniformVariable& variable);
-
-    void textAlign(TextAlign textAlign);
-    void textWrap(TextWrap textWrap);
-    void textFont(std::shared_ptr<Font> font);
-    void noTextFont();
-    void textSize(float size);
-    void textLetterSpacing(float spacing);
-    void textLineSpacing(float spacing);
+    void roundJoinThreshold(float roundJoinThreshold);
 
     void tint(int grey, int alpha = 255);
     void tint(int red, int green, int blue, int alpha = 255);
     void tint(color_t color);
     void noTint();
+
+    void bezierDetail(uint32_t detail);
+    void curveTightness(float tightness);
+    void curveDetail(uint32_t detail);
+
+    void textFont(std::shared_ptr<Font> font);
+    void noTextFont();
+    void textSize(float size);
+    void textLetterSpacing(float spacing);
+    void textLineSpacing(float spacing);
+    void textAlign(TextAlign textAlign);
+    void textWrap(TextWrap textWrap);
+
+    void shader(std::shared_ptr<ShaderImpl> shader);
+    void noShader();
+    void blendMode(BlendMode blendMode);
+
+    void setUniform(const std::string& name, const UniformVariable& variable);
+    void setUniform(std::shared_ptr<ShaderImpl> shader, const std::string& name, const UniformVariable& variable);
 
     void background(int grey, int alpha = 255);
     void background(int red, int green, int blue, int alpha = 255);

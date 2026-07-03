@@ -77,7 +77,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    inline Shader* get_current_shader(RenderingData& data, const RenderState& state)
+    inline ShaderImpl* get_current_shader(RenderingData& data, const RenderState& state)
     {
         if (state.shader != nullptr) {
             return state.shader.get();
@@ -862,7 +862,7 @@ namespace p5cpp
         RenderState& renderState = render_state_stack_peek(renderStateStack);
         UniformCache& uniformCache = *renderingData.uniformCache;
         Font* font = get_current_font(renderingData, renderState);
-        Shader* textShader = (renderState.shader != nullptr) ? renderState.shader.get() : renderingData.textShader.get();
+        ShaderImpl* textShader = (renderState.shader != nullptr) ? renderState.shader.get() : renderingData.textShader.get();
         TextLayout layout = measureText(text, font, renderState.textSize, renderState.textLetterSpacing, renderState.textLineSpacing, renderState.textAlign, renderState.textWrap, maxWidth);
         matrix4x4& matrix = renderState.metrics.peek();
 

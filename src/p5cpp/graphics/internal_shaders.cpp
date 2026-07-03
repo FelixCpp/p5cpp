@@ -54,7 +54,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<Shader> createPrimitiveShader()
+    std::unique_ptr<ShaderImpl> createPrimitiveShader()
     {
         return loadShader(defaultVSource, defaultFSource);
     }
@@ -115,7 +115,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<Shader> createTextShader()
+    std::unique_ptr<ShaderImpl> createTextShader()
     {
         return loadShader(textVSource, textFSource);
     }

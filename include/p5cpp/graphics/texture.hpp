@@ -11,6 +11,9 @@ namespace p5cpp
     struct TextureId
     {
         uint32_t value;
+
+        constexpr bool operator==(const TextureId& other) const = default;
+        constexpr bool operator!=(const TextureId& other) const = default;
     };
 
     struct TextureImpl
@@ -26,6 +29,7 @@ namespace p5cpp
     class Texture : public TextureImpl
     {
     public:
+        Texture();
         Texture(std::shared_ptr<TextureImpl> impl);
 
         TextureId getTextureId() const override;

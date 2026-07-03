@@ -54,6 +54,11 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    Texture::Texture()
+        : impl(nullptr)
+    {
+    }
+
     Texture::Texture(std::shared_ptr<TextureImpl> impl)
         : impl(std::move(impl))
     {

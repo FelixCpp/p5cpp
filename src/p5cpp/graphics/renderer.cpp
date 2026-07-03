@@ -41,10 +41,10 @@ namespace p5cpp
         size_t drawBufferIndexStart;
         size_t drawBufferIndexCount;
 
-        Shader* shader;
+        Shader shader;
         BlendMode blendMode;
 
-        std::array<const Texture*, 8> textures;
+        std::array<Texture, 8> textures;
         size_t textureCount;
 
         std::vector<UniformSnapshot> uniforms;
@@ -96,12 +96,12 @@ namespace p5cpp
             glDeleteBuffers(1, &ebo);
         }
 
-        void begin(FramebufferImpl* framebuffer) override
+        void begin(const Framebuffer& framebuffer) override
         {
-            const uint2 logicalSize = framebuffer->getSize();
+            const uint2 logicalSize = framebuffer.getSize();
             orthoProjection = matrix4x4::ortho(0.0f, static_cast<float>(logicalSize.y), static_cast<float>(logicalSize.x), 0.0f, -1.0f, 1.0f);
 
-            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getFramebufferId().value);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.getFramebufferId().value);
             glViewport(0, 0, logicalSize.x, logicalSize.y);
 
             glBindVertexArray(vao);
@@ -135,7 +135,7 @@ namespace p5cpp
             for (const DrawCommand& command : drawCommands) {
                 activateBlendMode(command.blendMode);
 
-                glUseProgram(command.shader->getShaderId().value);
+                glUseProgram(command.shader.getShaderId().value);
                 for (const UniformSnapshot& snapshot : command.uniforms) {
                     switch (snapshot.variable.type) {
                         case UniformVariable::Type::float1: glUniform1f(snapshot.location.value, snapshot.variable.floatValue); break;
@@ -146,17 +146,17 @@ namespace p5cpp
                 }
 
                 static constexpr GLint samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-                if (const auto location = command.shader->getUniformLocation("u_Textures")) {
+                if (const auto location = command.shader.getUniformLocation("u_Textures")) {
                     glUniform1iv(location->value, static_cast<GLsizei>(command.textureCount), samplers);
                 }
 
-                if (const auto location = command.shader->getUniformLocation("u_ProjectionMatrix")) {
+                if (const auto location = command.shader.getUniformLocation("u_ProjectionMatrix")) {
                     glUniformMatrix4fv(location->value, 1, GL_FALSE, orthoProjection.data());
                 }
 
                 for (size_t i = 0; i < command.textureCount; ++i) {
                     glActiveTexture(GL_TEXTURE0 + i);
-                    glBindTexture(GL_TEXTURE_2D, command.textures[i]->getTextureId().value);
+                    glBindTexture(GL_TEXTURE_2D, command.textures[i].getTextureId().value);
                 }
 
                 glDrawElements(GL_TRIANGLES, command.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(command.drawBufferIndexStart * sizeof(uint32_t)));
@@ -167,7 +167,7 @@ namespace p5cpp
             indexCursor = 0;
         }
 
-        void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, const Texture* texture) override
+        void submit(DrawScope scope, UniformCache& uniformCache, const Shader& shader, BlendMode blendMode, const Texture& texture) override
         {
             DrawCommand* targetCommand = nullptr;
 
@@ -187,7 +187,7 @@ namespace p5cpp
                 const DrawCommand& lastCommand = drawCommands.back();
 
                 bool needsNewCommand = false;
-                if (lastCommand.shader != shader) {
+                if (lastCommand.shader.getShaderId() != shader.getShaderId()) {
                     needsNewCommand = true;
                 } else if (lastCommand.blendMode != blendMode) {
                     needsNewCommand = true;
@@ -199,7 +199,7 @@ namespace p5cpp
                     } else {
                         bool textureAlreadyUsed = false;
                         for (size_t i = 0; i < lastCommand.textureCount; ++i) {
-                            if (lastCommand.textures[i] == texture) {
+                            if (lastCommand.textures[i].getTextureId() == texture.getTextureId()) {
                                 textureAlreadyUsed = true;
                                 break;
                             }
@@ -230,7 +230,7 @@ namespace p5cpp
 
             int textureIndex = -1;
             for (size_t i = 0; i < targetCommand->textureCount; ++i) {
-                if (targetCommand->textures[i] == texture) {
+                if (targetCommand->textures[i].getTextureId() == texture.getTextureId()) {
                     textureIndex = static_cast<int>(i);
                     break;
                 }

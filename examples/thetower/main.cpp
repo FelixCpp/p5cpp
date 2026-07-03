@@ -201,7 +201,7 @@ struct TowerSketch : p5cpp::Sketch
     float lastShotBgT = -100.f; // for background shader ripple
 
     float bgTime = 0.f;
-    std::shared_ptr<Shader> bgShader;
+    std::shared_ptr<ShaderImpl> bgShader;
     std::shared_ptr<FramebufferImpl> bgCanvas;
     std::mt19937 rng {std::random_device {}()};
 
@@ -360,7 +360,7 @@ struct TowerSketch : p5cpp::Sketch
                 o_Color = vec4(col,1.0);
             }
         )";
-        bgShader = std::shared_ptr<Shader>(loadShader(VERT, FRAG).release());
+        bgShader = std::shared_ptr<ShaderImpl>(loadShader(VERT, FRAG).release());
     }
 
     // ── Main draw / update ────────────────────────────────────────────────────

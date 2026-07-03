@@ -147,7 +147,7 @@ struct GravitasSketch : p5cpp::Sketch
     float shakeX = 0.f, shakeY = 0.f, shakeDur = 0.f;
 
     // ── Rendering ─────────────────────────────────────────────────────────────
-    std::shared_ptr<Shader> bgShader;
+    std::shared_ptr<ShaderImpl> bgShader;
     std::shared_ptr<FramebufferImpl> bgCanvas;
 
     // ── RNG ───────────────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ struct GravitasSketch : p5cpp::Sketch
             }
         )glsl";
 
-        bgShader = std::shared_ptr<Shader>(loadShader(VERT, FRAG).release());
+        bgShader = std::shared_ptr<ShaderImpl>(loadShader(VERT, FRAG).release());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

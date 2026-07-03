@@ -19,28 +19,35 @@ namespace p5cpp
     struct ShaderId
     {
         uint32_t value;
+
+        constexpr bool operator==(const ShaderId& other) const = default;
+        constexpr bool operator!=(const ShaderId& other) const = default;
     };
 
-    struct Shader
+    struct ShaderImpl
     {
-        virtual ~Shader() = default;
+        virtual ~ShaderImpl() = default;
 
         virtual std::optional<UniformLocation> getUniformLocation(const std::string& name) const = 0;
         virtual ShaderId getShaderId() const = 0;
     };
 
-    class ShaderHandle : public Shader
+    std::unique_ptr<ShaderImpl> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    class Shader : public ShaderImpl
     {
     public:
-        ShaderHandle();
-        ShaderHandle(std::unique_ptr<Shader> shader);
+        Shader();
+        Shader(std::shared_ptr<ShaderImpl> shader);
 
         std::optional<UniformLocation> getUniformLocation(const std::string& name) const override;
         virtual ShaderId getShaderId() const override;
 
     private:
-        std::unique_ptr<Shader> shader;
+        std::shared_ptr<ShaderImpl> shader;
     };
 
-    std::unique_ptr<Shader> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
 } // namespace p5cpp

@@ -16,13 +16,13 @@ namespace p5cpp
     class UniformCache
     {
     public:
-        void setUniform(Shader* shader, const std::string& name, const UniformVariable& variable);
-        void markShaderClean(Shader* shader);
-        bool isShaderDirty(Shader* shader) const;
+        void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
+        void markShaderClean(const Shader& shader);
+        bool isShaderDirty(const Shader& shader) const;
 
-        std::vector<UniformSnapshot> getUniforms(Shader* shader);
+        std::vector<UniformSnapshot> getUniforms(const Shader& shader);
 
-        std::unordered_map<Shader*, std::vector<UniformSnapshot>> uniformsByShader;
-        std::unordered_set<Shader*> dirtyShaders;
+        std::unordered_map<ShaderId, std::vector<UniformSnapshot>> uniformsByShader;
+        std::unordered_set<ShaderId> dirtyShaders;
     };
 } // namespace p5cpp

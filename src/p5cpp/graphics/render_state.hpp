@@ -4,6 +4,7 @@
 
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/matrix_stack.hpp>
+#include <p5cpp/graphics/shader.hpp>
 
 namespace p5cpp
 {
@@ -29,14 +30,14 @@ namespace p5cpp
         uint32_t curveDetail;
         float invCurveDetail;
 
-        std::shared_ptr<Font> font;
+        std::optional<Font> font;
         float textSize;
         float textLetterSpacing;
         float textLineSpacing;
         TextAlign textAlign;
         TextWrap textWrap;
 
-        std::shared_ptr<Shader> shader;
+        std::optional<Shader> shader;
         BlendMode blendMode;
         MatrixStack metrics;
     };

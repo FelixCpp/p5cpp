@@ -7,10 +7,10 @@
 
 namespace p5cpp
 {
-    class OpenGLShader : public Shader
+    class OpenGLShaderImpl : public ShaderImpl
     {
     public:
-        static std::unique_ptr<OpenGLShader> create(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
+        static std::unique_ptr<OpenGLShaderImpl> create(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
         {
             GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
             const char* vertexSource = vertexShaderSource.data();
@@ -75,10 +75,10 @@ namespace p5cpp
             glDeleteShader(vertexShader);
             glDeleteShader(fragmentShader);
 
-            return std::unique_ptr<OpenGLShader>(new OpenGLShader(shaderProgram));
+            return std::unique_ptr<OpenGLShaderImpl>(new OpenGLShaderImpl(shaderProgram));
         }
 
-        ~OpenGLShader() override
+        ~OpenGLShaderImpl() override
         {
             glDeleteProgram(shaderId);
         }
@@ -105,7 +105,7 @@ namespace p5cpp
         }
 
     private:
-        explicit OpenGLShader(GLuint shaderId)
+        explicit OpenGLShaderImpl(GLuint shaderId)
             : shaderId(shaderId)
         {
         }
@@ -117,12 +117,25 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    ShaderHandle::ShaderHandle()
+    std::unique_ptr<ShaderImpl> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
+    {
+        return OpenGLShaderImpl::create(vertexShaderSource, fragmentShaderSource);
+    }
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    Shader::Shader()
         : shader(nullptr)
     {
     }
 
-    std::optional<UniformLocation> ShaderHandle::getUniformLocation(const std::string& name) const
+    Shader::Shader(std::shared_ptr<ShaderImpl> shader)
+        : shader(std::move(shader))
+    {
+    }
+
+    std::optional<UniformLocation> Shader::getUniformLocation(const std::string& name) const
     {
         if (shader) {
             return shader->getUniformLocation(name);
@@ -131,25 +144,12 @@ namespace p5cpp
         return std::nullopt;
     }
 
-    ShaderId ShaderHandle::getShaderId() const
+    ShaderId Shader::getShaderId() const
     {
         if (shader) {
             return shader->getShaderId();
         }
 
         return ShaderId {.value = 0};
-    }
-
-    ShaderHandle::ShaderHandle(std::unique_ptr<Shader> shader)
-        : shader(std::move(shader))
-    {
-    }
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    std::unique_ptr<Shader> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
-    {
-        return OpenGLShader::create(vertexShaderSource, fragmentShaderSource);
     }
 } // namespace p5cpp
