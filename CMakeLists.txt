@@ -40,6 +40,8 @@ add_library(
 
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/graphics/framebuffer.cpp
+  ./src/p5cpp/graphics/graphics_component.cpp
+  ./src/p5cpp/graphics/graphics_module.cpp
   ./src/p5cpp/graphics/internal_shaders.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
   ./src/p5cpp/graphics/primitive_renderer.cpp
