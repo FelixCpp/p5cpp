@@ -604,8 +604,8 @@ struct Gravitas : Sketch
     void draw() override
     {
 
-        width = getWidth();
-        height = getHeight();
+        width = getLogicalWidth();
+        height = getLogicalHeight();
 
         const float time = getGlobalTime();
 

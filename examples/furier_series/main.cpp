@@ -76,7 +76,7 @@ float2 cycle(float x, float y, float time, float rotation, const std::span<const
 class Scratchpad
 {
 public:
-    std::shared_ptr<Framebuffer> framebuffer;
+    std::shared_ptr<FramebufferImpl> framebuffer;
     std::vector<int2> points;
 
     explicit Scratchpad(int width, int height)
@@ -159,8 +159,8 @@ public:
     {
         if (isDrawing) {
             const auto [width, height] = scratchpad->framebuffer->getSize();
-            const int left = static_cast<float>(getWidth() - width) / 2;
-            const int top = static_cast<float>(getHeight() - height) / 2;
+            const int left = static_cast<float>(getLogicalWidth() - width) / 2;
+            const int top = static_cast<float>(getLogicalHeight() - height) / 2;
             const int mouseX = getMouseX() - left;
             const int mouseY = getMouseY() - top;
             const bool isMouseInScratchPad = mouseX >= 0 and mouseX < width and mouseY >= 0 and mouseY < height;
@@ -177,8 +177,8 @@ public:
             scratchpad->show();
 
             const auto [width, height] = scratchpad->framebuffer->getSize();
-            const float left = (static_cast<float>(getWidth()) - static_cast<float>(width)) * 0.5f;
-            const float top = (static_cast<float>(getHeight()) - static_cast<float>(height)) * 0.5f;
+            const float left = (static_cast<float>(getLogicalWidth()) - static_cast<float>(width)) * 0.5f;
+            const float top = (static_cast<float>(getLogicalHeight()) - static_cast<float>(height)) * 0.5f;
 
             image(scratchpad->framebuffer->getColorTexture(), left, top, static_cast<float>(width), static_cast<float>(height));
 

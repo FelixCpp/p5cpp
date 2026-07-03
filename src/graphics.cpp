@@ -118,7 +118,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void pushCanvas(std::shared_ptr<Framebuffer> canvas)
+    void pushCanvas(std::shared_ptr<FramebufferImpl> canvas)
     {
         RenderingData& renderingData = engine->getContext().require<RenderingData>();
         Renderer& renderer = *renderingData.renderer;
@@ -127,7 +127,7 @@ namespace p5cpp
         renderer.flush();
         renderer.end();
 
-        Framebuffer* framebuffer = renderingData.framebufferStack.emplace_back(canvas.get());
+        FramebufferImpl* framebuffer = renderingData.framebufferStack.emplace_back(canvas.get());
         renderer.begin(framebuffer);
         render_state_stack_push(renderStateStack, render_state_stack_peek(renderStateStack));
     }
@@ -525,7 +525,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void image(Texture* texture, float left, float top, float width, float height)
+    void image(const Texture* texture, float left, float top, float width, float height)
     {
         RenderingData& renderingData = engine->getContext().require<RenderingData>();
         Renderer& renderer = *renderingData.renderer;

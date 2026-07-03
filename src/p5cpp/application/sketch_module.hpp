@@ -1,14 +1,11 @@
 #pragma once
 
+#include <p5cpp/application/sketch.hpp>
 #include <p5cpp/application/module.hpp>
-
-#include "frame_data.hpp"
-
-#include <chrono>
 
 namespace p5cpp
 {
-    class FrameModule : public Module
+    class SketchModule : public Module
     {
     public:
         void setup(AppContext& context, Next next) override;
@@ -17,12 +14,6 @@ namespace p5cpp
         void destroy(AppContext& context, Next next) override;
 
     private:
-        FrameData data;
-
-        float fpsCalculationInterval;
-        int framesPerCalculation;
-        std::chrono::steady_clock::time_point lastCalculationTimestamp;
-        std::chrono::steady_clock::time_point frameStartTimestamp;
-        std::chrono::steady_clock::time_point lastFrameStart;
+        std::unique_ptr<Sketch> sketch;
     };
 } // namespace p5cpp

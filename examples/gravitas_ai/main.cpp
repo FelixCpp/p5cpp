@@ -148,7 +148,7 @@ struct GravitasSketch : p5cpp::Sketch
 
     // ── Rendering ─────────────────────────────────────────────────────────────
     std::shared_ptr<Shader> bgShader;
-    std::shared_ptr<Framebuffer> bgCanvas;
+    std::shared_ptr<FramebufferImpl> bgCanvas;
 
     // ── RNG ───────────────────────────────────────────────────────────────────
     std::mt19937 rng {std::random_device {}()};
@@ -201,7 +201,7 @@ struct GravitasSketch : p5cpp::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<Framebuffer>(createFramebuffer(W, H).release());
+        bgCanvas = std::shared_ptr<FramebufferImpl>(createFramebuffer(W, H).release());
 
         for (auto& s : bgStars) {
             s.x = fr(0.f, W);

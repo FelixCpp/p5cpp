@@ -14,7 +14,7 @@ class MyCustomPlugin : public Module
 public:
     void setup(AppContext& context, Next next) override
     {
-        blurCanvas = createFramebuffer(getWidth(), getHeight());
+        blurCanvas = createFramebuffer(getLogicalWidth(), getLogicalHeight());
 
         next();
     }
@@ -37,7 +37,7 @@ public:
     }
 
 private:
-    std::shared_ptr<Framebuffer> blurCanvas;
+    std::shared_ptr<FramebufferImpl> blurCanvas;
 };
 
 struct ParticleSketch : Sketch
@@ -66,7 +66,7 @@ struct ParticleSketch : Sketch
         for (int i = 0; i < 5; ++i) {
             float2 dir = float2::randomUnit();
             particles.push_back({
-                {(float)getWidth() / 2, (float)getHeight() / 2},
+                {(float)getLogicalWidth() / 2, (float)getLogicalHeight() / 2},
                 dir * randomFloat(50.0f, 150.0f),
                 1.0f,
             });

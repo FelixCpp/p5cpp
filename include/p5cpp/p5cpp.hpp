@@ -6,9 +6,12 @@
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/module.hpp>
 
-#include <p5cpp/graphics/shader.hpp>
-#include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/color.hpp>
+#include <p5cpp/graphics/font.hpp>
+#include <p5cpp/graphics/shader.hpp>
+#include <p5cpp/graphics/framebuffer.hpp>
+#include <p5cpp/graphics/shaping.hpp>
+#include <p5cpp/graphics/texture.hpp>
 
 #include <p5cpp/math/angle.hpp>
 #include <p5cpp/math/constants.hpp>
@@ -22,8 +25,6 @@
 #include <cstdint>
 #include <memory>
 #include <string_view>
-#include <span>
-#include <filesystem>
 #include <vector>
 #include <optional>
 
@@ -49,10 +50,10 @@ namespace p5cpp
     int getPMouseX();
     int getPMouseY();
 
-    int getWidth();
-    int getHeight();
-    int getWindowWidth();
-    int getWindowHeight();
+    int getLogicalWidth();
+    int getLogicalHeight();
+    int getPhysicalWidth();
+    int getPhysicalHeight();
 
 } // namespace p5cpp
 
@@ -146,51 +147,6 @@ namespace p5cpp
         static const TextAlign bottomRight;
     };
 
-    struct Texture
-    {
-        virtual ~Texture() = default;
-        virtual void update(std::span<const uint8_t> imageData) = 0;
-        virtual void update(std::span<const color_t> pixelData) = 0;
-        virtual uint32_t getRendererId() const = 0;
-        virtual uint2 getSize() const = 0;
-    };
-
-    typedef size_t GlyphPageIndex;
-
-    struct GlyphRegion
-    {
-        int2 size;
-        float_rect uvRect;
-    };
-
-    struct Glyph
-    {
-        GlyphRegion region;
-        int2 bearing;
-        float advanceX;
-        size_t glyphAtlasIndex;
-    };
-
-    struct FontMetrics
-    {
-        float ascender;
-        float descender;
-        float lineHeight;
-    };
-
-    struct Font
-    {
-        virtual ~Font() = default;
-        virtual const Glyph* getGlyph(char32_t codepoint, int textSize) = 0;
-        virtual const FontMetrics* getMetrics(int textSize) = 0;
-        virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
-        virtual Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) = 0;
-    };
-
-    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath);
-    std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData);
-    Font* getCurrentFont();
-
     struct LineLayout
     {
         size_t codepointsStart;
@@ -216,22 +172,6 @@ namespace p5cpp
         std::vector<GlyphQuad> glyphs;
         std::vector<LineLayout> lines;
     };
-
-    std::unique_ptr<Texture> loadTexture(const std::filesystem::path& imageFilePath);
-    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height, std::span<const uint8_t> imageData);
-    std::unique_ptr<Texture> createTexture(uint32_t width, uint32_t height);
-
-    struct Framebuffer
-    {
-        virtual ~Framebuffer() = default;
-        virtual uint32_t getTextureId() const = 0;
-        virtual uint32_t getRendererId() const = 0;
-        virtual uint2 getSize() const = 0;
-        virtual uint2 getViewportSize() const = 0;
-        virtual Texture* getColorTexture() = 0;
-    };
-
-    std::unique_ptr<Framebuffer> createFramebuffer(int width, int height);
 
     struct UniformVariable
     {
@@ -268,7 +208,7 @@ namespace p5cpp
 
     size_t computeCircleSegmentCount(float angle, float radius);
 
-    void pushCanvas(std::shared_ptr<Framebuffer> canvas);
+    void pushCanvas(std::shared_ptr<FramebufferImpl> canvas);
     void popCanvas();
 
     void pushState();
@@ -345,7 +285,7 @@ namespace p5cpp
     void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
-    void image(Texture* texture, float left, float top, float width, float height);
+    void image(const Texture* texture, float left, float top, float width, float height);
     void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
 
     TextLayout measureText(std::string_view text);

@@ -1,11 +1,11 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
 #include <p5cpp/application/module.hpp>
+#include <p5cpp/application/frame_component.hpp>
 
 namespace p5cpp
 {
-    class SketchModule : public Module
+    class FrameModule : public Module
     {
     public:
         void setup(AppContext& context, Next next) override;
@@ -14,6 +14,6 @@ namespace p5cpp
         void destroy(AppContext& context, Next next) override;
 
     private:
-        std::unique_ptr<Sketch> sketch;
+        FrameComponent m_frameComponent;
     };
 } // namespace p5cpp

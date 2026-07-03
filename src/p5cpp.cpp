@@ -26,34 +26,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void setWindowSize(int width, int height) { getAppContext().require<Window>().setSize(width, height); }
-    void setWindowTitle(std::string_view title) { getAppContext().require<Window>().setTitle(title); }
-    void setWindowResizable(bool resizable) { getAppContext().require<Window>().setResizable(resizable); }
-
-    int getMouseX() { return getAppContext().require<InputData>().mouseX; }
-    int getMouseY() { return getAppContext().require<InputData>().mouseY; }
-    int getPMouseX() { return getAppContext().require<InputData>().pmouseX; }
-    int getPMouseY() { return getAppContext().require<InputData>().pmouseY; }
-
-    int getWidth() { return getAppContext().require<InputData>().logicalWidth; }
-    int getHeight() { return getAppContext().require<InputData>().logicalHeight; }
-    int getWindowWidth() { return getAppContext().require<InputData>().physicalWidth; }
-    int getWindowHeight() { return getAppContext().require<InputData>().physicalHeight; }
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    void frameRate(int targetFps) { getAppContext().require<FrameData>().targetFrameRate = targetFps; }
-    void loop() { getAppContext().require<FrameData>().isPaused = false; }
-    void noLoop() { getAppContext().require<FrameData>().isPaused = true; }
-    bool isLooping() { return not getAppContext().require<FrameData>().isPaused; }
-    void quit() { getAppContext().require<FrameData>().closeRequested = true; }
-    void quit(int code) { exitCode(code), quit(); }
-    void exitCode(int code) { getAppContext().require<FrameData>().exitCode = code; }
-    int getFrameCount() { return getAppContext().require<FrameData>().frameCount; }
-    int getFrameRate() { return getAppContext().require<FrameData>().framesPerSecond; }
-    float getDeltaTime() { return getAppContext().require<FrameData>().deltaTime; }
-    float getGlobalTime() { return getAppContext().require<FrameData>().globalTime; }
 } // namespace p5cpp
 
 namespace p5cpp

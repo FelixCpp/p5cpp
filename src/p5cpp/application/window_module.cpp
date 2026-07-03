@@ -1,7 +1,5 @@
-#include "window_module.hpp"
-
-#include "../../application/engine.hpp"
-
+#include <p5cpp/application/window_module.hpp>
+#include <p5cpp/application/engine.hpp>
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/app_context.hpp>
 

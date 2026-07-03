@@ -23,8 +23,8 @@ struct PixelGrid
 
     uint2 getCellAtPosition(float x, float y) const
     {
-        const uint32_t column = static_cast<uint32_t>(x / (static_cast<float>(getWidth()) / columns));
-        const uint32_t row = static_cast<uint32_t>(y / (static_cast<float>(getHeight()) / rows));
+        const uint32_t column = static_cast<uint32_t>(x / (static_cast<float>(getLogicalWidth()) / columns));
+        const uint32_t row = static_cast<uint32_t>(y / (static_cast<float>(getLogicalHeight()) / rows));
         return {column, row};
     }
 
@@ -89,7 +89,7 @@ struct PixelGrid
     void show()
     {
         texture->update(pixels);
-        image(texture.get(), 0, 0, getWidth(), getHeight());
+        image(texture.get(), 0, 0, getLogicalWidth(), getLogicalHeight());
     }
 };
 
@@ -113,8 +113,8 @@ struct Mold
     void update(PixelGrid& pixelGrid, float deltaTime)
     {
         position += direction * deltaTime;
-        position.x = fmod(position.x + getWidth(), getWidth());
-        position.y = fmod(position.y + getHeight(), getHeight());
+        position.x = fmod(position.x + getLogicalWidth(), getLogicalWidth());
+        position.y = fmod(position.y + getLogicalHeight(), getLogicalHeight());
 
         pixelGrid.markAtPosition(position.x, position.y, 255);
 
@@ -192,15 +192,15 @@ struct SlimeMoldsSimulation : Sketch
         setWindowTitle("Slime Molds Simulation");
 
         const size_t gridCellSize = 1;
-        const size_t gridColumns = getWidth() / gridCellSize;
-        const size_t gridRows = getHeight() / gridCellSize;
+        const size_t gridColumns = getLogicalWidth() / gridCellSize;
+        const size_t gridRows = getLogicalHeight() / gridCellSize;
 
         grid = std::make_unique<PixelGrid>(gridColumns, gridRows);
 
         // for (size_t i = 0; i < 100000; ++i) {
         for (size_t i = 0; i < 100; ++i) {
-            const float px = static_cast<float>(getWidth()) * 0.5f + randomFloat(-50, 50);
-            const float py = static_cast<float>(getHeight()) * 0.5f + randomFloat(-50, 50);
+            const float px = static_cast<float>(getLogicalWidth()) * 0.5f + randomFloat(-50, 50);
+            const float py = static_cast<float>(getLogicalHeight()) * 0.5f + randomFloat(-50, 50);
             const float angle = randomFloat(TWO_PI);
 
             molds.push_back(Mold {

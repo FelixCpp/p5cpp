@@ -202,7 +202,7 @@ struct TowerSketch : p5cpp::Sketch
 
     float bgTime = 0.f;
     std::shared_ptr<Shader> bgShader;
-    std::shared_ptr<Framebuffer> bgCanvas;
+    std::shared_ptr<FramebufferImpl> bgCanvas;
     std::mt19937 rng {std::random_device {}()};
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ struct TowerSketch : p5cpp::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<Framebuffer>(createFramebuffer(W, H).release());
+        bgCanvas = std::shared_ptr<FramebufferImpl>(createFramebuffer(W, H).release());
         initStars();
     }
 

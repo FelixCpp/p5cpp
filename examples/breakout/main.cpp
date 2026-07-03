@@ -155,7 +155,7 @@ struct BreakoutSketch : p5cpp::Sketch
     std::vector<Star> stars;
 
     std::shared_ptr<Shader> bgShader;
-    std::shared_ptr<Framebuffer> bgCanvas;
+    std::shared_ptr<FramebufferImpl> bgCanvas;
 
     std::mt19937 rng {std::random_device {}()};
 
@@ -246,7 +246,7 @@ struct BreakoutSketch : p5cpp::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<Framebuffer>(createFramebuffer(W, H).release());
+        bgCanvas = std::shared_ptr<FramebufferImpl>(createFramebuffer(W, H).release());
         initStars();
         initGame();
     }

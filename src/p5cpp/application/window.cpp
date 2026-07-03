@@ -85,14 +85,14 @@ namespace p5cpp
         int2 getLogicalSize() override
         {
             int width, height;
-            glfwGetWindowSize(window, &width, &height);
+            glfwGetFramebufferSize(window, &width, &height);
             return int2 {width, height};
         }
 
         int2 getPhysicalSize() override
         {
             int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
+            glfwGetWindowSize(window, &width, &height);
             return int2 {width, height};
         }
 

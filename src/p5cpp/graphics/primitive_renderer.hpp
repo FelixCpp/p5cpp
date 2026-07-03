@@ -3,6 +3,7 @@
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/render_state.hpp>
 #include <p5cpp/graphics/shaping.hpp>
+#include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/math/value2.hpp>
 
 #include <array>
@@ -13,7 +14,7 @@ namespace p5cpp
     class PrimitiveRenderer
     {
     public:
-        PrimitiveRenderer();
+        explicit PrimitiveRenderer(Renderer* renderer, UniformCache* uniformCache);
 
         void beginShape();
         void endShape(ShapeType type, bool close, const RenderState& renderState);
@@ -33,12 +34,18 @@ namespace p5cpp
             stroke,
         };
 
-        void endShapeFillOnly(ShapeType type, bool close, ColorChoice choice, const RenderState& renderState);
-        void endShapeStrokeOnly(ShapeType type, bool close, ColorChoice choice, const RenderState& renderState);
-        void endShapeStrokeAsFill(ShapeType type, bool close, const RenderState& renderState);
+        struct ShapeDetails
+        {
+            ColorChoice colorChoice;
+            ShapeType shapeType;
+        };
 
-        PathPoints buildFillDrawPoints() const;
-        PathPoints buildStrokeDrawPoints() const;
+        static ShapeDetails filled(ShapeType shapeType);
+        static ShapeDetails stroked(ShapeType shapeType);
+
+        void endShapeImpl(const std::optional<ShapeDetails>& fill, const std::optional<ShapeDetails>& stroke, bool close, const RenderState& renderState);
+
+        PathPoints buildPathPoints(ColorChoice colorChoice) const;
 
         size_t drawPointCount;
         size_t drawPointCapacity;
@@ -50,5 +57,8 @@ namespace p5cpp
 
         std::array<float2, 4> curveVertexPositions;
         size_t curveVertexCount;
+
+        Renderer* renderer;
+        UniformCache* uniformCache;
     };
 } // namespace p5cpp

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/graphics/shader.hpp>
+#include <p5cpp/graphics/texture.hpp>
+#include <p5cpp/graphics/uniform_cache.hpp>
 
 #include "vertex.hpp"
 
@@ -23,19 +25,17 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    struct UniformCache;
-
     struct Renderer
     {
         static std::unique_ptr<Renderer> create(size_t vertexCount, size_t indexCount);
 
         virtual ~Renderer() = default;
 
-        virtual void begin(Framebuffer* framebuffer) = 0;
+        virtual void begin(FramebufferImpl* framebuffer) = 0;
         virtual void end() = 0;
         virtual void flush() = 0;
 
-        virtual void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) = 0;
+        virtual void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, const Texture* texture) = 0;
 
         virtual DrawScope getDrawScope() = 0;
     };

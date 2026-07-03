@@ -72,10 +72,10 @@ public:
         position += velocity * deltaTime;
         acceleration = float2(0.0f, 0.0f);
 
-        if (position.x < 0) position.x = getWidth();
-        if (position.x > getWidth()) position.x = 0;
-        if (position.y < 0) position.y = getHeight();
-        if (position.y > getHeight()) position.y = 0;
+        if (position.x < 0) position.x = getLogicalWidth();
+        if (position.x > getLogicalWidth()) position.x = 0;
+        if (position.y < 0) position.y = getLogicalHeight();
+        if (position.y > getLogicalHeight()) position.y = 0;
     }
 
     void show()
@@ -214,20 +214,20 @@ struct SteeringBehavior : Sketch
         setWindowSize(1024, 1024);
 
         for (size_t i = 0; i < 5; ++i) {
-            const float x = randomFloat(getWidth());
-            const float y = randomFloat(getHeight());
+            const float x = randomFloat(getLogicalWidth());
+            const float y = randomFloat(getLogicalHeight());
             vehicles.push_back(Vehicle {float2(x, y)});
         }
 
         for (size_t i = 0; i < 20; ++i) {
-            const float x = randomFloat(getWidth());
-            const float y = randomFloat(getHeight());
+            const float x = randomFloat(getLogicalWidth());
+            const float y = randomFloat(getLogicalHeight());
             food.push_back(float2(x, y));
         }
 
         for (size_t i = 0; i < 20; ++i) {
-            const float x = randomFloat(getWidth());
-            const float y = randomFloat(getHeight());
+            const float x = randomFloat(getLogicalWidth());
+            const float y = randomFloat(getLogicalHeight());
             poison.push_back(float2(x, y));
         }
     }
@@ -245,15 +245,15 @@ struct SteeringBehavior : Sketch
 
         if (foodSpawnTimer >= 0.5f) {
             foodSpawnTimer = 0.0f;
-            const float x = randomFloat(getWidth());
-            const float y = randomFloat(getHeight());
+            const float x = randomFloat(getLogicalWidth());
+            const float y = randomFloat(getLogicalHeight());
             food.push_back(float2(x, y));
         }
 
         if (poisonSpawnTimer >= 1.0f) {
             poisonSpawnTimer = 0.0f;
-            const float x = randomFloat(getWidth());
-            const float y = randomFloat(getHeight());
+            const float x = randomFloat(getLogicalWidth());
+            const float y = randomFloat(getLogicalHeight());
             poison.push_back(float2(x, y));
         }
 

@@ -1,4 +1,4 @@
-#include "input_module.hpp"
+#include <p5cpp/application/input_module.hpp>
 
 #include <p5cpp/application/window.hpp>
 #include <p5cpp/application/logging.hpp>
@@ -13,20 +13,15 @@ namespace p5cpp
         Window& window = context.require<Window>();
 
         const int2 mousePosition = window.getMousePosition();
-        data.mouseX = mousePosition.x;
-        data.mouseY = mousePosition.y;
-        data.pmouseX = mousePosition.x;
-        data.pmouseY = mousePosition.y;
+        m_inputComponent.updateMousePosition(mousePosition.x, mousePosition.y);
 
         const int2 logicalSize = window.getLogicalSize();
-        data.logicalWidth = logicalSize.x;
-        data.logicalHeight = logicalSize.y;
+        m_inputComponent.updateLogicalSize(logicalSize.x, logicalSize.y);
 
         const int2 physicalSize = window.getPhysicalSize();
-        data.physicalWidth = physicalSize.x;
-        data.physicalHeight = physicalSize.y;
+        m_inputComponent.updatePhysicalSize(physicalSize.x, physicalSize.y);
 
-        context.registerService(&data);
+        context.registerService(&m_inputComponent);
         next();
     }
 
@@ -34,20 +29,15 @@ namespace p5cpp
     {
         switch (event.type) {
             case EventType::mouseMove:
-                data.pmouseX = data.mouseX;
-                data.pmouseY = data.mouseY;
-                data.mouseX = event.mouseMove.x;
-                data.mouseY = event.mouseMove.y;
+                m_inputComponent.updateMousePosition(event.mouseMove.x, event.mouseMove.y);
                 break;
 
             case EventType::windowResize:
-                data.logicalWidth = event.windowResize.width;
-                data.logicalHeight = event.windowResize.height;
+                m_inputComponent.updateLogicalSize(event.windowResize.width, event.windowResize.height);
                 break;
 
             case EventType::framebufferResize:
-                data.physicalWidth = event.framebufferResize.width;
-                data.physicalHeight = event.framebufferResize.height;
+                m_inputComponent.updatePhysicalSize(event.framebufferResize.width, event.framebufferResize.height);
                 break;
 
             default:
@@ -55,6 +45,12 @@ namespace p5cpp
         }
 
         next();
+    }
+
+    void InputModule::destroy(AppContext& context, Next next)
+    {
+        next();
+        context.unregisterService<InputComponent>();
     }
 
 } // namespace p5cpp

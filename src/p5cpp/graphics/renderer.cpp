@@ -1,6 +1,5 @@
-#include "renderer.hpp"
-#include "uniform_cache.hpp"
-#include "../vertex.hpp"
+#include <p5cpp/graphics/renderer.hpp>
+#include <p5cpp/graphics/uniform_cache.hpp>
 
 #include <glad/glad.h>
 
@@ -45,7 +44,7 @@ namespace p5cpp
         Shader* shader;
         BlendMode blendMode;
 
-        std::array<Texture*, 8> textures;
+        std::array<const Texture*, 8> textures;
         size_t textureCount;
 
         std::vector<UniformSnapshot> uniforms;
@@ -97,12 +96,12 @@ namespace p5cpp
             glDeleteBuffers(1, &ebo);
         }
 
-        void begin(Framebuffer* framebuffer) override
+        void begin(FramebufferImpl* framebuffer) override
         {
             const uint2 logicalSize = framebuffer->getSize();
             orthoProjection = matrix4x4::ortho(0.0f, static_cast<float>(logicalSize.y), static_cast<float>(logicalSize.x), 0.0f, -1.0f, 1.0f);
 
-            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getRendererId());
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getFramebufferId().value);
             glViewport(0, 0, logicalSize.x, logicalSize.y);
 
             glBindVertexArray(vao);
@@ -157,7 +156,7 @@ namespace p5cpp
 
                 for (size_t i = 0; i < command.textureCount; ++i) {
                     glActiveTexture(GL_TEXTURE0 + i);
-                    glBindTexture(GL_TEXTURE_2D, command.textures[i]->getRendererId());
+                    glBindTexture(GL_TEXTURE_2D, command.textures[i]->getTextureId().value);
                 }
 
                 glDrawElements(GL_TRIANGLES, command.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(command.drawBufferIndexStart * sizeof(uint32_t)));
@@ -168,7 +167,7 @@ namespace p5cpp
             indexCursor = 0;
         }
 
-        void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, Texture* texture) override
+        void submit(DrawScope scope, UniformCache& uniformCache, Shader* shader, BlendMode blendMode, const Texture* texture) override
         {
             DrawCommand* targetCommand = nullptr;
 
@@ -228,8 +227,6 @@ namespace p5cpp
             }
 
             targetCommand->drawBufferIndexCount += scope.indexCursor - scope.baseIndex;
-            targetCommand->shader = shader;
-            targetCommand->blendMode = blendMode;
 
             int textureIndex = -1;
             for (size_t i = 0; i < targetCommand->textureCount; ++i) {

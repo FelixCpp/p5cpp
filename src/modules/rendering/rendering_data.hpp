@@ -1,9 +1,10 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/graphics/shader.hpp>
+#include <p5cpp/graphics/uniform_cache.hpp>
+#include <p5cpp/graphics/renderer.hpp>
+#include <p5cpp/graphics/render_state_stack.hpp>
 
-#include "../../services/uniform_cache.hpp"
-#include "../../services/renderer.hpp"
 #include "../../render_state_stack.hpp"
 
 #include <memory>
@@ -15,11 +16,11 @@ namespace p5cpp
         std::shared_ptr<Shader> defaultShader;
         std::shared_ptr<Shader> textShader;
         std::shared_ptr<Font> defaultFont;
-        std::shared_ptr<Framebuffer> defaultFramebuffer;
+        std::shared_ptr<FramebufferImpl> defaultFramebuffer;
         std::shared_ptr<Texture> whiteTexture;
         std::shared_ptr<Renderer> renderer;
         std::shared_ptr<UniformCache> uniformCache;
-        std::vector<Framebuffer*> framebufferStack;
+        std::vector<FramebufferImpl*> framebufferStack;
 
         RenderStateStack renderStateStack;
     };

@@ -1,12 +1,12 @@
-#include <p5cpp/p5cpp.hpp>
-
-#include <optional>
-#include <algorithm>
+#include <p5cpp/graphics/font.hpp>
+#include <p5cpp/application/logging.hpp>
 
 #include <glad/glad.h>
-
 #include <freetype/freetype.h>
+
 #include <unordered_map>
+#include <optional>
+#include <vector>
 
 namespace p5cpp
 {
@@ -162,7 +162,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    class GlyphAtlasTexture : public Texture
+    class GlyphAtlasTexture : public TextureImpl
     {
     public:
         static std::unique_ptr<GlyphAtlasTexture> create(int width, int height)
@@ -182,30 +182,26 @@ namespace p5cpp
             return std::unique_ptr<GlyphAtlasTexture>(new GlyphAtlasTexture(textureId, width, height));
         }
 
+        uint2 getSize() const override
+        {
+            return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+        }
+
+        TextureId getTextureId() const override
+        {
+            return TextureId {.value = textureId};
+        }
+
+        void upload(std::span<const color_t> data) override
+        {
+            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture.");
+        }
+
         void store(int x, int y, int width, int height, std::span<const uint8_t> bitmapData)
         {
             glBindTexture(GL_TEXTURE_2D, textureId);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
-        }
-
-        void update(std::span<const uint8_t> imageData)
-        {
-            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture with image data.");
-        }
-
-        void update(std::span<const color_t> pixelData)
-        {
-            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture with pixel data.");
-        }
-
-        uint32_t getRendererId() const
-        {
-            return textureId;
-        }
-        uint2 getSize() const
-        {
-            return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
         }
 
     private:
@@ -225,18 +221,14 @@ namespace p5cpp
     {
     public:
         explicit GlyphAtlas(int width, int height, int paddingX, int paddingY)
-            : m_width(width), m_height(height), m_paddingX(paddingX), m_paddingY(paddingY), m_texture(GlyphAtlasTexture::create(width, height)), m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
+            : m_width(width),
+              m_height(height),
+              m_paddingX(paddingX),
+              m_paddingY(paddingY),
+              m_atlasTexture(GlyphAtlasTexture::create(width, height)),
+              m_texture(m_atlasTexture),
+              m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
         {
-            // glGenTextures(1, &m_textureId);
-            // glBindTexture(GL_TEXTURE_2D, m_textureId);
-            // glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            //
-            // constexpr GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
-            // glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
         }
 
         std::optional<GlyphRegion> store(int bitmapWidth, int bitmapHeight, std::span<const uint8_t> bitmapData)
@@ -254,10 +246,7 @@ namespace p5cpp
                 return std::nullopt;
             }
 
-            // glBindTexture(GL_TEXTURE_2D, m_textureId);
-            // glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            // glTexSubImage2D(GL_TEXTURE_2D, 0, placed->left, placed->top, static_cast<GLsizei>(bitmapWidth), static_cast<GLsizei>(bitmapHeight), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
-            m_texture->store(placed->left, placed->top, bitmapWidth, bitmapHeight, bitmapData);
+            m_atlasTexture->store(placed->left, placed->top, bitmapWidth, bitmapHeight, bitmapData);
 
             const float uvLeft = static_cast<float>(placed->left) / static_cast<float>(m_width);
             const float uvTop = static_cast<float>(placed->top) / static_cast<float>(m_height);
@@ -275,9 +264,9 @@ namespace p5cpp
             };
         }
 
-        Texture* getTexture()
+        const Texture* getTexture() const
         {
-            return m_texture.get();
+            return &m_texture;
         }
 
     private:
@@ -285,7 +274,9 @@ namespace p5cpp
         int m_height;
         int m_paddingX;
         int m_paddingY;
-        std::unique_ptr<GlyphAtlasTexture> m_texture;
+
+        std::shared_ptr<GlyphAtlasTexture> m_atlasTexture;
+        Texture m_texture;
 
         std::unique_ptr<BinPackingStrategy> m_packingStrategy;
     };
@@ -481,7 +472,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    class FreetypeFont : public Font
+    class FreetypeFont : public FontImpl
     {
     public:
         static std::unique_ptr<FreetypeFont> loadFromFile(const std::filesystem::path& fontFilePath)
@@ -618,7 +609,7 @@ namespace p5cpp
             return kerningValue;
         }
 
-        Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override
+        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override
         {
             if (glyphAtlasIndex >= m_glyphAtlasPages.size()) {
                 return 0; // Invalid atlas index.
@@ -644,13 +635,41 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    std::unique_ptr<Font> loadFont(const std::filesystem::path& fontFilePath)
+    std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath)
     {
         return FreetypeFont::loadFromFile(fontFilePath);
     }
 
-    std::unique_ptr<Font> loadFont(std::span<const uint8_t> fontData)
+    std::unique_ptr<FontImpl> loadFont(std::span<const uint8_t> fontData)
     {
         return FreetypeFont::loadFromMemory(fontData);
+    }
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    Font::Font(std::shared_ptr<FontImpl> impl)
+        : impl(std::move(impl))
+    {
+    }
+
+    const Glyph* Font::getGlyph(char32_t codepoint, int textSize)
+    {
+        return impl->getGlyph(codepoint, textSize);
+    }
+
+    const FontMetrics* Font::getMetrics(int textSize)
+    {
+        return impl->getMetrics(textSize);
+    }
+
+    float Font::getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize)
+    {
+        return impl->getKerning(leftCodepoint, rightCodepoint, textSize);
+    }
+
+    const Texture* Font::getGlyphAtlasTexture(size_t glyphAtlasIndex)
+    {
+        return impl->getGlyphAtlasTexture(glyphAtlasIndex);
     }
 } // namespace p5cpp

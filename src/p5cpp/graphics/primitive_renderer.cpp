@@ -1,9 +1,14 @@
 #include <p5cpp/graphics/primitive_renderer.hpp>
+#include <p5cpp/graphics/tess.hpp>
 
 namespace p5cpp
 {
-    PrimitiveRenderer::PrimitiveRenderer()
-        : curveVertexCount(0)
+    PrimitiveRenderer::PrimitiveRenderer(Renderer* renderer, UniformCache* uniformCache)
+        : drawPointCount(0),
+          drawPointCapacity(0),
+          curveVertexCount(0),
+          renderer(renderer),
+          uniformCache(uniformCache)
     {
     }
 
@@ -13,6 +18,7 @@ namespace p5cpp
 
     void PrimitiveRenderer::endShape(ShapeType type, bool close, const RenderState& renderState)
     {
+        endShapeImpl(filled(type), stroked(ShapeType::lineStrip), close, renderState);
     }
 
     void PrimitiveRenderer::vertex(float x, float y, float u, float v, const RenderState& renderState)
@@ -108,7 +114,7 @@ namespace p5cpp
                     vertex(x, y, 0.0f, 0.0f, renderState);
                 }
             }
-            endShapeFillOnly(ShapeType::triangleFan, true, ColorChoice::fill, renderState);
+            endShapeImpl(filled(ShapeType::triangleFan), std::nullopt, true, renderState);
         }
 
         if (not renderState.isStrokeDisabled) {
@@ -121,7 +127,7 @@ namespace p5cpp
                     vertex(x, y, 0.0f, 0.0f, renderState);
                 }
             }
-            endShapeStrokeOnly(ShapeType::lineLoop, true, ColorChoice::stroke, renderState);
+            endShapeImpl(std::nullopt, stroked(ShapeType::lineLoop), true, renderState);
         }
     }
 
@@ -142,26 +148,76 @@ namespace p5cpp
             float py = y + radius * std::sin(angle);
             vertex(px, py, 0.0f, 0.0f, renderState);
         }
-        endShapeStrokeAsFill(ShapeType::triangleFan, true, renderState);
+        endShapeImpl(stroked(ShapeType::triangleFan), std::nullopt, false, renderState);
     }
 
-    PathPoints PrimitiveRenderer::buildFillDrawPoints() const
+    PrimitiveRenderer::ShapeDetails PrimitiveRenderer::filled(ShapeType shapeType)
     {
-        return PathPoints {
-            .size = drawPointCount,
-            .positions = std::span<const float2>(drawPointPositions.get(), drawPointCount),
-            .texcoords = std::span<const float2>(drawPointTexCoords.get(), drawPointCount),
-            .colors = std::span<const color_t>(drawPointFillColors.get(), drawPointCount),
+        return ShapeDetails {
+            .colorChoice = ColorChoice::fill,
+            .shapeType = shapeType,
         };
     }
 
-    PathPoints PrimitiveRenderer::buildStrokeDrawPoints() const
+    PrimitiveRenderer::ShapeDetails PrimitiveRenderer::stroked(ShapeType shapeType)
+    {
+        return ShapeDetails {
+            .colorChoice = ColorChoice::stroke,
+            .shapeType = shapeType,
+        };
+    }
+
+    void PrimitiveRenderer::endShapeImpl(const std::optional<ShapeDetails>& fill, const std::optional<ShapeDetails>& stroke, bool close, const RenderState& renderState)
+    {
+        DrawScope scope = renderer->getDrawScope();
+        // TODO(Felix): Flush if needed
+
+        if (fill.has_value()) {
+            const PathPoints pathPoints = buildPathPoints(fill->colorChoice);
+
+            switch (fill->shapeType) {
+                case ShapeType::lines:
+                case ShapeType::lineStrip:
+                case ShapeType::lineLoop:
+                case ShapeType::triangles: tesselate_triangles(scope, pathPoints); break;
+                case ShapeType::triangleStrip: tesselate_triangle_strip(scope, pathPoints); break;
+                case ShapeType::triangleFan: tesselate_triangle_fan(scope, pathPoints); break;
+                case ShapeType::quads: tesselate_quads(scope, pathPoints); break;
+                case ShapeType::quadStrip: tesselate_quad_strip(scope, pathPoints); break;
+                case ShapeType::polygon: tesselate_polygon(scope, pathPoints); break;
+            }
+
+            renderer->submit(scope, *uniformCache, renderState.shader.get(), renderState.blendMode, nullptr);
+        }
+
+        if (stroke.has_value()) {
+            const PathPoints pathPoints = buildPathPoints(stroke->colorChoice);
+
+            switch (stroke->shapeType) {
+                case ShapeType::lines: stroke_lines(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::lineStrip: stroke_line_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::lineLoop: stroke_line_loop(scope, pathPoints, renderState.strokeWeight, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::triangles: stroke_triangles(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::triangleStrip: stroke_triangle_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::triangleFan: stroke_triangle_fan(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::quads: stroke_quads(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::quadStrip: stroke_quad_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
+                case ShapeType::polygon: stroke_polygon(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, close); break;
+            }
+
+            renderer->submit(scope, *uniformCache, renderState.shader.get(), renderState.blendMode, nullptr);
+        }
+    }
+
+    PathPoints PrimitiveRenderer::buildPathPoints(ColorChoice colorChoice) const
     {
         return PathPoints {
             .size = drawPointCount,
             .positions = std::span<const float2>(drawPointPositions.get(), drawPointCount),
             .texcoords = std::span<const float2>(drawPointTexCoords.get(), drawPointCount),
-            .colors = std::span<const color_t>(drawPointStrokeColors.get(), drawPointCount),
+            .colors = (colorChoice == ColorChoice::fill)
+                          ? std::span<const color_t>(drawPointFillColors.get(), drawPointCount)
+                          : std::span<const color_t>(drawPointStrokeColors.get(), drawPointCount),
         };
     }
 } // namespace p5cpp
