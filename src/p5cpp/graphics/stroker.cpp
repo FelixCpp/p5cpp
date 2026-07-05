@@ -1,6 +1,5 @@
-#include "stroker.hpp"
-#include "linepath.hpp"
-#include "services/renderer.hpp"
+#include <p5cpp/graphics/stroker.hpp>
+#include <p5cpp/graphics/renderer.hpp>
 
 #include <optional>
 

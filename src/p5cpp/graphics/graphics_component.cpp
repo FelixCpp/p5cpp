@@ -348,6 +348,210 @@ namespace p5cpp
     void GraphicsComponent::ellipse(float centerX, float centerY, float width, float height)
     {
         const RenderState& renderState = peekRenderState();
+        const float radiusX = width * 0.5f;
+        const float radiusY = height * 0.5f;
+        const size_t segmentCount = computeCircleSegmentCount(TWO_PI, std::max(radiusX, radiusY));
+
+        beginShape();
+        for (size_t i = 0; i <= segmentCount; ++i) {
+            const float angle = TWO_PI / static_cast<float>(segmentCount) * static_cast<float>(i);
+            const float x = centerX + std::cos(angle) * radiusX;
+            const float y = centerY + std::sin(angle) * radiusY;
+            vertex(x, y, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        }
+        endShape(ShapeType::triangleFan, true);
+    }
+
+    void GraphicsComponent::triangle(float x1, float y1, float x2, float y2, float x3, float y3)
+    {
+        const RenderState& renderState = peekRenderState();
+        beginShape();
+        vertex(x1, y1, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        vertex(x2, y2, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        vertex(x3, y3, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        endShape(ShapeType::triangles, true);
+    }
+
+    void GraphicsComponent::line(float x1, float y1, float x2, float y2)
+    {
+        const RenderState& renderState = peekRenderState();
+        beginShape();
+        vertex(x1, y1, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        vertex(x2, y2, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        endShape(ShapeType::lines, false);
+    }
+
+    void GraphicsComponent::arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
+    {
+        const RenderState& renderState = peekRenderState();
+        const float radiusX = width * 0.5f;
+        const float radiusY = height * 0.5f;
+        const size_t segmentCount = computeCircleSegmentCount(sweepAngle, std::max(radiusX, radiusY));
+
+        beginShape();
+
+        if (arcMode == ArcMode::pie) {
+            vertex(centerX, centerY, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        }
+
+        for (size_t i = 0; i <= segmentCount; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(segmentCount);
+            const float angle = startAngle + t * sweepAngle;
+            const float x = centerX + std::cos(angle) * radiusX;
+            const float y = centerY + std::sin(angle) * radiusY;
+            vertex(x, y, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        }
+
+        endShape(ShapeType::polygon, arcMode != ArcMode::open);
+    }
+
+    void GraphicsComponent::bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        const RenderState& renderState = peekRenderState();
+        beginShape();
+        for (size_t i = 0; i <= renderState.bezierDetail; ++i) {
+            const float t = static_cast<float>(i) * renderState.invBezierDetail;
+
+            const float mt = 1.0f - t;
+            const float mt2 = mt * mt;
+            const float mt3 = mt2 * mt;
+            const float t2 = t * t;
+            const float t3 = t2 * t;
+
+            const float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
+            const float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
+
+            vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        }
+        endShape(ShapeType::lineStrip, false);
+    }
+
+    void GraphicsComponent::curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        const RenderState& renderState = peekRenderState();
+        const float alpha = (1.0f - renderState.curveTightness) * 0.5f;
+
+        beginShape();
+        for (size_t i = 0; i <= renderState.curveDetail; ++i) {
+            const float t = static_cast<float>(i) * renderState.invCurveDetail;
+            const float t2 = t * t;
+            const float t3 = t2 * t;
+
+            const float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
+            const float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
+
+            vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        }
+        endShape(ShapeType::lineStrip, false);
+    }
+
+    void GraphicsComponent::image(const Texture* texture, float left, float top, float width, float height)
+    {
+    }
+
+    void GraphicsComponent::text(std::string_view text, float x, float y, std::optional<float> maxWidth)
+    {
+    }
+
+    void GraphicsComponent::beginShape()
+    {
+    }
+
+    void GraphicsComponent::endShape(ShapeType type, bool close)
+    {
+        const RenderState& renderState = peekRenderState();
+        endShapeImpl(filled(type), stroked(type), close, renderState);
+    }
+
+    void GraphicsComponent::vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor)
+    {
+        if (m_drawPointCount >= m_drawPointCapacity) {
+            const size_t newCapacity = std::max(m_drawPointCount * 2uz, 4uz);
+
+            std::unique_ptr<float2[]> newPositions = std::make_unique<float2[]>(newCapacity);
+            std::unique_ptr<float2[]> newTexCoords = std::make_unique<float2[]>(newCapacity);
+            std::unique_ptr<color_t[]> newFillColors = std::make_unique<color_t[]>(newCapacity);
+            std::unique_ptr<color_t[]> newStrokeColors = std::make_unique<color_t[]>(newCapacity);
+
+            if (m_drawPointCount > 0) {
+                std::copy(m_drawPointPositions.get(), m_drawPointPositions.get() + m_drawPointCount, newPositions.get());
+                std::copy(m_drawPointTexCoords.get(), m_drawPointTexCoords.get() + m_drawPointCount, newTexCoords.get());
+                std::copy(m_drawPointFillColors.get(), m_drawPointFillColors.get() + m_drawPointCount, newFillColors.get());
+                std::copy(m_drawPointStrokeColors.get(), m_drawPointStrokeColors.get() + m_drawPointCount, newStrokeColors.get());
+            }
+
+            m_drawPointPositions = std::move(newPositions);
+            m_drawPointTexCoords = std::move(newTexCoords);
+            m_drawPointFillColors = std::move(newFillColors);
+            m_drawPointStrokeColors = std::move(newStrokeColors);
+            m_drawPointCapacity = newCapacity;
+        }
+
+        const RenderState& renderState = peekRenderState();
+        const matrix4x4& matrix = renderState.metrics.peek();
+        const float2 transformedPosition = matrix.transformPoint(x, y);
+
+        m_drawPointPositions[m_drawPointCount] = transformedPosition;
+        m_drawPointTexCoords[m_drawPointCount] = float2 {u, v};
+        m_drawPointFillColors[m_drawPointCount] = renderState.fillColor;
+        m_drawPointStrokeColors[m_drawPointCount] = renderState.strokeColor;
+        ++m_drawPointCount;
+
+        m_curveVertexCount = 0; // Reset curve vertex count when a regular vertex is added
+    }
+
+    void GraphicsComponent::curveVertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor)
+    {
+        m_curveVertexPositions[m_curveVertexCount] = float2 {x, y};
+        m_curveVertexCount++;
+
+        if (m_curveVertexCount == 4) {
+            const RenderState& renderState = peekRenderState();
+            const float alpha = (1.0f - renderState.curveTightness) * 0.5f;
+
+            auto [x1, y1] = m_curveVertexPositions[0];
+            auto [x2, y2] = m_curveVertexPositions[1];
+            auto [x3, y3] = m_curveVertexPositions[2];
+            auto [x4, y4] = m_curveVertexPositions[3];
+
+            for (size_t j = 0; j <= renderState.curveDetail; ++j) {
+                float t = static_cast<float>(j) * renderState.invCurveDetail;
+                float t2 = t * t;
+                float t3 = t2 * t;
+
+                float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
+                float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
+
+                vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+            }
+
+            m_curveVertexCount = 0;
+        }
+    }
+
+    void GraphicsComponent::bezierVertex(float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        const RenderState& renderState = peekRenderState();
+        if (m_drawPointCount < 1) {
+            return; // Not enough points to define a Bezier curve
+        }
+
+        auto [x1, y1] = m_drawPointPositions[m_drawPointCount - 1];
+
+        for (size_t i = 0; i <= renderState.bezierDetail; ++i) {
+            float t = static_cast<float>(i) * renderState.invBezierDetail;
+
+            float mt = 1.0f - t;
+            float mt2 = mt * mt;
+            float mt3 = mt2 * mt;
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
+            float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
+
+            vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        }
     }
 
     void GraphicsComponent::endShapeImpl(const std::optional<ShapeDetails>& fill, const std::optional<ShapeDetails>& stroke, bool close, const RenderState& renderState)
@@ -390,5 +594,26 @@ namespace p5cpp
 
             m_renderer->submit(scope, m_uniformCache, getShader(renderState), renderState.blendMode, m_whiteTexture);
         }
+    }
+
+    size_t GraphicsComponent::computeCircleSegmentCount(float angle, float radius)
+    {
+        const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
+
+        if (radius <= 0.0f)
+            return 0;
+
+        // Clamp, um numerische Probleme zu vermeiden
+        const float cosValue = 1.0f - (error / radius);
+        const float clamped = std::clamp(cosValue, -1.0f, 1.0f);
+
+        const float step = std::acos(clamped);
+
+        if (step <= 0.0f)
+            return 4;
+
+        const size_t segments = static_cast<size_t>(std::ceil(std::abs(angle) / step));
+
+        return std::max<size_t>(segments, 4);
     }
 } // namespace p5cpp

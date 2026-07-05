@@ -79,7 +79,7 @@ namespace p5cpp
         void beginShape();
         void endShape(ShapeType type, bool close);
         void vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor);
-        void curveVertex(float x, float y, color_t fillColor, color_t strokeColor);
+        void curveVertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor);
 
         TextLayout measureText(std::string_view text, const Font& font, float textSize, float letterSpacing, float lineSpacing, TextAlign align, TextWrap wrap, std::optional<float> maxWidth);
         TextLayout measureText(std::string_view text);
@@ -105,6 +105,7 @@ namespace p5cpp
 
         Shader getShader(const RenderState& renderState);
         Texture getTexture(const RenderState& renderState);
+        size_t computeCircleSegmentCount(float angle, float radius);
 
         std::unique_ptr<float2[]> m_drawPointPositions;
         std::unique_ptr<float2[]> m_drawPointTexCoords;
@@ -113,6 +114,9 @@ namespace p5cpp
 
         size_t m_drawPointCount;
         size_t m_drawPointCapacity;
+
+        std::array<float2, 4> m_curveVertexPositions;
+        size_t m_curveVertexCount;
 
         std::vector<Framebuffer> m_framebufferStack;
 
