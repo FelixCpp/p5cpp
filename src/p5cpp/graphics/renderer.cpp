@@ -47,7 +47,7 @@ namespace p5cpp
         {
         }
 
-        void submit(DrawBufferWriter& scope, UniformCache& uniformCache, const Shader& shader, BlendMode blendMode, const Texture& texture) override
+        void submit(DrawBufferWriter& scope, UniformCache& uniformCache, const Shader& shader, const BlendMode& blendMode, const Texture& texture) override
         {
         }
 

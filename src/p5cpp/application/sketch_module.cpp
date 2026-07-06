@@ -1,5 +1,5 @@
-#include "sketch_module.hpp"
-
+#include <p5cpp/application/sketch_module.hpp>
+#include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/app_context.hpp>
 
 namespace p5cpp
@@ -8,7 +8,10 @@ namespace p5cpp
     {
         info("SketchModule setup");
 
+        Engine& engine = context.require<Engine>();
+
         sketch = createSketch();
+        sketch->plugins(engine);
         sketch->setup();
 
         context.registerService(sketch.get());

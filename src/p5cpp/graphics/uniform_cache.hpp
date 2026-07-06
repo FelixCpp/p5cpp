@@ -24,7 +24,7 @@ namespace p5cpp
 
         std::vector<UniformSnapshot> getUniforms(const Shader& shader);
 
-        std::unordered_map<ShaderId, std::vector<UniformSnapshot>> uniformsByShader;
-        std::unordered_set<ShaderId> dirtyShaders;
+        std::unordered_map<ShaderId, std::vector<UniformSnapshot>, ShaderHasher> uniformsByShader;
+        std::unordered_set<ShaderId, ShaderHasher> dirtyShaders;
     };
 } // namespace p5cpp

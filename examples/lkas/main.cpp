@@ -2,20 +2,11 @@
 
 using namespace p5cpp;
 
-struct Particle
+struct ExampleModule : Module
 {
-    float2 pos;
-    float2 vel;
-    float life; // 0..1
-};
-
-class MyCustomPlugin : public Module
-{
-public:
     void setup(AppContext& context, Next next) override
     {
-        blurCanvas = createFramebuffer(getLogicalWidth(), getLogicalHeight());
-
+        info("ExampleModule setup");
         next();
     }
 
@@ -26,68 +17,36 @@ public:
 
     void draw(AppContext& context, Next next) override
     {
-        pushCanvas(blurCanvas);
+        const float mx = static_cast<float>(getMouseX());
+        const float my = static_cast<float>(getMouseY());
+
+        noFill();
+        stroke(0, 255, 0, 255);
+        circle(mx, my, 100.0f);
+
         next();
-        popCanvas();
     }
 
     void destroy(AppContext& context, Next next) override
     {
         next();
     }
-
-private:
-    std::shared_ptr<FramebufferImpl> blurCanvas;
 };
 
-struct ParticleSketch : Sketch
+struct ExampleSketch : Sketch
 {
-    std::vector<Particle> particles;
+    void plugins(Engine& engine) override
+    {
+        engine.addModule(std::make_unique<ExampleModule>());
+    }
 
     void setup() override
     {
-        randomSeed(42);
-        setWindowSize(800, 600);
-        frameRate(60);
+        info("ExampleSketch setup");
     }
 
     void draw() override
     {
-        background(10, 10, 10, 30); // alpha trail
-
-        fill(255);
-        textSize(24.0f);
-        textAlign(TextAlign::topLeft);
-        text("Framerate: " + std::to_string((int)getFrameRate()), 10, 10);
-
-        const float dt = getDeltaTime();
-
-        // Spawn
-        for (int i = 0; i < 5; ++i) {
-            float2 dir = float2::randomUnit();
-            particles.push_back({
-                {(float)getLogicalWidth() / 2, (float)getLogicalHeight() / 2},
-                dir * randomFloat(50.0f, 150.0f),
-                1.0f,
-            });
-        }
-
-        // Update & draw
-        noStroke();
-        for (auto& p : particles) {
-            p.pos += p.vel * dt;
-            p.life -= dt * 0.5f;
-            p.life = std::max(p.life, 0.0f);
-
-            int alpha = (int)(p.life * 255);
-            fill(200, 120, 255, alpha);
-            circle(p.pos.x, p.pos.y, 6);
-        }
-
-        // Remove dead
-        std::erase_if(particles, [](const Particle& p) {
-            return p.life <= 0.0f;
-        });
     }
 };
 
@@ -95,6 +54,6 @@ namespace p5cpp
 {
     std::unique_ptr<Sketch> createSketch()
     {
-        return std::make_unique<ParticleSketch>();
+        return std::make_unique<ExampleSketch>();
     }
 } // namespace p5cpp

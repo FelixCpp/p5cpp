@@ -1,4 +1,5 @@
 #include <p5cpp/graphics/render_state.hpp>
+#include <p5cpp/math/angle.hpp>
 
 namespace p5cpp
 {
@@ -20,13 +21,13 @@ namespace p5cpp
             .curveTightness = 0.0f,
             .curveDetail = 20,
             .invCurveDetail = 1.0f / 20.0f,
-            .font = nullptr,
+            .font = std::nullopt,
             .textSize = 12.0f,
             .textLetterSpacing = 0.0f,
             .textLineSpacing = 1.0f,
             .textAlign = TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::baseline},
             .textWrap = TextWrap::none,
-            .shader = nullptr,
+            .shader = std::nullopt,
             .blendMode = BlendMode::alpha,
             .metrics = {}
         };

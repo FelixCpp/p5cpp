@@ -1,7 +1,7 @@
-#include "engine.hpp"
-#include "../modules/frame/frame_data.hpp"
+#include <p5cpp/application/engine.hpp>
+#include <p5cpp/application/window_event.hpp>
+#include <p5cpp/application/frame_component.hpp>
 
-#include <p5cpp/p5cpp.hpp>
 #include <p5cpp/application/app_context.hpp>
 
 namespace p5cpp
@@ -26,8 +26,8 @@ namespace p5cpp
 
             setupModules();
 
-            FrameData& frameData = context.require<FrameData>();
-            while (not frameData.closeRequested) {
+            FrameComponent& frameData = context.require<FrameComponent>();
+            while (not frameData.isCloseRequested()) {
                 drawModules();
             }
 

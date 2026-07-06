@@ -30,7 +30,7 @@ namespace p5cpp
         }
 
         template <typename T>
-        T* getOrNull() const
+        inline T* getOrNull() const
         {
             const size_t typeId = getUniqueTypeId<T>();
             if (typeId >= services.size()) {
@@ -41,7 +41,7 @@ namespace p5cpp
         }
 
         template <typename T>
-        T& require() const
+        inline T& require() const
         {
             T* instance = getOrNull<T>();
             assert(instance != nullptr && "Required service not found");

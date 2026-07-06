@@ -80,7 +80,7 @@ namespace p5cpp
         void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void image(const Texture& texture, float left, float top, float width, float height);
-        void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
+        void text(std::string_view text, float x, float y);
 
         void beginShape();
         void endShape(ShapeType type, bool close);
@@ -88,26 +88,9 @@ namespace p5cpp
         void curveVertex(float x, float y);
 
     private:
-        enum class ColorChoice {
-            fill,
-            stroke,
-        };
-
-        struct ShapeDetails
-        {
-            ColorChoice colorChoice;
-            ShapeType shapeType;
-        };
-
-        ShapeDetails filled(ShapeType shapeType);
-        ShapeDetails stroked(ShapeType shapeType);
-        void endShapeImpl(const std::optional<ShapeDetails>& fill, const std::optional<ShapeDetails>& stroke, bool close, const RenderState& renderState);
-
-        PathPoints buildPathPoints(ColorChoice colorChoice) const;
-        Shader getCurrentShader(const RenderState& renderState);
+        void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
 
         Shader getShader(const RenderState& renderState);
-        Texture getTexture(const RenderState& renderState);
 
         std::unique_ptr<float2[]> m_drawPointPositions;
         std::unique_ptr<float2[]> m_drawPointTexCoords;

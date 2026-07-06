@@ -1,5 +1,6 @@
 #include <p5cpp/graphics/graphics_module.hpp>
 #include <p5cpp/application/app_context.hpp>
+#include <p5cpp/application/logging.hpp>
 
 #include <p5cpp/application/input_component.hpp>
 
@@ -12,6 +13,8 @@ namespace p5cpp
 
     void GraphicsModule::setup(AppContext& context, Next next)
     {
+        info("GraphicsModule setup");
+
         const InputComponent& inputData = context.require<InputComponent>();
         m_component = std::make_unique<GraphicsComponent>(inputData.getPhysicalWidth(), inputData.getPhysicalHeight());
 

@@ -17,213 +17,83 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void pushCanvas(Framebuffer framebuffer)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.pushCanvas(std::move(framebuffer));
-    }
+    void pushCanvas(const Framebuffer& framebuffer) { getGraphicsComponent().pushCanvas(framebuffer); }
+    void popCanvas() { getGraphicsComponent().popCanvas(); }
 
-    void popCanvas()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.popCanvas();
-    }
+    void pushState() { getGraphicsComponent().pushState(); }
+    void popState() { getGraphicsComponent().popState(); }
 
-    void pushState()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.pushState();
-    }
+    void pushMatrix() { getGraphicsComponent().pushMatrix(); }
+    void popMatrix() { getGraphicsComponent().popMatrix(); }
+    void resetMatrix() { getGraphicsComponent().resetMatrix(); }
+    matrix4x4& peekMatrix() { return getGraphicsComponent().peekMatrix(); }
+    void applyMatrix(const matrix4x4& matrix) { getGraphicsComponent().applyMatrix(matrix); }
+    void setMatrix(const matrix4x4& matrix) { getGraphicsComponent().setMatrix(matrix); }
+    void translate(float x, float y) { getGraphicsComponent().translate(x, y); }
+    void scale(float x, float y) { getGraphicsComponent().scale(x, y); }
+    void rotate(float radians) { getGraphicsComponent().rotate(radians); }
 
-    void popState()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.popState();
-    }
+    void noFill() { getGraphicsComponent().noFill(); }
+    void fill(color_t color) { getGraphicsComponent().fill(color); }
+    void fill(int red, int green, int blue, int alpha) { fill(rgba(red, green, blue, alpha)); }
+    void fill(int grey, int alpha) { fill(grey, grey, grey, alpha); }
 
-    void pushMatrix()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.pushMatrix();
-    }
+    void noStroke() { getGraphicsComponent().noStroke(); }
+    void stroke(color_t color) { getGraphicsComponent().fill(color); }
+    void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
+    void stroke(int grey, int alpha) { stroke(grey, grey, grey, alpha); }
 
-    void popMatrix()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.popMatrix();
-    }
+    void strokeWeight(float strokeWeight) { getGraphicsComponent().strokeWeight(strokeWeight); }
+    void strokeCap(StrokeCap strokeCap) { getGraphicsComponent().strokeCap(strokeCap); }
+    void strokeJoin(StrokeJoin strokeJoin) { getGraphicsComponent().strokeJoin(strokeJoin); }
+    void miterLimit(float miterLimit) { getGraphicsComponent().miterLimit(miterLimit); }
+    void roundJoinThreshold(float roundJoinThreshold) { getGraphicsComponent().roundJoinThreshold(roundJoinThreshold); }
 
-    void resetMatrix()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.resetMatrix();
-    }
+    void noTint() { getGraphicsComponent().noTint(); }
+    void tint(color_t color) { getGraphicsComponent().tint(color); }
+    void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
+    void tint(int grey, int alpha) { tint(rgba(grey, alpha)); }
 
-    void applyMatrix(const matrix4x4& matrix)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.applyMatrix(matrix);
-    }
+    void bezierDetail(uint32_t detail) { getGraphicsComponent().bezierDetail(detail); }
+    void curveTightness(float tightness) { getGraphicsComponent().curveTightness(tightness); }
+    void curveDetail(uint32_t detail) { getGraphicsComponent().curveDetail(detail); }
 
-    void setMatrix(const matrix4x4& matrix)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.setMatrix(matrix);
-    }
+    void textFont(Font font) { getGraphicsComponent().textFont(font); }
+    void noTextFont() { getGraphicsComponent().noTextFont(); }
+    void textSize(float size) { getGraphicsComponent().textSize(size); }
+    void textLetterSpacing(float spacing) { getGraphicsComponent().textLetterSpacing(spacing); }
+    void textLineSpacing(float spacing) { getGraphicsComponent().textLineSpacing(spacing); }
+    void textAlign(TextAlign textAlign) { getGraphicsComponent().textAlign(textAlign); }
+    void textWrap(TextWrap textWrap) { getGraphicsComponent().textWrap(textWrap); }
 
-    void translate(float x, float y)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.translate(x, y);
-    }
+    void shader(const Shader& shader) { getGraphicsComponent().shader(shader); }
+    void noShader() { getGraphicsComponent().noShader(); }
+    void blendMode(const BlendMode& blendMode) { getGraphicsComponent().blendMode(blendMode); }
 
-    void scale(float x, float y)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.scale(x, y);
-    }
+    void setUniform(const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(name, variable); }
+    void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(shader, name, variable); }
 
-    void rotate(float radians)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.rotate(radians);
-    }
+    void background(color_t color) { getGraphicsComponent().background(color); }
+    void background(int red, int green, int blue, int alpha) { background(rgba(red, green, blue, alpha)); }
+    void background(int grey, int alpha) { background(grey, grey, grey, alpha); }
 
-    void fill(color_t color)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.fill(color);
-    }
+    void beginShape() { getGraphicsComponent().beginShape(); }
+    void endShape(ShapeType shapeType, bool close) { getGraphicsComponent().endShape(shapeType, close); }
+    void vertex(float x, float y) { getGraphicsComponent().vertex(x, y, 0.0f, 0.0f); }
+    void vertex(float x, float y, float u, float v) { getGraphicsComponent().vertex(x, y, u, v); }
+    void curveVertex(float x, float y) { getGraphicsComponent().curveVertex(x, y); }
 
-    void noFill()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.noFill();
-    }
-
-    void stroke(color_t color)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.stroke(color);
-    }
-
-    void noStroke()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.noStroke();
-    }
-
-    void strokeWeight(float strokeWeight)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.strokeWeight(strokeWeight);
-    }
-
-    void strokeCap(StrokeCap strokeCap)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.strokeCap(strokeCap);
-    }
-
-    void strokeJoin(StrokeJoin strokeJoin)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.strokeJoin(strokeJoin);
-    }
-
-    void miterLimit(float miterLimit)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.miterLimit(miterLimit);
-    }
-
-    void roundJoinThreshold(float roundJoinThreshold)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.roundJoinThreshold(roundJoinThreshold);
-    }
-
-    void tint(color_t color)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.tint(color);
-    }
-
-    void noTint()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.noTint();
-    }
-
-    void bezierDetail(uint32_t detail)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.bezierDetail(detail);
-    }
-
-    void curveTightness(float tightness)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.curveTightness(tightness);
-    }
-
-    void curveDetail(uint32_t detail)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.curveDetail(detail);
-    }
-
-    void textFont(const Font& font)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.textFont(font);
-    }
-
-    void textSize(float size)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.textSize(size);
-    }
-
-    void textLetterSpacing(float letterSpacing)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.textLetterSpacing(letterSpacing);
-    }
-
-    void textLineSpacing(float lineSpacing)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.textLineSpacing(lineSpacing);
-    }
-
-    void textAlign(TextAlign align)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.textAlign(align);
-    }
-
-    void textWrap(TextWrap wrap)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.textWrap(wrap);
-    }
-
-    void shader(const Shader& shader)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.shader(shader);
-    }
-
-    void blendMode(BlendMode blendMode)
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        graphics.blendMode(blendMode);
-    }
-
-    RenderState& peekRenderState()
-    {
-        GraphicsComponent& graphics = getGraphicsComponent();
-        return graphics.peekRenderState();
-    }
+    void rect(float left, float top, float width, float height) { getGraphicsComponent().rect(left, top, width, height); }
+    void rect(float left, float top, float width, float height, const BorderRadius& borderRadius) { getGraphicsComponent().rect(left, top, width, height, borderRadius); }
+    void square(float left, float top, float size) { rect(left, top, size, size); }
+    void ellipse(float centerX, float centerY, float radiusX, float radiusY) { getGraphicsComponent().ellipse(centerX, centerY, radiusX, radiusY); }
+    void circle(float centerX, float centerY, float radius) { ellipse(centerX, centerY, radius, radius); }
+    void point(float x, float y) { getGraphicsComponent().point(x, y); }
+    void triangle(float x1, float y1, float x2, float y2, float x3, float y3) { getGraphicsComponent().triangle(x1, y1, x2, y2, x3, y3); }
+    void line(float x1, float y1, float x2, float y2) { getGraphicsComponent().line(x1, y1, x2, y2); }
+    void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float sweepAngle, ArcMode arcMode) { getGraphicsComponent().arc(centerX, centerY, radiusX, radiusY, startAngle, sweepAngle, arcMode); }
+    void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { getGraphicsComponent().bezier(x1, y1, x2, y2, x3, y3, x4, y4); }
+    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { getGraphicsComponent().curve(x1, y1, x2, y2, x3, y3, x4, y4); }
+    void image(const Texture& texture, float left, float top, float width, float height) { getGraphicsComponent().image(texture, left, top, width, height); }
+    void text(std::string_view text, float x, float y) { getGraphicsComponent().text(text, x, y); }
 } // namespace p5cpp

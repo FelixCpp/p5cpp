@@ -30,6 +30,7 @@ namespace p5cpp
     {
     public:
         Texture();
+        Texture(std::unique_ptr<TextureImpl> impl);
         Texture(std::shared_ptr<TextureImpl> impl);
 
         TextureId getTextureId() const override;

@@ -74,12 +74,12 @@ namespace p5cpp
         m_targetFrameRate = frameRate;
     }
 
-    void FrameComponent::close()
+    void FrameComponent::quit()
     {
         m_closeRequested = true;
     }
 
-    void FrameComponent::close(int exitCode)
+    void FrameComponent::quit(int exitCode)
     {
         m_exitCode = exitCode;
         m_closeRequested = true;
@@ -113,5 +113,10 @@ namespace p5cpp
     float FrameComponent::getGlobalTime() const
     {
         return m_globalTime;
+    }
+
+    bool FrameComponent::isCloseRequested() const
+    {
+        return m_closeRequested;
     }
 } // namespace p5cpp

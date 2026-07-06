@@ -40,16 +40,17 @@ add_library(
 
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/graphics/framebuffer.cpp
+  ./src/p5cpp/graphics/graphics_api.cpp
   ./src/p5cpp/graphics/graphics_component.cpp
   ./src/p5cpp/graphics/graphics_module.cpp
   ./src/p5cpp/graphics/internal_shaders.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
-  ./src/p5cpp/graphics/primitive_renderer.cpp
   ./src/p5cpp/graphics/render_state.cpp
   ./src/p5cpp/graphics/render_state_stack.cpp
   ./src/p5cpp/graphics/renderer.cpp
   ./src/p5cpp/graphics/shader.cpp
   ./src/p5cpp/graphics/shaping.cpp
+  ./src/p5cpp/graphics/stroker.cpp
   ./src/p5cpp/graphics/tess.cpp
   ./src/p5cpp/graphics/texture.cpp
   ./src/p5cpp/graphics/uniform_cache.cpp
@@ -59,11 +60,9 @@ add_library(
   ./src/p5cpp/math/random.cpp
 
   ./src/p5cpp/system/timing.cpp
-  ./src/p5cpp/system/timing.hpp
   ./src/p5cpp/system/utf8_view.cpp
-  ./src/p5cpp/system/utf8_view.hpp
 
-  ./src/p5cpp/p5.cpp
+  ./src/p5cpp/p5cpp.cpp
 )
 
 target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio)

@@ -26,7 +26,6 @@
 
 #include <cstdint>
 #include <string_view>
-#include <optional>
 
 namespace p5cpp
 {
@@ -141,6 +140,6 @@ namespace p5cpp
     void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
-    void image(const Texture* texture, float left, float top, float width, float height);
-    void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
+    void image(const Texture& texture, float left, float top, float width, float height);
+    void text(std::string_view text, float x, float y);
 } // namespace p5cpp

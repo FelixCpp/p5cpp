@@ -11,13 +11,13 @@ struct PixelGrid
     size_t columns;
     size_t rows;
     std::vector<uint8_t> pixels;
-    std::unique_ptr<Texture> texture;
+    Texture texture;
 
     explicit PixelGrid(size_t columns, size_t rows)
         : columns(columns),
           rows(rows),
           pixels(columns * rows * 4, 0),
-          texture(createTexture(static_cast<uint32_t>(columns), static_cast<uint32_t>(rows), pixels))
+          texture(loadTexture(static_cast<uint32_t>(columns), static_cast<uint32_t>(rows), reinterpret_cast<const color_t*>(pixels.data())))
     {
     }
 
@@ -88,8 +88,9 @@ struct PixelGrid
 
     void show()
     {
-        texture->update(pixels);
-        image(texture.get(), 0, 0, getLogicalWidth(), getLogicalHeight());
+        const color_t* data = reinterpret_cast<const color_t*>(pixels.data());
+        texture.upload(std::span {data, pixels.size() / 4});
+        image(texture, 0, 0, getLogicalWidth(), getLogicalHeight());
     }
 };
 

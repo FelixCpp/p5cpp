@@ -24,6 +24,7 @@ namespace p5cpp
         int getFrameRate() const;
         float getDeltaTime() const;
         float getGlobalTime() const;
+        bool isCloseRequested() const;
 
     private:
         float m_deltaTime;

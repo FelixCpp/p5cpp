@@ -54,6 +54,11 @@ namespace p5cpp
         constexpr bool operator!=(const ShaderId& other) const = default;
     };
 
+    struct ShaderHasher
+    {
+        constexpr size_t operator()(const ShaderId& shaderId) const noexcept;
+    };
+
     struct ShaderImpl
     {
         virtual ~ShaderImpl() = default;
@@ -80,6 +85,14 @@ namespace p5cpp
         std::shared_ptr<ShaderImpl> shader;
     };
 
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    inline constexpr size_t ShaderHasher::operator()(const ShaderId& shaderId) const noexcept
+    {
+        return std::hash<uint32_t>()(shaderId.value);
+    }
 } // namespace p5cpp
 
 namespace p5cpp

@@ -21,7 +21,7 @@ namespace p5cpp
         const int2 physicalSize = window.getPhysicalSize();
         m_inputComponent.updatePhysicalSize(physicalSize.x, physicalSize.y);
 
-        context.registerService(&m_inputComponent);
+        context.registerService<InputComponent>(&m_inputComponent);
         next();
     }
 

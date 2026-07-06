@@ -11,69 +11,23 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void frameRate(int frameRate)
+    inline static FrameComponent& getFrameComponent()
     {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        component.frameRate(frameRate);
+        return engine->getContext().require<FrameComponent>();
     }
+} // namespace p5cpp
 
-    void loop()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        component.loop();
-    }
-
-    void noLoop()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        component.noLoop();
-    }
-
-    bool isLooping()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        return component.isLooping();
-    }
-
-    void quit()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        component.close();
-    }
-
-    void quit(int code)
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        component.close(code);
-    }
-
-    void exitCode(int code)
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        component.exitCode(code);
-    }
-
-    int getFrameCount()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        return component.getFrameCount();
-    }
-
-    int getFrameRate()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        return component.getFrameRate();
-    }
-
-    float getDeltaTime()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        return component.getDeltaTime();
-    }
-
-    float getGlobalTime()
-    {
-        FrameComponent& component = engine->getContext().require<FrameComponent>();
-        return component.getGlobalTime();
-    }
+namespace p5cpp
+{
+    void frameRate(int frameRate) { getFrameComponent().frameRate(frameRate); }
+    void loop() { getFrameComponent().loop(); }
+    void noLoop() { getFrameComponent().noLoop(); }
+    bool isLooping() { return getFrameComponent().isLooping(); }
+    void quit() { getFrameComponent().quit(); }
+    void quit(int code) { getFrameComponent().quit(code); }
+    void exitCode(int code) { getFrameComponent().exitCode(code); }
+    int getFrameCount() { return getFrameComponent().getFrameCount(); }
+    int getFrameRate() { return getFrameComponent().getFrameRate(); }
+    float getDeltaTime() { return getFrameComponent().getDeltaTime(); }
+    float getGlobalTime() { return getFrameComponent().getGlobalTime(); }
 } // namespace p5cpp

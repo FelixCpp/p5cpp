@@ -16,7 +16,7 @@ namespace p5cpp
     void FrameModule::event(AppContext& context, WindowEvent& event, Next next)
     {
         if (event.type == EventType::close) {
-            m_frameComponent.close();
+            m_frameComponent.quit();
         }
 
         next();
