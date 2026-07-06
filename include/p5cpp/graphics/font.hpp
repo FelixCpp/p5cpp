@@ -59,6 +59,7 @@ namespace p5cpp
     {
     public:
         Font();
+        Font(std::unique_ptr<FontImpl> impl);
         Font(std::shared_ptr<FontImpl> impl);
 
         const Glyph* getGlyph(char32_t codepoint, int textSize) const;

@@ -1,20 +1,23 @@
 #pragma once
 
-#include "p5cpp/p5cpp.hpp"
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/render_state_stack.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/graphics/shaping.hpp>
+#include <p5cpp/graphics/text.hpp>
 
 namespace p5cpp
 {
     class GraphicsComponent
     {
     public:
-        GraphicsComponent();
+        explicit GraphicsComponent(uint32_t width, uint32_t height);
 
         void beginFrame();
         void endFrame();
+
+        void resizeDefaultCanvas(uint32_t width, uint32_t height);
+        void blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight);
 
         void pushCanvas(Framebuffer framebuffer);
         void popCanvas();
@@ -61,6 +64,9 @@ namespace p5cpp
         void noShader();
         void blendMode(BlendMode blendMode);
 
+        void setUniform(const std::string& name, const UniformVariable& variable);
+        void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
+
         RenderState& peekRenderState();
 
         void background(color_t color);
@@ -73,16 +79,13 @@ namespace p5cpp
         void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
         void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
-        void image(const Texture* texture, float left, float top, float width, float height);
+        void image(const Texture& texture, float left, float top, float width, float height);
         void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
 
         void beginShape();
         void endShape(ShapeType type, bool close);
-        void vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor);
-        void curveVertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor);
-
-        TextLayout measureText(std::string_view text, const Font& font, float textSize, float letterSpacing, float lineSpacing, TextAlign align, TextWrap wrap, std::optional<float> maxWidth);
-        TextLayout measureText(std::string_view text);
+        void vertex(float x, float y, float u, float v);
+        void curveVertex(float x, float y);
 
     private:
         enum class ColorChoice {
@@ -105,7 +108,6 @@ namespace p5cpp
 
         Shader getShader(const RenderState& renderState);
         Texture getTexture(const RenderState& renderState);
-        size_t computeCircleSegmentCount(float angle, float radius);
 
         std::unique_ptr<float2[]> m_drawPointPositions;
         std::unique_ptr<float2[]> m_drawPointTexCoords;
@@ -119,12 +121,13 @@ namespace p5cpp
         size_t m_curveVertexCount;
 
         std::vector<Framebuffer> m_framebufferStack;
+        Framebuffer m_defaultFramebuffer;
 
         RenderStateStack m_renderStateStack;
         Shader m_defaultShader;
         Shader m_textShader;
         Texture m_whiteTexture;
         UniformCache m_uniformCache;
-        std::unique_ptr<Renderer> m_renderer;
+        std::unique_ptr<NativeRenderer> m_renderer;
     };
 } // namespace p5cpp

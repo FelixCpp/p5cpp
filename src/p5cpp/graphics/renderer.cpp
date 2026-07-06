@@ -5,305 +5,71 @@
 
 namespace p5cpp
 {
-    void DrawScope::pushVertex(const float2& position, const float2& texcoord, const float4& color)
+    class CommitableDrawBufferWriter : public DrawBufferWriter
     {
-        if (vertexCursor >= vertices.size()) {
-            // Buffer is full; the caller should have called flushIfNeeded() before
-            // creating this scope.  Silently drop the vertex to prevent an OOB write.
-            return;
+    public:
+        uint32_t getRelativeCursor() const override
+        {
+            return 0;
         }
 
-        vertices[vertexCursor++] = Vertex {
-            .position = position,
-            .texcoord = texcoord,
-            .color = color,
-            .texIndex = 0.0f, // Texture index will be assigned later by the renderer based on the current batch state
-        };
-    }
-
-    void DrawScope::pushTriangle(uint32_t a, uint32_t b, uint32_t c)
-    {
-        if (indexCursor + 2 >= indices.size()) {
-            // Buffer is full; silently drop to prevent an OOB write.
-            return;
+        void pushVertex(const float2& position, const float2& texcoord, const float4& color) override
+        {
         }
 
-        indices[indexCursor++] = baseVertex + a;
-        indices[indexCursor++] = baseVertex + b;
-        indices[indexCursor++] = baseVertex + c;
-    }
-} // namespace p5cpp
+        void pushTriangle(uint32_t a, uint32_t b, uint32_t c) override
+        {
+        }
 
-namespace p5cpp
-{
-    struct DrawCommand
-    {
-        size_t drawBufferIndexStart;
-        size_t drawBufferIndexCount;
-
-        Shader shader;
-        BlendMode blendMode;
-
-        std::array<Texture, 8> textures;
-        size_t textureCount;
-
-        std::vector<UniformSnapshot> uniforms;
+    private:
     };
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    class OpenGLRenderer : public Renderer
+    class NativeOpenGLRenderer : public NativeRenderer
     {
     public:
-        static std::unique_ptr<OpenGLRenderer> create(size_t vertexCount, size_t indexCount)
+        static std::unique_ptr<NativeOpenGLRenderer> create(size_t vertexCount, size_t indexCount)
         {
-            GLuint vbo = 0;
-            glGenBuffers(1, &vbo);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferData(GL_ARRAY_BUFFER, vertexCount * sizeof(Vertex), nullptr, GL_DYNAMIC_DRAW);
-
-            GLuint ebo = 0;
-            glGenBuffers(1, &ebo);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexCount * sizeof(uint32_t), nullptr, GL_DYNAMIC_DRAW);
-
-            GLuint vao = 0;
-            glGenVertexArrays(1, &vao);
-            glBindVertexArray(vao);
-
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texcoord));
-            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
-            glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texIndex));
-
-            glEnableVertexAttribArray(0);
-            glEnableVertexAttribArray(1);
-            glEnableVertexAttribArray(2);
-            glEnableVertexAttribArray(3);
-
-            glBindVertexArray(0);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-            return std::unique_ptr<OpenGLRenderer>(new OpenGLRenderer(vao, vbo, ebo, vertexCount, indexCount));
-        }
-
-        ~OpenGLRenderer() override
-        {
-            glDeleteVertexArrays(1, &vao);
-            glDeleteBuffers(1, &vbo);
-            glDeleteBuffers(1, &ebo);
+            return std::unique_ptr<NativeOpenGLRenderer>(new NativeOpenGLRenderer());
         }
 
         void begin(const Framebuffer& framebuffer) override
         {
-            const uint2 logicalSize = framebuffer.getSize();
-            orthoProjection = matrix4x4::ortho(0.0f, static_cast<float>(logicalSize.y), static_cast<float>(logicalSize.x), 0.0f, -1.0f, 1.0f);
-
-            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.getFramebufferId().value);
-            glViewport(0, 0, logicalSize.x, logicalSize.y);
-
-            glBindVertexArray(vao);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         }
 
         void end() override
         {
-            flush();
-
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glBindVertexArray(0);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         }
 
         void flush() override
         {
-            if (drawCommands.empty()) {
-                return;
-            }
-
-            if (vertexCursor == 0 or indexCursor == 0) {
-                return;
-            }
-
-            glBufferSubData(GL_ARRAY_BUFFER, 0, vertexCursor * sizeof(Vertex), vertices.data());
-            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indexCursor * sizeof(uint32_t), indices.data());
-
-            for (const DrawCommand& command : drawCommands) {
-                activateBlendMode(command.blendMode);
-
-                glUseProgram(command.shader.getShaderId().value);
-                for (const UniformSnapshot& snapshot : command.uniforms) {
-                    switch (snapshot.variable.type) {
-                        case UniformVariable::Type::float1: glUniform1f(snapshot.location.value, snapshot.variable.floatValue); break;
-                        case UniformVariable::Type::float2: glUniform2f(snapshot.location.value, snapshot.variable.float2Value.x, snapshot.variable.float2Value.y); break;
-                        case UniformVariable::Type::float4: glUniform4f(snapshot.location.value, snapshot.variable.float4Value.x, snapshot.variable.float4Value.y, snapshot.variable.float4Value.z, snapshot.variable.float4Value.w); break;
-                        case UniformVariable::Type::matrix4x4: glUniformMatrix4fv(snapshot.location.value, 1, GL_FALSE, snapshot.variable.matrix4x4Value.data()); break;
-                    }
-                }
-
-                static constexpr GLint samplers[] = {0, 1, 2, 3, 4, 5, 6, 7};
-                if (const auto location = command.shader.getUniformLocation("u_Textures")) {
-                    glUniform1iv(location->value, static_cast<GLsizei>(command.textureCount), samplers);
-                }
-
-                if (const auto location = command.shader.getUniformLocation("u_ProjectionMatrix")) {
-                    glUniformMatrix4fv(location->value, 1, GL_FALSE, orthoProjection.data());
-                }
-
-                for (size_t i = 0; i < command.textureCount; ++i) {
-                    glActiveTexture(GL_TEXTURE0 + i);
-                    glBindTexture(GL_TEXTURE_2D, command.textures[i].getTextureId().value);
-                }
-
-                glDrawElements(GL_TRIANGLES, command.drawBufferIndexCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(command.drawBufferIndexStart * sizeof(uint32_t)));
-            }
-
-            drawCommands.clear();
-            vertexCursor = 0;
-            indexCursor = 0;
         }
 
-        void submit(DrawScope scope, UniformCache& uniformCache, const Shader& shader, BlendMode blendMode, const Texture& texture) override
+        void submit(DrawBufferWriter& scope, UniformCache& uniformCache, const Shader& shader, BlendMode blendMode, const Texture& texture) override
         {
-            DrawCommand* targetCommand = nullptr;
-
-            if (drawCommands.empty()) {
-                targetCommand = &drawCommands.emplace_back(DrawCommand {
-                    .drawBufferIndexStart = scope.baseIndex,
-                    .drawBufferIndexCount = 0,
-                    .shader = shader,
-                    .blendMode = blendMode,
-                    .textures = {texture},
-                    .textureCount = 1,
-                    .uniforms = uniformCache.getUniforms(shader),
-                });
-
-                uniformCache.markShaderClean(shader);
-            } else {
-                const DrawCommand& lastCommand = drawCommands.back();
-
-                bool needsNewCommand = false;
-                if (lastCommand.shader.getShaderId() != shader.getShaderId()) {
-                    needsNewCommand = true;
-                } else if (lastCommand.blendMode != blendMode) {
-                    needsNewCommand = true;
-                } else if (uniformCache.isShaderDirty(shader)) {
-                    needsNewCommand = true;
-                } else {
-                    if (lastCommand.textureCount < lastCommand.textures.size()) {
-                        needsNewCommand = false;
-                    } else {
-                        bool textureAlreadyUsed = false;
-                        for (size_t i = 0; i < lastCommand.textureCount; ++i) {
-                            if (lastCommand.textures[i].getTextureId() == texture.getTextureId()) {
-                                textureAlreadyUsed = true;
-                                break;
-                            }
-                        }
-
-                        needsNewCommand = not textureAlreadyUsed;
-                    }
-                }
-
-                if (needsNewCommand) {
-                    targetCommand = &drawCommands.emplace_back(DrawCommand {
-                        .drawBufferIndexStart = scope.baseIndex,
-                        .drawBufferIndexCount = 0,
-                        .shader = shader,
-                        .blendMode = blendMode,
-                        .textures = {texture},
-                        .textureCount = 1,
-                        .uniforms = uniformCache.getUniforms(shader),
-                    });
-
-                    uniformCache.markShaderClean(shader);
-                } else {
-                    targetCommand = &drawCommands.back();
-                }
-            }
-
-            targetCommand->drawBufferIndexCount += scope.indexCursor - scope.baseIndex;
-
-            int textureIndex = -1;
-            for (size_t i = 0; i < targetCommand->textureCount; ++i) {
-                if (targetCommand->textures[i].getTextureId() == texture.getTextureId()) {
-                    textureIndex = static_cast<int>(i);
-                    break;
-                }
-            }
-
-            if (textureIndex == -1) {
-                textureIndex = static_cast<int>(targetCommand->textureCount);
-                targetCommand->textures[textureIndex] = texture;
-                targetCommand->textureCount++;
-            }
-
-            const size_t vertexCount = scope.vertexCursor - scope.baseVertex;
-            for (size_t i = 0; i < vertexCount; ++i) {
-                vertices[scope.baseVertex + i].texIndex = static_cast<float>(textureIndex);
-            }
         }
 
-        DrawScope getDrawScope() override
+        DrawBufferWriter& getDrawScope() override
         {
-            return DrawScope {
-                .baseIndex = indexCursor,
-                .baseVertex = vertexCursor,
-                .indexCursor = indexCursor,
-                .vertexCursor = vertexCursor,
-                .vertices = vertices,
-                .indices = indices,
-            };
+            return m_drawBufferWriter;
         }
 
     private:
-        explicit OpenGLRenderer(GLuint vao, GLuint vbo, GLuint ebo, size_t vertexCount, size_t indexCount)
-            : vao(vao), vbo(vbo), ebo(ebo), vertices(vertexCount), indices(indexCount), vertexCursor(0), indexCursor(0), orthoProjection(matrix4x4::identity)
+        NativeOpenGLRenderer()
+            : m_drawBufferWriter()
         {
         }
 
-        static void activateBlendMode(BlendMode blendMode)
-        {
-            switch (blendMode) {
-                case BlendMode::none: glDisable(GL_BLEND); break;
-                case BlendMode::alpha:
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                    break;
-                case BlendMode::additive:
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-                    break;
-                case BlendMode::multiply:
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_DST_COLOR, GL_ZERO);
-                    break;
-            }
-        }
-
-        GLuint vao;
-        GLuint vbo;
-        GLuint ebo;
-
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
-
-        size_t vertexCursor;
-        size_t indexCursor;
-        matrix4x4 orthoProjection;
-
-        std::vector<DrawCommand> drawCommands;
+        CommitableDrawBufferWriter m_drawBufferWriter;
     };
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    std::unique_ptr<Renderer> Renderer::create(size_t vertexCount, size_t indexCount)
+    std::unique_ptr<NativeRenderer> NativeRenderer::create(size_t vertexCount, size_t indexCount)
     {
-        return OpenGLRenderer::create(vertexCount, indexCount);
+        return NativeOpenGLRenderer::create(vertexCount, indexCount);
     }
 } // namespace p5cpp

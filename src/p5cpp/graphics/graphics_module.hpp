@@ -16,6 +16,6 @@ namespace p5cpp
         void destroy(AppContext& context, Next next) override;
 
     private:
-        GraphicsComponent m_component;
+        std::unique_ptr<GraphicsComponent> m_component;
     };
 } // namespace p5cpp

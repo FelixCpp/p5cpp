@@ -3,21 +3,66 @@
 
 namespace p5cpp
 {
+    struct DefaultComputeCircleSegmentCount : public ComputeCircleSegmentCount
+    {
+        size_t operator()(float angle, float radius) const
+        {
+            const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
+
+            if (radius <= 0.0f)
+                return 0;
+
+            // Clamp, um numerische Probleme zu vermeiden
+            const float cosValue = 1.0f - (error / radius);
+            const float clamped = std::clamp(cosValue, -1.0f, 1.0f);
+
+            const float step = std::acos(clamped);
+
+            if (step <= 0.0f)
+                return 4;
+
+            const size_t segments = static_cast<size_t>(std::ceil(std::abs(angle) / step));
+
+            return std::max<size_t>(segments, 4);
+        }
+    };
+
+    inline thread_local DefaultComputeCircleSegmentCount computeCircleSegmentCount;
+} // namespace p5cpp
+
+namespace p5cpp
+{
     inline static constexpr size_t MAX_VERTICES = 65536;
     inline static constexpr size_t MAX_INDICES = 65536 * 3;
 
-    GraphicsComponent::GraphicsComponent()
-        : m_renderStateStack(),
-          m_renderer(Renderer::create(MAX_VERTICES, MAX_INDICES))
+    GraphicsComponent::GraphicsComponent(uint32_t width, uint32_t height)
+        : m_drawPointCount(0),
+          m_drawPointCapacity(0),
+          m_curveVertexCount(0),
+          m_defaultFramebuffer(createFramebuffer(width, height)),
+          m_renderStateStack(),
+          m_renderer(NativeRenderer::create(MAX_VERTICES, MAX_INDICES))
     {
     }
 
     void GraphicsComponent::beginFrame()
     {
+        pushCanvas(m_defaultFramebuffer);
     }
 
     void GraphicsComponent::endFrame()
     {
+        popCanvas();
+    }
+
+    void GraphicsComponent::resizeDefaultCanvas(uint32_t width, uint32_t height)
+    {
+        m_defaultFramebuffer = createFramebuffer(width, height);
+    }
+
+    void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
+    {
+        throw std::runtime_error("Unimplemented: blitDefaultCanvasToScreen");
     }
 
     void GraphicsComponent::pushCanvas(Framebuffer framebuffer)
@@ -233,6 +278,19 @@ namespace p5cpp
         peekRenderState().blendMode = blendMode;
     }
 
+    void GraphicsComponent::setUniform(const std::string& name, const UniformVariable& variable)
+    {
+        const RenderState& renderState = peekRenderState();
+        if (renderState.shader.has_value()) {
+            m_uniformCache.setUniform(renderState.shader.value(), name, variable);
+        }
+    }
+
+    void GraphicsComponent::setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable)
+    {
+        m_uniformCache.setUniform(shader, name, variable);
+    }
+
     RenderState& GraphicsComponent::peekRenderState()
     {
         return m_renderStateStack.peek();
@@ -263,7 +321,7 @@ namespace p5cpp
         };
 
         const RenderState& renderState = peekRenderState();
-        DrawScope scope = m_renderer->getDrawScope();
+        DrawBufferWriter& scope = m_renderer->getDrawScope();
         tesselate_quads(
             scope,
             PathPoints {
@@ -281,10 +339,10 @@ namespace p5cpp
         const RenderState& renderState = peekRenderState();
 
         beginShape();
-        vertex(left, top, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        vertex(left + width, top, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        vertex(left + width, top + height, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        vertex(left, top + height, 1.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        vertex(left, top, 0.0f, 0.0f);
+        vertex(left + width, top, 0.0f, 0.0f);
+        vertex(left + width, top + height, 0.0f, 0.0f);
+        vertex(left, top + height, 0.0f, 0.0f);
         endShape(ShapeType::quads, false);
     }
 
@@ -323,7 +381,7 @@ namespace p5cpp
                 const size_t segs = std::max(size_t(1), computeCircleSegmentCount(HALF_PI, std::max(c.rx, c.ry)));
                 for (size_t i = 0; i < segs; ++i) {
                     const float angle = c.startAngle + HALF_PI * (float(i) / float(segs));
-                    vertex(c.cx + std::cos(angle) * c.rx, c.cy + std::sin(angle) * c.ry, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+                    vertex(c.cx + std::cos(angle) * c.rx, c.cy + std::sin(angle) * c.ry, 0.0f, 0.0f);
                 }
             }
         };
@@ -331,9 +389,9 @@ namespace p5cpp
         // Fill: triangleFan from the centre – rounded rect is always convex, so no libtess2 needed.
         if (not renderState.isFillDisabled) {
             beginShape();
-            vertex(left + width * 0.5f, top + height * 0.5f, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor); // fan centre
+            vertex(left + width * 0.5f, top + height * 0.5f, 0.0f, 0.0f); // fan centre
             emitRim();
-            vertex(corners[0].cx + corners[0].rx, corners[0].cy, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor); // re-emit first rim vertex to close the fan
+            vertex(corners[0].cx + corners[0].rx, corners[0].cy, 0.0f, 0.0f); // re-emit first rim vertex to close the fan
             endShapeImpl(filled(ShapeType::triangleFan), std::nullopt, true, renderState);
         }
 
@@ -357,7 +415,7 @@ namespace p5cpp
             const float angle = TWO_PI / static_cast<float>(segmentCount) * static_cast<float>(i);
             const float x = centerX + std::cos(angle) * radiusX;
             const float y = centerY + std::sin(angle) * radiusY;
-            vertex(x, y, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+            vertex(x, y, 0.0f, 0.0f);
         }
         endShape(ShapeType::triangleFan, true);
     }
@@ -366,9 +424,9 @@ namespace p5cpp
     {
         const RenderState& renderState = peekRenderState();
         beginShape();
-        vertex(x1, y1, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        vertex(x2, y2, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        vertex(x3, y3, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        vertex(x1, y1, 0.0f, 0.0f);
+        vertex(x2, y2, 0.0f, 0.0f);
+        vertex(x3, y3, 0.0f, 0.0f);
         endShape(ShapeType::triangles, true);
     }
 
@@ -376,8 +434,8 @@ namespace p5cpp
     {
         const RenderState& renderState = peekRenderState();
         beginShape();
-        vertex(x1, y1, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        vertex(x2, y2, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+        vertex(x1, y1, 0.0f, 0.0f);
+        vertex(x2, y2, 0.0f, 0.0f);
         endShape(ShapeType::lines, false);
     }
 
@@ -391,7 +449,7 @@ namespace p5cpp
         beginShape();
 
         if (arcMode == ArcMode::pie) {
-            vertex(centerX, centerY, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+            vertex(centerX, centerY, 0.0f, 0.0f);
         }
 
         for (size_t i = 0; i <= segmentCount; ++i) {
@@ -399,7 +457,7 @@ namespace p5cpp
             const float angle = startAngle + t * sweepAngle;
             const float x = centerX + std::cos(angle) * radiusX;
             const float y = centerY + std::sin(angle) * radiusY;
-            vertex(x, y, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+            vertex(x, y, 0.0f, 0.0f);
         }
 
         endShape(ShapeType::polygon, arcMode != ArcMode::open);
@@ -421,7 +479,7 @@ namespace p5cpp
             const float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
             const float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
 
-            vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+            vertex(bx, by, 0.0f, 0.0f);
         }
         endShape(ShapeType::lineStrip, false);
     }
@@ -440,13 +498,48 @@ namespace p5cpp
             const float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
             const float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
 
-            vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+            vertex(bx, by, 0.0f, 0.0f);
         }
         endShape(ShapeType::lineStrip, false);
     }
 
-    void GraphicsComponent::image(const Texture* texture, float left, float top, float width, float height)
+    void GraphicsComponent::image(const Texture& texture, float left, float top, float width, float height)
     {
+        const RenderState& renderState = peekRenderState();
+
+        const std::array<float2, 4> positions = {
+            float2 {left, top},
+            float2 {left + width, top},
+            float2 {left + width, top + height},
+            float2 {left, top + height}
+        };
+
+        const std::array<float2, 4> texcoords = {
+            float2 {0.0f, 0.0f},
+            float2 {1.0f, 0.0f},
+            float2 {1.0f, 1.0f},
+            float2 {0.0f, 1.0f}
+        };
+
+        const std::array<color_t, 4> colors = {
+            renderState.tintColor,
+            renderState.tintColor,
+            renderState.tintColor,
+            renderState.tintColor
+        };
+
+        DrawBufferWriter& scope = m_renderer->getDrawScope();
+        tesselate_quads(
+            scope,
+            PathPoints {
+                .size = 4,
+                .positions = positions,
+                .texcoords = texcoords,
+                .colors = colors,
+            }
+        );
+
+        m_renderer->submit(scope, m_uniformCache, getCurrentShader(renderState), renderState.blendMode, texture);
     }
 
     void GraphicsComponent::text(std::string_view text, float x, float y, std::optional<float> maxWidth)
@@ -463,7 +556,7 @@ namespace p5cpp
         endShapeImpl(filled(type), stroked(type), close, renderState);
     }
 
-    void GraphicsComponent::vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor)
+    void GraphicsComponent::vertex(float x, float y, float u, float v)
     {
         if (m_drawPointCount >= m_drawPointCapacity) {
             const size_t newCapacity = std::max(m_drawPointCount * 2uz, 4uz);
@@ -500,7 +593,7 @@ namespace p5cpp
         m_curveVertexCount = 0; // Reset curve vertex count when a regular vertex is added
     }
 
-    void GraphicsComponent::curveVertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor)
+    void GraphicsComponent::curveVertex(float x, float y)
     {
         m_curveVertexPositions[m_curveVertexCount] = float2 {x, y};
         m_curveVertexCount++;
@@ -522,41 +615,16 @@ namespace p5cpp
                 float bx = alpha * ((-x1 + 3 * x2 - 3 * x3 + x4) * t3 + (2 * x1 - 5 * x2 + 4 * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
                 float by = alpha * ((-y1 + 3 * y2 - 3 * y3 + y4) * t3 + (2 * y1 - 5 * y2 + 4 * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
 
-                vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
+                vertex(bx, by, 0.0f, 0.0f);
             }
 
             m_curveVertexCount = 0;
         }
     }
 
-    void GraphicsComponent::bezierVertex(float x2, float y2, float x3, float y3, float x4, float y4)
-    {
-        const RenderState& renderState = peekRenderState();
-        if (m_drawPointCount < 1) {
-            return; // Not enough points to define a Bezier curve
-        }
-
-        auto [x1, y1] = m_drawPointPositions[m_drawPointCount - 1];
-
-        for (size_t i = 0; i <= renderState.bezierDetail; ++i) {
-            float t = static_cast<float>(i) * renderState.invBezierDetail;
-
-            float mt = 1.0f - t;
-            float mt2 = mt * mt;
-            float mt3 = mt2 * mt;
-            float t2 = t * t;
-            float t3 = t2 * t;
-
-            float bx = mt3 * x1 + 3 * mt2 * t * x2 + 3 * mt * t2 * x3 + t3 * x4;
-            float by = mt3 * y1 + 3 * mt2 * t * y2 + 3 * mt * t2 * y3 + t3 * y4;
-
-            vertex(bx, by, 0.0f, 0.0f, renderState.fillColor, renderState.strokeColor);
-        }
-    }
-
     void GraphicsComponent::endShapeImpl(const std::optional<ShapeDetails>& fill, const std::optional<ShapeDetails>& stroke, bool close, const RenderState& renderState)
     {
-        DrawScope scope = m_renderer->getDrawScope();
+        DrawBufferWriter& scope = m_renderer->getDrawScope();
         // TODO(Felix): Flush if needed
 
         if (fill.has_value()) {
@@ -581,39 +649,18 @@ namespace p5cpp
             const PathPoints pathPoints = buildPathPoints(stroke->colorChoice);
 
             switch (stroke->shapeType) {
-                case ShapeType::lines: stroke_lines(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::lineStrip: stroke_line_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::lineLoop: stroke_line_loop(scope, pathPoints, renderState.strokeWeight, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::triangles: stroke_triangles(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::triangleStrip: stroke_triangle_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::triangleFan: stroke_triangle_fan(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::quads: stroke_quads(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::quadStrip: stroke_quad_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold); break;
-                case ShapeType::polygon: stroke_polygon(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, close); break;
+                case ShapeType::lines: stroke_lines(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::lineStrip: stroke_line_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::lineLoop: stroke_line_loop(scope, pathPoints, renderState.strokeWeight, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::triangles: stroke_triangles(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::triangleStrip: stroke_triangle_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::triangleFan: stroke_triangle_fan(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::quads: stroke_quads(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::quadStrip: stroke_quad_strip(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, computeCircleSegmentCount); break;
+                case ShapeType::polygon: stroke_polygon(scope, pathPoints, renderState.strokeWeight, renderState.strokeCap, renderState.strokeJoin, renderState.miterLimit, renderState.roundJoinThreshold, close, computeCircleSegmentCount); break;
             }
 
             m_renderer->submit(scope, m_uniformCache, getShader(renderState), renderState.blendMode, m_whiteTexture);
         }
-    }
-
-    size_t GraphicsComponent::computeCircleSegmentCount(float angle, float radius)
-    {
-        const float error = 0.75f; // maximaler Fehler in Pixeln (tweakbar)
-
-        if (radius <= 0.0f)
-            return 0;
-
-        // Clamp, um numerische Probleme zu vermeiden
-        const float cosValue = 1.0f - (error / radius);
-        const float clamped = std::clamp(cosValue, -1.0f, 1.0f);
-
-        const float step = std::acos(clamped);
-
-        if (step <= 0.0f)
-            return 4;
-
-        const size_t segments = static_cast<size_t>(std::ceil(std::abs(angle) / step));
-
-        return std::max<size_t>(segments, 4);
     }
 } // namespace p5cpp

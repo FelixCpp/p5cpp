@@ -1,5 +1,7 @@
 #include <p5cpp/graphics/stroker.hpp>
-#include <p5cpp/graphics/renderer.hpp>
+#include <p5cpp/graphics/shaping.hpp>
+#include <p5cpp/graphics/draw_buffer_writer.hpp>
+#include <p5cpp/math/value2.hpp>
 
 #include <optional>
 
@@ -29,42 +31,42 @@ namespace p5cpp
 
     namespace caps
     {
-        static void emit_stroke_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, StrokeCapStyle strokeCap, bool isEnd);
-        static void emit_square_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd);
-        static void emit_round_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd);
+        static void emit_stroke_cap(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, StrokeCapStyle strokeCap, bool isEnd, const ComputeCircleSegmentCount& computeCircleSegmentCount);
+        static void emit_square_cap(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd);
+        static void emit_round_cap(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd, const ComputeCircleSegmentCount& computeCircleSegmentCount);
     } // namespace caps
 
     namespace joins
     {
-        static void emit_stroke_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, StrokeJoin strokeJoin);
-        static void emit_bevel_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points);
-        static void emit_miter_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points);
-        static void emit_round_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold);
+        static void emit_stroke_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, StrokeJoin strokeJoin, const ComputeCircleSegmentCount& computeCircleSegmentCount);
+        static void emit_bevel_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points);
+        static void emit_miter_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points);
+        static void emit_round_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount);
     } // namespace joins
 
     static StrokeCorner compute_stroke_corner(const StrokeSegment& previous, const StrokeSegment& current, const StrokeSegment& next, const PathPoints& points, float halfStrokeWeight, float miterLimit);
     static StrokeSegment compute_stroke_segment(size_t startIndex, size_t endIndex, const PathPoints& points, float halfStrokeWeight);
-    static void emit_stroke_segment(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points);
+    static void emit_stroke_segment(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points);
 
-    static void push_vertex(DrawScope& scope, const float2& position, color_t color);
-    static void push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c);
+    static void push_vertex(DrawBufferWriter& scope, const float2& position, color_t color);
+    static void push_triangle(DrawBufferWriter& scope, uint32_t a, uint32_t b, uint32_t c);
     static std::optional<float2> line_intersection(const float2& p1, const float2& d1, const float2& p2, const float2& d2);
 } // namespace p5cpp
 
 namespace p5cpp::caps
 {
-    static void emit_stroke_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, StrokeCapStyle strokeCap, bool isEnd)
+    static void emit_stroke_cap(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, StrokeCapStyle strokeCap, bool isEnd, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         switch (strokeCap) {
             case StrokeCapStyle::square: emit_square_cap(scope, segment, points, strokeWeight, isEnd); break;
-            case StrokeCapStyle::round: emit_round_cap(scope, segment, points, strokeWeight, isEnd); break;
+            case StrokeCapStyle::round: emit_round_cap(scope, segment, points, strokeWeight, isEnd, computeCircleSegmentCount); break;
             case StrokeCapStyle::butt:
                 // No additional geometry needed for butt cap
                 break;
         }
     }
 
-    void emit_square_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd)
+    void emit_square_cap(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd)
     {
         const color_t color = points.colors[isEnd ? segment.endIndex : segment.startIndex];
 
@@ -74,7 +76,7 @@ namespace p5cpp::caps
         const float2 innerCapStart = isEnd ? segment.innerEnd : segment.innerStart;
         const float2 innerCapEnd = isEnd ? segment.innerEnd + offset : segment.innerStart - offset;
 
-        const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
+        const size_t baseVertex = scope.getRelativeCursor();
 
         push_vertex(scope, innerCapStart, color);
         push_vertex(scope, capStart, color);
@@ -85,7 +87,7 @@ namespace p5cpp::caps
         push_triangle(scope, baseVertex + 2, baseVertex + 3, baseVertex + 0);
     }
 
-    void emit_round_cap(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd)
+    void emit_round_cap(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points, float strokeWeight, bool isEnd, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const color_t color = points.colors[isEnd ? segment.endIndex : segment.startIndex];
         const float2 center = points.positions[isEnd ? segment.endIndex : segment.startIndex];
@@ -95,7 +97,7 @@ namespace p5cpp::caps
         const float startAngle = std::atan2(direction.y, direction.x) - PI / 2.0f;
 
         // Insert center vertex for the round cap
-        const size_t centerIndex = scope.vertexCursor - scope.baseVertex;
+        const size_t centerIndex = scope.getRelativeCursor();
         push_vertex(scope, center, color);
 
         for (size_t i = 0; i <= segmentCount; ++i) {
@@ -112,20 +114,20 @@ namespace p5cpp::caps
 
 namespace p5cpp::joins
 {
-    static void emit_stroke_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, StrokeJoin strokeJoin)
+    static void emit_stroke_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, StrokeJoin strokeJoin, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         switch (strokeJoin) {
             case StrokeJoin::bevel: emit_bevel_join(scope, corner, points); break;
             case StrokeJoin::miter: emit_miter_join(scope, corner, points); break;
-            case StrokeJoin::round: emit_round_join(scope, corner, points, halfStrokeWeight, roundJoinAngleThreshold); break;
+            case StrokeJoin::round: emit_round_join(scope, corner, points, halfStrokeWeight, roundJoinAngleThreshold, computeCircleSegmentCount); break;
         }
     }
 
-    static void emit_bevel_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points)
+    static void emit_bevel_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points)
     {
         const color_t color = points.colors[corner.index];
 
-        const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
+        const size_t baseVertex = scope.getRelativeCursor();
         push_vertex(scope, corner.innerHit, color);
         push_vertex(scope, corner.joinStart, color);
         push_vertex(scope, corner.joinEnd, color);
@@ -133,14 +135,14 @@ namespace p5cpp::joins
         push_triangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
     }
 
-    static void emit_miter_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points)
+    static void emit_miter_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points)
     {
         if (corner.exceedsMiterLimit) {
             // Fallback to bevel join if miter limit is exceeded
             return emit_bevel_join(scope, corner, points);
         }
 
-        const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
+        const size_t baseVertex = scope.getRelativeCursor();
         const color_t color = points.colors[corner.index];
 
         push_vertex(scope, corner.innerHit, color);
@@ -152,7 +154,7 @@ namespace p5cpp::joins
         push_triangle(scope, baseVertex + 2, baseVertex + 3, baseVertex + 0);
     }
 
-    static void emit_round_join(DrawScope& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold)
+    static void emit_round_join(DrawBufferWriter& scope, const StrokeCorner& corner, const PathPoints& points, float halfStrokeWeight, float roundJoinAngleThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const color_t color = points.colors[corner.index];
         const float2 cornerPos = points.positions[corner.index];
@@ -173,7 +175,7 @@ namespace p5cpp::joins
 
         const size_t steps = computeCircleSegmentCount(std::abs(angleDiff), halfStrokeWeight);
 
-        const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
+        const size_t baseVertex = scope.getRelativeCursor();
         push_vertex(scope, cornerPos, color); // Index: vertexBase + 0
 
         for (int i = 0; i <= steps; i++) {
@@ -265,12 +267,12 @@ namespace p5cpp
         };
     }
 
-    static void emit_stroke_segment(DrawScope& scope, const StrokeSegment& segment, const PathPoints& points)
+    static void emit_stroke_segment(DrawBufferWriter& scope, const StrokeSegment& segment, const PathPoints& points)
     {
         const color_t startColor = points.colors[segment.startIndex];
         const color_t endColor = points.colors[segment.endIndex];
 
-        const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
+        const size_t baseVertex = scope.getRelativeCursor();
         push_vertex(scope, segment.innerStart, startColor);
         push_vertex(scope, segment.outerStart, startColor);
         push_vertex(scope, segment.outerEnd, endColor);
@@ -283,19 +285,19 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    static void push_vertex(DrawScope& scope, const float2& position, color_t color)
+    static void push_vertex(DrawBufferWriter& scope, const float2& position, color_t color)
     {
         const float4 col = float4 {
-            .x = static_cast<float>(red(color)) / 255.0f,
-            .y = static_cast<float>(green(color)) / 255.0f,
-            .z = static_cast<float>(blue(color)) / 255.0f,
-            .w = static_cast<float>(alpha(color)) / 255.0f,
+            static_cast<float>(red(color)) / 255.0f,
+            static_cast<float>(green(color)) / 255.0f,
+            static_cast<float>(blue(color)) / 255.0f,
+            static_cast<float>(alpha(color)) / 255.0f,
         };
 
-        scope.pushVertex(position, float2 {}, col);
+        scope.pushVertex(position, float2::zero, col);
     }
 
-    static void push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
+    static void push_triangle(DrawBufferWriter& scope, uint32_t a, uint32_t b, uint32_t c)
     {
         scope.pushTriangle(a, b, c);
     }
@@ -317,7 +319,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void generate_solid_stroke(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close)
+    void generate_solid_stroke(DrawBufferWriter& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         if (n < 2) return; // NOTE: There's nothing to stroke if there are less than 2 points
@@ -346,13 +348,13 @@ namespace p5cpp
                 const StrokeSegment nextSegment = compute_stroke_segment(nextIndex, (nextIndex + 1) % n, points, halfStrokeWeight);
                 const StrokeCorner corner = compute_stroke_corner(previousSegment, segment, nextSegment, points, halfStrokeWeight, miterLimit);
 
-                joins::emit_stroke_join(scope, corner, points, halfStrokeWeight, roundJoinAngleThreshold, strokeJoin);
+                joins::emit_stroke_join(scope, corner, points, halfStrokeWeight, roundJoinAngleThreshold, strokeJoin, computeCircleSegmentCount);
             }
 
             // Insert stroke caps at the start and end of the stroke if needed
             if (not close) {
-                if (isStart) caps::emit_stroke_cap(scope, segment, points, strokeWeight, strokeCap.start, false);
-                if (isEnd) caps::emit_stroke_cap(scope, segment, points, strokeWeight, strokeCap.end, true);
+                if (isStart) caps::emit_stroke_cap(scope, segment, points, strokeWeight, strokeCap.start, false, computeCircleSegmentCount);
+                if (isEnd) caps::emit_stroke_cap(scope, segment, points, strokeWeight, strokeCap.end, true, computeCircleSegmentCount);
             }
         }
     }

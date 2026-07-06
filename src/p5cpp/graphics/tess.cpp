@@ -1,21 +1,23 @@
-#include "tess.hpp"
-#include "stroker.hpp"
-#include "linepath.hpp"
-
-#include "services/renderer.hpp"
+#include <p5cpp/graphics/color.hpp>
+#include <p5cpp/graphics/draw_buffer_writer.hpp>
+#include <p5cpp/graphics/shaping.hpp>
+#include <p5cpp/graphics/stroker.hpp>
 
 #include <cassert>
+#include <vector>
 #include <tesselator.h>
 
 namespace p5cpp
 {
     inline static float4 color_to_float4(color_t color)
     {
+        static constexpr float inv255 = 1.0f / 255.0f;
+
         return float4 {
-            .x = static_cast<float>(red(color)) / 255.0f,
-            .y = static_cast<float>(green(color)) / 255.0f,
-            .z = static_cast<float>(blue(color)) / 255.0f,
-            .w = static_cast<float>(alpha(color)) / 255.0f,
+            static_cast<float>(red(color)) * inv255,
+            static_cast<float>(green(color)) * inv255,
+            static_cast<float>(blue(color)) * inv255,
+            static_cast<float>(alpha(color)) * inv255,
         };
     }
 } // namespace p5cpp
@@ -27,94 +29,95 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void draw_scope_push_vertex(DrawScope& scope, const float2& position, const float2& texcoord, const float4& color)
+    void draw_scope_push_vertex(DrawBufferWriter& writer, const float2& position, const float2& texcoord, const float4& color)
     {
-        scope.pushVertex(position, texcoord, color);
+        writer.pushVertex(position, texcoord, color);
     }
 
-    void draw_scope_push_triangle(DrawScope& scope, uint32_t a, uint32_t b, uint32_t c)
+    void draw_scope_push_triangle(DrawBufferWriter& writer, uint32_t a, uint32_t b, uint32_t c)
     {
-        scope.pushTriangle(a, b, c);
+        writer.pushTriangle(a, b, c);
     }
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    void tesselate_quads(DrawScope& scope, const PathPoints& points)
+    void tesselate_quads(DrawBufferWriter& writer, const PathPoints& points)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 3 < n; i += 4) {
-            const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
-            draw_scope_push_vertex(scope, points.positions[i + 0], points.texcoords[i + 0], color_to_float4(points.colors[i + 0]));
-            draw_scope_push_vertex(scope, points.positions[i + 1], points.texcoords[i + 1], color_to_float4(points.colors[i + 1]));
-            draw_scope_push_vertex(scope, points.positions[i + 2], points.texcoords[i + 2], color_to_float4(points.colors[i + 2]));
-            draw_scope_push_vertex(scope, points.positions[i + 3], points.texcoords[i + 3], color_to_float4(points.colors[i + 3]));
+            // const size_t baseVertex = writer.vertexCursor - writer.baseVertex;
+            const size_t baseVertex = writer.getRelativeCursor();
+            draw_scope_push_vertex(writer, points.positions[i + 0], points.texcoords[i + 0], color_to_float4(points.colors[i + 0]));
+            draw_scope_push_vertex(writer, points.positions[i + 1], points.texcoords[i + 1], color_to_float4(points.colors[i + 1]));
+            draw_scope_push_vertex(writer, points.positions[i + 2], points.texcoords[i + 2], color_to_float4(points.colors[i + 2]));
+            draw_scope_push_vertex(writer, points.positions[i + 3], points.texcoords[i + 3], color_to_float4(points.colors[i + 3]));
 
-            draw_scope_push_triangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
-            draw_scope_push_triangle(scope, baseVertex + 0, baseVertex + 2, baseVertex + 3);
+            draw_scope_push_triangle(writer, baseVertex + 0, baseVertex + 1, baseVertex + 2);
+            draw_scope_push_triangle(writer, baseVertex + 0, baseVertex + 2, baseVertex + 3);
         }
     }
 
-    void tesselate_quad_strip(DrawScope& scope, const PathPoints& points)
+    void tesselate_quad_strip(DrawBufferWriter& writer, const PathPoints& points)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 3 < n; i += 2) {
-            const size_t base = scope.vertexCursor - scope.baseVertex;
-            draw_scope_push_vertex(scope, points.positions[i + 0], points.texcoords[i + 0], color_to_float4(points.colors[i + 0]));
-            draw_scope_push_vertex(scope, points.positions[i + 1], points.texcoords[i + 1], color_to_float4(points.colors[i + 1]));
-            draw_scope_push_vertex(scope, points.positions[i + 2], points.texcoords[i + 2], color_to_float4(points.colors[i + 2]));
-            draw_scope_push_vertex(scope, points.positions[i + 3], points.texcoords[i + 3], color_to_float4(points.colors[i + 3]));
+            const size_t base = writer.getRelativeCursor();
+            draw_scope_push_vertex(writer, points.positions[i + 0], points.texcoords[i + 0], color_to_float4(points.colors[i + 0]));
+            draw_scope_push_vertex(writer, points.positions[i + 1], points.texcoords[i + 1], color_to_float4(points.colors[i + 1]));
+            draw_scope_push_vertex(writer, points.positions[i + 2], points.texcoords[i + 2], color_to_float4(points.colors[i + 2]));
+            draw_scope_push_vertex(writer, points.positions[i + 3], points.texcoords[i + 3], color_to_float4(points.colors[i + 3]));
 
             // Quad strip winding: (0,1,3) + (0,3,2)
-            draw_scope_push_triangle(scope, base + 0, base + 1, base + 3);
-            draw_scope_push_triangle(scope, base + 0, base + 3, base + 2);
+            draw_scope_push_triangle(writer, base + 0, base + 1, base + 3);
+            draw_scope_push_triangle(writer, base + 0, base + 3, base + 2);
         }
     }
 
-    void tesselate_triangles(DrawScope& scope, const PathPoints& points)
+    void tesselate_triangles(DrawBufferWriter& writer, const PathPoints& points)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 2 < n; i += 3) {
-            const size_t baseVertex = scope.vertexCursor - scope.baseVertex;
-            draw_scope_push_vertex(scope, points.positions[i + 0], points.texcoords[i + 0], color_to_float4(points.colors[i + 0]));
-            draw_scope_push_vertex(scope, points.positions[i + 1], points.texcoords[i + 1], color_to_float4(points.colors[i + 1]));
-            draw_scope_push_vertex(scope, points.positions[i + 2], points.texcoords[i + 2], color_to_float4(points.colors[i + 2]));
-            draw_scope_push_triangle(scope, baseVertex + 0, baseVertex + 1, baseVertex + 2);
+            const size_t baseVertex = writer.getRelativeCursor();
+            draw_scope_push_vertex(writer, points.positions[i + 0], points.texcoords[i + 0], color_to_float4(points.colors[i + 0]));
+            draw_scope_push_vertex(writer, points.positions[i + 1], points.texcoords[i + 1], color_to_float4(points.colors[i + 1]));
+            draw_scope_push_vertex(writer, points.positions[i + 2], points.texcoords[i + 2], color_to_float4(points.colors[i + 2]));
+            draw_scope_push_triangle(writer, baseVertex + 0, baseVertex + 1, baseVertex + 2);
         }
     }
 
-    void tesselate_triangle_strip(DrawScope& scope, const PathPoints& points)
+    void tesselate_triangle_strip(DrawBufferWriter& writer, const PathPoints& points)
     {
         const size_t n = points.size;
         if (n < 3) return;
 
-        const size_t base = scope.vertexCursor - scope.baseVertex;
+        const size_t base = writer.getRelativeCursor();
         for (size_t i = 0; i < n; ++i)
-            draw_scope_push_vertex(scope, points.positions[i], points.texcoords[i], color_to_float4(points.colors[i]));
+            draw_scope_push_vertex(writer, points.positions[i], points.texcoords[i], color_to_float4(points.colors[i]));
 
         for (size_t i = 0; i + 2 < n; ++i) {
             // Alternate winding every other triangle to keep consistent front-face.
             if ((i & 1) == 0)
-                draw_scope_push_triangle(scope, base + i + 0, base + i + 1, base + i + 2);
+                draw_scope_push_triangle(writer, base + i + 0, base + i + 1, base + i + 2);
             else
-                draw_scope_push_triangle(scope, base + i + 1, base + i + 0, base + i + 2);
+                draw_scope_push_triangle(writer, base + i + 1, base + i + 0, base + i + 2);
         }
     }
 
-    void tesselate_triangle_fan(DrawScope& scope, const PathPoints& points)
+    void tesselate_triangle_fan(DrawBufferWriter& writer, const PathPoints& points)
     {
         const size_t n = points.size;
         if (n < 3) return;
 
-        const size_t base = scope.vertexCursor - scope.baseVertex;
+        const size_t base = writer.getRelativeCursor();
         for (size_t i = 0; i < n; ++i)
-            draw_scope_push_vertex(scope, points.positions[i], points.texcoords[i], color_to_float4(points.colors[i]));
+            draw_scope_push_vertex(writer, points.positions[i], points.texcoords[i], color_to_float4(points.colors[i]));
 
         for (size_t i = 1; i + 1 < n; ++i)
-            draw_scope_push_triangle(scope, base + 0, base + i, base + i + 1);
+            draw_scope_push_triangle(writer, base + 0, base + i, base + i + 1);
     }
 
-    void tesselate_polygon(DrawScope& scope, const PathPoints& points)
+    void tesselate_polygon(DrawBufferWriter& writer, const PathPoints& points)
     {
         const size_t n = points.size;
         if (n < 3) return;
@@ -136,7 +139,7 @@ namespace p5cpp
 
         s_tess_local.resize(static_cast<size_t>(vertCount));
 
-        const size_t base = scope.vertexCursor - scope.baseVertex;
+        const size_t base = writer.getRelativeCursor();
 
         size_t lastSrc = 0;
         for (int v = 0; v < vertCount; ++v) {
@@ -148,7 +151,7 @@ namespace p5cpp
                 src = lastSrc;
             }
             float2 pos = {verts[v * 2 + 0], verts[v * 2 + 1]};
-            draw_scope_push_vertex(scope, pos, points.texcoords[src], color_to_float4(points.colors[src]));
+            draw_scope_push_vertex(writer, pos, points.texcoords[src], color_to_float4(points.colors[src]));
             s_tess_local[v] = static_cast<uint32_t>(base + static_cast<size_t>(v));
         }
 
@@ -157,7 +160,7 @@ namespace p5cpp
             TESSindex b = elems[e * 3 + 1];
             TESSindex c = elems[e * 3 + 2];
             if (a == TESS_UNDEF || b == TESS_UNDEF || c == TESS_UNDEF) continue;
-            draw_scope_push_triangle(scope, s_tess_local[a], s_tess_local[b], s_tess_local[c]);
+            draw_scope_push_triangle(writer, s_tess_local[a], s_tess_local[b], s_tess_local[c]);
         }
 
         tessDeleteTess(tess);
@@ -166,7 +169,7 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    void stroke_quads(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_quads(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 3 < n; i += 4) {
@@ -174,11 +177,11 @@ namespace p5cpp
             float2 uvs[4] = {points.texcoords[i], points.texcoords[i + 1], points.texcoords[i + 2], points.texcoords[i + 3]};
             color_t cols[4] = {points.colors[i], points.colors[i + 1], points.colors[i + 2], points.colors[i + 3]};
             PathPoints sub = {4, pos, uvs, cols};
-            generate_solid_stroke(scope, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true);
+            generate_solid_stroke(writer, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true, computeCircleSegmentCount);
         }
     }
 
-    void stroke_quad_strip(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_quad_strip(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 3 < n; i += 2) {
@@ -190,11 +193,11 @@ namespace p5cpp
             float2 uvs[4] = {points.texcoords[i], points.texcoords[i + 2], points.texcoords[i + 3], points.texcoords[i + 1]};
             color_t cols[4] = {points.colors[i], points.colors[i + 2], points.colors[i + 3], points.colors[i + 1]};
             PathPoints sub = {4, pos, uvs, cols};
-            generate_solid_stroke(scope, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true);
+            generate_solid_stroke(writer, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true, computeCircleSegmentCount);
         }
     }
 
-    void stroke_triangles(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_triangles(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 2 < n; i += 3) {
@@ -202,11 +205,11 @@ namespace p5cpp
             float2 uvs[3] = {points.texcoords[i], points.texcoords[i + 1], points.texcoords[i + 2]};
             color_t cols[3] = {points.colors[i], points.colors[i + 1], points.colors[i + 2]};
             PathPoints sub = {3, pos, uvs, cols};
-            generate_solid_stroke(scope, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true);
+            generate_solid_stroke(writer, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true, computeCircleSegmentCount);
         }
     }
 
-    void stroke_triangle_strip(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_triangle_strip(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 2 < n; ++i) {
@@ -214,11 +217,11 @@ namespace p5cpp
             float2 uvs[3] = {points.texcoords[i], points.texcoords[i + 1], points.texcoords[i + 2]};
             color_t cols[3] = {points.colors[i], points.colors[i + 1], points.colors[i + 2]};
             PathPoints sub = {3, pos, uvs, cols};
-            generate_solid_stroke(scope, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true);
+            generate_solid_stroke(writer, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true, computeCircleSegmentCount);
         }
     }
 
-    void stroke_triangle_fan(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_triangle_fan(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         if (n < 3) return;
@@ -227,11 +230,11 @@ namespace p5cpp
             float2 uvs[3] = {points.texcoords[0], points.texcoords[i - 1], points.texcoords[i]};
             color_t cols[3] = {points.colors[0], points.colors[i - 1], points.colors[i]};
             PathPoints sub = {3, pos, uvs, cols};
-            generate_solid_stroke(scope, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true);
+            generate_solid_stroke(writer, sub, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, true, computeCircleSegmentCount);
         }
     }
 
-    void stroke_lines(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, float miterLimit, float roundJoinThreshold)
+    void stroke_lines(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         const size_t n = points.size;
         for (size_t i = 0; i + 1 < n; i += 2) {
@@ -239,25 +242,25 @@ namespace p5cpp
             float2 uvs[2] = {points.texcoords[i], points.texcoords[i + 1]};
             color_t cols[2] = {points.colors[i], points.colors[i + 1]};
             PathPoints sub = {2, pos, uvs, cols};
-            generate_solid_stroke(scope, sub, strokeWeight, strokeCap, StrokeJoin::miter, miterLimit, roundJoinThreshold, false);
+            generate_solid_stroke(writer, sub, strokeWeight, strokeCap, StrokeJoin::miter, miterLimit, roundJoinThreshold, false, computeCircleSegmentCount);
         }
     }
 
-    void stroke_line_strip(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_line_strip(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         if (points.size < 2) return;
-        generate_solid_stroke(scope, points, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, false);
+        generate_solid_stroke(writer, points, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, false, computeCircleSegmentCount);
     }
 
-    void stroke_line_loop(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold)
+    void stroke_line_loop(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         if (points.size < 2) return;
-        generate_solid_stroke(scope, points, strokeWeight, StrokeCap::butt, strokeJoin, miterLimit, roundJoinThreshold, true);
+        generate_solid_stroke(writer, points, strokeWeight, StrokeCap::butt, strokeJoin, miterLimit, roundJoinThreshold, true, computeCircleSegmentCount);
     }
 
-    void stroke_polygon(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool close)
+    void stroke_polygon(DrawBufferWriter& writer, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool close, const ComputeCircleSegmentCount& computeCircleSegmentCount)
     {
         if (points.size < 2) return;
-        generate_solid_stroke(scope, points, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, close);
+        generate_solid_stroke(writer, points, strokeWeight, strokeCap, strokeJoin, miterLimit, roundJoinThreshold, close, computeCircleSegmentCount);
     }
 } // namespace p5cpp

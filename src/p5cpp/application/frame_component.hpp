@@ -15,8 +15,8 @@ namespace p5cpp
         void noLoop();
 
         void frameRate(int frameRate);
-        void close();
-        void close(int exitCode);
+        void quit();
+        void quit(int exitCode);
         void exitCode(int exitCode);
 
         bool isLooping() const;

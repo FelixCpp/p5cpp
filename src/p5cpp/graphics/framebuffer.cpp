@@ -67,6 +67,11 @@ namespace p5cpp
     {
     }
 
+    Framebuffer::Framebuffer(std::unique_ptr<FramebufferImpl> impl)
+        : impl(std::move(impl))
+    {
+    }
+
     Framebuffer::Framebuffer(std::shared_ptr<FramebufferImpl> impl)
         : impl(std::move(impl))
     {

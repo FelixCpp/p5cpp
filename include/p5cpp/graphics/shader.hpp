@@ -1,10 +1,40 @@
 #pragma once
 
+#include <p5cpp/math/value2.hpp>
+#include <p5cpp/math/value4.hpp>
+#include <p5cpp/math/matrix4x4.hpp>
+
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <optional>
 #include <memory>
+
+namespace p5cpp
+{
+    struct UniformVariable
+    {
+        enum class Type {
+            float1,
+            float2,
+            float4,
+            matrix4x4
+        } type;
+
+        union
+        {
+            float floatValue;
+            float2 float2Value;
+            float4 float4Value;
+            matrix4x4 matrix4x4Value;
+        };
+    };
+
+    constexpr UniformVariable uniform(float x);
+    constexpr UniformVariable uniform(float x, float y);
+    constexpr UniformVariable uniform(float x, float y, float z, float w);
+    constexpr UniformVariable uniform(const matrix4x4& value);
+} // namespace p5cpp
 
 namespace p5cpp
 {
@@ -50,4 +80,12 @@ namespace p5cpp
         std::shared_ptr<ShaderImpl> shader;
     };
 
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    inline constexpr UniformVariable uniform(float x) { return UniformVariable {.type = UniformVariable::Type::float1, .floatValue = x}; }
+    inline constexpr UniformVariable uniform(float x, float y) { return UniformVariable {.type = UniformVariable::Type::float2, .float2Value = float2 {x, y}}; }
+    inline constexpr UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
+    inline constexpr UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
 } // namespace p5cpp

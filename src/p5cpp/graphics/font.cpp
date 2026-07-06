@@ -654,6 +654,11 @@ namespace p5cpp
     {
     }
 
+    Font::Font(std::unique_ptr<FontImpl> impl)
+        : impl(std::move(impl))
+    {
+    }
+
     Font::Font(std::shared_ptr<FontImpl> impl)
         : impl(std::move(impl))
     {

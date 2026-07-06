@@ -1,7 +1,9 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/graphics/shader.hpp>
 
+#include <string>
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 

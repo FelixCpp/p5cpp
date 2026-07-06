@@ -1,14 +1,23 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/graphics/shaping.hpp>
 
 namespace p5cpp
 {
-    struct DrawScope;
-    struct PathPoints;
+    struct DrawBufferWriter;
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    void generate_solid_stroke(DrawScope& scope, const PathPoints& points, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinAngleThreshold, bool close);
+    void generate_solid_stroke(
+        DrawBufferWriter& writer,
+        const PathPoints& points,
+        float strokeWeight,
+        StrokeCap strokeCap,
+        StrokeJoin strokeJoin,
+        float miterLimit,
+        float roundJoinAngleThreshold,
+        bool close,
+        const ComputeCircleSegmentCount& computeCircleSegmentCount
+    );
 } // namespace p5cpp

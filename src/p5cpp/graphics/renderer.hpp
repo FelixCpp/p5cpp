@@ -4,38 +4,24 @@
 #include <p5cpp/graphics/texture.hpp>
 #include <p5cpp/graphics/uniform_cache.hpp>
 #include <p5cpp/graphics/vertex.hpp>
+#include <p5cpp/graphics/draw_buffer_writer.hpp>
+#include <p5cpp/graphics/framebuffer.hpp>
+#include <p5cpp/graphics/blendmode.hpp>
 
 namespace p5cpp
 {
-    struct DrawScope
+    struct NativeRenderer
     {
-        size_t baseIndex;
-        size_t baseVertex;
-        size_t& indexCursor;
-        size_t& vertexCursor;
+        static std::unique_ptr<NativeRenderer> create(size_t vertexCount, size_t indexCount);
 
-        std::span<Vertex> vertices;
-        std::span<uint32_t> indices;
-
-        void pushVertex(const float2& position, const float2& texcoord, const float4& color);
-        void pushTriangle(uint32_t a, uint32_t b, uint32_t c);
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    struct Renderer
-    {
-        static std::unique_ptr<Renderer> create(size_t vertexCount, size_t indexCount);
-
-        virtual ~Renderer() = default;
+        virtual ~NativeRenderer() = default;
 
         virtual void begin(const Framebuffer& framebuffer) = 0;
         virtual void end() = 0;
         virtual void flush() = 0;
 
-        virtual void submit(DrawScope scope, UniformCache& uniformCache, const Shader& shader, BlendMode blendMode, const Texture& texture) = 0;
+        virtual void submit(DrawBufferWriter& scope, UniformCache& uniformCache, const Shader& shader, const BlendMode& blendMode, const Texture& texture) = 0;
 
-        virtual DrawScope getDrawScope() = 0;
+        virtual DrawBufferWriter& getDrawScope() = 0;
     };
 } // namespace p5cpp

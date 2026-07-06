@@ -1,4 +1,4 @@
-#include "uniform_cache.hpp"
+#include <p5cpp/graphics/uniform_cache.hpp>
 
 namespace p5cpp
 {

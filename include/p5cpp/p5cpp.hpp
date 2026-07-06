@@ -6,12 +6,14 @@
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/module.hpp>
 
+#include <p5cpp/graphics/blendmode.hpp>
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/font.hpp>
 #include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/texture.hpp>
+#include <p5cpp/graphics/text.hpp>
 
 #include <p5cpp/math/angle.hpp>
 #include <p5cpp/math/constants.hpp>
@@ -23,21 +25,8 @@
 #include <p5cpp/math/rectangle.hpp>
 
 #include <cstdint>
-#include <memory>
 #include <string_view>
-#include <vector>
 #include <optional>
-
-namespace p5cpp
-{
-    template <typename T>
-    struct value4
-    {
-        T x, y, z, w;
-    };
-
-    typedef value4<float> float4;
-} // namespace p5cpp
 
 namespace p5cpp
 {
@@ -75,139 +64,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    enum class StrokeCapStyle {
-        butt,
-        square,
-        round,
-    };
-
-    struct StrokeCap
-    {
-        StrokeCapStyle start;
-        StrokeCapStyle end;
-
-        static const StrokeCap butt;
-        static const StrokeCap square;
-        static const StrokeCap round;
-    };
-
-    enum class StrokeJoin {
-        miter,
-        bevel,
-        round
-    };
-
-    enum class BlendMode {
-        none,
-        alpha,
-        additive,
-        multiply,
-    };
-
-    enum class ArcMode {
-        open,
-        chord,
-        pie,
-    };
-
-    enum class VerticalTextAlign {
-        top,
-        center,
-        bottom,
-        baseline,
-    };
-
-    enum class HorizontalTextAlign {
-        left,
-        center,
-        right,
-    };
-
-    enum class TextWrap {
-        none,
-        word,
-        character,
-    };
-
-    struct TextAlign
-    {
-        HorizontalTextAlign horizontal;
-        VerticalTextAlign vertical;
-
-        static const TextAlign topLeft;
-        static const TextAlign topCenter;
-        static const TextAlign topRight;
-
-        static const TextAlign centerLeft;
-        static const TextAlign center;
-        static const TextAlign centerRight;
-
-        static const TextAlign bottomLeft;
-        static const TextAlign bottomCenter;
-        static const TextAlign bottomRight;
-    };
-
-    struct LineLayout
-    {
-        size_t codepointsStart;
-        size_t codepointsEnd;
-        float width;
-        float y;
-    };
-
-    struct GlyphQuad
-    {
-        float_rect vertexRect;
-        float_rect uvRect;
-        Texture* texture;
-        size_t codepointIndex;
-    };
-
-    struct TextLayout
-    {
-        float totalWidth;
-        float totalHeight;
-        float ascender;
-        float descender;
-        std::vector<GlyphQuad> glyphs;
-        std::vector<LineLayout> lines;
-    };
-
-    struct UniformVariable
-    {
-        enum class Type {
-            float1,
-            float2,
-            float4,
-            matrix4x4
-        } type;
-
-        union
-        {
-            float floatValue;
-            float2 float2Value;
-            float4 float4Value;
-            matrix4x4 matrix4x4Value;
-        };
-    };
-
-    UniformVariable uniform(float x);
-    UniformVariable uniform(float x, float y);
-    UniformVariable uniform(float x, float y, float z, float w);
-    UniformVariable uniform(const matrix4x4& value);
-
-    struct Pixels
-    {
-        int width;
-        int height;
-        std::vector<color_t> colors;
-    };
-
-    Pixels loadPixels();
-    void updatePixels(const Pixels& pixels);
-
-    size_t computeCircleSegmentCount(float angle, float radius);
-
     void pushCanvas(const Framebuffer& framebuffer);
     void popCanvas();
 
@@ -249,7 +105,7 @@ namespace p5cpp
     void curveTightness(float tightness);
     void curveDetail(uint32_t detail);
 
-    void textFont(std::shared_ptr<Font> font);
+    void textFont(Font font);
     void noTextFont();
     void textSize(float size);
     void textLetterSpacing(float spacing);
@@ -257,12 +113,12 @@ namespace p5cpp
     void textAlign(TextAlign textAlign);
     void textWrap(TextWrap textWrap);
 
-    void shader(std::shared_ptr<ShaderImpl> shader);
+    void shader(const Shader& shader);
     void noShader();
-    void blendMode(BlendMode blendMode);
+    void blendMode(const BlendMode& blendMode);
 
     void setUniform(const std::string& name, const UniformVariable& variable);
-    void setUniform(std::shared_ptr<ShaderImpl> shader, const std::string& name, const UniformVariable& variable);
+    void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
 
     void background(int grey, int alpha = 255);
     void background(int red, int green, int blue, int alpha = 255);
@@ -275,20 +131,16 @@ namespace p5cpp
     void curveVertex(float x, float y);
 
     void rect(float left, float top, float width, float height);
-    void rect(float left, float top, float width, float height, float cx, float cy);
-    void rect(float left, float top, float width, float height, float topLeftX, float topLeftY, float topRightX, float topRightY, float bottomRightX, float bottomRightY, float bottomLeftX, float bottomLeftY);
+    void rect(float left, float top, float width, float height, const BorderRadius& borderRadius);
     void square(float left, float top, float size);
-    void ellipse(float centerX, float centerY, float width, float height);
-    void circle(float centerX, float centerY, float size);
+    void ellipse(float centerX, float centerY, float radiusX, float radiusY);
+    void circle(float centerX, float centerY, float radius);
     void point(float x, float y);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
     void line(float x1, float y1, float x2, float y2);
-    void arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode);
+    void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float sweepAngle, ArcMode arcMode);
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void image(const Texture* texture, float left, float top, float width, float height);
     void text(std::string_view text, float x, float y, std::optional<float> maxWidth = std::nullopt);
-
-    TextLayout measureText(std::string_view text);
-    TextLayout measureText(std::string_view text, Font* font, float textSize, float letterSpacing, float lineSpacing, TextAlign textAlign, TextWrap textWrap, std::optional<float> maxWidth);
 } // namespace p5cpp

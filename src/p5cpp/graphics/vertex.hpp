@@ -1,6 +1,7 @@
 #pragma once
 
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/math/value2.hpp>
+#include <p5cpp/math/value4.hpp>
 
 namespace p5cpp
 {
@@ -10,17 +11,5 @@ namespace p5cpp
         float2 texcoord;
         float4 color;
         float texIndex;
-    };
-
-    enum class ColorStyle {
-        none,
-        fill,
-        stroke,
-    };
-
-    struct StrokePattern
-    {
-        std::span<const float> segments;
-        float offset;
     };
 } // namespace p5cpp
