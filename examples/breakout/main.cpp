@@ -789,7 +789,7 @@ struct BreakoutSketch : p5cpp::Sketch
         popCanvas();
 
         noTint();
-        image(bgCanvas->getColorTexture(), 0.f, 0.f, float(W), float(H));
+        image(*bgCanvas->getColorTexture(), 0.f, 0.f, float(W), float(H));
     }
 
     void drawStars()
@@ -820,22 +820,22 @@ struct BreakoutSketch : p5cpp::Sketch
             if (br.isBomb) {
                 const float bp = 0.5f + 0.5f * std::sin(t * 4.5f + br.phase);
                 fill(r, g, b, int(45.f * bp + 20.f));
-                rect(br.x - 9.f, br.y - 9.f, BRICK_W + 18.f, BRICK_H + 18.f, 10.f, 10.f);
+                rect(br.x - 9.f, br.y - 9.f, BRICK_W + 18.f, BRICK_H + 18.f, BorderRadius::elliptical(10.f, 10.f));
             } else {
                 fill(r, g, b, int(25.f * pu + 12.f));
-                rect(br.x - 6.f, br.y - 6.f, BRICK_W + 12.f, BRICK_H + 12.f, 8.f, 8.f);
+                rect(br.x - 6.f, br.y - 6.f, BRICK_W + 12.f, BRICK_H + 12.f, BorderRadius::elliptical(8.f, 8.f));
             }
             blendMode(BlendMode::alpha);
 
             // Brick body
             noStroke();
             fill(r * dm / 255, g * dm / 255, b * dm / 255);
-            rect(br.x, br.y, BRICK_W, BRICK_H, 4.f, 4.f);
+            rect(br.x, br.y, BRICK_W, BRICK_H, BorderRadius::elliptical(4.f, 4.f));
 
             // Shiny top-edge highlight
             blendMode(BlendMode::additive);
             fill(255, 255, 255, 48);
-            rect(br.x + 2.f, br.y + 2.f, BRICK_W - 4.f, 4.f, 2.f, 2.f);
+            rect(br.x + 2.f, br.y + 2.f, BRICK_W - 4.f, 4.f, BorderRadius::elliptical(2.f, 2.f));
             blendMode(BlendMode::alpha);
 
             // Bomb × symbol
@@ -924,7 +924,7 @@ struct BreakoutSketch : p5cpp::Sketch
             noStroke();
             const float lp = 0.5f + 0.5f * std::sin(t * 10.f);
             fill(255, 120, 0, int(70.f * lp));
-            rect(pL - 4.f, pT - 10.f, pW + 8.f, 14.f, 6.f, 6.f);
+            rect(pL - 4.f, pT - 10.f, pW + 8.f, 14.f, BorderRadius::elliptical(6.f, 6.f));
         }
 
         // Glow burst after ball reflection
@@ -933,9 +933,9 @@ struct BreakoutSketch : p5cpp::Sketch
             noStroke();
             const int ga = int(paddleGlow * 75.f);
             fill(100, 200, 255, ga);
-            rect(pL - 14.f, pT - 14.f, pW + 28.f, PADDLE_H + 28.f, 14.f, 14.f);
+            rect(pL - 14.f, pT - 14.f, pW + 28.f, PADDLE_H + 28.f, BorderRadius::elliptical(14.f, 14.f));
             fill(50, 130, 220, ga / 2);
-            rect(pL - 26.f, pT - 26.f, pW + 52.f, PADDLE_H + 52.f, 26.f, 26.f);
+            rect(pL - 26.f, pT - 26.f, pW + 52.f, PADDLE_H + 52.f, BorderRadius::elliptical(26.f, 26.f));
         }
         blendMode(BlendMode::alpha);
 
@@ -944,12 +944,12 @@ struct BreakoutSketch : p5cpp::Sketch
         if (wideTimer > 0.f) fill(rgba(70, 255, 150));
         else if (ghostTimer > 0.f) fill(rgba(200, 80, 255));
         else fill(rgba(60, 145, 255));
-        rect(pL, pT, pW, PADDLE_H, 7.f, 7.f);
+        rect(pL, pT, pW, PADDLE_H, BorderRadius::elliptical(7.f, 7.f));
 
         // Top highlight strip
         blendMode(BlendMode::additive);
         fill(255, 255, 255, 55);
-        rect(pL + 4.f, pT + 2.f, pW - 8.f, 4.f, 2.f, 2.f);
+        rect(pL + 4.f, pT + 2.f, pW - 8.f, 4.f, BorderRadius::elliptical(2.f, 2.f));
         blendMode(BlendMode::alpha);
     }
 
@@ -974,10 +974,10 @@ struct BreakoutSketch : p5cpp::Sketch
             if (!l.alive) continue;
             // Wide glow
             fill(255, 90, 0, 50);
-            rect(l.x - 7.f, l.y - 20.f, 14.f, 20.f, 3.f, 3.f);
+            rect(l.x - 7.f, l.y - 20.f, 14.f, 20.f, BorderRadius::elliptical(3.f, 3.f));
             // Bright core
             fill(255, 210, 60, 230);
-            rect(l.x - 2.f, l.y - 20.f, 4.f, 20.f, 2.f, 2.f);
+            rect(l.x - 2.f, l.y - 20.f, 4.f, 20.f, BorderRadius::elliptical(2.f, 2.f));
         }
         blendMode(BlendMode::alpha);
     }
@@ -1066,7 +1066,7 @@ struct BreakoutSketch : p5cpp::Sketch
             blendMode(BlendMode::alpha);
             noStroke();
             fill(cr, cg, cb, 230);
-            rect(pu.x - 14.f, pu.y - 9.f, 28.f, 18.f, 9.f, 9.f);
+            rect(pu.x - 14.f, pu.y - 9.f, 28.f, 18.f, BorderRadius::elliptical(9.f, 9.f));
 
             // Label
             fill(20, 20, 20);

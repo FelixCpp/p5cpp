@@ -789,7 +789,7 @@ struct TowerSketch : p5cpp::Sketch
         popCanvas();
         blendMode(BlendMode::alpha);
         noTint();
-        image(bgCanvas->getColorTexture(), 0, 0, (float)W, (float)H);
+        image(*bgCanvas->getColorTexture(), 0, 0, (float)W, (float)H);
     }
 
     // ── drawGame ─────────────────────────────────────────────────────────────
@@ -1185,13 +1185,13 @@ struct TowerSketch : p5cpp::Sketch
         const float pw = 730.f, ph = 420.f;
         const float px = (W - pw) * 0.5f, py = (H - ph) * 0.5f;
         fill(10, 12, 35, 240);
-        rect(px, py, pw, ph, 8.f, 8.f);
+        rect(px, py, pw, ph, BorderRadius::elliptical(8.f, 8.f));
         noFill();
         blendMode(BlendMode::additive);
         stroke(60, 120, 255, 120);
         // strokeWeight(1.5f);
         strokeWeight(5.5f);
-        rect(px, py, pw, ph, 8.f, 8.f);
+        rect(px, py, pw, ph, BorderRadius::elliptical(8.f, 8.f));
         blendMode(BlendMode::alpha);
 
         fill(180, 220, 255, 230);
@@ -1220,7 +1220,7 @@ struct TowerSketch : p5cpp::Sketch
                 blendMode(BlendMode::additive);
                 fill(buy ? 20 : 60, buy ? 80 : 20, buy ? 180 : 120, 80);
                 noStroke();
-                rect(cx, cy, cardW, cardH, 6.f, 6.f);
+                rect(cx, cy, cardW, cardH, BorderRadius::elliptical(6.f, 6.f));
                 blendMode(BlendMode::alpha);
             }
             noFill();
@@ -1229,7 +1229,7 @@ struct TowerSketch : p5cpp::Sketch
                                                                       : rgba(80, 80, 120, sel ? 160 : 60);
             stroke(red(bc), green(bc), blue(bc), alpha(bc));
             strokeWeight(sel ? 2.f : 1.f);
-            rect(cx, cy, cardW, cardH, 6.f, 6.f);
+            rect(cx, cy, cardW, cardH, BorderRadius::elliptical(6.f, 6.f));
             blendMode(BlendMode::alpha);
 
             fill(mx ? 80 : 200, mx ? 255 : 220, mx ? 80 : 255, 220);
@@ -1252,7 +1252,7 @@ struct TowerSketch : p5cpp::Sketch
                         blendMode(BlendMode::alpha);
                         fill(30, 30, 60, 180);
                     }
-                    rect(sx, bby, sqW, 6.f, 1.f, 1.f);
+                    rect(sx, bby, sqW, 6.f, BorderRadius::elliptical(1.f, 1.f));
                 }
                 blendMode(BlendMode::alpha);
             }

@@ -4,9 +4,13 @@ using namespace p5cpp;
 
 struct TextWrappingSketch : p5cpp::Sketch
 {
+    Font font;
+
     void setup() override
     {
         setWindowSize(800, 800);
+        font = loadFont("MapleMono-NF-Regular.ttf");
+        textFont(font);
     }
 
     void draw() override
@@ -24,7 +28,7 @@ struct TextWrappingSketch : p5cpp::Sketch
             textSize(24.0f);
             textAlign(TextAlign::topLeft);
             textWrap(TextWrap::none);
-            text("This is a long line of text that should not wrap and will overflow the box.", box.left, box.top, box.width);
+            text("This <-> => >= is a long line of text that should not wrap and will overflow the box.", box.left, box.top, box.width);
         }
 
         {

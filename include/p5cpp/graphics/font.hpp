@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <span>
+#include <vector>
 #include <filesystem>
 
 namespace p5cpp
@@ -40,6 +41,23 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    struct ShapedGlyph
+    {
+        int2 bearing;
+        int2 size;
+        float_rect uvRect;
+        size_t glyphAtlasIndex;
+        float xOffset;      // HarfBuzz cluster-relative offset in pixels
+        float yOffset;      // HarfBuzz cluster-relative offset in pixels
+        float xAdvance;     // HarfBuzz advance in pixels
+        float yAdvance;     // HarfBuzz advance in pixels
+        bool isWhitespace;  // true for space/tab — still advances but has no bitmap
+        char32_t cluster;   // leading codepoint of the cluster (for word-wrap)
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
     struct FontImpl
     {
         virtual ~FontImpl() = default;
@@ -47,6 +65,7 @@ namespace p5cpp
         virtual const FontMetrics* getMetrics(int textSize) = 0;
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
         virtual const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) = 0;
+        virtual std::vector<ShapedGlyph> shape(std::string_view text, int textSize) = 0;
     };
 
     std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath);
@@ -66,6 +85,7 @@ namespace p5cpp
         const FontMetrics* getMetrics(int textSize) const;
         float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const;
         const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) const;
+        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) const;
 
     private:
         std::shared_ptr<FontImpl> impl;

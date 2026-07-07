@@ -290,7 +290,7 @@ struct SimSketch : p5cpp::Sketch
     {
         fill(p5cpp::rgba(0, 0, 0, 160));
         noStroke();
-        rect(8, 8, 220, 52, 6, 6);
+        rect(8, 8, 220, 52, BorderRadius::elliptical(6, 6));
 
         fill(p5cpp::rgba(80, 220, 100));
         textSize(14);
@@ -310,7 +310,7 @@ struct SimSketch : p5cpp::Sketch
 
         fill(p5cpp::rgba(0, 0, 0, 140));
         noStroke();
-        rect(GX, GY, GW, GH, 4, 4);
+        rect(GX, GY, GW, GH, BorderRadius::elliptical(4, 4));
 
         float maxVal = 10;
         for (float v : preyHistory)

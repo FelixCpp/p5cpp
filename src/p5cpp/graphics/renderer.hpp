@@ -3,7 +3,6 @@
 #include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/texture.hpp>
 #include <p5cpp/graphics/uniform_cache.hpp>
-#include <p5cpp/graphics/vertex.hpp>
 #include <p5cpp/graphics/draw_buffer_writer.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/graphics/blendmode.hpp>

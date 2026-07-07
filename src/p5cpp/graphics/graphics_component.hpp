@@ -83,6 +83,7 @@ namespace p5cpp
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void image(const Texture& texture, float left, float top, float width, float height);
         void text(std::string_view text, float x, float y);
+        void text(std::string_view text, float x, float y, float maxWidth);
 
         void beginShape();
         void endShape(ShapeType type, bool close);
@@ -93,6 +94,9 @@ namespace p5cpp
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
 
         Shader getShader(const RenderState& renderState);
+
+        void submitFill(const PathPoints& pts, ShapeType type, const Texture& texture);
+        void submitStroke(const PathPoints& pts, ShapeType type, bool close);
 
         std::unique_ptr<float2[]> m_drawPointPositions;
         std::unique_ptr<float2[]> m_drawPointTexCoords;
@@ -114,6 +118,7 @@ namespace p5cpp
         Shader m_textShader;
         Texture m_whiteTexture;
         UniformCache m_uniformCache;
+        Font m_defaultFont;
         std::unique_ptr<NativeRenderer> m_renderer;
     };
 } // namespace p5cpp

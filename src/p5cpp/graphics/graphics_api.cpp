@@ -40,7 +40,7 @@ namespace p5cpp
     void fill(int grey, int alpha) { fill(grey, grey, grey, alpha); }
 
     void noStroke() { getGraphicsComponent().noStroke(); }
-    void stroke(color_t color) { getGraphicsComponent().fill(color); }
+    void stroke(color_t color) { getGraphicsComponent().stroke(color); }
     void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
     void stroke(int grey, int alpha) { stroke(grey, grey, grey, alpha); }
 
@@ -97,4 +97,5 @@ namespace p5cpp
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { getGraphicsComponent().curve(x1, y1, x2, y2, x3, y3, x4, y4); }
     void image(const Texture& texture, float left, float top, float width, float height) { getGraphicsComponent().image(texture, left, top, width, height); }
     void text(std::string_view text, float x, float y) { getGraphicsComponent().text(text, x, y); }
+    void text(std::string_view text, float x, float y, float maxWidth) { getGraphicsComponent().text(text, x, y, maxWidth); }
 } // namespace p5cpp

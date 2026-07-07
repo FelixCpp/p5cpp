@@ -3,10 +3,13 @@
 
 #include <glad/glad.h>
 #include <freetype/freetype.h>
+#include <hb.h>
+#include <hb-ft.h>
 
 #include <unordered_map>
 #include <optional>
 #include <vector>
+#include <string_view>
 #include <cassert>
 
 namespace p5cpp
@@ -473,6 +476,68 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    struct GlyphByIdCacheKey
+    {
+        uint32_t glyphId;
+        int textSize;
+
+        bool operator==(const GlyphByIdCacheKey& other) const
+        {
+            return glyphId == other.glyphId && textSize == other.textSize;
+        }
+    };
+
+    struct GlyphByIdCacheKeyHasher
+    {
+        std::size_t operator()(const GlyphByIdCacheKey& key) const
+        {
+            std::size_t h1 = std::hash<uint32_t> {}(key.glyphId);
+            std::size_t h2 = std::hash<int> {}(key.textSize);
+            return h1 ^ (h2 << 1);
+        }
+    };
+
+    class GlyphByIdCache
+    {
+    public:
+        const Glyph* get(uint32_t glyphId, int textSize) const
+        {
+            const GlyphByIdCacheKey key {.glyphId = glyphId, .textSize = textSize};
+            const auto itr = m_cache.find(key);
+            if (itr != m_cache.end()) {
+                return &itr->second;
+            }
+
+            return nullptr;
+        }
+
+        const Glyph* put(uint32_t glyphId, int textSize, const Glyph& glyph)
+        {
+            GlyphByIdCacheKey key {glyphId, textSize};
+            const auto insertion = m_cache.emplace(std::make_pair(key, glyph));
+            return &insertion.first->second;
+        }
+
+    private:
+        std::unordered_map<GlyphByIdCacheKey, Glyph, GlyphByIdCacheKeyHasher> m_cache;
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    struct HbFontDeleter
+    {
+        void operator()(hb_font_t* font) const
+        {
+            hb_font_destroy(font);
+        }
+    };
+
+    using HbFont = std::unique_ptr<hb_font_t, HbFontDeleter>;
+} // namespace p5cpp
+
+namespace p5cpp
+{
     class FreetypeFont : public FontImpl
     {
     public:
@@ -527,37 +592,20 @@ namespace p5cpp
             const int bearingY = m_face->glyph->bitmap_top;
             const int advanceX = m_face->glyph->advance.x / 64;
 
-            const int bitmapWidth = m_face->glyph->bitmap.width;
-            const int bitmapHeight = m_face->glyph->bitmap.rows;
-
+            const int bitmapWidth = static_cast<int>(m_face->glyph->bitmap.width);
+            const int bitmapHeight = static_cast<int>(m_face->glyph->bitmap.rows);
             const std::span<const uint8_t> bitmapData(m_face->glyph->bitmap.buffer, bitmapWidth * bitmapHeight);
 
-            const auto region = std::invoke([&]() -> std::optional<GlyphRegion> {
-                const bool needsToCreateInitialAtlas = m_glyphAtlasPages.empty();
-                if (needsToCreateInitialAtlas) {
-                    m_glyphAtlasPages.emplace_back(std::make_unique<GlyphAtlas>(512, 512, 1, 1));
-                }
-
-                const auto& currentGlyphAtlas = m_glyphAtlasPages.back();
-                const auto region = currentGlyphAtlas->store(bitmapWidth, bitmapHeight, bitmapData);
-                if (region.has_value()) {
-                    return region;
-                }
-
-                if (needsToCreateInitialAtlas) {
-                    error("Failed to store the glyph in the atlas. The glyph might be too large to fit in the atlas.");
-                    return std::nullopt; // Failed to store the glyph in the atlas. Even though the atlas is empty, the glyph might be too large to fit in the atlas.
-                }
-
-                auto& newAtlas = m_glyphAtlasPages.emplace_back(std::make_unique<GlyphAtlas>(512, 512, 1, 1));
-                return newAtlas->store(bitmapWidth, bitmapHeight, bitmapData);
-            });
+            const auto [region, atlasPageIndex] = storeInAtlas(bitmapWidth, bitmapHeight, bitmapData);
+            if (!region.has_value()) {
+                return nullptr;
+            }
 
             Glyph glyph {
                 .region = region.value(),
                 .bearing = int2 {bearingX, bearingY},
                 .advanceX = static_cast<float>(advanceX),
-                .glyphAtlasIndex = 0,
+                .glyphAtlasIndex = atlasPageIndex,
             };
 
             return m_glyphCache.put(codepoint, textSize, glyph);
@@ -619,18 +667,189 @@ namespace p5cpp
             return m_glyphAtlasPages[glyphAtlasIndex]->getTexture();
         }
 
+        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) override
+        {
+            if (!m_hbFont) {
+                m_hbFont.reset(hb_ft_font_create(m_face.get(), nullptr));
+            }
+
+            if (FT_Set_Pixel_Sizes(m_face.get(), 0, static_cast<FT_UInt>(textSize))) {
+                return {};
+            }
+
+            hb_ft_font_changed(m_hbFont.get());
+
+            hb_buffer_t* buf = hb_buffer_create();
+            hb_buffer_add_utf8(buf, text.data(), static_cast<int>(text.size()), 0, static_cast<int>(text.size()));
+            hb_buffer_guess_segment_properties(buf);
+
+            hb_feature_t features[3] = {};
+            hb_feature_from_string("liga", -1, &features[0]); // standard ligatures
+            hb_feature_from_string("calt", -1, &features[1]); // contextual alternates
+            hb_feature_from_string("kern", -1, &features[2]); // kerning
+
+            hb_shape(m_hbFont.get(), buf, features, 3);
+
+            unsigned int numGlyphs = 0;
+            hb_glyph_info_t* glyphInfos = hb_buffer_get_glyph_infos(buf, &numGlyphs);
+            hb_glyph_position_t* glyphPositions = hb_buffer_get_glyph_positions(buf, nullptr);
+
+            std::vector<ShapedGlyph> result;
+            result.reserve(numGlyphs);
+
+            for (unsigned int i = 0; i < numGlyphs; ++i) {
+                const uint32_t glyphId = glyphInfos[i].codepoint; // HarfBuzz renames this field to hold glyph ID
+                const uint32_t clusterByteOffset = glyphInfos[i].cluster;
+
+                const float xOffset = glyphPositions[i].x_offset / 64.0f;
+                const float yOffset = glyphPositions[i].y_offset / 64.0f;
+                const float xAdvance = glyphPositions[i].x_advance / 64.0f;
+                const float yAdvance = glyphPositions[i].y_advance / 64.0f;
+
+                const char32_t cluster = decodeUtf8CodepointAt(text, clusterByteOffset);
+                const Glyph* glyph = renderGlyphById(glyphId, textSize);
+
+                if (glyph == nullptr) {
+                    result.push_back(ShapedGlyph {
+                        .bearing = {0, 0},
+                        .size = {0, 0},
+                        .uvRect = {0.0f, 0.0f, 0.0f, 0.0f},
+                        .glyphAtlasIndex = 0,
+                        .xOffset = xOffset,
+                        .yOffset = yOffset,
+                        .xAdvance = xAdvance,
+                        .yAdvance = yAdvance,
+                        .isWhitespace = true,
+                        .cluster = cluster,
+                    });
+                } else {
+                    const bool hasNoPixels = (glyph->region.size.x == 0 || glyph->region.size.y == 0);
+                    result.push_back(ShapedGlyph {
+                        .bearing = glyph->bearing,
+                        .size = glyph->region.size,
+                        .uvRect = glyph->region.uvRect,
+                        .glyphAtlasIndex = glyph->glyphAtlasIndex,
+                        .xOffset = xOffset,
+                        .yOffset = yOffset,
+                        .xAdvance = xAdvance,
+                        .yAdvance = yAdvance,
+                        .isWhitespace = hasNoPixels,
+                        .cluster = cluster,
+                    });
+                }
+            }
+
+            hb_buffer_destroy(buf);
+            return result;
+        }
+
     private:
         explicit FreetypeFont(FreetypeFace face)
             : m_face(std::move(face))
         {
         }
 
+        // Rasterise a glyph by its FreeType/HarfBuzz glyph ID and store it in the atlas.
+        // Returns nullptr only if FreeType fails to load/render the glyph.
+        const Glyph* renderGlyphById(uint32_t glyphId, int textSize)
+        {
+            if (const Glyph* cached = m_glyphByIdCache.get(glyphId, textSize)) {
+                return cached;
+            }
+
+            if (FT_Load_Glyph(m_face.get(), glyphId, FT_LOAD_NO_BITMAP)) {
+                return nullptr;
+            }
+
+            if (FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL)) {
+                return nullptr;
+            }
+
+            const int bearingX = m_face->glyph->bitmap_left;
+            const int bearingY = m_face->glyph->bitmap_top;
+            const int advanceX = m_face->glyph->advance.x / 64;
+
+            const int bitmapWidth = static_cast<int>(m_face->glyph->bitmap.width);
+            const int bitmapHeight = static_cast<int>(m_face->glyph->bitmap.rows);
+            const std::span<const uint8_t> bitmapData(m_face->glyph->bitmap.buffer, bitmapWidth * bitmapHeight);
+
+            const auto [region, pageIndex] = storeInAtlas(bitmapWidth, bitmapHeight, bitmapData);
+            if (!region.has_value()) {
+                return nullptr;
+            }
+
+            Glyph glyph {
+                .region = region.value(),
+                .bearing = int2 {bearingX, bearingY},
+                .advanceX = static_cast<float>(advanceX),
+                .glyphAtlasIndex = pageIndex,
+            };
+
+            return m_glyphByIdCache.put(glyphId, textSize, glyph);
+        }
+
+        struct AtlasStorageResult
+        {
+            std::optional<GlyphRegion> region;
+            size_t pageIndex = 0;
+        };
+
+        AtlasStorageResult storeInAtlas(int bitmapWidth, int bitmapHeight, std::span<const uint8_t> bitmapData)
+        {
+            const bool needsToCreateInitialAtlas = m_glyphAtlasPages.empty();
+            if (needsToCreateInitialAtlas) {
+                m_glyphAtlasPages.emplace_back(std::make_unique<GlyphAtlas>(512, 512, 1, 1));
+            }
+
+            const size_t currentPageIndex = m_glyphAtlasPages.size() - 1;
+            const auto region = m_glyphAtlasPages.back()->store(bitmapWidth, bitmapHeight, bitmapData);
+            if (region.has_value()) {
+                return {region, currentPageIndex};
+            }
+
+            if (needsToCreateInitialAtlas) {
+                error("Failed to store the glyph in the atlas. The glyph might be too large to fit in the atlas.");
+                return {std::nullopt, 0};
+            }
+
+            m_glyphAtlasPages.emplace_back(std::make_unique<GlyphAtlas>(512, 512, 1, 1));
+            const size_t newPageIndex = m_glyphAtlasPages.size() - 1;
+            return {m_glyphAtlasPages.back()->store(bitmapWidth, bitmapHeight, bitmapData), newPageIndex};
+        }
+
+        static char32_t decodeUtf8CodepointAt(std::string_view text, uint32_t byteOffset)
+        {
+            if (byteOffset >= text.size()) {
+                return U' ';
+            }
+
+            const auto u = [&](uint32_t offset) -> uint8_t { return static_cast<uint8_t>(text[offset]); };
+            const uint8_t first = u(byteOffset);
+
+            if (first < 0x80) {
+                return static_cast<char32_t>(first);
+            }
+            if ((first & 0xE0) == 0xC0 && byteOffset + 1 < text.size()) {
+                return static_cast<char32_t>(((first & 0x1F) << 6) | (u(byteOffset + 1) & 0x3F));
+            }
+            if ((first & 0xF0) == 0xE0 && byteOffset + 2 < text.size()) {
+                return static_cast<char32_t>(((first & 0x0F) << 12) | ((u(byteOffset + 1) & 0x3F) << 6) | (u(byteOffset + 2) & 0x3F));
+            }
+            if ((first & 0xF8) == 0xF0 && byteOffset + 3 < text.size()) {
+                return static_cast<char32_t>(((first & 0x07) << 18) | ((u(byteOffset + 1) & 0x3F) << 12) | ((u(byteOffset + 2) & 0x3F) << 6) | (u(byteOffset + 3) & 0x3F));
+            }
+
+            return U' '; // Malformed byte — treat as space.
+        }
+
         KerningCache m_kerningCache;
         GlyphCache m_glyphCache;
+        GlyphByIdCache m_glyphByIdCache;
         FontMetricsCache m_glyphMetricsCache;
 
         std::vector<std::unique_ptr<GlyphAtlas>> m_glyphAtlasPages;
         FreetypeFace m_face;
+        HbFont m_hbFont;
     };
 } // namespace p5cpp
 
@@ -686,5 +905,11 @@ namespace p5cpp
     {
         assert(impl != nullptr && "Font implementation is not initialized.");
         return impl->getGlyphAtlasTexture(glyphAtlasIndex);
+    }
+
+    std::vector<ShapedGlyph> Font::shape(std::string_view text, int textSize) const
+    {
+        assert(impl != nullptr && "Font implementation is not initialized.");
+        return impl->shape(text, textSize);
     }
 } // namespace p5cpp

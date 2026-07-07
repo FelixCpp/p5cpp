@@ -180,12 +180,12 @@ public:
             const float left = (static_cast<float>(getLogicalWidth()) - static_cast<float>(width)) * 0.5f;
             const float top = (static_cast<float>(getLogicalHeight()) - static_cast<float>(height)) * 0.5f;
 
-            image(scratchpad->framebuffer->getColorTexture(), left, top, static_cast<float>(width), static_cast<float>(height));
+            image(*scratchpad->framebuffer->getColorTexture(), left, top, static_cast<float>(width), static_cast<float>(height));
 
             noFill();
             stroke(255);
             strokeWeight(2.0f);
-            rect(left, top, static_cast<float>(width), static_cast<float>(height), 25.0f, 25.0f);
+            rect(left, top, static_cast<float>(width), static_cast<float>(height), BorderRadius::elliptical(25.0f, 25.0f));
         }
     }
 

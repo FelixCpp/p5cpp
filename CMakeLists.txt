@@ -10,6 +10,13 @@ add_subdirectory(external/freetype)
 add_subdirectory(external/glad)
 add_subdirectory(external/miniaudio)
 
+set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
+set(HB_BUILD_UTILS OFF CACHE BOOL "" FORCE)
+set(HB_BUILD_RASTER OFF CACHE BOOL "" FORCE)
+set(HB_BUILD_VECTOR OFF CACHE BOOL "" FORCE)
+set(HB_BUILD_GPU OFF CACHE BOOL "" FORCE)
+add_subdirectory(external/harfbuzz)
+
 add_library(
   libtess2 STATIC
   ./external/libtess2/Source/bucketalloc.c
@@ -65,6 +72,6 @@ add_library(
   ./src/p5cpp/p5cpp.cpp
 )
 
-target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio)
+target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio harfbuzz)
 target_include_directories(p5cpp PUBLIC include src)
 add_subdirectory(examples)

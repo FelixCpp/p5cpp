@@ -1,8 +1,13 @@
+#include "dejavusans.hpp"
 #include "p5cpp/application/logging.hpp"
+#include "p5cpp/graphics/internal_shaders.hpp"
 #include <p5cpp/graphics/graphics_component.hpp>
 #include <p5cpp/graphics/tess.hpp>
+#include <p5cpp/graphics/stroker.hpp>
+#include <p5cpp/math/constants.hpp>
 
-#include <format>
+#include <glad/glad.h>
+#include <vector>
 
 namespace p5cpp
 {
@@ -35,6 +40,20 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    inline static float4 colorToFloat4(color_t color)
+    {
+        static constexpr float inv255 = 1.0f / 255.0f;
+        return float4 {
+            static_cast<float>(red(color)) * inv255,
+            static_cast<float>(green(color)) * inv255,
+            static_cast<float>(blue(color)) * inv255,
+            static_cast<float>(alpha(color)) * inv255,
+        };
+    }
+} // namespace p5cpp
+
+namespace p5cpp
+{
     inline static constexpr size_t MAX_VERTICES = 65536;
     inline static constexpr size_t MAX_INDICES = 65536 * 3;
 
@@ -44,8 +63,14 @@ namespace p5cpp
           m_curveVertexCount(0),
           m_defaultFramebuffer(createFramebuffer(width, height)),
           m_renderStateStack(),
+          m_defaultFont(loadFont(std::span {DejaVuSans_ttf, DejaVuSans_ttf_len})),
           m_renderer(NativeRenderer::create(MAX_VERTICES, MAX_INDICES))
     {
+        m_defaultShader = Shader(std::shared_ptr<ShaderImpl>(createPrimitiveShader()));
+        m_textShader = Shader(std::shared_ptr<ShaderImpl>(createTextShader()));
+
+        const color_t white = rgba(255, 255, 255, 255);
+        m_whiteTexture = Texture(loadTexture(1, 1, &white));
     }
 
     void GraphicsComponent::beginFrame()
@@ -65,8 +90,16 @@ namespace p5cpp
 
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
-        // error("Not implemented: blitDefaultCanvasToScreen");
-        info(std::format("Blitting default canvas {}x{}, to screen with size: {}x{}", m_defaultFramebuffer.getSize().x, m_defaultFramebuffer.getSize().y, screenWidth, screenHeight));
+        const uint2 canvasSize = m_defaultFramebuffer.getSize();
+        const GLuint fboId = m_defaultFramebuffer.getFramebufferId().value;
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(
+            0, 0, static_cast<GLint>(canvasSize.x), static_cast<GLint>(canvasSize.y), 0, 0, static_cast<GLint>(screenWidth), static_cast<GLint>(screenHeight), GL_COLOR_BUFFER_BIT, (canvasSize.x == screenWidth && canvasSize.y == screenHeight) ? GL_NEAREST : GL_LINEAR
+        );
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
 
     void GraphicsComponent::pushCanvas(Framebuffer framebuffer)
@@ -312,72 +345,525 @@ namespace p5cpp
 
     void GraphicsComponent::background(color_t color)
     {
-        error("Not implemented: background");
+        const uint2 canvasSize = getCanvasSize();
+        const float w = static_cast<float>(canvasSize.x);
+        const float h = static_cast<float>(canvasSize.y);
+        const float4 col = colorToFloat4(color);
+
+        DrawBufferWriter& writer = m_renderer->getDrawScope();
+        const uint32_t base = writer.getRelativeCursor();
+
+        writer.pushVertex({0.0f, 0.0f}, {0.0f, 0.0f}, col);
+        writer.pushVertex({w, 0.0f}, {1.0f, 0.0f}, col);
+        writer.pushVertex({w, h}, {1.0f, 1.0f}, col);
+        writer.pushVertex({0.0f, h}, {0.0f, 1.0f}, col);
+        writer.pushTriangle(base + 0, base + 1, base + 2);
+        writer.pushTriangle(base + 0, base + 2, base + 3);
+
+        m_renderer->submit(writer, m_uniformCache, m_defaultShader, BlendMode::none, m_whiteTexture);
     }
 
-    void GraphicsComponent::rect(float left, float top, float width, float height)
+    void GraphicsComponent::rect(float left, float top, float w, float h)
     {
-        error("Not implemented: rect");
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        const float2 p0 = mtx.transformPoint(left, top);
+        const float2 p1 = mtx.transformPoint(left + w, top);
+        const float2 p2 = mtx.transformPoint(left + w, top + h);
+        const float2 p3 = mtx.transformPoint(left, top + h);
+
+        const float2 positions[4] = {p0, p1, p2, p3};
+        const float2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+
+        if (not rs.isFillDisabled) {
+            info("Ich bin hier");
+            const color_t fillColors[4] = {rs.fillColor, rs.fillColor, rs.fillColor, rs.fillColor};
+            submitFill(PathPoints {4, positions, uvs, fillColors}, ShapeType::quads, m_whiteTexture);
+        }
+
+        if (not rs.isStrokeDisabled) {
+            const color_t strokeColors[4] = {rs.strokeColor, rs.strokeColor, rs.strokeColor, rs.strokeColor};
+            submitStroke(PathPoints {4, positions, uvs, strokeColors}, ShapeType::polygon, true);
+        }
     }
 
-    void GraphicsComponent::rect(float left, float top, float width, float height, BorderRadius borderRadius)
+    void GraphicsComponent::rect(float left, float top, float w, float h, BorderRadius borderRadius)
     {
-        error("Not implemented: rect with border radius");
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        std::vector<float2> positions;
+        positions.reserve(64);
+
+        const auto addCornerArc = [&](float cx, float cy, float rx, float ry, float startAngle) {
+            const float maxR = std::max(rx, ry);
+            const size_t segments = (maxR > 0.0f) ? computeCircleSegmentCount(HALF_PI, maxR) : 1;
+            for (size_t i = 0; i <= segments; ++i) {
+                const float angle = startAngle + HALF_PI * (static_cast<float>(i) / static_cast<float>(segments));
+                positions.push_back(mtx.transformPoint(cx + std::cos(angle) * rx, cy + std::sin(angle) * ry));
+            }
+        };
+
+        addCornerArc(left + borderRadius.topLeft.x, top + borderRadius.topLeft.y, borderRadius.topLeft.x, borderRadius.topLeft.y, PI);
+        addCornerArc(left + w - borderRadius.topRight.x, top + borderRadius.topRight.y, borderRadius.topRight.x, borderRadius.topRight.y, 3.0f * HALF_PI);
+        addCornerArc(left + w - borderRadius.bottomRight.x, top + h - borderRadius.bottomRight.y, borderRadius.bottomRight.x, borderRadius.bottomRight.y, 0.0f);
+        addCornerArc(left + borderRadius.bottomLeft.x, top + h - borderRadius.bottomLeft.y, borderRadius.bottomLeft.x, borderRadius.bottomLeft.y, HALF_PI);
+
+        const size_t n = positions.size();
+        std::vector<float2> uvs(n, float2::zero);
+
+        if (!rs.isFillDisabled) {
+            std::vector<color_t> fillColors(n, rs.fillColor);
+            submitFill(PathPoints {n, positions, uvs, fillColors}, ShapeType::polygon, m_whiteTexture);
+        }
+
+        if (!rs.isStrokeDisabled) {
+            std::vector<color_t> strokeColors(n, rs.strokeColor);
+            submitStroke(PathPoints {n, positions, uvs, strokeColors}, ShapeType::polygon, true);
+        }
     }
 
-    void GraphicsComponent::ellipse(float centerX, float centerY, float width, float height)
+    void GraphicsComponent::ellipse(float cx, float cy, float w, float h)
     {
-        error("Not implemented: ellipse");
+        const RenderState& rs = peekRenderState();
+        const float rx = w * 0.5f;
+        const float ry = h * 0.5f;
+        const float maxRadius = std::max(rx, ry);
+        const size_t segments = computeCircleSegmentCount(TWO_PI, maxRadius);
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        // Build center + (segments+1) perimeter points for a closed fan.
+        // The last perimeter point == the first (closing duplicate) so the fan triangle
+        // (center, last, first_perimeter+1) closes the circle.
+        std::vector<float2> fanPositions(segments + 2);
+        std::vector<float2> fanUVs(segments + 2);
+
+        fanPositions[0] = mtx.transformPoint(cx, cy);
+        fanUVs[0] = {0.5f, 0.5f};
+
+        for (size_t i = 0; i <= segments; ++i) {
+            const float angle = TWO_PI * static_cast<float>(i) / static_cast<float>(segments);
+            const float cosA = std::cos(angle);
+            const float sinA = std::sin(angle);
+            fanPositions[1 + i] = mtx.transformPoint(cx + cosA * rx, cy + sinA * ry);
+            fanUVs[1 + i] = {0.5f + 0.5f * cosA, 0.5f + 0.5f * sinA};
+        }
+
+        if (!rs.isFillDisabled) {
+            std::vector<color_t> fillColors(segments + 2, rs.fillColor);
+            submitFill(PathPoints {segments + 2, fanPositions, fanUVs, fillColors}, ShapeType::triangleFan, m_whiteTexture);
+        }
+
+        if (!rs.isStrokeDisabled) {
+            // Stroke uses exactly `segments` perimeter points (no center, no closing duplicate).
+            std::vector<float2> strokeUVs(segments, float2::zero);
+            std::vector<color_t> strokeColors(segments, rs.strokeColor);
+            submitStroke(
+                PathPoints {segments, {fanPositions.data() + 1, segments}, strokeUVs, strokeColors},
+                ShapeType::lineLoop,
+                true
+            );
+        }
     }
 
     void GraphicsComponent::triangle(float x1, float y1, float x2, float y2, float x3, float y3)
     {
-        error("Not implemented: triangle");
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        const float2 positions[3] = {
+            mtx.transformPoint(x1, y1),
+            mtx.transformPoint(x2, y2),
+            mtx.transformPoint(x3, y3),
+        };
+        const float2 uvs[3] = {float2::zero, float2::zero, float2::zero};
+
+        if (!rs.isFillDisabled) {
+            const color_t fillColors[3] = {rs.fillColor, rs.fillColor, rs.fillColor};
+            submitFill(PathPoints {3, positions, uvs, fillColors}, ShapeType::triangles, m_whiteTexture);
+        }
+
+        if (!rs.isStrokeDisabled) {
+            const color_t strokeColors[3] = {rs.strokeColor, rs.strokeColor, rs.strokeColor};
+            submitStroke(PathPoints {3, positions, uvs, strokeColors}, ShapeType::polygon, true);
+        }
     }
 
-    void GraphicsComponent::point(float centerX, float centerY)
+    void GraphicsComponent::point(float px, float py)
     {
-        error("Not implemented: point");
+        const RenderState& rs = peekRenderState();
+        if (rs.isStrokeDisabled) return;
+
+        const float halfSize = rs.strokeWeight * 0.5f;
+        const matrix4x4& mtx = m_matrixStack.peek();
+        const float2 center = mtx.transformPoint(px, py);
+
+        if (rs.strokeCap.start == StrokeCapStyle::round) {
+            const size_t segments = computeCircleSegmentCount(TWO_PI, halfSize);
+            std::vector<float2> positions(segments + 2);
+            std::vector<float2> uvs(segments + 2, float2::zero);
+            std::vector<color_t> colors(segments + 2, rs.strokeColor);
+
+            positions[0] = center;
+            for (size_t i = 0; i <= segments; ++i) {
+                const float angle = TWO_PI * static_cast<float>(i) / static_cast<float>(segments);
+                positions[1 + i] = center + float2 {std::cos(angle), std::sin(angle)} * halfSize;
+            }
+
+            submitFill(PathPoints {segments + 2, positions, uvs, colors}, ShapeType::triangleFan, m_whiteTexture);
+        } else {
+            const float2 positions[4] = {
+                {center.x - halfSize, center.y - halfSize},
+                {center.x + halfSize, center.y - halfSize},
+                {center.x + halfSize, center.y + halfSize},
+                {center.x - halfSize, center.y + halfSize},
+            };
+            const float2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+            const color_t colors[4] = {rs.strokeColor, rs.strokeColor, rs.strokeColor, rs.strokeColor};
+            submitFill(PathPoints {4, positions, uvs, colors}, ShapeType::quads, m_whiteTexture);
+        }
     }
 
     void GraphicsComponent::line(float x1, float y1, float x2, float y2)
     {
-        error("Not implemented: line");
+        const RenderState& rs = peekRenderState();
+        if (rs.isStrokeDisabled) return;
+
+        const matrix4x4& mtx = m_matrixStack.peek();
+        const float2 positions[2] = {mtx.transformPoint(x1, y1), mtx.transformPoint(x2, y2)};
+        const float2 uvs[2] = {float2::zero, float2::zero};
+        const color_t colors[2] = {rs.strokeColor, rs.strokeColor};
+
+        submitStroke(PathPoints {2, positions, uvs, colors}, ShapeType::lines, false);
     }
 
-    void GraphicsComponent::arc(float centerX, float centerY, float width, float height, float startAngle, float sweepAngle, ArcMode arcMode)
+    void GraphicsComponent::arc(float cx, float cy, float w, float h, float startAngle, float sweepAngle, ArcMode arcMode)
     {
-        error("Not implemented: arc");
+        const RenderState& rs = peekRenderState();
+        const float rx = w * 0.5f;
+        const float ry = h * 0.5f;
+        const float maxRadius = std::max(rx, ry);
+        const size_t segments = computeCircleSegmentCount(std::abs(sweepAngle), maxRadius);
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        // Arc perimeter points
+        std::vector<float2> arcPositions(segments + 1);
+        for (size_t i = 0; i <= segments; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(segments);
+            const float angle = startAngle + sweepAngle * t;
+            arcPositions[i] = mtx.transformPoint(cx + std::cos(angle) * rx, cy + std::sin(angle) * ry);
+        }
+
+        const float2 centerPos = mtx.transformPoint(cx, cy);
+        const std::vector<float2> zeroUVs(arcPositions.size() + 1, float2::zero);
+
+        if (!rs.isFillDisabled) {
+            std::vector<float2> fillPositions;
+            if (arcMode == ArcMode::pie) {
+                fillPositions.reserve(segments + 3);
+                fillPositions.push_back(centerPos);
+                fillPositions.insert(fillPositions.end(), arcPositions.begin(), arcPositions.end());
+            } else {
+                fillPositions = arcPositions;
+            }
+            std::vector<float2> fillUVs(fillPositions.size(), float2::zero);
+            std::vector<color_t> fillColors(fillPositions.size(), rs.fillColor);
+            submitFill(PathPoints {fillPositions.size(), fillPositions, fillUVs, fillColors}, ShapeType::polygon, m_whiteTexture);
+        }
+
+        if (!rs.isStrokeDisabled) {
+            std::vector<float2> arcUVs(arcPositions.size(), float2::zero);
+            std::vector<color_t> arcColors(arcPositions.size(), rs.strokeColor);
+            const PathPoints arcPts {arcPositions.size(), arcPositions, arcUVs, arcColors};
+
+            if (arcMode == ArcMode::open) {
+                submitStroke(arcPts, ShapeType::lineStrip, false);
+            } else if (arcMode == ArcMode::chord) {
+                submitStroke(arcPts, ShapeType::lineLoop, true);
+            } else { // pie
+                std::vector<float2> piePts;
+                piePts.reserve(arcPositions.size() + 2);
+                piePts.push_back(centerPos);
+                piePts.insert(piePts.end(), arcPositions.begin(), arcPositions.end());
+                std::vector<float2> pieUVs(piePts.size(), float2::zero);
+                std::vector<color_t> pieColors(piePts.size(), rs.strokeColor);
+                submitStroke(PathPoints {piePts.size(), piePts, pieUVs, pieColors}, ShapeType::polygon, true);
+            }
+        }
     }
 
     void GraphicsComponent::bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
     {
-        error("Not implemented: bezier");
+        const RenderState& rs = peekRenderState();
+        if (rs.isStrokeDisabled) return;
+
+        const size_t detail = rs.bezierDetail;
+        const float invDetail = rs.invBezierDetail;
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        std::vector<float2> positions(detail + 1);
+        std::vector<float2> uvs(detail + 1, float2::zero);
+        std::vector<color_t> colors(detail + 1, rs.strokeColor);
+
+        for (size_t j = 0; j <= detail; ++j) {
+            const float t = static_cast<float>(j) * invDetail;
+            const float mt = 1.0f - t;
+            const float mt2 = mt * mt;
+            const float mt3 = mt2 * mt;
+            const float t2 = t * t;
+            const float t3 = t2 * t;
+            const float bx = mt3 * x1 + 3.0f * mt2 * t * x2 + 3.0f * mt * t2 * x3 + t3 * x4;
+            const float by = mt3 * y1 + 3.0f * mt2 * t * y2 + 3.0f * mt * t2 * y3 + t3 * y4;
+            positions[j] = mtx.transformPoint(bx, by);
+        }
+
+        submitStroke(PathPoints {detail + 1, positions, uvs, colors}, ShapeType::lineStrip, false);
     }
 
     void GraphicsComponent::curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
     {
-        error("Not implemented: curve");
+        const RenderState& rs = peekRenderState();
+        if (rs.isStrokeDisabled) return;
+
+        const float alpha = (1.0f - rs.curveTightness) * 0.5f;
+        const size_t detail = rs.curveDetail;
+        const float invDetail = rs.invCurveDetail;
+        const matrix4x4& mtx = m_matrixStack.peek();
+
+        std::vector<float2> positions(detail + 1);
+        std::vector<float2> uvs(detail + 1, float2::zero);
+        std::vector<color_t> colors(detail + 1, rs.strokeColor);
+
+        for (size_t j = 0; j <= detail; ++j) {
+            const float t = static_cast<float>(j) * invDetail;
+            const float t2 = t * t;
+            const float t3 = t2 * t;
+            const float bx = alpha * ((-x1 + 3.0f * x2 - 3.0f * x3 + x4) * t3 + (2.0f * x1 - 5.0f * x2 + 4.0f * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
+            const float by = alpha * ((-y1 + 3.0f * y2 - 3.0f * y3 + y4) * t3 + (2.0f * y1 - 5.0f * y2 + 4.0f * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
+            positions[j] = mtx.transformPoint(bx, by);
+        }
+
+        submitStroke(PathPoints {detail + 1, positions, uvs, colors}, ShapeType::lineStrip, false);
     }
 
-    void GraphicsComponent::image(const Texture& texture, float left, float top, float width, float height)
+    void GraphicsComponent::image(const Texture& texture, float left, float top, float w, float h)
     {
-        error("Not implemented: image");
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = m_matrixStack.peek();
+        const float4 tint = colorToFloat4(rs.tintColor);
+
+        DrawBufferWriter& writer = m_renderer->getDrawScope();
+        const uint32_t base = writer.getRelativeCursor();
+
+        writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 0.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 0.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 1.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 1.0f}, tint);
+        writer.pushTriangle(base + 0, base + 1, base + 2);
+        writer.pushTriangle(base + 0, base + 2, base + 3);
+
+        m_renderer->submit(writer, m_uniformCache, getShader(rs), rs.blendMode, texture);
     }
 
     void GraphicsComponent::text(std::string_view text, float x, float y)
     {
-        error("Not implemented: text");
+        this->text(text, x, y, -1.0f);
+    }
+
+    void GraphicsComponent::text(std::string_view text, float x, float y, float maxWidth)
+    {
+        const RenderState& rs = peekRenderState();
+        const Font& font = rs.font.value_or(m_defaultFont);
+        if (rs.isFillDisabled) return;
+
+        const int textSizeInt = static_cast<int>(rs.textSize);
+        if (textSizeInt <= 0) return;
+
+        const FontMetrics* metrics = font.getMetrics(textSizeInt);
+        if (!metrics) return;
+
+        const bool doWrap = (maxWidth > 0.0f) && (rs.textWrap != TextWrap::none);
+        const float lineH = metrics->lineHeight * rs.textLineSpacing;
+
+        struct VisualLine
+        {
+            std::vector<ShapedGlyph> glyphs;
+            float width = 0.0f;
+        };
+
+        std::vector<VisualLine> lines;
+
+        auto shapeParagraph = [&](std::string_view para) {
+            if (para.empty()) {
+                lines.push_back(VisualLine {});
+                return;
+            }
+
+            std::vector<ShapedGlyph> shaped = font.shape(para, textSizeInt);
+
+            if (!doWrap) {
+                float w = 0.0f;
+                for (const ShapedGlyph& g : shaped) w += g.xAdvance + rs.textLetterSpacing;
+                lines.push_back(VisualLine {std::move(shaped), w});
+                return;
+            }
+
+            if (rs.textWrap == TextWrap::character) {
+                VisualLine current;
+                for (const ShapedGlyph& g : shaped) {
+                    const float adv = g.xAdvance + rs.textLetterSpacing;
+                    if (current.width + adv > maxWidth && !current.glyphs.empty()) {
+                        lines.push_back(std::move(current));
+                        current = {};
+                    }
+                    current.glyphs.push_back(g);
+                    current.width += adv;
+                }
+                if (!current.glyphs.empty()) lines.push_back(std::move(current));
+                return;
+            }
+
+            // TextWrap::word — greedy fill at whitespace boundaries
+            VisualLine current;
+            for (size_t i = 0; i < shaped.size(); ++i) {
+                const ShapedGlyph& g = shaped[i];
+                const float adv = g.xAdvance + rs.textLetterSpacing;
+
+                if (current.width + adv > maxWidth && !current.glyphs.empty()) {
+                    int breakIdx = -1;
+                    for (int j = static_cast<int>(current.glyphs.size()) - 1; j >= 0; --j) {
+                        if (current.glyphs[j].isWhitespace) {
+                            breakIdx = j;
+                            break;
+                        }
+                    }
+
+                    if (breakIdx >= 0) {
+                        VisualLine completedLine;
+                        for (size_t k = 0; k < static_cast<size_t>(breakIdx); ++k) {
+                            completedLine.glyphs.push_back(current.glyphs[k]);
+                            completedLine.width += current.glyphs[k].xAdvance + rs.textLetterSpacing;
+                        }
+                        lines.push_back(std::move(completedLine));
+
+                        VisualLine newCurrent;
+                        for (size_t k = static_cast<size_t>(breakIdx) + 1; k < current.glyphs.size(); ++k) {
+                            newCurrent.glyphs.push_back(current.glyphs[k]);
+                            newCurrent.width += current.glyphs[k].xAdvance + rs.textLetterSpacing;
+                        }
+                        current = std::move(newCurrent);
+                    } else {
+                        lines.push_back(std::move(current));
+                        current = {};
+                    }
+                }
+
+                current.glyphs.push_back(g);
+                current.width += adv;
+            }
+
+            if (!current.glyphs.empty()) lines.push_back(std::move(current));
+        };
+
+        // Split on newlines and shape each paragraph
+        size_t pos = 0;
+        while (true) {
+            const size_t nl = text.find('\n', pos);
+            const size_t end = (nl == std::string_view::npos) ? text.size() : nl;
+            shapeParagraph(text.substr(pos, end - pos));
+            if (nl == std::string_view::npos) break;
+            pos = nl + 1;
+        }
+
+        if (lines.empty()) return;
+
+        // Vertical alignment
+        const float totalH = lineH * static_cast<float>(lines.size());
+
+        float penY0 = y;
+        switch (rs.textAlign.vertical) {
+            case VerticalTextAlign::top:
+                penY0 = y + metrics->ascender;
+                break;
+            case VerticalTextAlign::center:
+                penY0 = y - totalH * 0.5f + metrics->ascender;
+                break;
+            case VerticalTextAlign::bottom:
+                penY0 = y - totalH + metrics->ascender;
+                break;
+            case VerticalTextAlign::baseline:
+            default:
+                penY0 = y;
+                break;
+        }
+
+        const matrix4x4& mtx = m_matrixStack.peek();
+        const float4 fillColor = colorToFloat4(rs.fillColor);
+
+        for (size_t li = 0; li < lines.size(); ++li) {
+            const VisualLine& line = lines[li];
+            const float baseY = penY0 + static_cast<float>(li) * lineH;
+
+            float startX = x;
+            switch (rs.textAlign.horizontal) {
+                case HorizontalTextAlign::left:
+                    startX = x;
+                    break;
+                case HorizontalTextAlign::center:
+                    startX = x - line.width * 0.5f;
+                    break;
+                case HorizontalTextAlign::right:
+                    startX = x - line.width;
+                    break;
+            }
+
+            float penX = startX;
+            float penY = baseY;
+
+            for (const ShapedGlyph& sg : line.glyphs) {
+                if (!sg.isWhitespace && sg.size.x > 0 && sg.size.y > 0) {
+                    const Texture* atlasTexture = font.getGlyphAtlasTexture(sg.glyphAtlasIndex);
+                    if (atlasTexture) {
+                        const float gLeft = penX + sg.xOffset + static_cast<float>(sg.bearing.x);
+                        const float gTop = penY - sg.yOffset - static_cast<float>(sg.bearing.y);
+                        const float gW = static_cast<float>(sg.size.x);
+                        const float gH = static_cast<float>(sg.size.y);
+
+                        const float u0 = sg.uvRect.left;
+                        const float v0 = sg.uvRect.top;
+                        const float u1 = sg.uvRect.left + sg.uvRect.width;
+                        const float v1 = sg.uvRect.top + sg.uvRect.height;
+
+                        DrawBufferWriter& writer = m_renderer->getDrawScope();
+                        const uint32_t base = writer.getRelativeCursor();
+
+                        writer.pushVertex(mtx.transformPoint(gLeft, gTop), {u0, v0}, fillColor);
+                        writer.pushVertex(mtx.transformPoint(gLeft + gW, gTop), {u1, v0}, fillColor);
+                        writer.pushVertex(mtx.transformPoint(gLeft + gW, gTop + gH), {u1, v1}, fillColor);
+                        writer.pushVertex(mtx.transformPoint(gLeft, gTop + gH), {u0, v1}, fillColor);
+                        writer.pushTriangle(base + 0, base + 1, base + 2);
+                        writer.pushTriangle(base + 0, base + 2, base + 3);
+
+                        m_renderer->submit(writer, m_uniformCache, m_textShader, rs.blendMode, *atlasTexture);
+                    }
+                }
+
+                penX += sg.xAdvance + rs.textLetterSpacing;
+                penY += sg.yAdvance;
+            }
+        }
     }
 
     void GraphicsComponent::beginShape()
     {
-        error("Not implemented: beginShape");
+        m_drawPointCount = 0;
+        m_curveVertexCount = 0;
     }
 
     void GraphicsComponent::endShape(ShapeType type, bool close)
     {
-        error("Not implemented: endShape");
+        endShapeImpl(type, close, peekRenderState());
     }
 
     void GraphicsComponent::vertex(float x, float y, float u, float v)
@@ -448,7 +934,30 @@ namespace p5cpp
 
     void GraphicsComponent::endShapeImpl(ShapeType type, bool close, const RenderState& renderState)
     {
-        error("Not implemented: endShapeImpl");
+        if (m_drawPointCount == 0) return;
+
+        const PathPoints fillPts {
+            m_drawPointCount,
+            {m_drawPointPositions.get(), m_drawPointCount},
+            {m_drawPointTexCoords.get(), m_drawPointCount},
+            {m_drawPointFillColors.get(), m_drawPointCount},
+        };
+        const PathPoints strokePts {
+            m_drawPointCount,
+            {m_drawPointPositions.get(), m_drawPointCount},
+            {m_drawPointTexCoords.get(), m_drawPointCount},
+            {m_drawPointStrokeColors.get(), m_drawPointCount},
+        };
+
+        if (not renderState.isFillDisabled) {
+            submitFill(fillPts, type, m_whiteTexture);
+        }
+
+        if (not renderState.isStrokeDisabled) {
+            submitStroke(strokePts, type, close);
+        }
+
+        m_drawPointCount = 0;
     }
 
     Shader GraphicsComponent::getShader(const RenderState& renderState)
@@ -458,5 +967,60 @@ namespace p5cpp
         }
 
         return m_defaultShader;
+    }
+
+    void GraphicsComponent::submitFill(const PathPoints& pts, ShapeType type, const Texture& texture)
+    {
+        const RenderState& rs = peekRenderState();
+        DrawBufferWriter& writer = m_renderer->getDrawScope();
+
+        switch (type) {
+            case ShapeType::triangles: tesselate_triangles(writer, pts); break;
+            case ShapeType::triangleStrip: tesselate_triangle_strip(writer, pts); break;
+            case ShapeType::triangleFan: tesselate_triangle_fan(writer, pts); break;
+            case ShapeType::quads: tesselate_quads(writer, pts); break;
+            case ShapeType::quadStrip: tesselate_quad_strip(writer, pts); break;
+            default: tesselate_polygon(writer, pts); break;
+        }
+
+        m_renderer->submit(writer, m_uniformCache, getShader(rs), rs.blendMode, texture);
+    }
+
+    void GraphicsComponent::submitStroke(const PathPoints& pts, ShapeType type, bool close)
+    {
+        const RenderState& rs = peekRenderState();
+        DrawBufferWriter& writer = m_renderer->getDrawScope();
+
+        switch (type) {
+            case ShapeType::lines:
+                stroke_lines(writer, pts, rs.strokeWeight, rs.strokeCap, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::lineStrip:
+                stroke_line_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::lineLoop:
+                stroke_line_loop(writer, pts, rs.strokeWeight, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::triangles:
+                stroke_triangles(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::triangleStrip:
+                stroke_triangle_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::triangleFan:
+                stroke_triangle_fan(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::quads:
+                stroke_quads(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            case ShapeType::quadStrip:
+                stroke_quad_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
+                break;
+            default:
+                stroke_polygon(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, close, computeCircleSegmentCount);
+                break;
+        }
+
+        m_renderer->submit(writer, m_uniformCache, m_defaultShader, rs.blendMode, m_whiteTexture);
     }
 } // namespace p5cpp
