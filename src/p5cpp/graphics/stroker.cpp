@@ -4,6 +4,7 @@
 #include <p5cpp/math/value2.hpp>
 
 #include <optional>
+#include <limits>
 
 namespace p5cpp
 {
