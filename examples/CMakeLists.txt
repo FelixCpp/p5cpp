@@ -1,3 +1,4 @@
+add_subdirectory(demo)
 add_subdirectory(gravitas)
 add_subdirectory(gravitas_ai)
 add_subdirectory(molds)

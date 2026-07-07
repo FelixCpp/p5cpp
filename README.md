@@ -8,17 +8,13 @@
 
 `background()`, `fill()`, `circle()`, `noise()`, shaders, framebuffers, a particle system in 20 lines. If you've used Processing or p5.js you'll feel at home immediately — with the full power of native C++ and OpenGL underneath.
 
-<video width="320" height="240" controls>
-  <source src="video.mov" type="./gitassets/Gravitas showcase.mp4">
-</video>
-
-<p align="middle">
-    <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
-    <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
-    <img src="./gitassets/gravitas_ingame.jpg" alt="Gravitas Gameplay" width="45%" />
-    <img src="./gitassets/molds.jpg" alt="Molds simulation" width="45%" />
-    <img src="./gitassets/predator_and_prey_ingame.jpg" alt="Predator and Prey Gameplay" width="45%" />
-    <img src="./gitassets/steering_behavior.jpg" alt="Steering Behavior" width="45%" />
+<p align="center">
+  <img src="./gitassets/showcase.gif" width="500" alt="p5cpp Flow Field Demo">
+  <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
+  <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
+  <img src="./gitassets/gravitas_ingame.jpg" alt="Gravitas Gameplay" width="45%" />
+  <img src="./gitassets/steering_behavior.jpg" alt="Steering Behavior" width="45%" />
+  <img src="./gitassets/predator_and_prey_ingame.jpg" alt="Predator and Prey Gameplay" width="45%" />
 </p>
 
 ---

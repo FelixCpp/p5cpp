@@ -6,6 +6,8 @@
 
 #include <array>
 #include <cassert>
+#include <cstring>
+#include <functional>
 #include <vector>
 
 namespace p5cpp
@@ -41,6 +43,25 @@ namespace p5cpp
             m_submitIndexBase = 0;
         }
 
+        // After flushing submitted batches mid-frame, relocate any in-progress (not-yet-submitted)
+        // vertices and indices to the start of the buffer so writes can continue.
+        void resetPreservingPending()
+        {
+            const size_t pendingVerts = m_vertexCount - m_submitVertexBase;
+            const size_t pendingIndices = m_indexCount - m_submitIndexBase;
+
+            if (pendingVerts > 0)
+                std::memmove(m_vertices, m_vertices + m_submitVertexBase, pendingVerts * sizeof(RenderVertex));
+
+            for (size_t i = 0; i < pendingIndices; ++i)
+                m_indices[i] = m_indices[m_submitIndexBase + i] - static_cast<uint32_t>(m_submitVertexBase);
+
+            m_vertexCount = pendingVerts;
+            m_indexCount = pendingIndices;
+            m_submitVertexBase = 0;
+            m_submitIndexBase = 0;
+        }
+
         uint32_t getRelativeCursor() const override
         {
             return static_cast<uint32_t>(m_vertexCount - m_submitVertexBase);
@@ -48,13 +69,19 @@ namespace p5cpp
 
         void pushVertex(const float2& position, const float2& texcoord, const float4& color) override
         {
-            assert(m_vertexCount < m_maxVertices && "Vertex buffer overflow");
+            if (m_vertexCount >= m_maxVertices) {
+                assert(m_submitVertexBase > 0 && "Single shape exceeds vertex buffer capacity");
+                if (m_onOverflow) m_onOverflow();
+            }
             m_vertices[m_vertexCount++] = RenderVertex {position, texcoord, color, 0.0f};
         }
 
         void pushTriangle(uint32_t a, uint32_t b, uint32_t c) override
         {
-            assert(m_indexCount + 3 <= m_maxIndices && "Index buffer overflow");
+            if (m_indexCount + 3 > m_maxIndices) {
+                assert(m_submitIndexBase > 0 && "Single shape exceeds index buffer capacity");
+                if (m_onOverflow) m_onOverflow();
+            }
             const uint32_t base = static_cast<uint32_t>(m_submitVertexBase);
             m_indices[m_indexCount++] = base + a;
             m_indices[m_indexCount++] = base + b;
@@ -69,6 +96,7 @@ namespace p5cpp
         size_t m_maxIndices = 0;
         RenderVertex* m_vertices = nullptr;
         uint32_t* m_indices = nullptr;
+        std::function<void()> m_onOverflow;
     };
 } // namespace p5cpp
 
@@ -121,80 +149,8 @@ namespace p5cpp
 
         void flush() override
         {
-            if (m_batches.empty())
-                return;
-
-            glBindVertexArray(m_vao);
-
-            glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_writer.m_vertexCount * sizeof(RenderVertex)), m_vertices.get());
-
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
-            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_writer.m_indexCount * sizeof(uint32_t)), m_indices.get());
-
-            glEnable(GL_BLEND);
-
-            const matrix4x4 projection = matrix4x4::ortho(0.0f, static_cast<float>(m_viewportSize.y), static_cast<float>(m_viewportSize.x), 0.0f, -1.0f, 1.0f);
-
-            GLuint lastProgramId = 0;
-            BlendMode lastBlendMode = BlendMode::none;
-            bool firstBatch = true;
-
-            for (const BatchEntry& batch : m_batches) {
-                const GLuint programId = static_cast<GLuint>(batch.shader.getShaderId().value);
-                if (programId == 0) continue;
-
-                if (firstBatch || programId != lastProgramId) {
-                    glUseProgram(programId);
-                    lastProgramId = programId;
-
-                    const auto projLoc = batch.shader.getUniformLocation("u_ProjectionMatrix");
-                    if (projLoc.has_value()) {
-                        glUniformMatrix4fv(projLoc->value, 1, GL_FALSE, projection.data());
-                    }
-
-                    const auto texLoc = batch.shader.getUniformLocation("u_Textures");
-                    if (texLoc.has_value()) {
-                        const GLint samplers[8] = {0, 1, 2, 3, 4, 5, 6, 7};
-                        glUniform1iv(texLoc->value, 8, samplers);
-                    }
-                }
-
-                for (const UniformSnapshot& snap : batch.uniforms) {
-                    switch (snap.variable.type) {
-                        case UniformVariable::Type::float1:
-                            glUniform1f(snap.location.value, snap.variable.floatValue);
-                            break;
-                        case UniformVariable::Type::float2:
-                            glUniform2f(snap.location.value, snap.variable.float2Value.x, snap.variable.float2Value.y);
-                            break;
-                        case UniformVariable::Type::float4:
-                            glUniform4f(snap.location.value, snap.variable.float4Value.x, snap.variable.float4Value.y, snap.variable.float4Value.z, snap.variable.float4Value.w);
-                            break;
-                        case UniformVariable::Type::matrix4x4:
-                            glUniformMatrix4fv(snap.location.value, 1, GL_FALSE, snap.variable.matrix4x4Value.data());
-                            break;
-                    }
-                }
-
-                if (firstBatch || !(batch.blendMode == lastBlendMode)) {
-                    applyBlendMode(batch.blendMode);
-                    lastBlendMode = batch.blendMode;
-                }
-
-                for (uint8_t i = 0; i < batch.textureCount; ++i) {
-                    glActiveTexture(GL_TEXTURE0 + i);
-                    glBindTexture(GL_TEXTURE_2D, batch.textures[i]);
-                }
-
-                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<const void*>(static_cast<uintptr_t>(batch.indexOffset * sizeof(uint32_t))));
-                firstBatch = false;
-            }
-
-            glBindVertexArray(0);
-
+            renderBatches();
             m_writer.reset();
-            m_batches.clear();
         }
 
         void submit(DrawBufferWriter& /*scope*/, UniformCache& uniformCache, const Shader& shader, const BlendMode& blendMode, const Texture& texture) override
@@ -275,6 +231,9 @@ namespace p5cpp
               m_maxIndices(indexCount)
         {
             m_writer.init(m_vertices.get(), m_indices.get(), vertexCount, indexCount);
+            m_writer.m_onOverflow = [this]() {
+                midFrameFlush();
+            };
 
             glGenVertexArrays(1, &m_vao);
             glGenBuffers(1, &m_vbo);
@@ -299,6 +258,94 @@ namespace p5cpp
             glEnableVertexAttribArray(3);
 
             glBindVertexArray(0);
+        }
+
+        // Renders all accumulated batches to the GPU and clears the batch list.
+        // Uses m_submitVertexBase/m_submitIndexBase so that any in-progress (not-yet-submitted)
+        // pending vertices/indices are not uploaded — only fully-submitted data is rendered.
+        void renderBatches()
+        {
+            if (m_batches.empty())
+                return;
+
+            glBindVertexArray(m_vao);
+
+            glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_writer.m_submitVertexBase * sizeof(RenderVertex)), m_vertices.get());
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_writer.m_submitIndexBase * sizeof(uint32_t)), m_indices.get());
+
+            glEnable(GL_BLEND);
+
+            const matrix4x4 projection = matrix4x4::ortho(0.0f, static_cast<float>(m_viewportSize.y), static_cast<float>(m_viewportSize.x), 0.0f, -1.0f, 1.0f);
+
+            GLuint lastProgramId = 0;
+            BlendMode lastBlendMode = BlendMode::none;
+            bool firstBatch = true;
+
+            for (const BatchEntry& batch : m_batches) {
+                const GLuint programId = static_cast<GLuint>(batch.shader.getShaderId().value);
+                if (programId == 0) continue;
+
+                if (firstBatch || programId != lastProgramId) {
+                    glUseProgram(programId);
+                    lastProgramId = programId;
+
+                    const auto projLoc = batch.shader.getUniformLocation("u_ProjectionMatrix");
+                    if (projLoc.has_value()) {
+                        glUniformMatrix4fv(projLoc->value, 1, GL_FALSE, projection.data());
+                    }
+
+                    const auto texLoc = batch.shader.getUniformLocation("u_Textures");
+                    if (texLoc.has_value()) {
+                        const GLint samplers[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+                        glUniform1iv(texLoc->value, 8, samplers);
+                    }
+                }
+
+                for (const UniformSnapshot& snap : batch.uniforms) {
+                    switch (snap.variable.type) {
+                        case UniformVariable::Type::float1:
+                            glUniform1f(snap.location.value, snap.variable.floatValue);
+                            break;
+                        case UniformVariable::Type::float2:
+                            glUniform2f(snap.location.value, snap.variable.float2Value.x, snap.variable.float2Value.y);
+                            break;
+                        case UniformVariable::Type::float4:
+                            glUniform4f(snap.location.value, snap.variable.float4Value.x, snap.variable.float4Value.y, snap.variable.float4Value.z, snap.variable.float4Value.w);
+                            break;
+                        case UniformVariable::Type::matrix4x4:
+                            glUniformMatrix4fv(snap.location.value, 1, GL_FALSE, snap.variable.matrix4x4Value.data());
+                            break;
+                    }
+                }
+
+                if (firstBatch || !(batch.blendMode == lastBlendMode)) {
+                    applyBlendMode(batch.blendMode);
+                    lastBlendMode = batch.blendMode;
+                }
+
+                for (uint8_t i = 0; i < batch.textureCount; ++i) {
+                    glActiveTexture(GL_TEXTURE0 + i);
+                    glBindTexture(GL_TEXTURE_2D, batch.textures[i]);
+                }
+
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<const void*>(static_cast<uintptr_t>(batch.indexOffset * sizeof(uint32_t))));
+                firstBatch = false;
+            }
+
+            glBindVertexArray(0);
+            m_batches.clear();
+        }
+
+        // Called when the writer detects an imminent buffer overflow mid-frame.
+        // Renders all submitted batches to the GPU, then relocates any pending (not-yet-submitted)
+        // vertices and indices to the start of the staging buffers so writing can continue.
+        void midFrameFlush()
+        {
+            renderBatches();
+            m_writer.resetPreservingPending();
         }
 
         static void applyBlendMode(const BlendMode& mode)
@@ -330,13 +377,8 @@ namespace p5cpp
                 return GL_FUNC_ADD;
             };
 
-            glBlendFuncSeparate(
-                toFactor(mode.srcColorFactor), toFactor(mode.dstColorFactor), toFactor(mode.srcAlphaFactor), toFactor(mode.dstAlphaFactor)
-            );
-            glBlendEquationSeparate(
-                toEquation(mode.colorEquation),
-                toEquation(mode.alphaEquation)
-            );
+            glBlendFuncSeparate(toFactor(mode.srcColorFactor), toFactor(mode.dstColorFactor), toFactor(mode.srcAlphaFactor), toFactor(mode.dstAlphaFactor));
+            glBlendEquationSeparate(toEquation(mode.colorEquation), toEquation(mode.alphaEquation));
         }
 
         GLuint m_vao = 0;
