@@ -1,6 +1,5 @@
-#include "dejavusans.hpp"
-#include "p5cpp/application/logging.hpp"
-#include "p5cpp/graphics/internal_shaders.hpp"
+#include <p5cpp/graphics/dejavusans.hpp>
+#include <p5cpp/graphics/internal_shaders.hpp>
 #include <p5cpp/graphics/graphics_component.hpp>
 #include <p5cpp/graphics/tess.hpp>
 #include <p5cpp/graphics/stroker.hpp>

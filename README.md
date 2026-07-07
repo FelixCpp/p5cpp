@@ -8,6 +8,10 @@
 
 `background()`, `fill()`, `circle()`, `noise()`, shaders, framebuffers, a particle system in 20 lines. If you've used Processing or p5.js you'll feel at home immediately — with the full power of native C++ and OpenGL underneath.
 
+<video width="320" height="240" controls>
+  <source src="video.mov" type="./gitassets/Gravitas showcase.mp4">
+</video>
+
 <p align="middle">
     <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
     <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
@@ -63,6 +67,48 @@ std::unique_ptr<Sketch> p5cpp::createSketch()
 ```
 
 The framework owns the window, render loop, and input — you just implement `setup()` and `draw()`.
+
+## Why p5cpp?
+
+If you love the simplicity of p5.js or Processing but need the performance,
+control, and portability of native code, p5cpp bridges that gap.
+
+### vs. p5.js / Processing
+
+You get the same intuitive, sketch-based API you already know — but compiled,
+faster, and without a browser or JVM in between. No more fighting with canvas
+performance limits or JS garbage collection pauses in your creative-coding
+projects.
+
+### vs. openFrameworks / Cinder
+
+Both are excellent, mature C++ creative-coding frameworks — but they come with
+a much larger API surface and a steeper learning curve. p5cpp deliberately
+stays small and focused: if you already think in p5.js terms (`setup()`,
+`draw()`, `background()`, `ellipse()`), you'll feel at home immediately,
+without learning a new mental model.
+
+### vs. raw OpenGL / SFML
+
+Building sketches directly on top of OpenGL or a low-level graphics library
+means writing a lot of boilerplate before you draw your first shape. p5cpp
+handles the setup, render loop, and drawing primitives for you, so you can
+focus on the creative logic instead of graphics plumbing.
+
+### When p5cpp is the right choice
+
+- You're coming from p5.js/Processing and want native performance without
+  relearning your whole workflow.
+- You want something lighter-weight than a full framework like openFrameworks.
+- You're prototyping visual/generative ideas and want fast iteration with
+  minimal ceremony.
+
+### When it might not be
+
+- You need a battle-tested, large-ecosystem framework with tons of add-ons
+  (→ openFrameworks).
+- You're building a full game or complex interactive application, not a
+  visual sketch (→ a game engine might fit better).
 
 ---
 
