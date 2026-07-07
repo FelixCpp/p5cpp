@@ -160,7 +160,7 @@ namespace p5cpp
 
     void GraphicsComponent::resetMatrix()
     {
-        m_matrixStack.peek() = matrix4x4::identity;
+        setMatrix(matrix4x4::identity);
     }
 
     matrix4x4& GraphicsComponent::peekMatrix()
@@ -170,7 +170,8 @@ namespace p5cpp
 
     void GraphicsComponent::applyMatrix(const matrix4x4& matrix)
     {
-        m_matrixStack.peek() *= matrix;
+        matrix4x4& currentMatrix = m_matrixStack.peek();
+        currentMatrix = matrix * currentMatrix;
     }
 
     void GraphicsComponent::setMatrix(const matrix4x4& matrix)
@@ -377,7 +378,6 @@ namespace p5cpp
         const float2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
 
         if (not rs.isFillDisabled) {
-            info("Ich bin hier");
             const color_t fillColors[4] = {rs.fillColor, rs.fillColor, rs.fillColor, rs.fillColor};
             submitFill(PathPoints {4, positions, uvs, fillColors}, ShapeType::quads, m_whiteTexture);
         }

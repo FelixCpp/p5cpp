@@ -1,52 +1,42 @@
 # p5cpp
 
-![Badge](https://github.com/FelixCpp/p5cpp/actions/workflows/ci.yaml/badge.svg)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/FelixCpp/p5cpp/graphs/commit-activity)
-[![GitHub license](https://badgen.net/github/license/FelixCpp/p5cpp)](https://github.com/FelixCpp/p5cpp/blob/main/LICENSE.txt)
+![CI](https://github.com/FelixCpp/p5cpp/actions/workflows/ci.yaml/badge.svg)
+[![Maintained](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/FelixCpp/p5cpp/graphs/commit-activity)
+[![License](https://badgen.net/github/license/FelixCpp/p5cpp)](https://github.com/FelixCpp/p5cpp/blob/main/LICENSE.txt)
 
-A C++ creative coding framework inspired by [Processing](https://processing.org/) and [p5.js](https://p5js.org/). If you've drawn circles with `ellipse()` or built particle systems in a JavaScript `draw()` loop, p5cpp will feel immediately familiar — just with the full power of native C++ underneath.
+> **p5.js creative coding — in native C++23.**
 
----
-
-## Credits
-
-p5cpp is built on the ideas and API design of two great creative coding environments:
-
-- **[Processing](https://processing.org/)** — the original, created by Casey Reas and Ben Fry. A flexible software sketchbook and language for learning how to code within the context of the visual arts.
-- **[p5.js](https://p5js.org/)** — a JavaScript library created by Lauren McCarthy that interprets Processing's core philosophy for the web.
-
-p5cpp is not affiliated with or endorsed by either project. It is a spiritual port of their ideas into native C++, intended for cases where performance, low-level GPU access, or platform constraints make a native runtime preferable.
-
----
-
-## Dependencies
-
-p5cpp bundles the following third-party libraries under the `third_party/` directory. You do not need to install them separately — they are compiled as part of the build.
-
-| Library                                           | Purpose                                                                                                                         |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [FreeType](https://freetype.org/)                 | Font loading and glyph rasterisation — backs `loadFont()`, `getGlyph()`, and all text rendering                                 |
-| [GLAD](https://glad.dav1d.de/)                    | OpenGL function loader — resolves GL function pointers at runtime on all platforms                                              |
-| [GLFW](https://www.glfw.org/)                     | Window creation, OpenGL context management, and raw input events (mouse, keyboard, resize)                                      |
-| [libtess2](https://github.com/memononen/libtess2) | Polygon tessellation — used internally to triangulate concave and self-intersecting shapes drawn with `beginShape` / `endShape` |
-
-## Screenshots of [examples](./examples/)
+`background()`, `fill()`, `circle()`, `noise()`, shaders, framebuffers, a particle system in 20 lines. If you've used Processing or p5.js you'll feel at home immediately — with the full power of native C++ and OpenGL underneath.
 
 <p align="middle">
     <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
     <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
-    <img src="./gitassets/gravitas_ingame.jpg" alt="Grvaitas Gameplay" width="45%" />
+    <img src="./gitassets/gravitas_ingame.jpg" alt="Gravitas Gameplay" width="45%" />
     <img src="./gitassets/molds.jpg" alt="Molds simulation" width="45%" />
     <img src="./gitassets/predator_and_prey_ingame.jpg" alt="Predator and Prey Gameplay" width="45%" />
     <img src="./gitassets/steering_behavior.jpg" alt="Steering Behavior" width="45%" />
 </p>
 
-## Concepts
+---
 
-Every p5cpp program is a **Sketch**. You subclass `p5cpp::Sketch`, implement `setup()` (called once) and `draw()` (called every frame), and hand it to the framework via `createSketch()`. The framework manages the window, the render loop, and input — you just draw.
+## Getting Started
+
+```bash
+git clone --recursive https://github.com/FelixCpp/p5cpp.git
+cd p5cpp
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+```
+
+All dependencies (GLFW, FreeType, GLAD, libtess2, harfbuzz) are bundled as git submodules — no separate installs needed.
+
+---
+
+## Your First Sketch
 
 ```cpp
-#include <p5cpp/p5cpp.h>
+#include <p5cpp/p5cpp.hpp>
+using namespace p5cpp;
 
 struct MySketch : Sketch
 {
@@ -62,7 +52,7 @@ struct MySketch : Sketch
         background(30);
         fill(255, 100, 0);
         noStroke();
-        circle(getMouseX(), getMouseY(), 40);
+        circle((float)getMouseX(), (float)getMouseY(), 40);
     }
 };
 
@@ -72,249 +62,178 @@ std::unique_ptr<Sketch> p5cpp::createSketch()
 }
 ```
 
+The framework owns the window, render loop, and input — you just implement `setup()` and `draw()`.
+
 ---
 
 ## Examples
 
-### 1. Basic Shapes
+### Shapes, Transforms & Curves
 
 ```cpp
 void draw() override
 {
-    background(240);
+    background(20);
 
-    // Filled rectangle
+    // Rounded rect
     fill(70, 130, 200);
-    stroke(20, 60, 120);
-    strokeWeight(2.0f);
-    rect(50, 50, 200, 100);
-
-    // Rounded rectangle (uniform corner radius)
-    fill(200, 80, 80);
     noStroke();
-    rect(300, 50, 100, 100, 16, 16);
+    rect(50, 50, 200, 120, BorderRadius{16});
 
-    // Circle and ellipse
-    fill(80, 180, 80);
-    stroke(20, 100, 20);
-    strokeWeight(1.5f);
-    circle(150, 250, 80);
-    ellipse(350, 250, 120, 60);
-
-    // Triangle
-    fill(200, 160, 40);
-    triangle(500, 300, 560, 200, 620, 300);
-
-    // Line
-    stroke(0);
-    strokeWeight(3.0f);
-    line(50, 350, 750, 350);
-}
-```
-
----
-
-### 2. Arcs
-
-```cpp
-void draw() override
-{
-    background(20);
-    noFill();
-    stroke(255);
-    strokeWeight(4.0f);
-
-    // Open arc
-    arc(200, 200, 150, 150, 0.0f, radians(270), ArcMode::open);
-
-    // Pie slice
-    fill(255, 80, 80, 180);
+    // Pie arc
+    fill(255, 80, 80, 200);
     stroke(255, 80, 80);
-    arc(500, 200, 150, 150, radians(-30), radians(120), ArcMode::pie);
-}
-```
+    strokeWeight(2.0f);
+    arc(500, 150, 100, 100, 0.0f, radians(240), ArcMode::pie);
 
----
-
-### 3. Colours
-
-```cpp
-// Named RGBA construction
-color_t orange = rgba(255, 140, 0);
-color_t semiBlue = rgba(30, 100, 220, 180);
-
-// Derive colours
-color_t lighter = lighten(orange, 0.3f);
-color_t darker  = darken(orange, 0.4f);
-color_t faded   = withAlpha(orange, 80);
-
-// Interpolate between two colours
-float t = std::sin(getGlobalTime()) * 0.5f + 0.5f;
-color_t blended = lerp(semiBlue, orange, t);
-
-void draw() override
-{
-    background(20);
-    fill(blended);
+    // Hexagon from vertices
+    fill(180, 80, 220);
     noStroke();
-    circle(400, 300, 200);
-}
-```
+    beginShape();
+    for (int i = 0; i < 6; ++i)
+    {
+        float a = radians(60.0f * i - 30.0f);
+        vertex(400 + std::cos(a) * 80, 350 + std::sin(a) * 80);
+    }
+    endShape(ShapeType::polygon);
 
----
+    // Bézier curve
+    noFill();
+    stroke(255, 200, 50);
+    strokeWeight(3.0f);
+    bezier(100, 500, 150, 250, 550, 250, 600, 500);
 
-### 4. Transforms
-
-```cpp
-void draw() override
-{
-    background(30);
-    fill(255, 200, 50);
-    noStroke();
-
-    // Translate to the centre, rotate over time, draw a square
+    // Spinning square — local transform doesn't leak
     pushMatrix();
-        translate(getWidth() / 2.0f, getHeight() / 2.0f);
+        translate((float)getLogicalWidth() / 2, (float)getLogicalHeight() / 2);
         rotate(getGlobalTime());
-        rect(-40, -40, 80, 80);
-    popMatrix();
-
-    // Scale a second shape independently
-    pushMatrix();
-        translate(150, 150);
-        float s = 1.0f + 0.5f * std::sin(getGlobalTime() * 2.0f);
-        scale(s, s);
-        circle(0, 0, 60);
+        fill(255);
+        noStroke();
+        rect(-30, -30, 60, 60);
     popMatrix();
 }
 ```
 
 ---
 
-### 5. Mouse & Keyboard Input
+### Particle System
+
+`float2` vector math, `randomFloat`, Perlin `noise`, and delta-time movement in one sketch:
 
 ```cpp
-struct InputSketch : Sketch
+struct Particle { float2 pos, vel; float life; };
+
+struct FireSketch : Sketch
 {
-    bool drawCircle = true;
+    std::vector<Particle> particles;
 
     void setup() override { setWindowSize(800, 600); }
 
     void draw() override
     {
-        background(40);
-        if (drawCircle)
-        {
-            fill(100, 200, 255);
-            noStroke();
-            circle(getMouseX(), getMouseY(), 60);
-        }
-    }
+        background(10, 10, 10, 40); // ghost trail via semi-transparent clear
+        const float dt = getDeltaTime();
+        const float cx = (float)getLogicalWidth()  / 2;
+        const float cy = (float)getLogicalHeight() / 2;
 
-    void event(const WindowEvent& e) override
-    {
-        if (e.type == EventType::keyPress)
+        for (int i = 0; i < 8; ++i)
         {
-            if (e.keyEvent.key == Key::space)
-                drawCircle = !drawCircle;
-
-            if (e.keyEvent.key == Key::escape)
-                quit();
+            float2 dir = randomDirection<float>();
+            particles.push_back({.pos = {cx, cy}, .vel = dir * randomFloat(60.f, 200.f), .life = 1.f});
         }
 
-        if (e.type == EventType::mousePress &&
-            e.mouseButton.button == MouseButton::left)
+        noStroke();
+        for (auto& p : particles)
         {
-            // do something on left click
+            p.pos  += p.vel * dt;
+            p.vel  *= 0.97f;
+            p.life -= dt * 0.6f;
+            fill(255, (int)(120 * p.life), 20, (int)(p.life * 220));
+            circle(p.pos.x, p.pos.y, 5);
         }
+        std::erase_if(particles, [](const Particle& p){ return p.life <= 0.f; });
     }
 };
 ```
 
 ---
 
-### 6. Custom Shapes with `beginShape` / `endShape`
+### Perlin Noise Flow Field
 
 ```cpp
 void draw() override
 {
-    background(20);
-    fill(180, 80, 220);
-    stroke(255);
-    strokeWeight(2.0f);
+    background(10);
+    stroke(255, 255, 255, 50);
+    strokeWeight(1.0f);
+    const float t = getGlobalTime() * 0.25f;
 
-    // A hexagon built from vertices
-    beginShape();
-    for (int i = 0; i < 6; ++i)
+    for (int x = 0; x < getLogicalWidth(); x += 18)
     {
-        float angle = radians(60.0f * i - 30.0f);
-        vertex(400 + std::cos(angle) * 100,
-               300 + std::sin(angle) * 100);
+        for (int y = 0; y < getLogicalHeight(); y += 18)
+        {
+            float angle = noise(x * 0.004f, y * 0.004f, t) * TWO_PI * 2.0f;
+            line((float)x, (float)y,
+                 x + std::cos(angle) * 12.f,
+                 y + std::sin(angle) * 12.f);
+        }
     }
-    endShape(ShapeType::polygon);
 }
 ```
 
 ---
 
-### 7. Bézier & Catmull-Rom Curves
+### GLSL Shaders
+
+Bind any GLSL shader and push uniforms before drawing shapes — the built-in batch renderer picks it up automatically:
 
 ```cpp
-void draw() override
+const char* frag = R"glsl(
+    #version 410 core
+    uniform float uTime;
+    uniform vec2  uResolution;
+    out vec4 FragColor;
+    void main()
+    {
+        vec2 uv = gl_FragCoord.xy / uResolution;
+        float r = 0.5 + 0.5 * sin(uTime + uv.x * 6.28);
+        FragColor = vec4(r, 0.3, 1.0 - r, 1.0);
+    }
+)glsl";
+
+struct GradientSketch : Sketch
 {
-    background(15);
-    noFill();
-    stroke(255, 180, 0);
-    strokeWeight(3.0f);
-
-    // Cubic Bézier (anchor, control, control, anchor)
-    bezier(100, 400, 150, 100, 550, 100, 600, 400);
-
-    // Catmull-Rom curve (ghost point, p1, p2, ghost point)
-    stroke(80, 200, 255);
-    curve(50, 300, 200, 200, 500, 350, 700, 250);
-}
-```
-
----
-
-### 8. Textures & Images
-
-```cpp
-struct TextureSketch : Sketch
-{
-    std::unique_ptr<Texture> tex;
+    Shader sh;
 
     void setup() override
     {
-        tex = loadTexture("assets/photo.png");
+        // vertex shader omitted for brevity — use the passthrough vert
+        sh = loadShader(vertSrc, frag);
         setWindowSize(800, 600);
     }
 
     void draw() override
     {
         background(0);
-
-        // Draw at original size
-        auto [w, h] = tex->getSize();
-        image(tex->getRendererId(), 0, 0, (float)w, (float)h);
-
-        // Tinted copy
-        tint(255, 100, 100, 200);
-        image(tex->getRendererId(), 400, 0, (float)w * 0.5f, (float)h * 0.5f);
-        noTint();
+        shader(sh);
+        setUniform("uTime",       uniform(getGlobalTime()));
+        setUniform("uResolution", uniform((float)getLogicalWidth(), (float)getLogicalHeight()));
+        rect(0, 0, (float)getLogicalWidth(), (float)getLogicalHeight());
+        noShader();
     }
 };
 ```
 
 ---
 
-### 9. Render to a Framebuffer
+### Offscreen Framebuffer
+
+Render into an offscreen canvas, then use it as a texture:
 
 ```cpp
-struct FBOSketch : Sketch
+struct PostFXSketch : Sketch
 {
-    std::shared_ptr<Framebuffer> canvas;
+    Framebuffer canvas;
 
     void setup() override
     {
@@ -324,292 +243,185 @@ struct FBOSketch : Sketch
 
     void draw() override
     {
-        // Draw into the offscreen canvas
         pushCanvas(canvas);
-            background(10, 40, 80);
+            background(10, 30, 60);
             fill(255, 200, 50);
             noStroke();
-            circle(256, 256, 200);
+            circle(256, 256 + std::sin(getGlobalTime()) * 80, 120);
         popCanvas();
 
-        // Display the canvas texture on screen
-        background(30);
-        image(canvas->getTextureId(), 144, 50, 512, 512);
-    }
-};
-```
-
----
-
-### 10. Custom GLSL Shaders
-
-```cpp
-const char* vert = R"(
-    #version 330 core
-    layout(location = 0) in vec2 aPos;
-    uniform mat4 u_ProjectionMatrix;
-    void main() {
-        gl_Position = u_ProjectionMatrix * vec4(aPos, 0.0, 1.0);
-    }
-)";
-
-const char* frag = R"(
-    #version 330 core
-    uniform float uTime;
-    out vec4 FragColor;
-    void main()
-    {
-        float r = 0.5 + 0.5 * sin(uTime);
-        FragColor = vec4(r, 0.4, 1.0 - r, 1.0);
-    }
-)";
-
-struct ShaderSketch : Sketch
-{
-    std::shared_ptr<Shader> sh;
-
-    void setup() override
-    {
-        sh = loadShader(vert, frag);
-        setWindowSize(800, 600);
-    }
-
-    void draw() override
-    {
-        background(0);
-        shader(sh);
-        setUniform("uTime", uniform(getGlobalTime()));
-        rect(100, 100, 600, 400);
-        noShader();
-    }
-};
-```
-
----
-
-### 11. Text & Fonts
-
-```cpp
-struct TextSketch : Sketch
-{
-    std::shared_ptr<Font> font;
-
-    void setup() override
-    {
-        font = loadFont("assets/Inter-Regular.ttf");
-        textFont(font);
-        textSize(32);
-        setWindowSize(800, 600);
-    }
-
-    void draw() override
-    {
         background(20);
-
-        // Centred headline
-        fill(255);
-        textAlign(TextAlign::center);
-        text("Hello, p5cpp!", getWidth() / 2.0f, 80);
-
-        // Left-aligned body text with wrapping
-        fill(180);
-        textSize(16);
-        textAlign(TextAlign::topLeft);
-        textWrap(TextWrap::word);
-        text("This text will wrap at 400 px.", 50, 150, 400.0f);
+        tint(200, 150, 255); // colour-grade the result
+        image(*canvas.getColorTexture(), 144, 44, 512, 512);
+        noTint();
     }
 };
 ```
 
 ---
 
-### 12. Particle System
-
-A minimal particle system demonstrating `float2` maths, `randomFloat`, `noise`, and delta-time based movement:
+### Input & Events
 
 ```cpp
-struct Particle
+struct InputSketch : Sketch
 {
-    float2 pos;
-    float2 vel;
-    float life; // 0..1
-};
+    bool paused = false;
 
-struct ParticleSketch : Sketch
-{
-    std::vector<Particle> particles;
-
-    void setup() override
-    {
-        randomSeed(42);
-        setWindowSize(800, 600);
-        frameRate(60);
-    }
+    void setup() override { setWindowSize(800, 600); }
 
     void draw() override
     {
-        background(10, 10, 10, 30); // alpha trail
-
-        const float dt = getDeltaTime();
-
-        // Spawn
-        for (int i = 0; i < 5; ++i)
+        background(40);
+        if (!paused)
         {
-            float2 dir = randomDirection<float>();
-            particles.push_back({
-                {(float)getWidth() / 2, (float)getHeight() / 2},
-                dir * randomFloat(50.0f, 150.0f),
-                1.0f
-            });
+            fill(100, 200, 255);
+            noStroke();
+            circle((float)getMouseX(), (float)getMouseY(), 60);
         }
+    }
 
-        // Update & draw
-        noStroke();
-        for (auto& p : particles)
-        {
-            p.pos += p.vel * dt;
-            p.life -= dt * 0.5f;
+    void event(const WindowEvent& e) override
+    {
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::space)
+            paused = !paused;
 
-            int alpha = (int)(p.life * 255);
-            fill(200, 120, 255, alpha);
-            circle(p.pos.x, p.pos.y, 6);
-        }
+        if (e.type == EventType::mousePress && e.mouseButton.button == MouseButton::left)
+            info(std::format("click at {}, {}", getMouseX(), getMouseY()));
 
-        // Remove dead
-        std::erase_if(particles, [](const Particle& p){ return p.life <= 0.0f; });
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::escape)
+            quit();
     }
 };
 ```
 
 ---
 
-### 13. Perlin Noise Flow Field
+### Custom Engine Modules _(advanced)_
+
+p5cpp's engine is a middleware pipeline. You can inject your own module anywhere in the
+lifecycle — useful for shared services (audio, networking, physics) that multiple sketches
+or subsystems depend on:
 
 ```cpp
-void draw() override
+struct TimerModule : p5cpp::Module
 {
-    background(10);
-    stroke(255, 255, 255, 40);
-    strokeWeight(1.0f);
-    noFill();
+    float elapsed = 0.f;
 
-    float t = getGlobalTime() * 0.3f;
-
-    for (int x = 0; x < getWidth(); x += 20)
+    void setup(AppContext& ctx, Next next) override
     {
-        for (int y = 0; y < getHeight(); y += 20)
-        {
-            float angle = noise(x * 0.005f, y * 0.005f, t) * 6.2832f * 2.0f;
-            float len = 14.0f;
-            line((float)x, (float)y,
-                 x + std::cos(angle) * len,
-                 y + std::sin(angle) * len);
-        }
+        ctx.registerService<TimerModule>(this);
+        next(); // always call next() to let downstream modules run
     }
-}
+
+    void draw(AppContext& ctx, Next next) override
+    {
+        elapsed += getDeltaTime();
+        next();
+    }
+
+    void destroy(AppContext& ctx, Next next) override
+    {
+        ctx.unregisterService<TimerModule>();
+        next();
+    }
+};
 ```
+
+Register it before the Sketch module in `p5cpp.cpp`, then retrieve it from any API function via `ctx.require<TimerModule>()`.
 
 ---
 
-## API Reference Summary
+## API Cheatsheet
 
 ### Sketch lifecycle
 
-| Method               | When called                  |
-| -------------------- | ---------------------------- |
-| `setup()`            | Once at startup              |
-| `draw()`             | Every frame                  |
-| `destroy()`          | On shutdown                  |
-| `event(WindowEvent)` | On any input or window event |
+| Method                | When                     |
+| --------------------- | ------------------------ |
+| `setup()`             | once at startup          |
+| `draw()`              | every frame              |
+| `event(WindowEvent&)` | on input / window events |
+| `destroy()`           | on shutdown              |
 
-### State helpers
+### Drawing
 
-`pushState()` / `popState()` — save and restore the complete render state (fill, stroke, blend mode, matrix, …).
+|                                                        |                          |
+| ------------------------------------------------------ | ------------------------ |
+| `background(r,g,b)`                                    | clear canvas             |
+| `fill(r,g,b,a)` / `noFill()`                           | fill colour              |
+| `stroke(r,g,b,a)` / `noStroke()`                       | stroke colour            |
+| `strokeWeight(w)`                                      | line thickness           |
+| `rect(x,y,w,h)` / `rect(x,y,w,h, BorderRadius)`        | rectangle / rounded rect |
+| `circle(cx,cy,r)` / `ellipse(cx,cy,rx,ry)`             | circle / ellipse         |
+| `line(x1,y1,x2,y2)`                                    | line                     |
+| `triangle(x1,y1,…)`                                    | triangle                 |
+| `arc(cx,cy,rx,ry,start,sweep,ArcMode)`                 | arc / pie                |
+| `bezier(…)` / `curve(…)`                               | Bézier / Catmull-Rom     |
+| `beginShape()` / `vertex(x,y)` / `endShape(ShapeType)` | custom polygon           |
+| `image(texture,x,y,w,h)`                               | draw texture             |
+| `text(str,x,y)` / `text(str,x,y,maxWidth)`             | draw text                |
 
-`pushMatrix()` / `popMatrix()` — save and restore only the transform matrix.
-
-### Colour
+### Transforms & state
 
 ```cpp
-color_t rgba(int r, int g, int b, int a = 255);
-color_t rgba(int grey, int a = 255);
-color_t lighten(color_t c, float amount);
-color_t darken(color_t c, float amount);
-color_t lerp(color_t a, color_t b, float t);
-color_t withAlpha(color_t c, int alpha);
-int red(color_t), green(color_t), blue(color_t), alpha(color_t), brightness(color_t);
+pushMatrix();  translate(x,y);  rotate(rad);  scale(x,y);  popMatrix();
+pushState();  /* change fill/stroke/blend */  popState();
+pushCanvas(fb);  /* draw into framebuffer */  popCanvas();
 ```
 
-### Math utilities
+### Colour helpers
 
 ```cpp
-float radians(float degrees);
-float degrees(float radians);
-float remap(float value, float fromLow, float fromHigh, float toLow, float toHigh);
-float noise(float x);
-float noise(float x, float y);
-float noise(float x, float y, float z);
-void  randomSeed(uint64_t seed);
-float randomFloat(float max);
-float randomFloat(float min, float max);
-int   randomInt(int max);
-int   randomInt(int min, int max);
+color_t c = rgba(r, g, b, a);
+color_t c = lighten(c, 0.3f);   // or darken, withAlpha, lerp
+int r = red(c);  // also green(), blue(), alpha(), brightness()
 ```
 
-### Vector math (`value2<T>`)
-
-`float2`, `int2`, `uint2` are typedef aliases for `value2<float/int32_t/uint32_t>`.
-
-All arithmetic operators are overloaded for both vector×vector and vector×scalar.
+### Math & noise
 
 ```cpp
-float  dot(float2 a, float2 b);
-float  cross(float2 a, float2 b);
-float2 perp(float2 v);          // 90° rotation
-float2 lerp(float2 a, float2 b, float t);
-float  length(float2 v);
-float2 normalized(float2 v);
-float2 limit(float2 v, float maxLength);
-float2 fixedLength(float2 v, float newLength);
-float2 randomDirection<T>();
+noise(x)  /  noise(x,y)  /  noise(x,y,z)   // Perlin noise → 0..1
+randomFloat(min, max)   randomInt(min, max)   randomDirection<float>()
+radians(deg)   degrees(rad)   remap(v, lo, hi, newLo, newHi)
 ```
 
-### Timing
+### `float2` vector math
 
 ```cpp
-int   getFrameCount();
-int   getFrameRate();
-float getDeltaTime();    // seconds since last frame
-float getGlobalTime();   // seconds since app start
-float millis();          // milliseconds since app start
-void  frameRate(float targetFps);
-void  loop();
-void  noLoop();
-void  quit();
+float2 v = {1.f, 0.f};
+v += other;   v *= scalar;
+dot(a,b)   cross(a,b)   length(v)   normalized(v)
+lerp(a,b,t)   limit(v, maxLen)   perp(v)
 ```
 
-### Logging
+### Timing & control
 
 ```cpp
-info("message");
-debug("message");
-warning("message");
-error("message");
+getDeltaTime()     // seconds since last frame
+getGlobalTime()    // seconds since start
+getFrameCount()    // total frames rendered
+frameRate(fps)     // target FPS cap
+loop() / noLoop()  // resume / pause draw()
+quit()             // exit cleanly
 ```
 
 ---
 
-## Design Philosophy
+## Dependencies
 
-p5cpp keeps the same creative coding ethos as its inspirations:
+All bundled as git submodules — nothing to install.
 
-- **One function does one thing** — `fill()`, `stroke()`, `rect()` set state and draw, just like Processing.
-- **Push / pop everything** — transforms, state, and render targets are all stack-based so local changes stay local.
-- **Frame loop is the heartbeat** — `draw()` is called unconditionally every frame. Pause with `noLoop()`, resume with `loop()`.
-- **Opinionated defaults** — sensible stroke weights, alpha blending, and coordinate origin (top-left) out of the box.
+| Library                                           | Purpose                                        |
+| ------------------------------------------------- | ---------------------------------------------- |
+| [GLFW](https://www.glfw.org/)                     | Window, OpenGL context, raw input              |
+| [GLAD](https://glad.dav1d.de/)                    | OpenGL function loader                         |
+| [FreeType](https://freetype.org/)                 | Font loading & glyph rasterisation             |
+| [libtess2](https://github.com/memononen/libtess2) | Polygon tessellation (`beginShape`/`endShape`) |
+| [harfbuzz](https://github.com/harfbuzz/harfbuzz)  | Text shaping (ligature support)                |
 
 ---
 
-## License
+## Credits & License
 
-See `LICENSE` for details. Processing and p5.js are separate projects with their own licenses.
+Inspired by [Processing](https://processing.org/) (Casey Reas & Ben Fry) and [p5.js](https://p5js.org/) (Lauren McCarthy). Not affiliated with or endorsed by either project.
+
+See `LICENSE.txt` for details.

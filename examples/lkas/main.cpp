@@ -1,59 +1,38 @@
 #include <p5cpp/p5cpp.hpp>
+#include <format>
 
 using namespace p5cpp;
 
-struct ExampleModule : Module
+struct InputSketch : Sketch
 {
-    void setup(AppContext& context, Next next) override
-    {
-        info("ExampleModule setup");
-        next();
-    }
+    bool paused = false;
 
-    void event(AppContext& context, WindowEvent& event, Next next) override
-    {
-        next();
-    }
-
-    void draw(AppContext& context, Next next) override
-    {
-        const float mx = static_cast<float>(getMouseX());
-        const float my = static_cast<float>(getMouseY());
-
-        noFill();
-        stroke(0, 255, 0, 255);
-        circle(mx, my, 100.0f);
-
-        next();
-    }
-
-    void destroy(AppContext& context, Next next) override
-    {
-        next();
-    }
-};
-
-struct ExampleSketch : Sketch
-{
-    void plugins(Engine& engine) override
-    {
-        engine.addModule(std::make_unique<ExampleModule>());
-    }
-
-    void setup() override
-    {
-        info("ExampleSketch setup");
-    }
+    void setup() override { setWindowSize(800, 600); }
 
     void draw() override
     {
+        background(40);
+        if (!paused) {
+            fill(100, 200, 255);
+            noStroke();
+            circle((float)getMouseX(), (float)getMouseY(), 60);
+        }
+    }
+
+    void event(const WindowEvent& e) override
+    {
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::space)
+            paused = !paused;
+
+        if (e.type == EventType::mousePress && e.mouseButton.button == MouseButton::left)
+            info(std::format("click at {}, {}", getMouseX(), getMouseY()));
+
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::escape)
+            quit();
     }
 };
 
-namespace p5cpp
+std::unique_ptr<Sketch> p5cpp::createSketch()
 {
-    std::unique_ptr<Sketch> createSketch()
-    {
-        return std::make_unique<ExampleSketch>();
-    }
-} // namespace p5cpp
+    return std::make_unique<InputSketch>();
+}
