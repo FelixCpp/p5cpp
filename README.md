@@ -6,16 +6,11 @@
 
 > **p5.js creative coding — in native C++23.**
 
-`background()`, `fill()`, `circle()`, `noise()`, shaders, framebuffers, a particle system in 20 lines. If you've used Processing or p5.js you'll feel at home immediately — with the full power of native C++ and OpenGL underneath.
-
 <p align="center">
   <img src="./gitassets/showcase.gif" width="500" alt="p5cpp Flow Field Demo">
-  <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
-  <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
-  <img src="./gitassets/gravitas_ingame.jpg" alt="Gravitas Gameplay" width="45%" />
-  <img src="./gitassets/steering_behavior.jpg" alt="Steering Behavior" width="45%" />
-  <img src="./gitassets/predator_and_prey_ingame.jpg" alt="Predator and Prey Gameplay" width="45%" />
 </p>
+
+`background()`, `fill()`, `circle()`, `noise()`, shaders, framebuffers, a particle system in 20 lines. If you've used Processing or p5.js you'll feel at home immediately — with the full power of native C++ and OpenGL underneath.
 
 ---
 
@@ -63,6 +58,16 @@ std::unique_ptr<Sketch> p5cpp::createSketch()
 ```
 
 The framework owns the window, render loop, and input — you just implement `setup()` and `draw()`.
+
+## Screenshots
+
+<p align="center">
+  <img src="./gitassets/breakout_menu.jpg" alt="Breakout Main-Menu" width="45%" />
+  <img src="./gitassets/breakout_ingame.jpg" alt="Breakout Gameplay" width="45%" />
+  <img src="./gitassets/gravitas_ingame.jpg" alt="Gravitas Gameplay" width="45%" />
+  <img src="./gitassets/steering_behavior.jpg" alt="Steering Behavior" width="45%" />
+  <img src="./gitassets/predator_and_prey_ingame.jpg" alt="Predator and Prey Gameplay" width="45%" />
+</p>
 
 ## Why p5cpp?
 
