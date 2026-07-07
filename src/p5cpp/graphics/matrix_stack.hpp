@@ -11,7 +11,7 @@ namespace p5cpp
     public:
         MatrixStack();
 
-        void push(const matrix4x4& matrix);
+        void push();
         void pop();
         void reset();
 

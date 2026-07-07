@@ -2,6 +2,8 @@
 #include <p5cpp/graphics/graphics_component.hpp>
 #include <p5cpp/graphics/tess.hpp>
 
+#include <format>
+
 namespace p5cpp
 {
     struct DefaultComputeCircleSegmentCount : public ComputeCircleSegmentCount
@@ -63,7 +65,8 @@ namespace p5cpp
 
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
-        error("Not implemented: blitDefaultCanvasToScreen");
+        // error("Not implemented: blitDefaultCanvasToScreen");
+        info(std::format("Blitting default canvas {}x{}, to screen with size: {}x{}", m_defaultFramebuffer.getSize().x, m_defaultFramebuffer.getSize().y, screenWidth, screenHeight));
     }
 
     void GraphicsComponent::pushCanvas(Framebuffer framebuffer)
@@ -73,7 +76,9 @@ namespace p5cpp
 
         Framebuffer& current = m_framebufferStack.emplace_back(std::move(framebuffer));
         m_renderer->begin(current);
+
         m_renderStateStack.push();
+        m_matrixStack.push();
     }
 
     void GraphicsComponent::popCanvas()
@@ -88,6 +93,16 @@ namespace p5cpp
         }
 
         m_renderStateStack.pop();
+        m_matrixStack.pop();
+    }
+
+    uint2 GraphicsComponent::getCanvasSize()
+    {
+        if (m_framebufferStack.empty()) {
+            return uint2::zero;
+        }
+
+        return m_framebufferStack.back().getSize();
     }
 
     void GraphicsComponent::pushState()
@@ -102,34 +117,32 @@ namespace p5cpp
 
     void GraphicsComponent::pushMatrix()
     {
-        RenderState& currentState = peekRenderState();
-        currentState.metrics.push(currentState.metrics.peek());
+        m_matrixStack.push();
     }
 
     void GraphicsComponent::popMatrix()
     {
-        peekRenderState().metrics.pop();
+        m_matrixStack.pop();
     }
 
     void GraphicsComponent::resetMatrix()
     {
-        peekRenderState().metrics.reset();
+        m_matrixStack.peek() = matrix4x4::identity;
     }
 
     matrix4x4& GraphicsComponent::peekMatrix()
     {
-        return peekRenderState().metrics.peek();
+        return m_matrixStack.peek();
     }
 
     void GraphicsComponent::applyMatrix(const matrix4x4& matrix)
     {
-        matrix4x4& currentMatrix = peekRenderState().metrics.peek();
-        currentMatrix *= matrix;
+        m_matrixStack.peek() *= matrix;
     }
 
     void GraphicsComponent::setMatrix(const matrix4x4& matrix)
     {
-        peekRenderState().metrics.peek() = matrix;
+        m_matrixStack.peek() = matrix;
     }
 
     void GraphicsComponent::translate(float x, float y)
@@ -392,7 +405,7 @@ namespace p5cpp
         }
 
         const RenderState& renderState = peekRenderState();
-        const matrix4x4& matrix = renderState.metrics.peek();
+        const matrix4x4& matrix = m_matrixStack.peek();
         const float2 transformedPosition = matrix.transformPoint(x, y);
 
         m_drawPointPositions[m_drawPointCount] = transformedPosition;

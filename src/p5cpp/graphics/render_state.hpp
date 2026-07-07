@@ -1,7 +1,6 @@
 #pragma once
 
 #include <p5cpp/graphics/color.hpp>
-#include <p5cpp/graphics/matrix_stack.hpp>
 #include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/text.hpp>
 #include <p5cpp/graphics/shaping.hpp>
@@ -41,7 +40,6 @@ namespace p5cpp
 
         std::optional<Shader> shader;
         BlendMode blendMode;
-        MatrixStack metrics;
     };
 
     RenderState render_state_create();

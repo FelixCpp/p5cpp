@@ -1,5 +1,6 @@
 #pragma once
 
+#include <p5cpp/graphics/matrix_stack.hpp>
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/render_state_stack.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
@@ -21,6 +22,7 @@ namespace p5cpp
 
         void pushCanvas(Framebuffer framebuffer);
         void popCanvas();
+        uint2 getCanvasSize();
 
         void pushState();
         void popState();
@@ -107,6 +109,7 @@ namespace p5cpp
         Framebuffer m_defaultFramebuffer;
 
         RenderStateStack m_renderStateStack;
+        MatrixStack m_matrixStack;
         Shader m_defaultShader;
         Shader m_textShader;
         Texture m_whiteTexture;

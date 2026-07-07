@@ -65,6 +65,7 @@ namespace p5cpp
 {
     void pushCanvas(const Framebuffer& framebuffer);
     void popCanvas();
+    uint2 getCanvasSize();
 
     void pushState();
     void popState();

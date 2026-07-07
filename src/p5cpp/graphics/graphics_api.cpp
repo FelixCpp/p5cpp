@@ -19,6 +19,7 @@ namespace p5cpp
 {
     void pushCanvas(const Framebuffer& framebuffer) { getGraphicsComponent().pushCanvas(framebuffer); }
     void popCanvas() { getGraphicsComponent().popCanvas(); }
+    uint2 getCanvasSize() { return getGraphicsComponent().getCanvasSize(); }
 
     void pushState() { getGraphicsComponent().pushState(); }
     void popState() { getGraphicsComponent().popState(); }

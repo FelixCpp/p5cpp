@@ -25,11 +25,10 @@ namespace p5cpp
             .textSize = 12.0f,
             .textLetterSpacing = 0.0f,
             .textLineSpacing = 1.0f,
-            .textAlign = TextAlign {.horizontal = HorizontalTextAlign::left, .vertical = VerticalTextAlign::baseline},
+            .textAlign = TextAlign::baselineLeft,
             .textWrap = TextWrap::none,
             .shader = std::nullopt,
             .blendMode = BlendMode::alpha,
-            .metrics = {}
         };
     }
 } // namespace p5cpp

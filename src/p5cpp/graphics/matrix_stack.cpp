@@ -6,9 +6,9 @@ namespace p5cpp
     {
     }
 
-    void MatrixStack::push(const matrix4x4& matrix)
+    void MatrixStack::push()
     {
-        metrics.push(matrix);
+        metrics.push(peek());
     }
 
     void MatrixStack::pop()
