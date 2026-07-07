@@ -5,28 +5,6 @@
 
 namespace p5cpp
 {
-    class CommitableDrawBufferWriter : public DrawBufferWriter
-    {
-    public:
-        uint32_t getRelativeCursor() const override
-        {
-            return 0;
-        }
-
-        void pushVertex(const float2& position, const float2& texcoord, const float4& color) override
-        {
-        }
-
-        void pushTriangle(uint32_t a, uint32_t b, uint32_t c) override
-        {
-        }
-
-    private:
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
     class NativeOpenGLRenderer : public NativeRenderer
     {
     public:
@@ -37,32 +15,33 @@ namespace p5cpp
 
         void begin(const Framebuffer& framebuffer) override
         {
+            throw std::runtime_error("Not implemented");
         }
 
         void end() override
         {
+            throw std::runtime_error("Not implemented");
         }
 
         void flush() override
         {
+            throw std::runtime_error("Not implemented");
         }
 
         void submit(DrawBufferWriter& scope, UniformCache& uniformCache, const Shader& shader, const BlendMode& blendMode, const Texture& texture) override
         {
+            throw std::runtime_error("Not implemented");
         }
 
         DrawBufferWriter& getDrawScope() override
         {
-            return m_drawBufferWriter;
+            throw std::runtime_error("Not implemented");
         }
 
     private:
         NativeOpenGLRenderer()
-            : m_drawBufferWriter()
         {
         }
-
-        CommitableDrawBufferWriter m_drawBufferWriter;
     };
 } // namespace p5cpp
 

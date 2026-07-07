@@ -10,6 +10,6 @@ namespace p5cpp
         float2 position;
         float2 texcoord;
         float4 color;
-        float texIndex;
+        uint32_t textureSlot;
     };
 } // namespace p5cpp
