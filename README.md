@@ -118,42 +118,112 @@ void draw() override
 
 ### Particle System
 
-`float2` vector math, `randomFloat`, Perlin `noise`, and delta-time movement in one sketch:
+HSV color cycling, additive blending, motion-blur trails, gravity, and an interactive mouse-driven vortex emitter with click-to-explode bursts:
 
 ```cpp
-struct Particle { float2 pos, vel; float life; };
+#include <p5cpp/p5cpp.hpp>
+#include <algorithm>
+#include <cmath>
+#include <vector>
+using namespace p5cpp;
 
-struct FireSketch : Sketch
+// HSV → RGBA (h: 0–360, s/v: 0–1)
+static color_t hsv(float h, float s, float v, int a = 255)
+{
+    h = std::fmod(h, 360.f);
+    const float c = v * s;
+    const float x = c * (1.f - std::abs(std::fmod(h / 60.f, 2.f) - 1.f));
+    const float m = v - c;
+    float r, g, b;
+    if      (h < 60)  { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else              { r = c; g = 0; b = x; }
+    return rgba((int)((r+m)*255), (int)((g+m)*255), (int)((b+m)*255), a);
+}
+
+struct Particle { float2 pos, vel; float life, maxLife, hue, size; };
+
+struct GalaxySketch : Sketch
 {
     std::vector<Particle> particles;
+    float hueOffset = 0.f;
 
-    void setup() override { setWindowSize(800, 600); }
+    void setup() override
+    {
+        setWindowSize(900, 700);
+        setWindowTitle("Galaxy Vortex  |  Move mouse · Click to explode");
+        particles.reserve(8000);
+    }
 
     void draw() override
     {
-        background(10, 10, 10, 40); // ghost trail via semi-transparent clear
-        const float dt = getDeltaTime();
-        const float cx = (float)getLogicalWidth()  / 2;
-        const float cy = (float)getLogicalHeight() / 2;
+        background(4, 4, 12, 18); // low-alpha clear → motion-blur trail
 
-        for (int i = 0; i < 8; ++i)
+        const float dt = getDeltaTime();
+        const float cx = (float)getMouseX();
+        const float cy = (float)getMouseY();
+        hueOffset += dt * 50.f;
+
+        for (int i = 0; i < 10; ++i)
         {
-            float2 dir = randomDirection<float>();
-            particles.push_back({.pos = {cx, cy}, .vel = dir * randomFloat(60.f, 200.f), .life = 1.f});
+            const float angle = randomFloat(0.f, TWO_PI);
+            const float speed = randomFloat(100.f, 320.f);
+            const float life  = randomFloat(1.2f, 3.0f);
+            float2 dir    = float2::fromAngle(angle);
+            float2 vel    = dir * speed + dir.perpendicular() * randomFloat(-80.f, 80.f);
+            vel.y -= randomFloat(10.f, 40.f);
+            particles.push_back({
+                .pos = {cx + dir.x * randomFloat(20.f), cy + dir.y * randomFloat(20.f)},
+                .vel = vel, .life = life, .maxLife = life,
+                .hue = hueOffset + angle * (180.f / PI), .size = randomFloat(5.f, 15.f),
+            });
         }
 
+        blendMode(BlendMode::additive); // overlapping particles bloom and glow
         noStroke();
+
         for (auto& p : particles)
         {
-            p.pos  += p.vel * dt;
-            p.vel  *= 0.97f;
-            p.life -= dt * 0.6f;
-            fill(255, (int)(120 * p.life), 20, (int)(p.life * 220));
-            circle(p.pos.x, p.pos.y, 5);
+            p.vel.y += 120.f * dt;  // gravity
+            p.vel   *= 0.993f;      // drag
+            p.pos   += p.vel * dt;
+            p.life  -= dt;
+            const float t = p.life / p.maxLife;
+            fill(hsv(p.hue, 1.f, 1.f, (int)(t * t * 210.f)));
+            circle(p.pos.x, p.pos.y, p.size * t);
         }
-        std::erase_if(particles, [](const Particle& p){ return p.life <= 0.f; });
+
+        blendMode(BlendMode::alpha);
+        std::erase_if(particles, [](const Particle& p) { return p.life <= 0.f; });
+    }
+
+    void event(const WindowEvent& e) override
+    {
+        if (e.type == EventType::mousePress)
+        {
+            for (int i = 0; i < 160; ++i)
+            {
+                const float a = TWO_PI * i / 160.f;
+                const float life = randomFloat(1.0f, 2.5f);
+                particles.push_back({
+                    .pos = {(float)getMouseX(), (float)getMouseY()},
+                    .vel = float2::fromAngle(a) * randomFloat(150.f, 600.f),
+                    .life = life, .maxLife = life,
+                    .hue = hueOffset + a * (180.f / PI), .size = randomFloat(3.f, 9.f),
+                });
+            }
+        }
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::escape) quit();
     }
 };
+
+std::unique_ptr<Sketch> p5cpp::createSketch()
+{
+    return std::make_unique<GalaxySketch>();
+}
 ```
 
 ---
