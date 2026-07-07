@@ -9,7 +9,7 @@ struct TextWrappingSketch : p5cpp::Sketch
     void setup() override
     {
         setWindowSize(800, 800);
-        font = loadFont("MapleMono-NF-Regular.ttf");
+        font = loadFont("example_assets/MapleMono-NF-Regular.ttf");
         textFont(font);
     }
 
