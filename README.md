@@ -23,7 +23,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
 
-All dependencies (GLFW, FreeType, GLAD, libtess2, harfbuzz) are bundled as git submodules — no separate installs needed.
+All dependencies (GLFW, FreeType, GLAD, libtess2, harfbuzz, miniaudio, stb) are bundled as git submodules — no separate installs needed.
 
 ---
 
@@ -377,6 +377,152 @@ struct PostFXSketch : Sketch
 
 ---
 
+### Post-Processing Effects (Blur)
+
+`filter()` applies a built-in screen-space effect to whatever has been drawn to the current
+canvas so far this frame — no manual framebuffer juggling required. `effect()` is the same
+mechanism with an arbitrary custom shader instead of a built-in one, so you can write your own
+full-screen passes (vignettes, chromatic aberration, pixelation, …) using the exact same
+`loadShader()`/`setUniform()` API you already use for shapes:
+
+```cpp
+void draw() override
+{
+    background(10);
+
+    noStroke();
+    for (auto& p : particles)
+    {
+        fill(p.color);
+        circle(p.pos.x, p.pos.y, p.size);
+    }
+
+    filter(FilterType::blur, 6.0f); // radius in pixels — glow/bloom-style softening
+
+    // A custom full-screen shader works the same way:
+    // shader(myPostFxShader);
+    // setUniform("uTime", uniform(getGlobalTime()));
+    // effect(myPostFxShader);
+}
+```
+
+`filter()`/`effect()` operate on the currently active canvas — the main window canvas by
+default, or whatever `Framebuffer` you last `pushCanvas()`'d — so post-processing composes
+naturally with offscreen rendering.
+
+---
+
+### Images, Screenshots & Pixels
+
+Load PNG/JPG/BMP files from disk (or memory) straight into a `Texture`, and read pixels back
+off any canvas — the main window canvas or an offscreen `Framebuffer`:
+
+```cpp
+struct ImageSketch : Sketch
+{
+    Texture logo;
+
+    void setup() override
+    {
+        setWindowSize(800, 600);
+        logo = loadImage("example_assets/logo.png"); // also: loadImage(std::span<const uint8_t>)
+    }
+
+    void draw() override
+    {
+        background(20);
+        image(logo, 50, 50, (float)logo.getSize().x, (float)logo.getSize().y);
+    }
+
+    void event(const WindowEvent& e) override
+    {
+        // Screenshot the whole window canvas to disk
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::s)
+        {
+            const uint2 size = getCanvasSize();
+            saveImage("screenshot.png", size.x, size.y, loadPixels());
+        }
+    }
+};
+```
+
+`loadPixels()` snapshots the currently active canvas into a `std::vector<color_t>` you can
+inspect or mutate on the CPU; `Framebuffer::readPixels()` does the same for an explicit
+offscreen buffer, and `saveImage(path, framebuffer)` writes one straight to a PNG file:
+
+```cpp
+Framebuffer fb = createFramebuffer(256, 256);
+pushCanvas(fb);
+    background(255, 0, 0);
+popCanvas();
+
+saveImage("red_square.png", fb);
+std::vector<color_t> pixels = fb.readPixels(); // raw R,G,B,A bytes per pixel, top-left origin
+```
+
+> **Note:** pixel buffers returned by `loadPixels()`/`readPixels()` (and consumed by
+> `saveImage()`/produced by `loadImage()`) store raw R,G,B,A bytes — the same layout the GPU
+> always uses for texture data. This is a different in-memory layout than the bit-packed value
+> `rgba()`/`red()`/`green()`/`blue()`/`alpha()` work with, so don't round-trip pixel-buffer
+> values through those helpers — they're for vertex/fill/stroke colours, not raw pixel data.
+
+---
+
+### Audio
+
+Load and play sounds through a `miniaudio`-backed engine, control per-sound volume/pan/pitch/
+looping, and drive visuals from live playback analysis (RMS amplitude + a raw waveform ring
+buffer):
+
+```cpp
+struct AudioSketch : Sketch
+{
+    Sound tone;
+
+    void setup() override
+    {
+        setWindowSize(800, 500);
+        tone = loadSound("example_assets/tone.wav"); // also: loadSound(std::span<const uint8_t>)
+        tone.setLoop(true);
+        masterVolume(0.8f);
+    }
+
+    void event(const WindowEvent& e) override
+    {
+        if (e.type == EventType::keyPress && e.keyEvent.key == Key::space)
+            isPlaying(tone) ? pauseSound(tone) : playSound(tone);
+    }
+
+    void draw() override
+    {
+        background(15);
+
+        // Audio-reactive circle, driven by the engine's live RMS amplitude
+        const float amp = getAudioAmplitude();
+        noStroke();
+        fill(255, 120, 80);
+        circle(400, 150, 30.f + amp * 260.f);
+
+        // Oscilloscope from the live waveform ring buffer
+        noFill();
+        stroke(80, 200, 255);
+        beginShape();
+        auto waveform = getAudioWaveform();
+        for (size_t i = 0; i < waveform.size(); ++i)
+            vertex(800.f * i / (float)waveform.size(), 350.f + waveform[i] * 100.f);
+        endShape(ShapeType::lineStrip, false);
+    }
+};
+```
+
+`Sound` handles are cheap to copy (reference-counted) and expose per-sound `setVolume()`,
+`getVolume()`, `setPan()`, `getPan()`, `setRate()` (pitch), `getRate()`, `setLoop()` and
+`isLooping()`; playback itself goes through the free functions `playSound()` / `stopSound()`
+(rewinds) / `pauseSound()` (keeps position) / `isPlaying()`, mirroring how `image()` takes a
+`Texture` rather than the texture "drawing itself".
+
+---
+
 ### Input & Events
 
 ```cpp
@@ -520,6 +666,8 @@ anchored relative to your sketch instead of the global module list.
 | `beginShape()` / `vertex(x,y)` / `endShape(ShapeType)` | custom polygon           |
 | `image(texture,x,y,w,h)`                               | draw texture             |
 | `text(str,x,y)` / `text(str,x,y,maxWidth)`             | draw text                |
+| `filter(FilterType::blur, amount)`                     | built-in post-processing |
+| `effect(shader)`                                       | custom full-screen pass  |
 
 ### Transforms & state
 
@@ -565,6 +713,29 @@ loop() / noLoop()  // resume / pause draw()
 quit()             // exit cleanly
 ```
 
+### Images, screenshots & pixels
+
+```cpp
+Texture t = loadImage("path.png");            // also: loadImage(std::span<const uint8_t>)
+saveImage("out.png", framebuffer);             // encode a Framebuffer to PNG
+saveImage("out.png", w, h, pixels);            // encode a raw pixel buffer to PNG
+
+std::vector<color_t> pixels = loadPixels();    // snapshot of the current canvas
+std::vector<color_t> pixels = fb.readPixels(); // snapshot of an offscreen Framebuffer
+```
+
+### Audio
+
+```cpp
+Sound s = loadSound("path.wav");               // also: loadSound(std::span<const uint8_t>)
+playSound(s);  stopSound(s);  pauseSound(s);  isPlaying(s);
+s.setVolume(v);  s.setPan(p);  s.setRate(r);  s.setLoop(true);
+
+masterVolume(v);  getMasterVolume();
+getAudioAmplitude();   // live RMS level, 0..~1
+getAudioWaveform();    // std::span<const float> — live waveform ring buffer
+```
+
 ---
 
 ## Dependencies
@@ -578,6 +749,8 @@ All bundled as git submodules — nothing to install.
 | [FreeType](https://freetype.org/)                 | Font loading & glyph rasterisation             |
 | [libtess2](https://github.com/memononen/libtess2) | Polygon tessellation (`beginShape`/`endShape`) |
 | [harfbuzz](https://github.com/harfbuzz/harfbuzz)  | Text shaping (ligature support)                |
+| [miniaudio](https://miniaud.io/)                  | Audio playback, mixing & analysis              |
+| [stb](https://github.com/nothings/stb)            | Image loading & PNG encoding (`stb_image` / `stb_image_write`) |
 
 ---
 
