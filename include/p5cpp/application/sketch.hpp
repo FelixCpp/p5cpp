@@ -1,6 +1,7 @@
 #pragma once
 
 #include <p5cpp/application/engine.hpp>
+#include <p5cpp/application/module.hpp>
 #include <p5cpp/application/window_event.hpp>
 
 #include <memory>
@@ -12,6 +13,7 @@ namespace p5cpp
         virtual ~Sketch() = default;
 
         virtual void plugins(Engine& engine) {}
+        virtual void registerModules(ModuleRegistrar& registrar) {}
 
         virtual void setup() = 0;
         virtual void event(const WindowEvent& event) {}

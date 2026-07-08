@@ -29,6 +29,9 @@ add_library(
 
 target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ./external/stb)
+
 add_library(
   p5cpp STATIC
   ./src/p5cpp/application/engine.cpp
@@ -45,11 +48,17 @@ add_library(
   ./src/p5cpp/application/window_api.cpp
   ./src/p5cpp/application/window_module.cpp
 
+  ./src/p5cpp/audio/audio_api.cpp
+  ./src/p5cpp/audio/audio_component.cpp
+  ./src/p5cpp/audio/audio_module.cpp
+  ./src/p5cpp/audio/sound.cpp
+
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/graphics/framebuffer.cpp
   ./src/p5cpp/graphics/graphics_api.cpp
   ./src/p5cpp/graphics/graphics_component.cpp
   ./src/p5cpp/graphics/graphics_module.cpp
+  ./src/p5cpp/graphics/image.cpp
   ./src/p5cpp/graphics/internal_shaders.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
   ./src/p5cpp/graphics/render_state.cpp
@@ -57,6 +66,7 @@ add_library(
   ./src/p5cpp/graphics/renderer.cpp
   ./src/p5cpp/graphics/shader.cpp
   ./src/p5cpp/graphics/shaping.cpp
+  ./src/p5cpp/graphics/stb_image_impl.cpp
   ./src/p5cpp/graphics/stroker.cpp
   ./src/p5cpp/graphics/tess.cpp
   ./src/p5cpp/graphics/texture.cpp
@@ -72,6 +82,6 @@ add_library(
   ./src/p5cpp/p5cpp.cpp
 )
 
-target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio harfbuzz)
+target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio harfbuzz stb)
 target_include_directories(p5cpp PUBLIC include src)
 add_subdirectory(examples)

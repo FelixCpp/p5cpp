@@ -6,9 +6,13 @@
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/module.hpp>
 
+#include <p5cpp/audio/sound.hpp>
+
 #include <p5cpp/graphics/blendmode.hpp>
 #include <p5cpp/graphics/color.hpp>
+#include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/font.hpp>
+#include <p5cpp/graphics/image.hpp>
 #include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/graphics/shaping.hpp>
@@ -25,7 +29,27 @@
 #include <p5cpp/math/rectangle.hpp>
 
 #include <cstdint>
+#include <filesystem>
+#include <span>
 #include <string_view>
+#include <vector>
+
+namespace p5cpp
+{
+    Sound loadSound(const std::filesystem::path& soundFilePath);
+    Sound loadSound(std::span<const uint8_t> soundData);
+
+    void playSound(const Sound& sound);
+    void stopSound(const Sound& sound);
+    void pauseSound(const Sound& sound);
+    bool isPlaying(const Sound& sound);
+
+    void masterVolume(float volume);
+    float getMasterVolume();
+
+    float getAudioAmplitude();
+    std::span<const float> getAudioWaveform();
+} // namespace p5cpp
 
 namespace p5cpp
 {
@@ -66,6 +90,7 @@ namespace p5cpp
     void pushCanvas(const Framebuffer& framebuffer);
     void popCanvas();
     uint2 getCanvasSize();
+    std::vector<color_t> loadPixels();
 
     void pushState();
     void popState();
@@ -116,6 +141,9 @@ namespace p5cpp
     void shader(const Shader& shader);
     void noShader();
     void blendMode(const BlendMode& blendMode);
+
+    void filter(FilterType type, float amount);
+    void effect(const Shader& shader);
 
     void setUniform(const std::string& name, const UniformVariable& variable);
     void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);

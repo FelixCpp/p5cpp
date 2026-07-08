@@ -3,9 +3,11 @@
 #include <p5cpp/application/sketch.hpp>
 #include <p5cpp/application/module.hpp>
 
+#include <vector>
+
 namespace p5cpp
 {
-    class SketchModule : public Module
+    class SketchModule : public Module, private ModuleRegistrar
     {
     public:
         void setup(AppContext& context, Next next) override;
@@ -14,6 +16,23 @@ namespace p5cpp
         void destroy(AppContext& context, Next next) override;
 
     private:
+        void addModuleBefore(std::unique_ptr<Module> module) override;
+        void addModuleAfter(std::unique_ptr<Module> module) override;
+
+        void setupPreModules(AppContext& context, Next next, size_t i = 0);
+        void setupPostModules(AppContext& context, Next next, size_t i = 0);
+
+        void drawPreModules(AppContext& context, Next next, size_t i = 0);
+        void drawPostModules(AppContext& context, Next next, size_t i = 0);
+
+        void eventPreModules(AppContext& context, WindowEvent& event, Next next, size_t i = 0);
+        void eventPostModules(AppContext& context, WindowEvent& event, Next next, size_t i = 0);
+
+        void destroyPreModules(AppContext& context, size_t i = 0);
+        void destroyPostModules(AppContext& context, size_t i = 0);
+
         std::unique_ptr<Sketch> sketch;
+        std::vector<std::unique_ptr<Module>> m_preModules;
+        std::vector<std::unique_ptr<Module>> m_postModules;
     };
 } // namespace p5cpp

@@ -4,8 +4,11 @@
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/render_state_stack.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
+#include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/text.hpp>
+
+#include <array>
 
 namespace p5cpp
 {
@@ -23,6 +26,7 @@ namespace p5cpp
         void pushCanvas(Framebuffer framebuffer);
         void popCanvas();
         uint2 getCanvasSize();
+        std::vector<color_t> loadPixels();
 
         void pushState();
         void popState();
@@ -66,6 +70,9 @@ namespace p5cpp
         void noShader();
         void blendMode(BlendMode blendMode);
 
+        void filter(FilterType type, float amount);
+        void effect(const Shader& shader);
+
         void setUniform(const std::string& name, const UniformVariable& variable);
         void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
 
@@ -98,6 +105,11 @@ namespace p5cpp
         void submitFill(const PathPoints& pts, ShapeType type, const Texture& texture);
         void submitStroke(const PathPoints& pts, ShapeType type, bool close);
 
+        void applyBlur(float amount);
+        void ensureEffectScratch(uint2 size);
+        void runEffectPass(const Framebuffer& source, const Framebuffer& dest, const Shader& shader);
+        static void blitFramebuffer(const Framebuffer& source, const Framebuffer& dest);
+
         std::unique_ptr<float2[]> m_drawPointPositions;
         std::unique_ptr<float2[]> m_drawPointTexCoords;
         std::unique_ptr<color_t[]> m_drawPointFillColors;
@@ -109,6 +121,23 @@ namespace p5cpp
         std::array<float2, 4> m_curveVertexPositions;
         size_t m_curveVertexCount;
 
+        // Reusable per-shape scratch buffers: avoid a fresh heap allocation on every
+        // ellipse()/rect()/bezier()/curve() call by keeping capacity across calls.
+        std::vector<float2> m_ellipseFanPositions;
+        std::vector<float2> m_ellipseFanUVs;
+        std::vector<color_t> m_ellipseFillColors;
+        std::vector<float2> m_ellipseStrokeUVs;
+        std::vector<color_t> m_ellipseStrokeColors;
+
+        std::vector<float2> m_roundedRectPositions;
+        std::vector<float2> m_roundedRectUVs;
+        std::vector<color_t> m_roundedRectFillColors;
+        std::vector<color_t> m_roundedRectStrokeColors;
+
+        std::vector<float2> m_curvePositions;
+        std::vector<float2> m_curveUVs;
+        std::vector<color_t> m_curveColors;
+
         std::vector<Framebuffer> m_framebufferStack;
         Framebuffer m_defaultFramebuffer;
 
@@ -116,6 +145,9 @@ namespace p5cpp
         MatrixStack m_matrixStack;
         Shader m_defaultShader;
         Shader m_textShader;
+        Shader m_blurShader;
+        std::array<Framebuffer, 2> m_effectScratchFramebuffers;
+        uint2 m_effectScratchSize {0, 0};
         Texture m_whiteTexture;
         UniformCache m_uniformCache;
         Font m_defaultFont;

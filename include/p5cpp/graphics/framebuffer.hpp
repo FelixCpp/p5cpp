@@ -4,6 +4,7 @@
 #include <p5cpp/graphics/texture.hpp>
 
 #include <memory>
+#include <vector>
 
 namespace p5cpp
 {
@@ -19,6 +20,10 @@ namespace p5cpp
         virtual uint2 getSize() const = 0;
         virtual FramebufferId getFramebufferId() const = 0;
         virtual const Texture* getColorTexture() const = 0;
+
+        // Raw GL row order (bottom-to-top) — callers that need top-left-origin
+        // image data (e.g. PNG encoding) are responsible for flipping rows.
+        virtual std::vector<color_t> readPixels() const = 0;
     };
 
     std::unique_ptr<FramebufferImpl> createFramebuffer(uint32_t width, uint32_t height);
@@ -33,6 +38,7 @@ namespace p5cpp
         uint2 getSize() const;
         FramebufferId getFramebufferId() const;
         const Texture* getColorTexture() const;
+        std::vector<color_t> readPixels() const;
 
     private:
         std::shared_ptr<FramebufferImpl> impl;

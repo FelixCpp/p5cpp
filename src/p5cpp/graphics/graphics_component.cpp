@@ -6,6 +6,7 @@
 #include <p5cpp/math/constants.hpp>
 
 #include <glad/glad.h>
+#include <unordered_map>
 #include <vector>
 
 namespace p5cpp
@@ -39,6 +40,50 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    // Caches unit-circle sample points (cos, sin) so that repeated ellipse()/point()/
+    // rounded-rect-corner calls that land on the same segment count (very common, since
+    // computeCircleSegmentCount quantizes radius into a limited set of segment counts)
+    // don't re-evaluate std::cos/std::sin for every point on every frame.
+    class UnitCircleTableCache
+    {
+    public:
+        // Full circle: points at angle = TWO_PI * i / segments, i = 0..segments (inclusive).
+        const std::vector<float2>& getFullCircle(size_t segments)
+        {
+            return getOrBuild(m_fullCircleTables, segments, TWO_PI);
+        }
+
+        // Quarter circle: points at angle = HALF_PI * i / segments, i = 0..segments (inclusive).
+        const std::vector<float2>& getQuarterCircle(size_t segments)
+        {
+            return getOrBuild(m_quarterCircleTables, segments, HALF_PI);
+        }
+
+    private:
+        static const std::vector<float2>& getOrBuild(std::unordered_map<size_t, std::vector<float2>>& tables, size_t segments, float fullSweep)
+        {
+            const auto it = tables.find(segments);
+            if (it != tables.end())
+                return it->second;
+
+            std::vector<float2> table(segments + 1);
+            for (size_t i = 0; i <= segments; ++i) {
+                const float angle = fullSweep * static_cast<float>(i) / static_cast<float>(segments);
+                table[i] = {std::cos(angle), std::sin(angle)};
+            }
+
+            return tables.try_emplace(segments, std::move(table)).first->second;
+        }
+
+        std::unordered_map<size_t, std::vector<float2>> m_fullCircleTables;
+        std::unordered_map<size_t, std::vector<float2>> m_quarterCircleTables;
+    };
+
+    inline thread_local UnitCircleTableCache unitCircleTableCache;
+} // namespace p5cpp
+
+namespace p5cpp
+{
     inline static float4 colorToFloat4(color_t color)
     {
         static constexpr float inv255 = 1.0f / 255.0f;
@@ -67,6 +112,7 @@ namespace p5cpp
     {
         m_defaultShader = Shader(std::shared_ptr<ShaderImpl>(createPrimitiveShader()));
         m_textShader = Shader(std::shared_ptr<ShaderImpl>(createTextShader()));
+        m_blurShader = Shader(std::shared_ptr<ShaderImpl>(createBlurShader()));
 
         const color_t white = rgba(255, 255, 255, 255);
         m_whiteTexture = Texture(loadTexture(1, 1, &white));
@@ -135,6 +181,16 @@ namespace p5cpp
         }
 
         return m_framebufferStack.back().getSize();
+    }
+
+    std::vector<color_t> GraphicsComponent::loadPixels()
+    {
+        if (m_framebufferStack.empty()) {
+            return {};
+        }
+
+        m_renderer->flush();
+        return m_framebufferStack.back().readPixels();
     }
 
     void GraphicsComponent::pushState()
@@ -392,15 +448,20 @@ namespace p5cpp
         const RenderState& rs = peekRenderState();
         const matrix4x4& mtx = m_matrixStack.peek();
 
-        std::vector<float2> positions;
-        positions.reserve(64);
+        m_roundedRectPositions.clear();
 
         const auto addCornerArc = [&](float cx, float cy, float rx, float ry, float startAngle) {
             const float maxR = std::max(rx, ry);
             const size_t segments = (maxR > 0.0f) ? computeCircleSegmentCount(HALF_PI, maxR) : 1;
+            const std::vector<float2>& quarterCircle = unitCircleTableCache.getQuarterCircle(segments);
+            const float cosStart = std::cos(startAngle);
+            const float sinStart = std::sin(startAngle);
             for (size_t i = 0; i <= segments; ++i) {
-                const float angle = startAngle + HALF_PI * (static_cast<float>(i) / static_cast<float>(segments));
-                positions.push_back(mtx.transformPoint(cx + std::cos(angle) * rx, cy + std::sin(angle) * ry));
+                const float cosQ = quarterCircle[i].x;
+                const float sinQ = quarterCircle[i].y;
+                const float cosA = cosStart * cosQ - sinStart * sinQ;
+                const float sinA = sinStart * cosQ + cosStart * sinQ;
+                m_roundedRectPositions.push_back(mtx.transformPoint(cx + cosA * rx, cy + sinA * ry));
             }
         };
 
@@ -409,17 +470,17 @@ namespace p5cpp
         addCornerArc(left + w - borderRadius.bottomRight.x, top + h - borderRadius.bottomRight.y, borderRadius.bottomRight.x, borderRadius.bottomRight.y, 0.0f);
         addCornerArc(left + borderRadius.bottomLeft.x, top + h - borderRadius.bottomLeft.y, borderRadius.bottomLeft.x, borderRadius.bottomLeft.y, HALF_PI);
 
-        const size_t n = positions.size();
-        std::vector<float2> uvs(n, float2::zero);
+        const size_t n = m_roundedRectPositions.size();
+        m_roundedRectUVs.assign(n, float2::zero);
 
         if (!rs.isFillDisabled) {
-            std::vector<color_t> fillColors(n, rs.fillColor);
-            submitFill(PathPoints {n, positions, uvs, fillColors}, ShapeType::polygon, m_whiteTexture);
+            m_roundedRectFillColors.assign(n, rs.fillColor);
+            submitFill(PathPoints {n, m_roundedRectPositions, m_roundedRectUVs, m_roundedRectFillColors}, ShapeType::polygon, m_whiteTexture);
         }
 
         if (!rs.isStrokeDisabled) {
-            std::vector<color_t> strokeColors(n, rs.strokeColor);
-            submitStroke(PathPoints {n, positions, uvs, strokeColors}, ShapeType::polygon, true);
+            m_roundedRectStrokeColors.assign(n, rs.strokeColor);
+            submitStroke(PathPoints {n, m_roundedRectPositions, m_roundedRectUVs, m_roundedRectStrokeColors}, ShapeType::polygon, true);
         }
     }
 
@@ -431,35 +492,36 @@ namespace p5cpp
         const float maxRadius = std::max(rx, ry);
         const size_t segments = computeCircleSegmentCount(TWO_PI, maxRadius);
         const matrix4x4& mtx = m_matrixStack.peek();
+        const std::vector<float2>& unitCircle = unitCircleTableCache.getFullCircle(segments);
 
         // Build center + (segments+1) perimeter points for a closed fan.
         // The last perimeter point == the first (closing duplicate) so the fan triangle
         // (center, last, first_perimeter+1) closes the circle.
-        std::vector<float2> fanPositions(segments + 2);
-        std::vector<float2> fanUVs(segments + 2);
+        const size_t fanCount = segments + 2;
+        m_ellipseFanPositions.resize(fanCount);
+        m_ellipseFanUVs.resize(fanCount);
 
-        fanPositions[0] = mtx.transformPoint(cx, cy);
-        fanUVs[0] = {0.5f, 0.5f};
+        m_ellipseFanPositions[0] = mtx.transformPoint(cx, cy);
+        m_ellipseFanUVs[0] = {0.5f, 0.5f};
 
         for (size_t i = 0; i <= segments; ++i) {
-            const float angle = TWO_PI * static_cast<float>(i) / static_cast<float>(segments);
-            const float cosA = std::cos(angle);
-            const float sinA = std::sin(angle);
-            fanPositions[1 + i] = mtx.transformPoint(cx + cosA * rx, cy + sinA * ry);
-            fanUVs[1 + i] = {0.5f + 0.5f * cosA, 0.5f + 0.5f * sinA};
+            const float cosA = unitCircle[i].x;
+            const float sinA = unitCircle[i].y;
+            m_ellipseFanPositions[1 + i] = mtx.transformPoint(cx + cosA * rx, cy + sinA * ry);
+            m_ellipseFanUVs[1 + i] = {0.5f + 0.5f * cosA, 0.5f + 0.5f * sinA};
         }
 
         if (!rs.isFillDisabled) {
-            std::vector<color_t> fillColors(segments + 2, rs.fillColor);
-            submitFill(PathPoints {segments + 2, fanPositions, fanUVs, fillColors}, ShapeType::triangleFan, m_whiteTexture);
+            m_ellipseFillColors.assign(fanCount, rs.fillColor);
+            submitFill(PathPoints {fanCount, m_ellipseFanPositions, m_ellipseFanUVs, m_ellipseFillColors}, ShapeType::triangleFan, m_whiteTexture);
         }
 
         if (!rs.isStrokeDisabled) {
             // Stroke uses exactly `segments` perimeter points (no center, no closing duplicate).
-            std::vector<float2> strokeUVs(segments, float2::zero);
-            std::vector<color_t> strokeColors(segments, rs.strokeColor);
+            m_ellipseStrokeUVs.assign(segments, float2::zero);
+            m_ellipseStrokeColors.assign(segments, rs.strokeColor);
             submitStroke(
-                PathPoints {segments, {fanPositions.data() + 1, segments}, strokeUVs, strokeColors},
+                PathPoints {segments, {m_ellipseFanPositions.data() + 1, segments}, m_ellipseStrokeUVs, m_ellipseStrokeColors},
                 ShapeType::lineLoop,
                 true
             );
@@ -500,14 +562,14 @@ namespace p5cpp
 
         if (rs.strokeCap.start == StrokeCapStyle::round) {
             const size_t segments = computeCircleSegmentCount(TWO_PI, halfSize);
+            const std::vector<float2>& unitCircle = unitCircleTableCache.getFullCircle(segments);
             std::vector<float2> positions(segments + 2);
             std::vector<float2> uvs(segments + 2, float2::zero);
             std::vector<color_t> colors(segments + 2, rs.strokeColor);
 
             positions[0] = center;
             for (size_t i = 0; i <= segments; ++i) {
-                const float angle = TWO_PI * static_cast<float>(i) / static_cast<float>(segments);
-                positions[1 + i] = center + float2 {std::cos(angle), std::sin(angle)} * halfSize;
+                positions[1 + i] = center + unitCircle[i] * halfSize;
             }
 
             submitFill(PathPoints {segments + 2, positions, uvs, colors}, ShapeType::triangleFan, m_whiteTexture);
@@ -555,7 +617,6 @@ namespace p5cpp
         }
 
         const float2 centerPos = mtx.transformPoint(cx, cy);
-        const std::vector<float2> zeroUVs(arcPositions.size() + 1, float2::zero);
 
         if (!rs.isFillDisabled) {
             std::vector<float2> fillPositions;
@@ -601,9 +662,10 @@ namespace p5cpp
         const float invDetail = rs.invBezierDetail;
         const matrix4x4& mtx = m_matrixStack.peek();
 
-        std::vector<float2> positions(detail + 1);
-        std::vector<float2> uvs(detail + 1, float2::zero);
-        std::vector<color_t> colors(detail + 1, rs.strokeColor);
+        const size_t count = detail + 1;
+        m_curvePositions.resize(count);
+        m_curveUVs.assign(count, float2::zero);
+        m_curveColors.assign(count, rs.strokeColor);
 
         for (size_t j = 0; j <= detail; ++j) {
             const float t = static_cast<float>(j) * invDetail;
@@ -614,10 +676,10 @@ namespace p5cpp
             const float t3 = t2 * t;
             const float bx = mt3 * x1 + 3.0f * mt2 * t * x2 + 3.0f * mt * t2 * x3 + t3 * x4;
             const float by = mt3 * y1 + 3.0f * mt2 * t * y2 + 3.0f * mt * t2 * y3 + t3 * y4;
-            positions[j] = mtx.transformPoint(bx, by);
+            m_curvePositions[j] = mtx.transformPoint(bx, by);
         }
 
-        submitStroke(PathPoints {detail + 1, positions, uvs, colors}, ShapeType::lineStrip, false);
+        submitStroke(PathPoints {count, m_curvePositions, m_curveUVs, m_curveColors}, ShapeType::lineStrip, false);
     }
 
     void GraphicsComponent::curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
@@ -630,9 +692,10 @@ namespace p5cpp
         const float invDetail = rs.invCurveDetail;
         const matrix4x4& mtx = m_matrixStack.peek();
 
-        std::vector<float2> positions(detail + 1);
-        std::vector<float2> uvs(detail + 1, float2::zero);
-        std::vector<color_t> colors(detail + 1, rs.strokeColor);
+        const size_t count = detail + 1;
+        m_curvePositions.resize(count);
+        m_curveUVs.assign(count, float2::zero);
+        m_curveColors.assign(count, rs.strokeColor);
 
         for (size_t j = 0; j <= detail; ++j) {
             const float t = static_cast<float>(j) * invDetail;
@@ -640,10 +703,10 @@ namespace p5cpp
             const float t3 = t2 * t;
             const float bx = alpha * ((-x1 + 3.0f * x2 - 3.0f * x3 + x4) * t3 + (2.0f * x1 - 5.0f * x2 + 4.0f * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
             const float by = alpha * ((-y1 + 3.0f * y2 - 3.0f * y3 + y4) * t3 + (2.0f * y1 - 5.0f * y2 + 4.0f * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
-            positions[j] = mtx.transformPoint(bx, by);
+            m_curvePositions[j] = mtx.transformPoint(bx, by);
         }
 
-        submitStroke(PathPoints {detail + 1, positions, uvs, colors}, ShapeType::lineStrip, false);
+        submitStroke(PathPoints {count, m_curvePositions, m_curveUVs, m_curveColors}, ShapeType::lineStrip, false);
     }
 
     void GraphicsComponent::image(const Texture& texture, float left, float top, float w, float h)
@@ -1021,5 +1084,107 @@ namespace p5cpp
         }
 
         m_renderer->submit(writer, m_uniformCache, m_defaultShader, rs.blendMode, m_whiteTexture);
+    }
+
+    void GraphicsComponent::filter(FilterType type, float amount)
+    {
+        switch (type) {
+            case FilterType::blur:
+                applyBlur(amount);
+                break;
+        }
+    }
+
+    void GraphicsComponent::effect(const Shader& shader)
+    {
+        if (m_framebufferStack.empty()) return;
+
+        m_renderer->flush();
+        m_renderer->end();
+
+        Framebuffer& current = m_framebufferStack.back();
+        const uint2 size = current.getSize();
+        ensureEffectScratch(size);
+
+        runEffectPass(current, m_effectScratchFramebuffers[0], shader);
+        blitFramebuffer(m_effectScratchFramebuffers[0], current);
+
+        m_renderer->begin(current);
+    }
+
+    void GraphicsComponent::applyBlur(float amount)
+    {
+        if (m_framebufferStack.empty()) return;
+
+        m_renderer->flush();
+        m_renderer->end();
+
+        Framebuffer& current = m_framebufferStack.back();
+        const uint2 size = current.getSize();
+        ensureEffectScratch(size);
+
+        const float radius = std::max(amount, 0.0f);
+        const float texelX = (size.x > 0) ? (1.0f / static_cast<float>(size.x)) : 0.0f;
+        const float texelY = (size.y > 0) ? (1.0f / static_cast<float>(size.y)) : 0.0f;
+
+        m_uniformCache.setUniform(m_blurShader, "u_TexelSize", uniform(texelX, texelY));
+        m_uniformCache.setUniform(m_blurShader, "u_Radius", uniform(radius));
+
+        m_uniformCache.setUniform(m_blurShader, "u_Direction", uniform(1.0f, 0.0f));
+        runEffectPass(current, m_effectScratchFramebuffers[0], m_blurShader);
+
+        m_uniformCache.setUniform(m_blurShader, "u_Direction", uniform(0.0f, 1.0f));
+        runEffectPass(m_effectScratchFramebuffers[0], m_effectScratchFramebuffers[1], m_blurShader);
+
+        blitFramebuffer(m_effectScratchFramebuffers[1], current);
+
+        m_renderer->begin(current);
+    }
+
+    void GraphicsComponent::ensureEffectScratch(uint2 size)
+    {
+        if (m_effectScratchSize.x == size.x && m_effectScratchSize.y == size.y) return;
+
+        m_effectScratchFramebuffers[0] = createFramebuffer(size.x, size.y);
+        m_effectScratchFramebuffers[1] = createFramebuffer(size.x, size.y);
+        m_effectScratchSize = size;
+    }
+
+    // Draws a fullscreen quad sampling `source`'s color texture into `dest`, using `shader`.
+    // Bypasses transform/tint/getShader() entirely — a screen-space pass is neither
+    // transformed nor tinted, matching how background() bypasses them too.
+    void GraphicsComponent::runEffectPass(const Framebuffer& source, const Framebuffer& dest, const Shader& shader)
+    {
+        m_renderer->begin(dest);
+
+        const uint2 size = dest.getSize();
+        const float w = static_cast<float>(size.x);
+        const float h = static_cast<float>(size.y);
+        const float4 white {1.0f, 1.0f, 1.0f, 1.0f};
+
+        DrawBufferWriter& writer = m_renderer->getDrawScope();
+        const uint32_t base = writer.getRelativeCursor();
+
+        writer.pushVertex({0.0f, 0.0f}, {0.0f, 0.0f}, white);
+        writer.pushVertex({w, 0.0f}, {1.0f, 0.0f}, white);
+        writer.pushVertex({w, h}, {1.0f, 1.0f}, white);
+        writer.pushVertex({0.0f, h}, {0.0f, 1.0f}, white);
+        writer.pushTriangle(base + 0, base + 1, base + 2);
+        writer.pushTriangle(base + 0, base + 2, base + 3);
+
+        m_renderer->submit(writer, m_uniformCache, shader, BlendMode::none, *source.getColorTexture());
+        m_renderer->flush();
+        m_renderer->end();
+    }
+
+    void GraphicsComponent::blitFramebuffer(const Framebuffer& source, const Framebuffer& dest)
+    {
+        const uint2 size = dest.getSize();
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getFramebufferId().value);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dest.getFramebufferId().value);
+        glBlitFramebuffer(0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), 0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
 } // namespace p5cpp

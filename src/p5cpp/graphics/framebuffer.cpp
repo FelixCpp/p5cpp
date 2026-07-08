@@ -45,6 +45,22 @@ namespace p5cpp
             return &colorTexture;
         }
 
+        std::vector<color_t> readPixels() const override
+        {
+            const uint2 size = colorTexture.getSize();
+            std::vector<color_t> pixels(static_cast<size_t>(size.x) * static_cast<size_t>(size.y));
+
+            GLint previousFbo = 0;
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFbo);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, framebufferId);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFbo));
+
+            return pixels;
+        }
+
     private:
         GLuint framebufferId;
         GLuint renderbufferId;
@@ -90,5 +106,10 @@ namespace p5cpp
     const Texture* Framebuffer::getColorTexture() const
     {
         return impl->getColorTexture();
+    }
+
+    std::vector<color_t> Framebuffer::readPixels() const
+    {
+        return impl->readPixels();
     }
 } // namespace p5cpp

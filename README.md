@@ -446,6 +446,50 @@ struct TimerModule : p5cpp::Module
 
 Register it before the Sketch module in `p5cpp.cpp`, then retrieve it from any API function via `ctx.require<TimerModule>()`.
 
+### Modules Before/After Your Sketch _(advanced)_
+
+`plugins()` registers modules globally, with no control over where they end up relative to
+your own `setup()`/`draw()`/`event()`/`destroy()` calls. If you need a module to run right
+before or right after your sketch's own call — every frame, deterministically — implement
+`registerModules(ModuleRegistrar&)` instead:
+
+```cpp
+struct LogBeforeModule : p5cpp::Module
+{
+    void draw(AppContext& ctx, Next next) override
+    {
+        p5cpp::info("before sketch draw");
+        next();
+    }
+};
+
+struct LogAfterModule : p5cpp::Module
+{
+    void draw(AppContext& ctx, Next next) override
+    {
+        next();
+        p5cpp::info("after sketch draw");
+    }
+};
+
+struct MySketch : p5cpp::Sketch
+{
+    void registerModules(p5cpp::ModuleRegistrar& registrar) override
+    {
+        registrar.addModuleBefore(std::make_unique<LogBeforeModule>());
+        registrar.addModuleAfter(std::make_unique<LogAfterModule>());
+    }
+
+    void setup() override { /* ... */ }
+    void draw() override { /* ... */ }
+};
+```
+
+Each frame this logs `before sketch draw`, then runs your sketch's `draw()`, then logs
+`after sketch draw`. Modules registered this way still follow the same middleware contract
+as any other `Module` — code before `next()` runs first, code after runs last — they're just
+anchored relative to your sketch instead of the global module list.
+
 ---
 
 ## API Cheatsheet

@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <optional>
 #include <vector>
+#include <string>
 #include <string_view>
 #include <cassert>
 
@@ -525,6 +526,59 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    // Caches the result of a full HarfBuzz shaping pass (shape() re-runs hb_shape() — bidi,
+    // ligatures, kerning, contextual alternates — from scratch on every call otherwise), keyed
+    // by the exact text content and size. Independent of letterSpacing/wrap/align, which are
+    // applied downstream by the caller using the shaped glyph list's xAdvance values.
+    struct ShapedTextCacheKey
+    {
+        std::string text;
+        int textSize;
+
+        bool operator==(const ShapedTextCacheKey& other) const
+        {
+            return textSize == other.textSize && text == other.text;
+        }
+    };
+
+    struct ShapedTextCacheKeyHasher
+    {
+        std::size_t operator()(const ShapedTextCacheKey& key) const
+        {
+            std::size_t h1 = std::hash<std::string> {}(key.text);
+            std::size_t h2 = std::hash<int> {}(key.textSize);
+            return h1 ^ (h2 << 1);
+        }
+    };
+
+    class ShapedTextCache
+    {
+    public:
+        const std::vector<ShapedGlyph>* get(std::string_view text, int textSize) const
+        {
+            const ShapedTextCacheKey key {.text = std::string(text), .textSize = textSize};
+            const auto itr = m_cache.find(key);
+            if (itr != m_cache.end()) {
+                return &itr->second;
+            }
+
+            return nullptr;
+        }
+
+        const std::vector<ShapedGlyph>* put(std::string_view text, int textSize, std::vector<ShapedGlyph> shaped)
+        {
+            ShapedTextCacheKey key {std::string(text), textSize};
+            const auto insertion = m_cache.insert_or_assign(std::move(key), std::move(shaped));
+            return &insertion.first->second;
+        }
+
+    private:
+        std::unordered_map<ShapedTextCacheKey, std::vector<ShapedGlyph>, ShapedTextCacheKeyHasher> m_cache;
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
     struct HbFontDeleter
     {
         void operator()(hb_font_t* font) const
@@ -669,6 +723,10 @@ namespace p5cpp
 
         std::vector<ShapedGlyph> shape(std::string_view text, int textSize) override
         {
+            if (const std::vector<ShapedGlyph>* cached = m_shapedTextCache.get(text, textSize)) {
+                return *cached;
+            }
+
             if (!m_hbFont) {
                 m_hbFont.reset(hb_ft_font_create(m_face.get(), nullptr));
             }
@@ -740,7 +798,7 @@ namespace p5cpp
             }
 
             hb_buffer_destroy(buf);
-            return result;
+            return *m_shapedTextCache.put(text, textSize, std::move(result));
         }
 
     private:
@@ -846,6 +904,7 @@ namespace p5cpp
         GlyphCache m_glyphCache;
         GlyphByIdCache m_glyphByIdCache;
         FontMetricsCache m_glyphMetricsCache;
+        ShapedTextCache m_shapedTextCache;
 
         std::vector<std::unique_ptr<GlyphAtlas>> m_glyphAtlasPages;
         FreetypeFace m_face;

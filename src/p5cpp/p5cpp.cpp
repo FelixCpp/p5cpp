@@ -7,6 +7,8 @@
 #include <p5cpp/application/input_module.hpp>
 #include <p5cpp/application/sketch_module.hpp>
 
+#include <p5cpp/audio/audio_module.hpp>
+
 #include <p5cpp/graphics/graphics_module.hpp>
 
 #include <cassert>
@@ -24,6 +26,7 @@ int main()
     engine->addModule(std::make_unique<FrameModule>());
     engine->addModule(std::make_unique<WindowModule>());
     engine->addModule(std::make_unique<InputModule>());
+    engine->addModule(std::make_unique<AudioModule>());
     engine->addModule(std::make_unique<GraphicsModule>());
     engine->addModule(std::make_unique<SketchModule>());
 

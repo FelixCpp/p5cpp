@@ -8,6 +8,8 @@
 #include <cassert>
 #include <cstring>
 #include <functional>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace p5cpp
@@ -294,31 +296,19 @@ namespace p5cpp
 
                     const auto projLoc = batch.shader.getUniformLocation("u_ProjectionMatrix");
                     if (projLoc.has_value()) {
-                        glUniformMatrix4fv(projLoc->value, 1, GL_FALSE, projection.data());
+                        applyUniformCached(programId, *projLoc, uniform(projection));
                     }
 
                     const auto texLoc = batch.shader.getUniformLocation("u_Textures");
-                    if (texLoc.has_value()) {
+                    if (texLoc.has_value() && !m_samplerArrayApplied.contains(programId)) {
                         const GLint samplers[8] = {0, 1, 2, 3, 4, 5, 6, 7};
                         glUniform1iv(texLoc->value, 8, samplers);
+                        m_samplerArrayApplied.insert(programId);
                     }
                 }
 
                 for (const UniformSnapshot& snap : batch.uniforms) {
-                    switch (snap.variable.type) {
-                        case UniformVariable::Type::float1:
-                            glUniform1f(snap.location.value, snap.variable.floatValue);
-                            break;
-                        case UniformVariable::Type::float2:
-                            glUniform2f(snap.location.value, snap.variable.float2Value.x, snap.variable.float2Value.y);
-                            break;
-                        case UniformVariable::Type::float4:
-                            glUniform4f(snap.location.value, snap.variable.float4Value.x, snap.variable.float4Value.y, snap.variable.float4Value.z, snap.variable.float4Value.w);
-                            break;
-                        case UniformVariable::Type::matrix4x4:
-                            glUniformMatrix4fv(snap.location.value, 1, GL_FALSE, snap.variable.matrix4x4Value.data());
-                            break;
-                    }
+                    applyUniformCached(programId, snap.location, snap.variable);
                 }
 
                 if (firstBatch || !(batch.blendMode == lastBlendMode)) {
@@ -346,6 +336,51 @@ namespace p5cpp
         {
             renderBatches();
             m_writer.resetPreservingPending();
+        }
+
+        static bool uniformVariableEquals(const UniformVariable& a, const UniformVariable& b)
+        {
+            if (a.type != b.type)
+                return false;
+
+            switch (a.type) {
+                case UniformVariable::Type::float1:
+                    return a.floatValue == b.floatValue;
+                case UniformVariable::Type::float2:
+                    return a.float2Value.x == b.float2Value.x && a.float2Value.y == b.float2Value.y;
+                case UniformVariable::Type::float4:
+                    return a.float4Value.x == b.float4Value.x && a.float4Value.y == b.float4Value.y
+                        && a.float4Value.z == b.float4Value.z && a.float4Value.w == b.float4Value.w;
+                case UniformVariable::Type::matrix4x4:
+                    return std::memcmp(a.matrix4x4Value.data(), b.matrix4x4Value.data(), 16 * sizeof(float)) == 0;
+            }
+            return false;
+        }
+
+        // Skips the glUniform* call if the same value is already active for this program,
+        // since uniform state lives on the GL program object and survives across batches/frames.
+        void applyUniformCached(GLuint programId, const UniformLocation& location, const UniformVariable& variable)
+        {
+            std::unordered_map<int32_t, UniformVariable>& programCache = m_appliedUniforms.try_emplace(programId).first->second;
+            const auto it = programCache.find(location.value);
+            if (it != programCache.end() && uniformVariableEquals(it->second, variable))
+                return;
+
+            switch (variable.type) {
+                case UniformVariable::Type::float1:
+                    glUniform1f(location.value, variable.floatValue);
+                    break;
+                case UniformVariable::Type::float2:
+                    glUniform2f(location.value, variable.float2Value.x, variable.float2Value.y);
+                    break;
+                case UniformVariable::Type::float4:
+                    glUniform4f(location.value, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w);
+                    break;
+                case UniformVariable::Type::matrix4x4:
+                    glUniformMatrix4fv(location.value, 1, GL_FALSE, variable.matrix4x4Value.data());
+                    break;
+            }
+            programCache.insert_or_assign(location.value, variable);
         }
 
         static void applyBlendMode(const BlendMode& mode)
@@ -394,6 +429,9 @@ namespace p5cpp
         std::vector<BatchEntry> m_batches;
 
         uint2 m_viewportSize {0, 0};
+
+        std::unordered_map<GLuint, std::unordered_map<int32_t, UniformVariable>> m_appliedUniforms;
+        std::unordered_set<GLuint> m_samplerArrayApplied;
     };
 } // namespace p5cpp
 

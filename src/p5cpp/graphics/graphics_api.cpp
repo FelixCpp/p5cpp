@@ -20,6 +20,7 @@ namespace p5cpp
     void pushCanvas(const Framebuffer& framebuffer) { getGraphicsComponent().pushCanvas(framebuffer); }
     void popCanvas() { getGraphicsComponent().popCanvas(); }
     uint2 getCanvasSize() { return getGraphicsComponent().getCanvasSize(); }
+    std::vector<color_t> loadPixels() { return getGraphicsComponent().loadPixels(); }
 
     void pushState() { getGraphicsComponent().pushState(); }
     void popState() { getGraphicsComponent().popState(); }
@@ -70,6 +71,9 @@ namespace p5cpp
     void shader(const Shader& shader) { getGraphicsComponent().shader(shader); }
     void noShader() { getGraphicsComponent().noShader(); }
     void blendMode(const BlendMode& blendMode) { getGraphicsComponent().blendMode(blendMode); }
+
+    void filter(FilterType type, float amount) { getGraphicsComponent().filter(type, amount); }
+    void effect(const Shader& shader) { getGraphicsComponent().effect(shader); }
 
     void setUniform(const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(name, variable); }
     void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(shader, name, variable); }
