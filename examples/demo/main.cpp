@@ -159,7 +159,7 @@ public:
     void draw(AppContext& context, Next next) override
     {
         noStroke();
-        background(6, 8, 16, m_trailsEnabled ? 10 : 255);
+        background(6, 8, 16, m_trailsEnabled ? 40 : 255);
 
         next(); // Sketch, Vignette und HUD zeichnen jetzt ihren gesamten Inhalt.
 

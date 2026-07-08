@@ -416,7 +416,7 @@ namespace p5cpp
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
-        m_renderer->submit(writer, m_uniformCache, m_defaultShader, BlendMode::none, m_whiteTexture);
+        m_renderer->submit(writer, m_uniformCache, m_defaultShader, BlendMode::alpha, m_whiteTexture);
     }
 
     void GraphicsComponent::rect(float left, float top, float w, float h)
