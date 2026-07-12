@@ -1199,10 +1199,10 @@ namespace p5cpp
         DrawBufferWriter& writer = m_renderer->getDrawScope();
         const uint32_t base = writer.getRelativeCursor();
 
-        writer.pushVertex({0.0f, 0.0f}, {0.0f, 0.0f}, white);
-        writer.pushVertex({w, 0.0f}, {1.0f, 0.0f}, white);
-        writer.pushVertex({w, h}, {1.0f, 1.0f}, white);
-        writer.pushVertex({0.0f, h}, {0.0f, 1.0f}, white);
+        writer.pushVertex({0.0f, 0.0f}, {0.0f, 1.0f}, white);
+        writer.pushVertex({w, 0.0f}, {1.0f, 1.0f}, white);
+        writer.pushVertex({w, h}, {1.0f, 0.0f}, white);
+        writer.pushVertex({0.0f, h}, {0.0f, 0.0f}, white);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 

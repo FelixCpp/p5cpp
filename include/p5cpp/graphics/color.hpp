@@ -8,6 +8,7 @@ namespace p5cpp
 
     constexpr color_t rgba(int grey, int alpha = 255);
     constexpr color_t rgba(int red, int green, int blue, int alpha = 255);
+    color_t hsv(float h, float s, float v, int a = 255);
 
     constexpr color_t lighten(color_t color, float factor);
     constexpr color_t darken(color_t color, float factor);

@@ -54,6 +54,7 @@ add_library(
   ./src/p5cpp/audio/audio_stream.cpp
   ./src/p5cpp/audio/sound.cpp
 
+  ./src/p5cpp/graphics/color.cpp
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/graphics/framebuffer.cpp
   ./src/p5cpp/graphics/graphics_api.cpp
