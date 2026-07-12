@@ -1,5 +1,6 @@
 add_subdirectory(demo)
 add_subdirectory(audio_demo)
+add_subdirectory(audio_playground)
 add_subdirectory(gravitas)
 add_subdirectory(gravitas_ai)
 add_subdirectory(molds)

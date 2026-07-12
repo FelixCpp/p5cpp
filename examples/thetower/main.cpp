@@ -360,7 +360,7 @@ struct TowerSketch : p5cpp::Sketch
                 o_Color = vec4(col,1.0);
             }
         )";
-        bgShader = std::shared_ptr<ShaderImpl>(loadShader(VERT, FRAG).release());
+        bgShader = loadShader(VERT, FRAG);
     }
 
     // ── Main draw / update ────────────────────────────────────────────────────

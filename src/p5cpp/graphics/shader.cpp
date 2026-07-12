@@ -182,6 +182,11 @@ namespace p5cpp
     {
     }
 
+    Shader::Shader(std::unique_ptr<ShaderImpl> shader)
+        : shader(std::move(shader))
+    {
+    }
+
     Shader::Shader(std::shared_ptr<ShaderImpl> shader)
         : shader(std::move(shader))
     {

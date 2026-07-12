@@ -1,9 +1,12 @@
 #pragma once
 
+#include <p5cpp/audio/sound.hpp>
+
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <vector>
@@ -12,6 +15,16 @@ struct ma_engine;
 
 namespace p5cpp
 {
+    // Bridges miniaudio's audio-thread end notification to the main thread:
+    // the audio thread only flips `pending`; AudioComponent::update() invokes
+    // `callback` on the main thread. Owned by the sound impl (which guarantees
+    // it outlives the underlying ma_sound), watched weakly by AudioComponent.
+    struct SoundEndedState
+    {
+        std::atomic<bool> pending {false};
+        std::function<void()> callback;
+    };
+
     class AudioComponent
     {
     public:
@@ -22,7 +35,9 @@ namespace p5cpp
         AudioComponent& operator=(const AudioComponent&) = delete;
 
         // Called once per frame (main thread): snapshots the audio-thread-written
-        // waveform ring buffer into a stable buffer for getWaveform() to return.
+        // waveform ring buffer into a stable buffer for getWaveform() to return,
+        // dispatches pending onEnded callbacks, and reaps finished fire-and-forget
+        // sounds started via playMulti().
         void update();
 
         void setMasterVolume(float volume);
@@ -30,6 +45,9 @@ namespace p5cpp
 
         float getAmplitude() const;
         std::span<const float> getWaveform() const;
+
+        void watchEndedState(std::weak_ptr<SoundEndedState> state);
+        void playMulti(const Sound& sound);
 
         ma_engine* getEngine();
 
@@ -50,5 +68,9 @@ namespace p5cpp
         std::atomic<float> m_amplitude {0.0f};
 
         std::vector<float> m_waveformSnapshot;
+
+        // Main-thread only (registration and dispatch both happen there).
+        std::vector<std::weak_ptr<SoundEndedState>> m_endedStates;
+        std::vector<Sound> m_transientSounds;
     };
 } // namespace p5cpp

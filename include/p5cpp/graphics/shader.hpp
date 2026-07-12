@@ -87,6 +87,7 @@ namespace p5cpp
     {
     public:
         Shader();
+        Shader(std::unique_ptr<ShaderImpl> shader);
         Shader(std::shared_ptr<ShaderImpl> shader);
 
         std::optional<UniformLocation> getUniformLocation(const std::string& name) const override;

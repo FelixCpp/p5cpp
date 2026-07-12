@@ -33,6 +33,33 @@ namespace p5cpp
             const size_t idx = (writeIndex + i) % WAVEFORM_SIZE;
             m_waveformSnapshot[i] = m_waveformRing[idx].load(std::memory_order_relaxed);
         }
+
+        std::erase_if(m_transientSounds, [](const Sound& sound) { return sound.status() != SoundStatus::playing; });
+        std::erase_if(m_endedStates, [](const std::weak_ptr<SoundEndedState>& state) { return state.expired(); });
+
+        // Iterate over a copy: a callback may load sounds or register new
+        // onEnded handlers, which would mutate m_endedStates mid-loop.
+        const std::vector<std::weak_ptr<SoundEndedState>> states = m_endedStates;
+        for (const std::weak_ptr<SoundEndedState>& weakState : states) {
+            const std::shared_ptr<SoundEndedState> state = weakState.lock();
+            if (state && state->pending.exchange(false, std::memory_order_relaxed) && state->callback) {
+                state->callback();
+            }
+        }
+    }
+
+    void AudioComponent::watchEndedState(std::weak_ptr<SoundEndedState> state)
+    {
+        m_endedStates.push_back(std::move(state));
+    }
+
+    void AudioComponent::playMulti(const Sound& sound)
+    {
+        Sound transient = sound.clone();
+        if (!transient.isValid()) return;
+
+        transient.play();
+        m_transientSounds.push_back(std::move(transient));
     }
 
     void AudioComponent::setMasterVolume(float volume)

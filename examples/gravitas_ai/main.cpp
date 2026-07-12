@@ -297,7 +297,7 @@ struct GravitasSketch : p5cpp::Sketch
             }
         )glsl";
 
-        bgShader = std::shared_ptr<ShaderImpl>(loadShader(VERT, FRAG).release());
+        bgShader = loadShader(VERT, FRAG);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -246,7 +246,7 @@ struct BreakoutSketch : p5cpp::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<FramebufferImpl>(createFramebuffer(W, H).release());
+        bgCanvas = createFramebuffer(W, H);
         initStars();
         initGame();
     }
@@ -307,7 +307,7 @@ struct BreakoutSketch : p5cpp::Sketch
             }
         )";
 
-        bgShader = std::shared_ptr<ShaderImpl>(loadShader(VERT, FRAG).release());
+        bgShader = loadShader(VERT, FRAG);
     }
 
     void initStars()

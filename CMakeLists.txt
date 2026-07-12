@@ -51,6 +51,7 @@ add_library(
   ./src/p5cpp/audio/audio_api.cpp
   ./src/p5cpp/audio/audio_component.cpp
   ./src/p5cpp/audio/audio_module.cpp
+  ./src/p5cpp/audio/audio_stream.cpp
   ./src/p5cpp/audio/sound.cpp
 
   ./src/p5cpp/graphics/font.cpp

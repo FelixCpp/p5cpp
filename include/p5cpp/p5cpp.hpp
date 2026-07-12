@@ -7,6 +7,7 @@
 #include <p5cpp/application/module.hpp>
 
 #include <p5cpp/audio/sound.hpp>
+#include <p5cpp/audio/audio_stream.hpp>
 
 #include <p5cpp/graphics/blendmode.hpp>
 #include <p5cpp/graphics/color.hpp>
@@ -39,10 +40,31 @@ namespace p5cpp
     Sound loadSound(const std::filesystem::path& soundFilePath);
     Sound loadSound(std::span<const uint8_t> soundData);
 
+    // Streams from disk while playing instead of decoding the whole file into
+    // memory up front — use for long background music. Returns a regular Sound;
+    // only clone()/playSoundMulti() are unsupported on streamed sounds.
+    Sound loadMusic(const std::filesystem::path& musicFilePath);
+
+    // Creates a playable sound from raw interleaved 32-bit float PCM samples.
+    Sound createSound(std::span<const float> samples, uint32_t sampleRate, uint32_t channels);
+
+    // Fully decodes an audio file into raw PCM samples for analysis/processing.
+    AudioSamples loadAudioSamples(const std::filesystem::path& soundFilePath);
+    AudioSamples loadAudioSamples(std::span<const uint8_t> soundData);
+
+    // Procedural audio: the callback fills sample buffers on demand (on the
+    // audio thread — see AudioStreamCallback in audio/audio_stream.hpp).
+    AudioStream createAudioStream(uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback);
+
     void playSound(const Sound& sound);
     void stopSound(const Sound& sound);
     void pauseSound(const Sound& sound);
     bool isPlaying(const Sound& sound);
+    void seekSound(const Sound& sound, float seconds);
+
+    // Fire-and-forget: plays an overlapping copy of the sound (polyphony); the
+    // copy is cleaned up automatically when it finishes.
+    void playSoundMulti(const Sound& sound);
 
     void masterVolume(float volume);
     float getMasterVolume();

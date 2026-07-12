@@ -97,8 +97,8 @@ public:
         setWindowTitle("p5cpp - Custom Effects");
         frameRate(60);
 
-        vignetteShader = Shader(std::shared_ptr<ShaderImpl>(loadEffectShader(vignetteSource).release()));
-        pixelateShader = Shader(std::shared_ptr<ShaderImpl>(loadEffectShader(pixelateSource).release()));
+        vignetteShader = loadEffectShader(vignetteSource);
+        pixelateShader = loadEffectShader(pixelateSource);
     }
 
     void event(const WindowEvent& e) override

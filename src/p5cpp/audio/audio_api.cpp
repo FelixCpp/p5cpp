@@ -22,13 +22,22 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    Sound loadSound(const std::filesystem::path& soundFilePath) { return Sound(loadSoundImpl(getAudioComponent().getEngine(), soundFilePath)); }
-    Sound loadSound(std::span<const uint8_t> soundData) { return Sound(loadSoundImpl(getAudioComponent().getEngine(), soundData)); }
+    Sound loadSound(const std::filesystem::path& soundFilePath) { return Sound(loadSoundImpl(getAudioComponent(), soundFilePath, false)); }
+    Sound loadSound(std::span<const uint8_t> soundData) { return Sound(loadSoundImpl(getAudioComponent(), soundData)); }
+    Sound loadMusic(const std::filesystem::path& musicFilePath) { return Sound(loadSoundImpl(getAudioComponent(), musicFilePath, true)); }
+    Sound createSound(std::span<const float> samples, uint32_t sampleRate, uint32_t channels) { return Sound(createSoundImpl(getAudioComponent(), samples, sampleRate, channels)); }
+
+    AudioSamples loadAudioSamples(const std::filesystem::path& soundFilePath) { return decodeAudioSamples(soundFilePath); }
+    AudioSamples loadAudioSamples(std::span<const uint8_t> soundData) { return decodeAudioSamples(soundData); }
+
+    AudioStream createAudioStream(uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback) { return AudioStream(createAudioStreamImpl(getAudioComponent(), sampleRate, channels, std::move(callback))); }
 
     void playSound(const Sound& sound) { sound.play(); }
     void stopSound(const Sound& sound) { sound.stop(); }
     void pauseSound(const Sound& sound) { sound.pause(); }
     bool isPlaying(const Sound& sound) { return sound.isPlaying(); }
+    void seekSound(const Sound& sound, float seconds) { sound.seek(seconds); }
+    void playSoundMulti(const Sound& sound) { getAudioComponent().playMulti(sound); }
 
     void masterVolume(float volume) { getAudioComponent().setMasterVolume(volume); }
     float getMasterVolume() { return getAudioComponent().getMasterVolume(); }

@@ -47,7 +47,7 @@ jobs:
       - name: Verify example binaries (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          for example in demo audio_demo furier_series breakout gravitas gravitas_ai molds steering_behavior thetower predator_and_prey lkas text_wrapping custom_effects; do
+          for example in demo audio_demo audio_playground furier_series breakout gravitas gravitas_ai molds steering_behavior thetower predator_and_prey lkas text_wrapping custom_effects; do
             bin="build/examples/${example}/${example}"
             if [ ! -f "$bin" ]; then
               echo "❌ Missing binary: $bin"
@@ -60,7 +60,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $examples = @("demo","audio_demo","breakout","furier_series","gravitas","gravitas_ai","molds","steering_behavior","thetower","predator_and_prey","lkas","text_wrapping","custom_effects")
+          $examples = @("demo","audio_demo","audio_playground","breakout","furier_series","gravitas","gravitas_ai","molds","steering_behavior","thetower","predator_and_prey","lkas","text_wrapping","custom_effects")
           foreach ($ex in $examples) {
             $bin = "build\examples\$ex\Release\$ex.exe"
             if (-Not (Test-Path $bin)) {
