@@ -68,6 +68,17 @@ namespace p5cpp
     };
 
     std::unique_ptr<ShaderImpl> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+
+    // Compiles a custom full-screen post-processing effect from a small GLSL snippet,
+    // for use with effect(). Unlike loadShader(), the caller does not need to write a
+    // vertex shader or the multi-texture sampling boilerplate — `effectSource` only has
+    // to define:
+    //
+    //     vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex)
+    //
+    // `tex` is the canvas contents before the effect runs, `uv` is the texture coordinate
+    // to sample/output for, and `texelSize` is (1/width, 1/height) of the current canvas.
+    std::unique_ptr<ShaderImpl> loadEffectShader(std::string_view effectSource);
 } // namespace p5cpp
 
 namespace p5cpp

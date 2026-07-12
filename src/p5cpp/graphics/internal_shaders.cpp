@@ -176,3 +176,53 @@ namespace p5cpp
         return loadShader(defaultVSource, blurFSource);
     }
 } // namespace p5cpp
+
+namespace p5cpp
+{
+    // Built via loadEffectShader() - the same helper user code uses for custom
+    // effects - so these built-in filters only need to define `effect()` too.
+    inline static constexpr const char* grayscaleSource = R"(
+        uniform float u_Amount;
+
+        vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex) {
+            vec4 c = texture(tex, uv);
+            float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+            return vec4(mix(c.rgb, vec3(luma), clamp(u_Amount, 0.0, 1.0)), c.a);
+        }
+    )";
+
+    std::unique_ptr<ShaderImpl> createGrayscaleShader()
+    {
+        return loadEffectShader(grayscaleSource);
+    }
+
+    inline static constexpr const char* invertSource = R"(
+        uniform float u_Amount;
+
+        vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex) {
+            vec4 c = texture(tex, uv);
+            return vec4(mix(c.rgb, 1.0 - c.rgb, clamp(u_Amount, 0.0, 1.0)), c.a);
+        }
+    )";
+
+    std::unique_ptr<ShaderImpl> createInvertShader()
+    {
+        return loadEffectShader(invertSource);
+    }
+
+    inline static constexpr const char* thresholdSource = R"(
+        uniform float u_Amount;
+
+        vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex) {
+            vec4 c = texture(tex, uv);
+            float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+            float v = step(u_Amount, luma);
+            return vec4(vec3(v), c.a);
+        }
+    )";
+
+    std::unique_ptr<ShaderImpl> createThresholdShader()
+    {
+        return loadEffectShader(thresholdSource);
+    }
+} // namespace p5cpp

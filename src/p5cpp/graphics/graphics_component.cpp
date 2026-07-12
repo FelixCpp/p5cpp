@@ -113,6 +113,9 @@ namespace p5cpp
         m_defaultShader = Shader(std::shared_ptr<ShaderImpl>(createPrimitiveShader()));
         m_textShader = Shader(std::shared_ptr<ShaderImpl>(createTextShader()));
         m_blurShader = Shader(std::shared_ptr<ShaderImpl>(createBlurShader()));
+        m_grayscaleShader = Shader(std::shared_ptr<ShaderImpl>(createGrayscaleShader()));
+        m_invertShader = Shader(std::shared_ptr<ShaderImpl>(createInvertShader()));
+        m_thresholdShader = Shader(std::shared_ptr<ShaderImpl>(createThresholdShader()));
 
         const color_t white = rgba(255, 255, 255, 255);
         m_whiteTexture = Texture(loadTexture(1, 1, &white));
@@ -1092,6 +1095,15 @@ namespace p5cpp
             case FilterType::blur:
                 applyBlur(amount);
                 break;
+            case FilterType::grayscale:
+                applyGrayscale(amount);
+                break;
+            case FilterType::invert:
+                applyInvert(amount);
+                break;
+            case FilterType::threshold:
+                applyThreshold(amount);
+                break;
         }
     }
 
@@ -1105,6 +1117,10 @@ namespace p5cpp
         Framebuffer& current = m_framebufferStack.back();
         const uint2 size = current.getSize();
         ensureEffectScratch(size);
+
+        const float texelX = (size.x > 0) ? (1.0f / static_cast<float>(size.x)) : 0.0f;
+        const float texelY = (size.y > 0) ? (1.0f / static_cast<float>(size.y)) : 0.0f;
+        m_uniformCache.setUniform(shader, "u_TexelSize", uniform(texelX, texelY));
 
         runEffectPass(current, m_effectScratchFramebuffers[0], shader);
         blitFramebuffer(m_effectScratchFramebuffers[0], current);
@@ -1139,6 +1155,24 @@ namespace p5cpp
         blitFramebuffer(m_effectScratchFramebuffers[1], current);
 
         m_renderer->begin(current);
+    }
+
+    void GraphicsComponent::applyGrayscale(float amount)
+    {
+        m_uniformCache.setUniform(m_grayscaleShader, "u_Amount", uniform(amount));
+        effect(m_grayscaleShader);
+    }
+
+    void GraphicsComponent::applyInvert(float amount)
+    {
+        m_uniformCache.setUniform(m_invertShader, "u_Amount", uniform(amount));
+        effect(m_invertShader);
+    }
+
+    void GraphicsComponent::applyThreshold(float amount)
+    {
+        m_uniformCache.setUniform(m_thresholdShader, "u_Amount", uniform(amount));
+        effect(m_thresholdShader);
     }
 
     void GraphicsComponent::ensureEffectScratch(uint2 size)

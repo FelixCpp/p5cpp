@@ -106,6 +106,9 @@ namespace p5cpp
         void submitStroke(const PathPoints& pts, ShapeType type, bool close);
 
         void applyBlur(float amount);
+        void applyGrayscale(float amount);
+        void applyInvert(float amount);
+        void applyThreshold(float amount);
         void ensureEffectScratch(uint2 size);
         void runEffectPass(const Framebuffer& source, const Framebuffer& dest, const Shader& shader);
         static void blitFramebuffer(const Framebuffer& source, const Framebuffer& dest);
@@ -146,6 +149,9 @@ namespace p5cpp
         Shader m_defaultShader;
         Shader m_textShader;
         Shader m_blurShader;
+        Shader m_grayscaleShader;
+        Shader m_invertShader;
+        Shader m_thresholdShader;
         std::array<Framebuffer, 2> m_effectScratchFramebuffers;
         uint2 m_effectScratchSize {0, 0};
         Texture m_whiteTexture;
