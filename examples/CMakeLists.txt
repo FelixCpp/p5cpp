@@ -1,5 +1,6 @@
 add_subdirectory(demo)
 add_subdirectory(rotating_blocks)
+add_subdirectory(connected_particles)
 add_subdirectory(audio_demo)
 add_subdirectory(audio_playground)
 add_subdirectory(gravitas)

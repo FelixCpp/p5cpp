@@ -9,7 +9,7 @@ namespace p5cpp
           m_globalTime(0.0f),
           m_framesPerSecond(0.0f),
           m_frameCount(0),
-          m_targetFrameRate(60),
+          m_targetFrameRate(120),
           m_closeRequested(false),
           m_isPaused(false),
           m_exitCode(0),
