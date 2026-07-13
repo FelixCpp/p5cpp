@@ -25,10 +25,11 @@ namespace p5cpp
             context.registerService<Engine>(this);
 
             setupModules();
+            buildDrawChain();
 
             FrameComponent& frameData = context.require<FrameComponent>();
             while (not frameData.isCloseRequested()) {
-                drawModules();
+                m_drawChain();
             }
 
             destroyModules();
@@ -51,15 +52,23 @@ namespace p5cpp
             });
         }
 
-        void drawModules(size_t i = 0)
+        // Builds the fixed draw dispatch chain once (the module list never changes
+        // after setup), instead of reconstructing a std::function closure per module
+        // on every single frame. Folding from the last module backward means each
+        // closure captures the already-built Next for the rest of the chain by
+        // value, producing the exact same onion call structure as the recursive
+        // version — modules can still act before *and* after calling next().
+        void buildDrawChain()
         {
-            if (i >= modules.size()) {
-                return;
+            Next chain = []() {};
+            for (size_t i = modules.size(); i-- > 0; ) {
+                Module* module = modules[i].get();
+                Next inner = std::move(chain);
+                chain = [this, module, inner]() {
+                    module->draw(context, inner);
+                };
             }
-
-            modules[i]->draw(context, [this, i]() {
-                drawModules(i + 1);
-            });
+            m_drawChain = std::move(chain);
         }
 
         void destroyModules(size_t i = 0)
@@ -86,6 +95,7 @@ namespace p5cpp
 
         AppContext context;
         std::vector<std::unique_ptr<Module>> modules;
+        Next m_drawChain;
     };
 } // namespace p5cpp
 

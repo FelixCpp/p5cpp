@@ -912,11 +912,50 @@ namespace p5cpp
     };
 } // namespace p5cpp
 
+namespace
+{
+    // Forwards every call to a shared, already-loaded FontImpl so that repeated
+    // loadFont(path) calls for the same file can return a lightweight handle
+    // instead of re-running FT_New_Face, while still handing back a genuinely
+    // unique_ptr-owned object at each call site (loadFont()'s return type can't
+    // change). FontImpl is read-only after construction, so aliasing is safe.
+    class SharedFontImpl : public p5cpp::FontImpl
+    {
+    public:
+        explicit SharedFontImpl(std::shared_ptr<p5cpp::FontImpl> shared) : m_shared(std::move(shared)) {}
+
+        const p5cpp::Glyph* getGlyph(char32_t codepoint, int textSize) override { return m_shared->getGlyph(codepoint, textSize); }
+        const p5cpp::FontMetrics* getMetrics(int textSize) override { return m_shared->getMetrics(textSize); }
+        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override { return m_shared->getKerning(leftCodepoint, rightCodepoint, textSize); }
+        const p5cpp::Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override { return m_shared->getGlyphAtlasTexture(glyphAtlasIndex); }
+        std::vector<p5cpp::ShapedGlyph> shape(std::string_view text, int textSize) override { return m_shared->shape(text, textSize); }
+
+    private:
+        std::shared_ptr<p5cpp::FontImpl> m_shared;
+    };
+
+    std::unordered_map<std::string, std::weak_ptr<p5cpp::FontImpl>> s_fontCache;
+} // namespace
+
 namespace p5cpp
 {
     std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath)
     {
-        return FreetypeFont::loadFromFile(fontFilePath);
+        const std::string key = fontFilePath.string();
+
+        if (const auto it = s_fontCache.find(key); it != s_fontCache.end()) {
+            if (std::shared_ptr<FontImpl> cached = it->second.lock()) {
+                return std::make_unique<SharedFontImpl>(std::move(cached));
+            }
+        }
+
+        std::shared_ptr<FontImpl> fresh = FreetypeFont::loadFromFile(fontFilePath);
+        if (!fresh) {
+            return nullptr;
+        }
+
+        s_fontCache[key] = fresh;
+        return std::make_unique<SharedFontImpl>(std::move(fresh));
     }
 
     std::unique_ptr<FontImpl> loadFont(std::span<const uint8_t> fontData)

@@ -566,16 +566,17 @@ namespace p5cpp
         if (rs.strokeCap.start == StrokeCapStyle::round) {
             const size_t segments = computeCircleSegmentCount(TWO_PI, halfSize);
             const std::vector<float2>& unitCircle = unitCircleTableCache.getFullCircle(segments);
-            std::vector<float2> positions(segments + 2);
-            std::vector<float2> uvs(segments + 2, float2::zero);
-            std::vector<color_t> colors(segments + 2, rs.strokeColor);
+            const size_t fanCount = segments + 2;
+            m_pointFanPositions.resize(fanCount);
+            m_pointFanUVs.assign(fanCount, float2::zero);
+            m_pointFanColors.assign(fanCount, rs.strokeColor);
 
-            positions[0] = center;
+            m_pointFanPositions[0] = center;
             for (size_t i = 0; i <= segments; ++i) {
-                positions[1 + i] = center + unitCircle[i] * halfSize;
+                m_pointFanPositions[1 + i] = center + unitCircle[i] * halfSize;
             }
 
-            submitFill(PathPoints {segments + 2, positions, uvs, colors}, ShapeType::triangleFan, m_whiteTexture);
+            submitFill(PathPoints {fanCount, m_pointFanPositions, m_pointFanUVs, m_pointFanColors}, ShapeType::triangleFan, m_whiteTexture);
         } else {
             const float2 positions[4] = {
                 {center.x - halfSize, center.y - halfSize},
@@ -612,46 +613,46 @@ namespace p5cpp
         const matrix4x4& mtx = m_matrixStack.peek();
 
         // Arc perimeter points
-        std::vector<float2> arcPositions(segments + 1);
+        m_arcPositions.resize(segments + 1);
         for (size_t i = 0; i <= segments; ++i) {
             const float t = static_cast<float>(i) / static_cast<float>(segments);
             const float angle = startAngle + sweepAngle * t;
-            arcPositions[i] = mtx.transformPoint(cx + std::cos(angle) * rx, cy + std::sin(angle) * ry);
+            m_arcPositions[i] = mtx.transformPoint(cx + std::cos(angle) * rx, cy + std::sin(angle) * ry);
         }
 
         const float2 centerPos = mtx.transformPoint(cx, cy);
 
         if (!rs.isFillDisabled) {
-            std::vector<float2> fillPositions;
+            m_arcFillPositions.clear();
             if (arcMode == ArcMode::pie) {
-                fillPositions.reserve(segments + 3);
-                fillPositions.push_back(centerPos);
-                fillPositions.insert(fillPositions.end(), arcPositions.begin(), arcPositions.end());
+                m_arcFillPositions.reserve(segments + 3);
+                m_arcFillPositions.push_back(centerPos);
+                m_arcFillPositions.insert(m_arcFillPositions.end(), m_arcPositions.begin(), m_arcPositions.end());
             } else {
-                fillPositions = arcPositions;
+                m_arcFillPositions = m_arcPositions;
             }
-            std::vector<float2> fillUVs(fillPositions.size(), float2::zero);
-            std::vector<color_t> fillColors(fillPositions.size(), rs.fillColor);
-            submitFill(PathPoints {fillPositions.size(), fillPositions, fillUVs, fillColors}, ShapeType::polygon, m_whiteTexture);
+            m_arcFillUVs.assign(m_arcFillPositions.size(), float2::zero);
+            m_arcFillColors.assign(m_arcFillPositions.size(), rs.fillColor);
+            submitFill(PathPoints {m_arcFillPositions.size(), m_arcFillPositions, m_arcFillUVs, m_arcFillColors}, ShapeType::polygon, m_whiteTexture);
         }
 
         if (!rs.isStrokeDisabled) {
-            std::vector<float2> arcUVs(arcPositions.size(), float2::zero);
-            std::vector<color_t> arcColors(arcPositions.size(), rs.strokeColor);
-            const PathPoints arcPts {arcPositions.size(), arcPositions, arcUVs, arcColors};
+            m_arcStrokeUVs.assign(m_arcPositions.size(), float2::zero);
+            m_arcStrokeColors.assign(m_arcPositions.size(), rs.strokeColor);
+            const PathPoints arcPts {m_arcPositions.size(), m_arcPositions, m_arcStrokeUVs, m_arcStrokeColors};
 
             if (arcMode == ArcMode::open) {
                 submitStroke(arcPts, ShapeType::lineStrip, false);
             } else if (arcMode == ArcMode::chord) {
                 submitStroke(arcPts, ShapeType::lineLoop, true);
             } else { // pie
-                std::vector<float2> piePts;
-                piePts.reserve(arcPositions.size() + 2);
-                piePts.push_back(centerPos);
-                piePts.insert(piePts.end(), arcPositions.begin(), arcPositions.end());
-                std::vector<float2> pieUVs(piePts.size(), float2::zero);
-                std::vector<color_t> pieColors(piePts.size(), rs.strokeColor);
-                submitStroke(PathPoints {piePts.size(), piePts, pieUVs, pieColors}, ShapeType::polygon, true);
+                m_arcPiePositions.clear();
+                m_arcPiePositions.reserve(m_arcPositions.size() + 2);
+                m_arcPiePositions.push_back(centerPos);
+                m_arcPiePositions.insert(m_arcPiePositions.end(), m_arcPositions.begin(), m_arcPositions.end());
+                m_arcPieUVs.assign(m_arcPiePositions.size(), float2::zero);
+                m_arcPieColors.assign(m_arcPiePositions.size(), rs.strokeColor);
+                submitStroke(PathPoints {m_arcPiePositions.size(), m_arcPiePositions, m_arcPieUVs, m_arcPieColors}, ShapeType::polygon, true);
             }
         }
     }

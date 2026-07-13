@@ -51,9 +51,7 @@ namespace p5cpp
             const float sleepDuration = desiredFrameTime - frameDuration;
 
             if (sleepDuration > 0.0f) {
-                const auto sleepTimeInMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<float>(sleepDuration));
-                const auto timestampToWaitUntil = frameEndTimestamp + sleepTimeInMilliseconds;
-
+                const auto timestampToWaitUntil = frameEndTimestamp + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(sleepDuration));
                 precise_sleep_until(timestampToWaitUntil);
             }
         }

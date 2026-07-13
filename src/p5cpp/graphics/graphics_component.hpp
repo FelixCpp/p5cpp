@@ -141,6 +141,22 @@ namespace p5cpp
         std::vector<float2> m_curveUVs;
         std::vector<color_t> m_curveColors;
 
+        // point() round-cap fan (center + perimeter, mirrors m_ellipseFan*).
+        std::vector<float2> m_pointFanPositions;
+        std::vector<float2> m_pointFanUVs;
+        std::vector<color_t> m_pointFanColors;
+
+        // arc() scratch buffers.
+        std::vector<float2> m_arcPositions;
+        std::vector<float2> m_arcFillPositions;
+        std::vector<float2> m_arcFillUVs;
+        std::vector<color_t> m_arcFillColors;
+        std::vector<float2> m_arcStrokeUVs;
+        std::vector<color_t> m_arcStrokeColors;
+        std::vector<float2> m_arcPiePositions;
+        std::vector<float2> m_arcPieUVs;
+        std::vector<color_t> m_arcPieColors;
+
         std::vector<Framebuffer> m_framebufferStack;
         Framebuffer m_defaultFramebuffer;
 

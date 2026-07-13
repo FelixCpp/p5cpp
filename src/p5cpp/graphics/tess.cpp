@@ -25,6 +25,17 @@ namespace p5cpp
 namespace p5cpp
 {
     thread_local std::vector<uint32_t> s_tess_local;
+
+    // Reused across tesselate_polygon() calls to avoid allocating/freeing a full
+    // TESStesselator (with internal mempools) on every polygon fill. libtess2 resets
+    // tess->mesh to null on a successful tessTesselate(), so the handle is designed
+    // to be reused via repeated tessAddContour()/tessTesselate() cycles.
+    struct PooledTess
+    {
+        TESStesselator* tess = tessNewTess(nullptr);
+        ~PooledTess() { tessDeleteTess(tess); }
+    };
+    thread_local PooledTess s_pooled_tess;
 } // namespace p5cpp
 
 namespace p5cpp
@@ -122,12 +133,16 @@ namespace p5cpp
         const size_t n = points.size;
         if (n < 3) return;
 
-        TESStesselator* tess = tessNewTess(nullptr);
+        TESStesselator* tess = s_pooled_tess.tess;
 
         tessAddContour(tess, 2, points.positions.data(), static_cast<int>(sizeof(float2)), static_cast<int>(n));
 
         if (!tessTesselate(tess, TESS_WINDING_NONZERO, TESS_POLYGONS, 3, 2, nullptr)) {
+            // tessTesselate() failed via its internal longjmp path without resetting
+            // tess->mesh, so the pooled instance is left in a half-built state — fully
+            // recycle it rather than risk corrupting the next call.
             tessDeleteTess(tess);
+            s_pooled_tess.tess = tessNewTess(nullptr);
             return;
         }
 
@@ -162,8 +177,6 @@ namespace p5cpp
             if (a == TESS_UNDEF || b == TESS_UNDEF || c == TESS_UNDEF) continue;
             draw_scope_push_triangle(writer, s_tess_local[a], s_tess_local[b], s_tess_local[c]);
         }
-
-        tessDeleteTess(tess);
     }
 } // namespace p5cpp
 

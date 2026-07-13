@@ -46,6 +46,10 @@ Each subsystem (application, graphics, ...) is split into three layers:
 
 When adding a new public API function: add the declaration to the appropriate header under `include/p5cpp/`, implement the logic on the relevant `*Component`, and add a one-line forwarding definition in the matching `*_api.cpp`.
 
+### Resource loading
+
+`loadFont()`/`loadShader()` (`src/p5cpp/graphics/font.cpp`, `shader.cpp`) cache by path/source: calling the same load function again with the same arguments while a previous handle from that call is still alive returns a new lightweight handle sharing the same underlying parsed font / compiled shader program, instead of reloading from disk or recompiling. This is transparent for these read-only resource types (no per-instance mutable state), but it does mean two `Font`/`Shader` values built from the same path/source are now aliases of one underlying resource. `loadImage()`/`loadTexture()` are deliberately **not** cached this way, since `Texture::upload()` is mutable and aliasing would make one texture's pixel upload silently visible through another.
+
 ### Sketch entry point
 
 User code implements `p5cpp::Sketch` (`include/p5cpp/application/sketch.hpp`) and defines `p5cpp::createSketch()`, which `SketchModule` calls once during `setup`. `Sketch::plugins(Engine&)` is the extension point for registering additional custom `Module`s before the sketch itself runs (see the "Custom Engine Modules" section of README.md for an example — e.g. a shared `TimerModule` other modules/sketches can `require<T>()` from `AppContext`).

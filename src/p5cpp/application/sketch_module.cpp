@@ -26,6 +26,8 @@ namespace p5cpp
 
         context.registerService(sketch.get());
 
+        buildDrawChain(context);
+
         setupPreModules(context, next);
     }
 
@@ -86,32 +88,41 @@ namespace p5cpp
 
     void SketchModule::draw(AppContext& context, Next next)
     {
-        drawPreModules(context, next);
+        m_drawNext = std::move(next);
+        m_drawChain();
     }
 
-    void SketchModule::drawPreModules(AppContext& context, Next next, size_t i)
+    void SketchModule::buildDrawChain(AppContext& context)
     {
-        if (i >= m_preModules.size()) {
+        // Terminal step: invoke whatever outer continuation the current frame's
+        // draw() call was given (read live, not captured, since it changes per call).
+        Next chain = [this]() {
+            m_drawNext();
+        };
+
+        for (size_t i = m_postModules.size(); i-- > 0; ) {
+            Module* module = m_postModules[i].get();
+            Next inner = std::move(chain);
+            chain = [this, &context, module, inner]() {
+                module->draw(context, inner);
+            };
+        }
+
+        Next afterPreModules = [this, postChain = std::move(chain)]() {
             sketch->draw();
-            drawPostModules(context, next);
-            return;
+            postChain();
+        };
+
+        Next fullChain = std::move(afterPreModules);
+        for (size_t i = m_preModules.size(); i-- > 0; ) {
+            Module* module = m_preModules[i].get();
+            Next inner = std::move(fullChain);
+            fullChain = [this, &context, module, inner]() {
+                module->draw(context, inner);
+            };
         }
 
-        m_preModules[i]->draw(context, [this, &context, next, i]() {
-            drawPreModules(context, next, i + 1);
-        });
-    }
-
-    void SketchModule::drawPostModules(AppContext& context, Next next, size_t i)
-    {
-        if (i >= m_postModules.size()) {
-            next();
-            return;
-        }
-
-        m_postModules[i]->draw(context, [this, &context, next, i]() {
-            drawPostModules(context, next, i + 1);
-        });
+        m_drawChain = std::move(fullChain);
     }
 
     void SketchModule::destroy(AppContext& context, Next next)

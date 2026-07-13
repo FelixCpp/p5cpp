@@ -11,7 +11,11 @@ namespace p5cpp
 {
     GraphicsComponent& getGraphicsComponent()
     {
-        return engine->getContext().require<GraphicsComponent>();
+        static GraphicsComponent* s_graphicsComponent = nullptr;
+        if (s_graphicsComponent == nullptr) {
+            s_graphicsComponent = &engine->getContext().require<GraphicsComponent>();
+        }
+        return *s_graphicsComponent;
     }
 } // namespace p5cpp
 

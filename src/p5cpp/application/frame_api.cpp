@@ -13,7 +13,11 @@ namespace p5cpp
 {
     inline static FrameComponent& getFrameComponent()
     {
-        return engine->getContext().require<FrameComponent>();
+        static FrameComponent* s_frameComponent = nullptr;
+        if (s_frameComponent == nullptr) {
+            s_frameComponent = &engine->getContext().require<FrameComponent>();
+        }
+        return *s_frameComponent;
     }
 } // namespace p5cpp
 

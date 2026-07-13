@@ -22,8 +22,7 @@ namespace p5cpp
         void setupPreModules(AppContext& context, Next next, size_t i = 0);
         void setupPostModules(AppContext& context, Next next, size_t i = 0);
 
-        void drawPreModules(AppContext& context, Next next, size_t i = 0);
-        void drawPostModules(AppContext& context, Next next, size_t i = 0);
+        void buildDrawChain(AppContext& context);
 
         void eventPreModules(AppContext& context, WindowEvent& event, Next next, size_t i = 0);
         void eventPostModules(AppContext& context, WindowEvent& event, Next next, size_t i = 0);
@@ -34,5 +33,12 @@ namespace p5cpp
         std::unique_ptr<Sketch> sketch;
         std::vector<std::unique_ptr<Module>> m_preModules;
         std::vector<std::unique_ptr<Module>> m_postModules;
+
+        // Fixed pre-modules -> sketch->draw() -> post-modules chain, built once
+        // (see buildDrawChain) instead of reconstructed every frame. m_drawNext
+        // holds the current frame's outer continuation, read by the chain's
+        // terminal step at invocation time.
+        Next m_drawChain;
+        Next m_drawNext;
     };
 } // namespace p5cpp

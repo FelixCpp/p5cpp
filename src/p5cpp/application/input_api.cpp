@@ -11,7 +11,11 @@ namespace p5cpp
 {
     InputComponent& getInputComponent()
     {
-        return engine->getContext().require<InputComponent>();
+        static InputComponent* s_inputComponent = nullptr;
+        if (s_inputComponent == nullptr) {
+            s_inputComponent = &engine->getContext().require<InputComponent>();
+        }
+        return *s_inputComponent;
     }
 } // namespace p5cpp
 

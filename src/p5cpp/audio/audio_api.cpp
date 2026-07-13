@@ -16,7 +16,11 @@ namespace p5cpp
 {
     AudioComponent& getAudioComponent()
     {
-        return engine->getContext().require<AudioComponent>();
+        static AudioComponent* s_audioComponent = nullptr;
+        if (s_audioComponent == nullptr) {
+            s_audioComponent = &engine->getContext().require<AudioComponent>();
+        }
+        return *s_audioComponent;
     }
 } // namespace p5cpp
 

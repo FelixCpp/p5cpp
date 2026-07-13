@@ -11,7 +11,14 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    Window& getWindow() { return engine->getContext().require<Window>(); }
+    Window& getWindow()
+    {
+        static Window* s_window = nullptr;
+        if (s_window == nullptr) {
+            s_window = &engine->getContext().require<Window>();
+        }
+        return *s_window;
+    }
 } // namespace p5cpp
 
 namespace p5cpp
