@@ -194,10 +194,22 @@ namespace
         }
     )";
 
+    inline constexpr const char* vignetteSource = R"(
+        uniform float u_Strength;
+
+        vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex) {
+            vec4 c = texture(tex, uv);
+            vec2 centered = uv - 0.5;
+            float vignette = 1.0 - dot(centered, centered) * u_Strength;
+            return vec4(c.rgb * clamp(vignette, 0.0, 1.0), c.a);
+        }
+    )";
+
     struct ConnectedParticleSketch : Sketch
     {
         std::unique_ptr<ParticleSystem> particleSystem;
         Shader pixelateShader;
+        Shader vignetteShader;
         bool isMouseDown;
 
         void setup() override
@@ -207,9 +219,10 @@ namespace
             frameRate(144.0f);
 
             pixelateShader = loadEffectShader(pixelateSource);
+            vignetteShader = loadEffectShader(vignetteSource);
 
             // s_colorizer = std::make_unique<GlobalHueColorizer>();
-            s_colorizer = std::make_unique<PositionBasedColorizer>();
+            s_colorizer = std::make_unique<GlobalHueColorizer>();
             particleSystem = std::make_unique<ParticleSystem>(10);
             isMouseDown = false;
         }
@@ -251,7 +264,10 @@ namespace
             particleSystem->update(getDeltaTime());
             particleSystem->show();
 
-            setUniform(pixelateShader, "u_BlockSize", uniform(3.0f));
+            setUniform(vignetteShader, "u_Strength", uniform(2.5f));
+            effect(vignetteShader);
+
+            setUniform(pixelateShader, "u_BlockSize", uniform(0.25f));
             effect(pixelateShader);
 
             blendMode(BlendMode::alpha);
