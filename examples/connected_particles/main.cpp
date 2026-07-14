@@ -61,6 +61,206 @@ namespace
 
     inline static std::unique_ptr<Colorizer> s_colorizer;
 
+    template <typename T>
+    struct QuadTreePoint
+    {
+        float x;
+        float y;
+        T* userData;
+
+        explicit QuadTreePoint(const float2& position, T* userData)
+            : x(position.x), y(position.y), userData(userData)
+        {
+        }
+    };
+
+    struct QuadTreeBoundary
+    {
+        float left;
+        float top;
+        float width;
+        float height;
+
+        explicit QuadTreeBoundary(float x, float y, float width, float height)
+            : left(x), top(y), width(width), height(height)
+        {
+        }
+
+        bool contains(float px, float py) const
+        {
+            return (px >= left && px <= left + width && py >= top && py <= top + height);
+        }
+    };
+
+    template <typename T>
+    concept QuadTreeQueryShape = requires(const T& shape, const QuadTreePoint<T>& point, const QuadTreeBoundary& boundary) {
+        { shape.contains(point) } -> std::convertible_to<bool>;
+        { shape.intersects(boundary) } -> std::convertible_to<bool>;
+    };
+
+    struct QuadTreeQueryRect
+    {
+        float x;
+        float y;
+        float width;
+        float height;
+
+        explicit QuadTreeQueryRect(const float2& position, const float2& size)
+            : x(position.x), y(position.y), width(size.x), height(size.y)
+        {
+        }
+
+        template <typename T>
+        bool contains(const QuadTreePoint<T>& point) const
+        {
+            return (point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height);
+        }
+
+        bool intersects(const QuadTreeBoundary& boundary) const
+        {
+            return not(boundary.left > x + width || boundary.left + boundary.width < x || boundary.top > y + height || boundary.top + boundary.height < y);
+        }
+    };
+
+    struct QuadTreeQueryCircle
+    {
+        float x;
+        float y;
+        float radius;
+
+        explicit QuadTreeQueryCircle(const float2& position, float radius)
+            : x(position.x), y(position.y), radius(radius)
+        {
+        }
+
+        template <typename T>
+        bool contains(const QuadTreePoint<T>& point) const
+        {
+            const float dx = point.x - x;
+            const float dy = point.y - y;
+            return (dx * dx + dy * dy) <= (radius * radius);
+        }
+
+        bool intersects(const QuadTreeBoundary& boundary) const
+        {
+            const float closestX = std::clamp(x, boundary.left, boundary.left + boundary.width);
+            const float closestY = std::clamp(y, boundary.top, boundary.top + boundary.height);
+            const float dx = x - closestX;
+            const float dy = y - closestY;
+            return (dx * dx + dy * dy) <= (radius * radius);
+        }
+    };
+
+    template <typename T>
+    class QuadTree
+    {
+    public:
+        explicit QuadTree(const QuadTreeBoundary& boundary, size_t capacity)
+            : boundary(boundary), isSubdivided(false), capacity(capacity)
+        {
+        }
+
+        void reset()
+        {
+            points.clear();
+            isSubdivided = false;
+            topLeft.reset();
+            topRight.reset();
+            bottomRight.reset();
+            bottomLeft.reset();
+        }
+
+        std::vector<QuadTreePoint<T>> query(const QuadTreeQueryShape auto& shape) const
+        {
+            // Check if the current node's boundary intersects with the query shape
+            if (not shape.intersects(boundary)) {
+                return {}; // Return empty if no intersection
+            }
+
+            std::vector<QuadTreePoint<T>> foundPoints;
+
+            for (const auto& point : points) {
+                if (shape.contains(point)) {
+                    foundPoints.push_back(point);
+                }
+            }
+
+            if (isSubdivided) {
+                const auto topLeftPoints = topLeft->query(shape);
+                const auto topRightPoints = topRight->query(shape);
+                const auto bottomRightPoints = bottomRight->query(shape);
+                const auto bottomLeftPoints = bottomLeft->query(shape);
+
+                foundPoints.insert(foundPoints.end(), topLeftPoints.begin(), topLeftPoints.end());
+                foundPoints.insert(foundPoints.end(), topRightPoints.begin(), topRightPoints.end());
+                foundPoints.insert(foundPoints.end(), bottomRightPoints.begin(), bottomRightPoints.end());
+                foundPoints.insert(foundPoints.end(), bottomLeftPoints.begin(), bottomLeftPoints.end());
+            }
+
+            return foundPoints;
+        }
+
+        bool insert(const QuadTreePoint<T>& point)
+        {
+            if (not boundary.contains(point.x, point.y)) {
+                return false; // Point is out of bounds
+            }
+
+            const bool hasCapacity = points.size() < capacity;
+            if (hasCapacity) {
+                points.push_back(point);
+                return true;
+            }
+
+            if (not isSubdivided) {
+                subdivide();
+            }
+
+            if (topLeft->insert(point)) return true;
+            if (topRight->insert(point)) return true;
+            if (bottomRight->insert(point)) return true;
+            if (bottomLeft->insert(point)) return true;
+
+            return false;
+        }
+
+        void show() const
+        {
+            // Draw the current node's boundary
+            noFill();
+            stroke(255, 100);
+            rect(boundary.left, boundary.top, boundary.width, boundary.height);
+
+            if (isSubdivided) {
+                topLeft->show();
+                topRight->show();
+                bottomRight->show();
+                bottomLeft->show();
+            }
+        }
+
+    private:
+        void subdivide()
+        {
+            // Subdivide the current node into four quadrants
+            isSubdivided = true;
+            topLeft = std::make_unique<QuadTree<T>>(QuadTreeBoundary {boundary.left, boundary.top, boundary.width * 0.5f, boundary.height * 0.5f}, capacity);
+            topRight = std::make_unique<QuadTree<T>>(QuadTreeBoundary {boundary.left + boundary.width * 0.5f, boundary.top, boundary.width * 0.5f, boundary.height * 0.5f}, capacity);
+            bottomRight = std::make_unique<QuadTree<T>>(QuadTreeBoundary {boundary.left + boundary.width * 0.5f, boundary.top + boundary.height * 0.5f, boundary.width * 0.5f, boundary.height * 0.5f}, capacity);
+            bottomLeft = std::make_unique<QuadTree<T>>(QuadTreeBoundary {boundary.left, boundary.top + boundary.height * 0.5f, boundary.width * 0.5f, boundary.height * 0.5f}, capacity);
+        }
+
+        std::unique_ptr<QuadTree<T>> topLeft;
+        std::unique_ptr<QuadTree<T>> topRight;
+        std::unique_ptr<QuadTree<T>> bottomRight;
+        std::unique_ptr<QuadTree<T>> bottomLeft;
+        bool isSubdivided;
+        size_t capacity;
+
+        QuadTreeBoundary boundary;
+        std::vector<QuadTreePoint<T>> points;
+    };
+
     struct Particle
     {
         float2 position;
@@ -103,10 +303,11 @@ namespace
     struct ParticleSystem
     {
         std::vector<Particle> particles;
+        QuadTree<Particle> quadTree;
 
         explicit ParticleSystem(size_t particleCount)
+            : quadTree(QuadTreeBoundary {0.0f, 0.0f, (float)getPhysicalWidth(), (float)getPhysicalHeight()}, 4)
         {
-
             spawnParticles(
                 []() {
                     const auto width = getPhysicalWidth();
@@ -124,8 +325,8 @@ namespace
             particles.reserve(particles.size() + count);
             for (size_t i = 0; i < count; ++i) {
                 const float2 randomDirection = float2::randomUnit();
-                const float2 velocity = randomDirection * randomFloat(50.0f, 150.0f);
-                const float lifetimeInSeconds = randomFloat(1.0f, 5.0f);
+                const float2 velocity = randomDirection * randomFloat(10.0f, 30.0f);
+                const float lifetimeInSeconds = randomFloat(1.0f, 15.0f);
 
                 particles.emplace_back(getPosition(), velocity, lifetimeInSeconds);
             }
@@ -133,6 +334,8 @@ namespace
 
         void update(float deltaTime)
         {
+            quadTree.reset();
+
             for (Particle& particle : particles) {
                 particle.update(deltaTime);
 
@@ -144,37 +347,121 @@ namespace
                 }
             }
 
-            for (size_t i = 0; i < particles.size(); ++i) {
-                const Particle& particle = particles[i];
-                for (size_t j = i + 1; j < particles.size(); ++j) {
-                    const Particle& otherParticle = particles[j];
-
-                    const float distance = (particle.position - otherParticle.position).length();
-                    if (distance > 100.0f) continue;
-
-                    const float alpha = 1.0f - (distance / 100.0f);
-                    const float particleAlpha = (particle.getAlpha() * alpha) * 255.0f;
-                    const float otherParticleAlpha = (otherParticle.getAlpha() * alpha) * 255.0f;
-
-                    beginShape();
-                    stroke(withAlpha(particle.color, particleAlpha));
-                    vertex(particle.position.x, particle.position.y);
-                    stroke(withAlpha(otherParticle.color, otherParticleAlpha));
-                    vertex(otherParticle.position.x, otherParticle.position.y);
-                    endShape(ShapeType::lines, false);
-                }
-            }
-
             std::erase_if(particles, [](const Particle& particle) {
                 return not particle.isAlive();
             });
+
+            quadTree.reset();
+            for (Particle& particle : particles) {
+                quadTree.insert(QuadTreePoint<Particle>(particle.position, &particle));
+            }
+
+            // Repell from nearby particles
+            // for (size_t i = 0; i < particles.size(); ++i) {
+            //     Particle& particle = particles[i];
+            //     for (size_t j = i + 1; j < particles.size(); ++j) {
+            //         Particle& otherParticle = particles[j];
+            //
+            //         const float2 direction = particle.position - otherParticle.position;
+            //         const float distanceSquared = direction.lengthSquared();
+            //         const float minDistance = 50.0f;
+            //         const float minDistanceSquared = minDistance * minDistance;
+            //
+            //         if (distanceSquared < minDistanceSquared && distanceSquared > 0.0f) {
+            //             const float distance = std::sqrt(distanceSquared);
+            //             const float2 repulsionForce = direction / distance * (minDistance - distance) * 15.0f;
+            //             particle.velocity += repulsionForce * deltaTime;
+            //             otherParticle.velocity -= repulsionForce * deltaTime;
+            //         }
+            //     }
+            // }
+
+            // Repell from nearby particles using QuadTree
+            for (Particle& particle : particles) {
+                const float2 queryPosition = particle.position;
+                const float queryRadius = 50.0f;
+                const QuadTreeQueryCircle queryCircle(queryPosition, queryRadius);
+
+                // noFill();
+                // stroke(255, 50);
+                // circle(queryPosition.x, queryPosition.y, queryRadius * 2.0f);
+
+                const auto nearbyPoints = quadTree.query(queryCircle);
+                for (const auto& point : nearbyPoints) {
+                    Particle* otherParticle = point.userData;
+                    if (otherParticle == &particle) continue;
+
+                    const float2 direction = particle.position - otherParticle->position;
+                    const float distanceSquared = direction.lengthSquared();
+                    const float minDistance = 50.0f;
+                    const float minDistanceSquared = minDistance * minDistance;
+
+                    if (distanceSquared < minDistanceSquared && distanceSquared > 0.0f) {
+                        const float distance = std::sqrt(distanceSquared);
+                        const float2 repulsionForce = direction / distance * (minDistance - distance) * 5.0f;
+                        particle.velocity += repulsionForce * deltaTime;
+                        otherParticle->velocity -= repulsionForce * deltaTime;
+                    }
+                }
+            }
         }
 
         void show() const
         {
+            // for (size_t i = 0; i < particles.size(); ++i) {
+            //     const Particle& particle = particles[i];
+            //     for (size_t j = i + 1; j < particles.size(); ++j) {
+            //         const Particle& otherParticle = particles[j];
+            //
+            //         const float viewRadius = 100.0f;
+            //         const float distance = (particle.position - otherParticle.position).length();
+            //         if (distance > viewRadius) continue;
+            //
+            //         const float alpha = 1.0f - (distance / viewRadius);
+            //         const float particleAlpha = particle.getAlpha() * 255.0f * alpha;
+            //         const float otherParticleAlpha = otherParticle.getAlpha() * 255.0f * alpha;
+            //
+            //         beginShape();
+            //         stroke(withAlpha(particle.color, particleAlpha));
+            //         vertex(particle.position.x, particle.position.y);
+            //         stroke(withAlpha(otherParticle.color, otherParticleAlpha));
+            //         vertex(otherParticle.position.x, otherParticle.position.y);
+            //         endShape(ShapeType::lines, false);
+            //     }
+            // }
+
+            // Check for nearby particles using QuadTree
+            for (const Particle& particle : particles) {
+                const float2 queryPosition = particle.position;
+                const float queryRadius = 100.0f;
+                const QuadTreeQueryCircle queryCircle(queryPosition, queryRadius);
+
+                const auto nearbyPoints = quadTree.query(queryCircle);
+                for (const auto& point : nearbyPoints) {
+                    Particle* otherParticle = point.userData;
+                    if (otherParticle == &particle) continue;
+
+                    const float distance = (particle.position - otherParticle->position).length();
+                    if (distance > queryRadius) continue;
+
+                    const float alpha = 1.0f - (distance / queryRadius);
+                    const float particleAlpha = particle.getAlpha() * 255.0f * alpha;
+                    const float otherParticleAlpha = otherParticle->getAlpha() * 255.0f * alpha;
+
+                    beginShape();
+                    stroke(withAlpha(particle.color, particleAlpha));
+                    vertex(particle.position.x, particle.position.y);
+                    stroke(withAlpha(otherParticle->color, otherParticleAlpha));
+                    vertex(otherParticle->position.x, otherParticle->position.y);
+                    endShape(ShapeType::lines, false);
+                }
+            }
+
             for (const auto& particle : particles) {
                 particle.show();
             }
+
+            quadTree.show();
         }
 
         bool isOutOfSight(const float2& position) const
@@ -223,7 +510,7 @@ namespace
 
             // s_colorizer = std::make_unique<GlobalHueColorizer>();
             s_colorizer = std::make_unique<GlobalHueColorizer>();
-            particleSystem = std::make_unique<ParticleSystem>(10);
+            particleSystem = std::make_unique<ParticleSystem>(50);
             isMouseDown = false;
         }
 
@@ -248,7 +535,7 @@ namespace
             const bool isMouseDragging = (std::abs(mouseDragX) > dragThreshold) || (std::abs(mouseDragY) > dragThreshold);
 
             if (isMouseDown and isMouseDragging) {
-                const int newParticlesCount = std::sqrt(mouseDragX * mouseDragX + mouseDragY * mouseDragY) / 5;
+                const int newParticlesCount = std::sqrt(mouseDragX * mouseDragX + mouseDragY * mouseDragY) / 10;
 
                 particleSystem->spawnParticles(
                     []() {
