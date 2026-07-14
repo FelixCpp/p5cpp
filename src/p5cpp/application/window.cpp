@@ -127,7 +127,7 @@ namespace p5cpp
                 throw std::runtime_error("Failed to initialize GLAD");
             }
 
-            // glfwSwapInterval(1);
+            glfwSwapInterval(0);
             glfwSetWindowUserPointer(window, this);
 
             glfwSetWindowCloseCallback(window, &closeCallback);

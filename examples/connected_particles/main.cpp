@@ -228,7 +228,8 @@ namespace
         {
             // Draw the current node's boundary
             noFill();
-            stroke(255, 100);
+            stroke(255, 50);
+            strokeWeight(1.0f);
             rect(boundary.left, boundary.top, boundary.width, boundary.height);
 
             if (isSubdivided) {
@@ -300,6 +301,10 @@ namespace
         }
     };
 
+    class ParticleMovement
+    {
+    };
+
     struct ParticleSystem
     {
         std::vector<Particle> particles;
@@ -356,26 +361,6 @@ namespace
                 quadTree.insert(QuadTreePoint<Particle>(particle.position, &particle));
             }
 
-            // Repell from nearby particles
-            // for (size_t i = 0; i < particles.size(); ++i) {
-            //     Particle& particle = particles[i];
-            //     for (size_t j = i + 1; j < particles.size(); ++j) {
-            //         Particle& otherParticle = particles[j];
-            //
-            //         const float2 direction = particle.position - otherParticle.position;
-            //         const float distanceSquared = direction.lengthSquared();
-            //         const float minDistance = 50.0f;
-            //         const float minDistanceSquared = minDistance * minDistance;
-            //
-            //         if (distanceSquared < minDistanceSquared && distanceSquared > 0.0f) {
-            //             const float distance = std::sqrt(distanceSquared);
-            //             const float2 repulsionForce = direction / distance * (minDistance - distance) * 15.0f;
-            //             particle.velocity += repulsionForce * deltaTime;
-            //             otherParticle.velocity -= repulsionForce * deltaTime;
-            //         }
-            //     }
-            // }
-
             // Repell from nearby particles using QuadTree
             for (Particle& particle : particles) {
                 const float2 queryPosition = particle.position;
@@ -408,28 +393,6 @@ namespace
 
         void show() const
         {
-            // for (size_t i = 0; i < particles.size(); ++i) {
-            //     const Particle& particle = particles[i];
-            //     for (size_t j = i + 1; j < particles.size(); ++j) {
-            //         const Particle& otherParticle = particles[j];
-            //
-            //         const float viewRadius = 100.0f;
-            //         const float distance = (particle.position - otherParticle.position).length();
-            //         if (distance > viewRadius) continue;
-            //
-            //         const float alpha = 1.0f - (distance / viewRadius);
-            //         const float particleAlpha = particle.getAlpha() * 255.0f * alpha;
-            //         const float otherParticleAlpha = otherParticle.getAlpha() * 255.0f * alpha;
-            //
-            //         beginShape();
-            //         stroke(withAlpha(particle.color, particleAlpha));
-            //         vertex(particle.position.x, particle.position.y);
-            //         stroke(withAlpha(otherParticle.color, otherParticleAlpha));
-            //         vertex(otherParticle.position.x, otherParticle.position.y);
-            //         endShape(ShapeType::lines, false);
-            //     }
-            // }
-
             // Check for nearby particles using QuadTree
             for (const Particle& particle : particles) {
                 const float2 queryPosition = particle.position;
@@ -503,7 +466,7 @@ namespace
         {
             setWindowSize(1280, 720);
             setWindowTitle("Connected Particles");
-            frameRate(144.0f);
+            frameRate(60);
 
             pixelateShader = loadEffectShader(pixelateSource);
             vignetteShader = loadEffectShader(vignetteSource);
@@ -554,8 +517,8 @@ namespace
             setUniform(vignetteShader, "u_Strength", uniform(2.5f));
             effect(vignetteShader);
 
-            setUniform(pixelateShader, "u_BlockSize", uniform(0.25f));
-            effect(pixelateShader);
+            // setUniform(pixelateShader, "u_BlockSize", uniform(3.5f));
+            // effect(pixelateShader);
 
             blendMode(BlendMode::alpha);
             fill(255);
