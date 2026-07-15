@@ -12,7 +12,9 @@ namespace p5cpp
     GraphicsComponent& getGraphicsComponent()
     {
         static GraphicsComponent* s_graphicsComponent = nullptr;
-        if (s_graphicsComponent == nullptr) {
+        static Engine* s_engine = nullptr;
+        if (s_engine != engine.get()) {
+            s_engine = engine.get();
             s_graphicsComponent = &engine->getContext().require<GraphicsComponent>();
         }
         return *s_graphicsComponent;

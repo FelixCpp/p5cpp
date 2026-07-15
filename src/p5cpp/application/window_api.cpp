@@ -14,7 +14,9 @@ namespace p5cpp
     Window& getWindow()
     {
         static Window* s_window = nullptr;
-        if (s_window == nullptr) {
+        static Engine* s_engine = nullptr;
+        if (s_engine != engine.get()) {
+            s_engine = engine.get();
             s_window = &engine->getContext().require<Window>();
         }
         return *s_window;

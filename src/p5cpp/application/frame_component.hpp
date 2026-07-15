@@ -18,6 +18,7 @@ namespace p5cpp
         void quit();
         void quit(int exitCode);
         void exitCode(int exitCode);
+        void restart();
 
         bool isLooping() const;
         int getFrameCount() const;
@@ -25,6 +26,7 @@ namespace p5cpp
         float getDeltaTime() const;
         float getGlobalTime() const;
         bool isCloseRequested() const;
+        bool isRestartRequested() const;
 
     private:
         float m_deltaTime;
@@ -35,6 +37,7 @@ namespace p5cpp
         int m_targetFrameRate;
 
         bool m_closeRequested;
+        bool m_restartRequested;
         bool m_isPaused;
         int m_exitCode;
 

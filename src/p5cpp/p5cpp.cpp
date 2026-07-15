@@ -22,15 +22,19 @@ int main()
 {
     using namespace p5cpp;
 
-    engine = Engine::create();
-    engine->addModule(std::make_unique<FrameModule>());
-    engine->addModule(std::make_unique<WindowModule>());
-    engine->addModule(std::make_unique<InputModule>());
-    engine->addModule(std::make_unique<AudioModule>());
-    engine->addModule(std::make_unique<GraphicsModule>());
-    engine->addModule(std::make_unique<SketchModule>());
+    bool restart;
+    do {
+        engine = Engine::create();
+        engine->addModule(std::make_unique<FrameModule>());
+        engine->addModule(std::make_unique<WindowModule>());
+        engine->addModule(std::make_unique<InputModule>());
+        engine->addModule(std::make_unique<AudioModule>());
+        engine->addModule(std::make_unique<GraphicsModule>());
+        engine->addModule(std::make_unique<SketchModule>());
 
-    engine->run();
+        engine->run();
+        restart = engine->wasRestartRequested();
+    } while (restart);
 
     return 0;
 }

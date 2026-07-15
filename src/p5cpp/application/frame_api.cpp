@@ -14,7 +14,9 @@ namespace p5cpp
     inline static FrameComponent& getFrameComponent()
     {
         static FrameComponent* s_frameComponent = nullptr;
-        if (s_frameComponent == nullptr) {
+        static Engine* s_engine = nullptr;
+        if (s_engine != engine.get()) {
+            s_engine = engine.get();
             s_frameComponent = &engine->getContext().require<FrameComponent>();
         }
         return *s_frameComponent;
@@ -30,6 +32,7 @@ namespace p5cpp
     void quit() { getFrameComponent().quit(); }
     void quit(int code) { getFrameComponent().quit(code); }
     void exitCode(int code) { getFrameComponent().exitCode(code); }
+    void restart() { getFrameComponent().restart(); }
     int getFrameCount() { return getFrameComponent().getFrameCount(); }
     int getFrameRate() { return getFrameComponent().getFrameRate(); }
     float getDeltaTime() { return getFrameComponent().getDeltaTime(); }

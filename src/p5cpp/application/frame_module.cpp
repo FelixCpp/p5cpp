@@ -19,16 +19,29 @@ namespace p5cpp
             m_frameComponent.quit();
         }
 
+        if (event.type == EventType::keyPress and event.keyEvent.key == Key::escape) {
+            m_frameComponent.quit();
+        }
+
+        if (event.type == EventType::keyPress and event.keyEvent.key == Key::r and event.keyEvent.mods & KeyMod::ctrl) {
+            m_frameComponent.restart();
+        }
+
+        if (event.type == EventType::keyPress and event.keyEvent.key == Key::space) {
+            if (m_frameComponent.isLooping()) {
+                m_frameComponent.noLoop();
+            } else {
+                m_frameComponent.loop();
+            }
+        }
+
         next();
     }
 
     void FrameModule::draw(AppContext& context, Next next)
     {
         m_frameComponent.update();
-
-        if (m_frameComponent.isLooping()) {
-            next();
-        }
+        next();
     }
 
     void FrameModule::destroy(AppContext& context, Next next)

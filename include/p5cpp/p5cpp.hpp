@@ -100,6 +100,7 @@ namespace p5cpp
     void quit();
     void quit(int code);
     void exitCode(int code);
+    void restart();
 
     int getFrameCount();
     int getFrameRate();

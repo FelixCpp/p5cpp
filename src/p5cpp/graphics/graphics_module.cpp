@@ -19,7 +19,10 @@ namespace p5cpp
         m_component = std::make_unique<GraphicsComponent>(inputData.getPhysicalWidth(), inputData.getPhysicalHeight());
 
         context.registerService(m_component.get());
+
+        m_component->beginFrame();
         next();
+        m_component->endFrame();
     }
 
     void GraphicsModule::event(AppContext& context, WindowEvent& event, Next next)

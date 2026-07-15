@@ -134,6 +134,20 @@ namespace p5cpp
     void GraphicsComponent::resizeDefaultCanvas(uint32_t width, uint32_t height)
     {
         m_defaultFramebuffer = createFramebuffer(width, height);
+
+        // beginFrame() pushes a *copy* of m_defaultFramebuffer onto the stack (always
+        // at index 0 - the outermost canvas). If a resize happens while that bracket is
+        // still open (e.g. a Sketch calling setWindowSize() from within its own setup(),
+        // after some earlier draw call already opened the frame), the stack entry would
+        // otherwise keep referencing the old, now-orphaned framebuffer, so any further
+        // drawing in the same setup()/draw() would silently land in a canvas nobody ever
+        // presents to the screen again.
+        if (not m_framebufferStack.empty()) {
+            m_framebufferStack.front() = m_defaultFramebuffer;
+            if (m_framebufferStack.size() == 1) {
+                m_renderer->begin(m_framebufferStack.back());
+            }
+        }
     }
 
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)

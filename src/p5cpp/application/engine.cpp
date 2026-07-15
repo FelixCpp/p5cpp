@@ -32,7 +32,13 @@ namespace p5cpp
                 m_drawChain();
             }
 
+            m_restartRequested = frameData.isRestartRequested();
             destroyModules();
+        }
+
+        bool wasRestartRequested() const override
+        {
+            return m_restartRequested;
         }
 
         AppContext& getContext() override
@@ -96,6 +102,7 @@ namespace p5cpp
         AppContext context;
         std::vector<std::unique_ptr<Module>> modules;
         Next m_drawChain;
+        bool m_restartRequested = false;
     };
 } // namespace p5cpp
 

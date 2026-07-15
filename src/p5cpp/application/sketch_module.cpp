@@ -1,6 +1,7 @@
 #include <p5cpp/application/sketch_module.hpp>
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/app_context.hpp>
+#include <p5cpp/application/frame_component.hpp>
 
 namespace p5cpp
 {
@@ -108,8 +109,10 @@ namespace p5cpp
             };
         }
 
-        Next afterPreModules = [this, postChain = std::move(chain)]() {
-            sketch->draw();
+        Next afterPreModules = [this, &context, postChain = std::move(chain)]() {
+            if (context.require<FrameComponent>().isLooping()) {
+                sketch->draw();
+            }
             postChain();
         };
 

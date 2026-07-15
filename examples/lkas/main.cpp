@@ -5,43 +5,6 @@
 
 using namespace p5cpp;
 
-// ─── HSV → RGBA (h: 0–360, s/v: 0–1) ────────────────────────────────────────
-
-static color_t hsv(float h, float s, float v, int a = 255)
-{
-    h = std::fmod(h, 360.f);
-    const float c = v * s;
-    const float x = c * (1.f - std::abs(std::fmod(h / 60.f, 2.f) - 1.f));
-    const float m = v - c;
-    float r, g, b;
-    if (h < 60) {
-        r = c;
-        g = x;
-        b = 0;
-    } else if (h < 120) {
-        r = x;
-        g = c;
-        b = 0;
-    } else if (h < 180) {
-        r = 0;
-        g = c;
-        b = x;
-    } else if (h < 240) {
-        r = 0;
-        g = x;
-        b = c;
-    } else if (h < 300) {
-        r = x;
-        g = 0;
-        b = c;
-    } else {
-        r = c;
-        g = 0;
-        b = x;
-    }
-    return rgba((int)((r + m) * 255), (int)((g + m) * 255), (int)((b + m) * 255), a);
-}
-
 // ─── Particle ─────────────────────────────────────────────────────────────────
 
 struct Particle
@@ -221,7 +184,7 @@ struct GalaxySketch : Sketch
                 p.life -= dt;
 
                 const float t = p.life / p.maxLife;
-                fill(hsv(p.hue, 1.f, 1.f, (int)(t * t * 210.f)));
+                fill(hsv(p.hue, 1.f, 1.f, (t * t * 210.f)));
                 circle(p.pos.x, p.pos.y, p.size * t);
             }
 

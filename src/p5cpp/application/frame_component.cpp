@@ -11,6 +11,7 @@ namespace p5cpp
           m_frameCount(0),
           m_targetFrameRate(120),
           m_closeRequested(false),
+          m_restartRequested(false),
           m_isPaused(false),
           m_exitCode(0),
           m_fpsCalculationInterval(1.0f),
@@ -88,6 +89,12 @@ namespace p5cpp
         m_exitCode = exitCode;
     }
 
+    void FrameComponent::restart()
+    {
+        m_restartRequested = true;
+        m_closeRequested = true;
+    }
+
     bool FrameComponent::isLooping() const
     {
         return not m_isPaused;
@@ -116,5 +123,10 @@ namespace p5cpp
     bool FrameComponent::isCloseRequested() const
     {
         return m_closeRequested;
+    }
+
+    bool FrameComponent::isRestartRequested() const
+    {
+        return m_restartRequested;
     }
 } // namespace p5cpp
