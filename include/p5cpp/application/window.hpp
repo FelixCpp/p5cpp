@@ -20,6 +20,12 @@ namespace p5cpp
         virtual void setTitle(std::string_view title) = 0;
         virtual void setResizable(bool resizable) = 0;
 
+        // Switches to fullscreen on the primary monitor at its current video mode
+        // and back. Restores whatever windowed position/size was in effect right
+        // before entering fullscreen.
+        virtual void setFullscreen(bool fullscreen) = 0;
+        virtual bool isFullscreen() const = 0;
+
         virtual void setEventCallback(std::function<void(const WindowEvent&)> callback) = 0;
         virtual void setVisible(bool visible) = 0;
         virtual void swapBuffers() = 0;

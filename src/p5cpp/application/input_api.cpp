@@ -31,4 +31,12 @@ namespace p5cpp
     int getLogicalHeight() { return getInputComponent().getLogicalHeight(); }
     int getPhysicalWidth() { return getInputComponent().getPhysicalWidth(); }
     int getPhysicalHeight() { return getInputComponent().getPhysicalHeight(); }
+
+    bool isKeyDown(Key key) { return getInputComponent().isKeyDown(key); }
+    bool isKeyPressed(Key key) { return getInputComponent().isKeyPressed(key); }
+    bool isKeyReleased(Key key) { return getInputComponent().isKeyReleased(key); }
+
+    bool isMouseDown(MouseButton button) { return getInputComponent().isMouseDown(button); }
+    bool isMousePressed(MouseButton button) { return getInputComponent().isMousePressed(button); }
+    bool isMouseReleased(MouseButton button) { return getInputComponent().isMouseReleased(button); }
 } // namespace p5cpp

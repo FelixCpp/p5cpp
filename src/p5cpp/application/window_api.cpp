@@ -28,4 +28,6 @@ namespace p5cpp
     void setWindowSize(int width, int height) { getWindow().setSize(width, height); }
     void setWindowTitle(std::string_view title) { getWindow().setTitle(title); }
     void setWindowResizable(bool resizable) { getWindow().setResizable(resizable); }
+    void setFullscreen(bool fullscreen) { getWindow().setFullscreen(fullscreen); }
+    bool isFullscreen() { return getWindow().isFullscreen(); }
 } // namespace p5cpp

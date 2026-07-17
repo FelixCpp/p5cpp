@@ -557,6 +557,32 @@ struct InputSketch : Sketch
 };
 ```
 
+`event(WindowEvent&)` is best for one-shot reactions (a click, a key press that toggles
+something). For "is this held down right now" checks inside `draw()`, poll instead:
+
+```cpp
+void draw() override
+{
+    if (isKeyDown(Key::right)) x += speed * getDeltaTime();  // continuous, true every frame it's held
+    if (isKeyPressed(Key::space)) jump();                    // true only on the frame it went down
+    if (isMouseDown(MouseButton::left)) paint();
+    if (isKeyReleased(Key::leftShift)) stopSprinting();       // true only on the frame it went up
+}
+```
+
+`isKeyPressed`/`isKeyReleased`/`isMousePressed`/`isMouseReleased` are edge-triggered — each
+stays true for exactly the one `draw()` call in which the transition happened (OS key-repeat
+does not re-trigger `isKeyPressed`). `isKeyDown`/`isMouseDown` are continuous state.
+
+A handful of keys are bound by the framework itself, independent of your sketch's `event()`:
+
+| Key           | Effect                                     |
+| ------------- | ------------------------------------------ |
+| `Escape`      | quit                                       |
+| `Space`       | toggle `loop()`/`noLoop()`                 |
+| `Alt` + `Enter` | toggle fullscreen                        |
+| `Ctrl` + `R`  | restart the sketch                         |
+
 ---
 
 ### Custom Engine Modules _(advanced)_
@@ -700,6 +726,25 @@ float2 v = {1.f, 0.f};
 v += other;   v *= scalar;
 dot(a,b)   cross(a,b)   length(v)   normalized(v)
 lerp(a,b,t)   limit(v, maxLen)   perp(v)
+```
+
+### Input polling
+
+```cpp
+isKeyDown(Key::right)          // true every frame the key is held
+isKeyPressed(Key::space)       // true only on the frame it went down
+isKeyReleased(Key::leftShift)  // true only on the frame it went up
+
+isMouseDown(MouseButton::left)
+isMousePressed(MouseButton::left)
+isMouseReleased(MouseButton::left)
+```
+
+### Window & environment
+
+```cpp
+setWindowSize(w, h)          setWindowTitle("...")        setWindowResizable(true)
+setFullscreen(true)          isFullscreen()                // toggled by Alt+Enter by default, too
 ```
 
 ### Timing & control

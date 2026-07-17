@@ -51,6 +51,31 @@ namespace p5cpp
             glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable ? GLFW_TRUE : GLFW_FALSE);
         }
 
+        void setFullscreen(bool fullscreen) override
+        {
+            if (fullscreen == fullscreenActive) {
+                return;
+            }
+
+            if (fullscreen) {
+                glfwGetWindowPos(window, &windowedX, &windowedY);
+                glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+
+                GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+                const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+                glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+            } else {
+                glfwSetWindowMonitor(window, nullptr, windowedX, windowedY, windowedWidth, windowedHeight, GLFW_DONT_CARE);
+            }
+
+            fullscreenActive = fullscreen;
+        }
+
+        bool isFullscreen() const override
+        {
+            return fullscreenActive;
+        }
+
         void setEventCallback(std::function<void(const WindowEvent&)> callback) override
         {
             eventCallback = std::move(callback);
@@ -374,6 +399,12 @@ namespace p5cpp
 
         std::function<void(const WindowEvent&)> eventCallback;
         GLFWwindow* window;
+
+        bool fullscreenActive = false;
+        int windowedX = 0;
+        int windowedY = 0;
+        int windowedWidth = 0;
+        int windowedHeight = 0;
     };
 } // namespace p5cpp
 

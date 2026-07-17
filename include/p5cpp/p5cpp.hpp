@@ -78,6 +78,8 @@ namespace p5cpp
     void setWindowSize(int width, int height);
     void setWindowTitle(std::string_view title);
     void setWindowResizable(bool resizable);
+    void setFullscreen(bool fullscreen);
+    bool isFullscreen();
 
     int getMouseX();
     int getMouseY();
@@ -88,6 +90,17 @@ namespace p5cpp
     int getLogicalHeight();
     int getPhysicalWidth();
     int getPhysicalHeight();
+
+    // Continuous state: true for every frame the key/button is held down.
+    bool isKeyDown(Key key);
+    bool isMouseDown(MouseButton button);
+
+    // Edge-triggered: true only for the frame in which the key/button went
+    // down/up, respectively (does not re-trigger on OS key-repeat).
+    bool isKeyPressed(Key key);
+    bool isKeyReleased(Key key);
+    bool isMousePressed(MouseButton button);
+    bool isMouseReleased(MouseButton button);
 
 } // namespace p5cpp
 

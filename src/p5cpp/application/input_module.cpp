@@ -40,11 +40,38 @@ namespace p5cpp
                 m_inputComponent.updatePhysicalSize(event.framebufferResize.width, event.framebufferResize.height);
                 break;
 
+            case EventType::keyPress:
+                m_inputComponent.setKeyDown(event.keyEvent.key, true);
+                break;
+
+            case EventType::keyRelease:
+                m_inputComponent.setKeyDown(event.keyEvent.key, false);
+                break;
+
+            case EventType::mousePress:
+                m_inputComponent.setMouseButtonDown(event.mouseButton.button, true);
+                break;
+
+            case EventType::mouseRelease:
+                m_inputComponent.setMouseButtonDown(event.mouseButton.button, false);
+                break;
+
             default:
                 break;
         }
 
         next();
+    }
+
+    void InputModule::draw(AppContext& context, Next next)
+    {
+        // Events for this frame (dispatched by WindowModule::draw's pollEvents(),
+        // which runs before this module in the chain) are already applied to
+        // m_inputComponent, so isKeyPressed()/isKeyReleased() are visible to the
+        // rest of the draw chain, including the sketch's draw(). Clear the edge
+        // state afterwards so it doesn't leak into the next frame.
+        next();
+        m_inputComponent.clearFrameState();
     }
 
     void InputModule::destroy(AppContext& context, Next next)

@@ -1,6 +1,7 @@
 #include <p5cpp/application/frame_module.hpp>
 #include <p5cpp/application/logging.hpp>
 #include <p5cpp/application/app_context.hpp>
+#include <p5cpp/application/window.hpp>
 
 #include <p5cpp/application/window_event.hpp>
 
@@ -33,6 +34,13 @@ namespace p5cpp
             } else {
                 m_frameComponent.loop();
             }
+        }
+
+        // F11 is intercepted by the OS on macOS (Mission Control), so fullscreen
+        // uses the cross-platform game convention of Alt+Enter instead.
+        if (event.type == EventType::keyPress and event.keyEvent.key == Key::enter and event.keyEvent.mods & KeyMod::alt) {
+            Window& window = context.require<Window>();
+            window.setFullscreen(not window.isFullscreen());
         }
 
         next();
