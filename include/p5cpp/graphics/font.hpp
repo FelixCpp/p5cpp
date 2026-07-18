@@ -41,6 +41,14 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    // A single closed contour of a glyph outline — either an outer boundary or an inner hole
+    // (e.g. the counter of an "O"). Points are not repeated at the end; the contour is implicitly
+    // closed back to points[0].
+    using TextContour = std::vector<float2>;
+} // namespace p5cpp
+
+namespace p5cpp
+{
     struct ShapedGlyph
     {
         int2 bearing;
@@ -66,6 +74,7 @@ namespace p5cpp
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
         virtual const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) = 0;
         virtual std::vector<ShapedGlyph> shape(std::string_view text, int textSize) = 0;
+        virtual std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail) = 0;
     };
 
     std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath);
@@ -86,6 +95,16 @@ namespace p5cpp
         float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const;
         const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) const;
         std::vector<ShapedGlyph> shape(std::string_view text, int textSize) const;
+
+        // Returns the outline of `text` as a list of closed contours (one per letter part —
+        // e.g. "O" yields two: the outer boundary and the inner hole), in the same coordinate
+        // space as the (x, y) baseline-left origin passed here. '\n' starts a new line, advanced
+        // by this font's line height at `textSize`. `curveDetail` controls how many line segments
+        // each curve in the glyph outline is flattened into. If `spacing` is greater than 0, every
+        // contour is additionally resampled to points evenly spaced `spacing` pixels apart along
+        // its arc length (matching p5.js's textToPoints()); otherwise contours keep the raw,
+        // curvature-biased points produced by the outline decomposition.
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail = 8, float spacing = 0.0f) const;
 
     private:
         std::shared_ptr<FontImpl> impl;

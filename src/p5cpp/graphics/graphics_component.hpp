@@ -71,6 +71,8 @@ namespace p5cpp
         void textLineSpacing(float lineSpacing);
         void textAlign(TextAlign align);
         void textWrap(TextWrap wrap);
+        void textToPointsDetail(uint32_t detail);
+        void textToPointsSpacing(float spacing);
 
         void shader(const Shader& shader);
         void noShader();
@@ -100,6 +102,8 @@ namespace p5cpp
 
         TextLayout layoutText(std::string_view text, float x, float y);
         TextLayout layoutText(std::string_view text, float x, float y, float maxWidth);
+
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y);
 
         void beginShape();
         void endShape(ShapeType type, bool close);

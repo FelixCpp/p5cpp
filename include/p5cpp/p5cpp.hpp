@@ -177,6 +177,12 @@ namespace p5cpp
     void textAlign(TextAlign textAlign);
     void textWrap(TextWrap textWrap);
 
+    // Detail/spacing used by textToPoints(text, x, y) below: curveDetail controls how many line
+    // segments each curve in a glyph outline is flattened into, spacing (if > 0) additionally
+    // resamples every contour to points evenly spaced that many pixels apart along its arc length.
+    void textToPointsDetail(uint32_t detail);
+    void textToPointsSpacing(float spacing);
+
     void shader(const Shader& shader);
     void noShader();
     void blendMode(const BlendMode& blendMode);
@@ -216,6 +222,11 @@ namespace p5cpp
     // width, height, bounding box, ...) without drawing anything.
     TextLayout textLayout(std::string_view text, float x, float y);
     TextLayout textLayout(std::string_view text, float x, float y, float maxWidth);
+
+    // Returns the outline of text(text, x, y) as a list of closed contours, using the current
+    // textFont()/textSize()/textToPointsDetail()/textToPointsSpacing() state and the active
+    // transform, instead of drawing anything. See Font::textToPoints() for the point semantics.
+    std::vector<TextContour> textToPoints(std::string_view text, float x, float y);
 
     // Builds geometry once by running buildFn (which can call fill()/stroke()/rect()/
     // ellipse()/beginShape()-vertex()-endShape()/image()/shader()+setUniform()/etc., or

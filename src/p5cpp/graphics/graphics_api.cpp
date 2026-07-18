@@ -73,6 +73,8 @@ namespace p5cpp
     void textLineSpacing(float spacing) { getGraphicsComponent().textLineSpacing(spacing); }
     void textAlign(TextAlign textAlign) { getGraphicsComponent().textAlign(textAlign); }
     void textWrap(TextWrap textWrap) { getGraphicsComponent().textWrap(textWrap); }
+    void textToPointsDetail(uint32_t detail) { getGraphicsComponent().textToPointsDetail(detail); }
+    void textToPointsSpacing(float spacing) { getGraphicsComponent().textToPointsSpacing(spacing); }
 
     void shader(const Shader& shader) { getGraphicsComponent().shader(shader); }
     void noShader() { getGraphicsComponent().noShader(); }
@@ -110,6 +112,8 @@ namespace p5cpp
     void text(std::string_view text, float x, float y, float maxWidth) { getGraphicsComponent().text(text, x, y, maxWidth); }
     TextLayout textLayout(std::string_view text, float x, float y) { return getGraphicsComponent().layoutText(text, x, y); }
     TextLayout textLayout(std::string_view text, float x, float y, float maxWidth) { return getGraphicsComponent().layoutText(text, x, y, maxWidth); }
+
+    std::vector<TextContour> textToPoints(std::string_view text, float x, float y) { return getGraphicsComponent().textToPoints(text, x, y); }
 
     RenderGroup buildRenderGroup(const std::function<void()>& buildFn) { return getGraphicsComponent().buildRenderGroup(buildFn); }
     void drawRenderGroup(const RenderGroup& group) { getGraphicsComponent().drawRenderGroup(group); }

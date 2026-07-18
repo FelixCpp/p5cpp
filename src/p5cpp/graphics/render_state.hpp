@@ -37,6 +37,8 @@ namespace p5cpp
         float textLineSpacing;
         TextAlign textAlign;
         TextWrap textWrap;
+        uint32_t textToPointsDetail;
+        float textToPointsSpacing;
 
         std::optional<Shader> shader;
         BlendMode blendMode;

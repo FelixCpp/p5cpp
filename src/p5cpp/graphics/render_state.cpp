@@ -27,6 +27,8 @@ namespace p5cpp
             .textLineSpacing = 1.0f,
             .textAlign = TextAlign::baselineLeft,
             .textWrap = TextWrap::none,
+            .textToPointsDetail = 8,
+            .textToPointsSpacing = 0.0f,
             .shader = std::nullopt,
             .blendMode = BlendMode::alpha,
         };

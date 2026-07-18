@@ -511,6 +511,16 @@ namespace p5cpp
         peekRenderState().textWrap = wrap;
     }
 
+    void GraphicsComponent::textToPointsDetail(uint32_t detail)
+    {
+        peekRenderState().textToPointsDetail = detail;
+    }
+
+    void GraphicsComponent::textToPointsSpacing(float spacing)
+    {
+        peekRenderState().textToPointsSpacing = spacing;
+    }
+
     void GraphicsComponent::shader(const Shader& shader)
     {
         peekRenderState().shader = shader;
@@ -1054,6 +1064,26 @@ namespace p5cpp
         layout.bounds = float_rect {minX, penY0 - metrics->ascender, maxX - minX, totalH};
 
         return layout;
+    }
+
+    std::vector<TextContour> GraphicsComponent::textToPoints(std::string_view text, float x, float y)
+    {
+        const RenderState& rs = peekRenderState();
+        const Font& font = rs.font.value_or(m_defaultFont);
+
+        const int textSizeInt = static_cast<int>(rs.textSize);
+        if (textSizeInt <= 0) return {};
+
+        std::vector<TextContour> contours = font.textToPoints(text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing);
+
+        const matrix4x4& mtx = peekMatrix();
+        for (TextContour& contour : contours) {
+            for (float2& p : contour) {
+                p = mtx.transformPoint(p.x, p.y);
+            }
+        }
+
+        return contours;
     }
 
     void GraphicsComponent::beginShape()

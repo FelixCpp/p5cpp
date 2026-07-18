@@ -3,6 +3,7 @@
 
 #include <glad/glad.h>
 #include <freetype/freetype.h>
+#include <freetype/ftoutln.h>
 #include <hb.h>
 #include <hb-ft.h>
 
@@ -12,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <cassert>
+#include <cmath>
 
 namespace p5cpp
 {
@@ -592,6 +594,86 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    // Shared state for FT_Outline_Decompose callbacks below: converts FreeType's y-up,
+    // glyph-local 26.6 fixed-point coordinates into y-down world points anchored at `penOffset`
+    // (the glyph's pen position), and flattens conic/cubic curve segments into line segments.
+    struct OutlineDecomposeContext
+    {
+        std::vector<TextContour>* contours = nullptr;
+        TextContour* current = nullptr;
+        float2 penOffset {0.0f, 0.0f};
+        float2 lastPoint {0.0f, 0.0f}; // last point in FreeType-local space (y-up), for curve flattening
+        int curveDetail = 8;
+
+        static float2 fromFixed(const FT_Vector& v)
+        {
+            return float2 {static_cast<float>(v.x) / 64.0f, static_cast<float>(v.y) / 64.0f};
+        }
+
+        float2 toWorld(const float2& local) const
+        {
+            return float2 {penOffset.x + local.x, penOffset.y - local.y};
+        }
+    };
+
+    static int outlineMoveTo(const FT_Vector* to, void* user)
+    {
+        auto* ctx = static_cast<OutlineDecomposeContext*>(user);
+        ctx->contours->emplace_back();
+        ctx->current = &ctx->contours->back();
+        ctx->lastPoint = OutlineDecomposeContext::fromFixed(*to);
+        ctx->current->push_back(ctx->toWorld(ctx->lastPoint));
+        return 0;
+    }
+
+    static int outlineLineTo(const FT_Vector* to, void* user)
+    {
+        auto* ctx = static_cast<OutlineDecomposeContext*>(user);
+        ctx->lastPoint = OutlineDecomposeContext::fromFixed(*to);
+        ctx->current->push_back(ctx->toWorld(ctx->lastPoint));
+        return 0;
+    }
+
+    static int outlineConicTo(const FT_Vector* control, const FT_Vector* to, void* user)
+    {
+        auto* ctx = static_cast<OutlineDecomposeContext*>(user);
+        const float2 p0 = ctx->lastPoint;
+        const float2 c = OutlineDecomposeContext::fromFixed(*control);
+        const float2 p1 = OutlineDecomposeContext::fromFixed(*to);
+
+        for (int i = 1; i <= ctx->curveDetail; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(ctx->curveDetail);
+            const float mt = 1.0f - t;
+            const float2 pt = p0 * (mt * mt) + c * (2.0f * mt * t) + p1 * (t * t);
+            ctx->current->push_back(ctx->toWorld(pt));
+        }
+
+        ctx->lastPoint = p1;
+        return 0;
+    }
+
+    static int outlineCubicTo(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* user)
+    {
+        auto* ctx = static_cast<OutlineDecomposeContext*>(user);
+        const float2 p0 = ctx->lastPoint;
+        const float2 c1 = OutlineDecomposeContext::fromFixed(*control1);
+        const float2 c2 = OutlineDecomposeContext::fromFixed(*control2);
+        const float2 p1 = OutlineDecomposeContext::fromFixed(*to);
+
+        for (int i = 1; i <= ctx->curveDetail; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(ctx->curveDetail);
+            const float mt = 1.0f - t;
+            const float2 pt = p0 * (mt * mt * mt) + c1 * (3.0f * mt * mt * t) + c2 * (3.0f * mt * t * t) + p1 * (t * t * t);
+            ctx->current->push_back(ctx->toWorld(pt));
+        }
+
+        ctx->lastPoint = p1;
+        return 0;
+    }
+} // namespace p5cpp
+
+namespace p5cpp
+{
     class FreetypeFont : public FontImpl
     {
     public:
@@ -801,6 +883,87 @@ namespace p5cpp
             return *m_shapedTextCache.put(text, textSize, std::move(result));
         }
 
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail) override
+        {
+            std::vector<TextContour> result;
+
+            if (!m_hbFont) {
+                m_hbFont.reset(hb_ft_font_create(m_face.get(), nullptr));
+            }
+
+            if (FT_Set_Pixel_Sizes(m_face.get(), 0, static_cast<FT_UInt>(textSize))) {
+                return result;
+            }
+            hb_ft_font_changed(m_hbFont.get());
+
+            const FontMetrics* metrics = getMetrics(textSize);
+            const float lineHeight = metrics ? metrics->lineHeight : static_cast<float>(textSize) * 1.2f;
+
+            FT_Outline_Funcs funcs {};
+            funcs.move_to = &outlineMoveTo;
+            funcs.line_to = &outlineLineTo;
+            funcs.conic_to = &outlineConicTo;
+            funcs.cubic_to = &outlineCubicTo;
+            funcs.shift = 0;
+            funcs.delta = 0;
+
+            hb_feature_t features[3] = {};
+            hb_feature_from_string("liga", -1, &features[0]); // standard ligatures
+            hb_feature_from_string("calt", -1, &features[1]); // contextual alternates
+            hb_feature_from_string("kern", -1, &features[2]); // kerning
+
+            float penY = y;
+            size_t lineStart = 0;
+            while (lineStart <= text.size()) {
+                const size_t newlinePos = text.find('\n', lineStart);
+                const std::string_view line = (newlinePos == std::string_view::npos)
+                    ? text.substr(lineStart)
+                    : text.substr(lineStart, newlinePos - lineStart);
+
+                hb_buffer_t* buf = hb_buffer_create();
+                hb_buffer_add_utf8(buf, line.data(), static_cast<int>(line.size()), 0, static_cast<int>(line.size()));
+                hb_buffer_guess_segment_properties(buf);
+                hb_shape(m_hbFont.get(), buf, features, 3);
+
+                unsigned int numGlyphs = 0;
+                hb_glyph_info_t* glyphInfos = hb_buffer_get_glyph_infos(buf, &numGlyphs);
+                hb_glyph_position_t* glyphPositions = hb_buffer_get_glyph_positions(buf, nullptr);
+
+                float penX = x;
+                for (unsigned int i = 0; i < numGlyphs; ++i) {
+                    const uint32_t glyphId = glyphInfos[i].codepoint; // HarfBuzz renames this field to hold glyph ID
+                    const float xOffset = glyphPositions[i].x_offset / 64.0f;
+                    const float yOffset = glyphPositions[i].y_offset / 64.0f;
+                    const float xAdvance = glyphPositions[i].x_advance / 64.0f;
+                    const float yAdvance = glyphPositions[i].y_advance / 64.0f;
+
+                    if (FT_Load_Glyph(m_face.get(), glyphId, FT_LOAD_NO_BITMAP) == 0) {
+                        FT_Outline& outline = m_face->glyph->outline;
+                        if (outline.n_points > 0) {
+                            OutlineDecomposeContext ctx;
+                            ctx.contours = &result;
+                            ctx.penOffset = float2 {penX + xOffset, penY - yOffset};
+                            ctx.curveDetail = curveDetail < 1 ? 1 : curveDetail;
+                            FT_Outline_Decompose(&outline, &funcs, &ctx);
+                        }
+                    }
+
+                    penX += xAdvance;
+                    penY += yAdvance;
+                }
+
+                hb_buffer_destroy(buf);
+
+                if (newlinePos == std::string_view::npos) {
+                    break;
+                }
+                lineStart = newlinePos + 1;
+                penY += lineHeight;
+            }
+
+            return result;
+        }
+
     private:
         explicit FreetypeFont(FreetypeFace face)
             : m_face(std::move(face))
@@ -912,6 +1075,59 @@ namespace p5cpp
     };
 } // namespace p5cpp
 
+namespace p5cpp
+{
+    // Resamples a closed contour to points spaced `spacing` pixels apart along its arc length
+    // (walking through the implicit closing edge back to points[0] too). Leaves the contour
+    // untouched if spacing is non-positive or it has too few points to measure a perimeter.
+    static TextContour resampleContourEvenly(const TextContour& contour, float spacing)
+    {
+        if (spacing <= 0.0f || contour.size() < 2) {
+            return contour;
+        }
+
+        const size_t n = contour.size();
+        std::vector<float> edgeLengths(n);
+        float perimeter = 0.0f;
+        for (size_t i = 0; i < n; ++i) {
+            edgeLengths[i] = (contour[(i + 1) % n] - contour[i]).length();
+            perimeter += edgeLengths[i];
+        }
+
+        if (perimeter <= 0.0f) {
+            return contour;
+        }
+
+        size_t count = static_cast<size_t>(std::round(perimeter / spacing));
+        if (count < 3) {
+            count = 3;
+        }
+
+        TextContour result;
+        result.reserve(count);
+
+        size_t edgeIndex = 0;
+        float edgeStart = 0.0f;
+        float edgeEnd = edgeLengths[0];
+
+        for (size_t i = 0; i < count; ++i) {
+            const float targetDist = perimeter * (static_cast<float>(i) / static_cast<float>(count));
+
+            while (targetDist > edgeEnd && edgeIndex + 1 < n) {
+                ++edgeIndex;
+                edgeStart = edgeEnd;
+                edgeEnd += edgeLengths[edgeIndex];
+            }
+
+            const float edgeLen = edgeLengths[edgeIndex];
+            const float t = edgeLen > 0.0f ? (targetDist - edgeStart) / edgeLen : 0.0f;
+            result.push_back(contour[edgeIndex].lerp(contour[(edgeIndex + 1) % n], t));
+        }
+
+        return result;
+    }
+} // namespace p5cpp
+
 namespace
 {
     // Forwards every call to a shared, already-loaded FontImpl so that repeated
@@ -929,6 +1145,7 @@ namespace
         float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override { return m_shared->getKerning(leftCodepoint, rightCodepoint, textSize); }
         const p5cpp::Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override { return m_shared->getGlyphAtlasTexture(glyphAtlasIndex); }
         std::vector<p5cpp::ShapedGlyph> shape(std::string_view text, int textSize) override { return m_shared->shape(text, textSize); }
+        std::vector<p5cpp::TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail) override { return m_shared->textToPoints(text, x, y, textSize, curveDetail); }
 
     private:
         std::shared_ptr<p5cpp::FontImpl> m_shared;
@@ -1009,5 +1226,19 @@ namespace p5cpp
     {
         assert(impl != nullptr && "Font implementation is not initialized.");
         return impl->shape(text, textSize);
+    }
+
+    std::vector<TextContour> Font::textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float spacing) const
+    {
+        assert(impl != nullptr && "Font implementation is not initialized.");
+        std::vector<TextContour> contours = impl->textToPoints(text, x, y, textSize, curveDetail);
+
+        if (spacing > 0.0f) {
+            for (TextContour& contour : contours) {
+                contour = resampleContourEvenly(contour, spacing);
+            }
+        }
+
+        return contours;
     }
 } // namespace p5cpp
