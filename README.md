@@ -585,6 +585,62 @@ A handful of keys are bound by the framework itself, independent of your sketch'
 
 ---
 
+### RenderGroup (cached geometry)
+
+Every `rect()`/`ellipse()`/`beginShape()…endShape()` call re-tessellates its geometry from
+scratch, every frame. For complex or static shapes, build the geometry once and replay it
+cheaply instead:
+
+```cpp
+RenderGroup blob;
+
+void setup() override
+{
+    blob = buildRenderGroup([] {
+        fill(200, 100, 50);
+        stroke(0);
+        strokeWeight(3);
+        beginShape();
+        for (int i = 0; i < 200; ++i) {
+            const float a = TWO_PI * i / 200.0f;
+            vertex(std::cos(a) * 40.0f, std::sin(a) * 40.0f);
+        }
+        endShape(ShapeType::polygon, true);
+    });
+}
+
+void draw() override
+{
+    background(230);
+    pushMatrix();
+    translate((float)getMouseX(), (float)getMouseY());
+    rotate(getGlobalTime());
+    drawRenderGroup(blob);   // replays the cached geometry — no re-tessellation
+    popMatrix();
+}
+```
+
+`buildRenderGroup()` runs its lambda with its own isolated transform and fill/stroke state
+(starts at identity / sketch defaults, independent of whatever is active at the call site), so
+the returned `RenderGroup` is a self-contained, freely repositionable unit — move/rotate/scale
+it at replay time via the normal matrix stack. Inside the lambda you can use any of `rect()`,
+`ellipse()`/`circle()`, `triangle()`, `point()`, `line()`, `arc()`, `bezier()`, `curve()`,
+`beginShape()`/`vertex()`/`endShape()`, `image()`, `text()`, and custom `shader()`/`setUniform()`
+(the uniform values are frozen at build time). You can also call `drawRenderGroup()` on another,
+already-built group to compose groups out of groups. `background()` and
+`pushCanvas()`/`popCanvas()` are not supported inside `buildRenderGroup()` (they don't operate
+on shape-local geometry — `background()` always fills the whole current canvas, and a
+`RenderGroup` has no framebuffer association).
+
+```cpp
+void draw() override
+{
+    drawRenderGroup(blob, (float)getMouseX(), (float)getMouseY());  // sugar for translate(x,y) + drawRenderGroup(blob)
+}
+```
+
+---
+
 ### Custom Engine Modules _(advanced)_
 
 p5cpp's engine is a middleware pipeline. You can inject your own module anywhere in the
@@ -692,8 +748,17 @@ anchored relative to your sketch instead of the global module list.
 | `beginShape()` / `vertex(x,y)` / `endShape(ShapeType)` | custom polygon           |
 | `image(texture,x,y,w,h)`                               | draw texture             |
 | `text(str,x,y)` / `text(str,x,y,maxWidth)`             | draw text                |
+| `textLayout(str,x,y[,maxWidth])` → `TextLayout`        | measure text (lines, width, height, bounds) without drawing |
 | `filter(FilterType::blur, amount)`                     | built-in post-processing |
 | `effect(shader)`                                       | custom full-screen pass  |
+
+### RenderGroup
+
+```cpp
+RenderGroup group = buildRenderGroup([] { /* rect()/ellipse()/beginShape()-.../image()/... */ });
+drawRenderGroup(group);            // replay at the current transform
+drawRenderGroup(group, x, y);      // sugar: translate(x,y) + drawRenderGroup(group)
+```
 
 ### Transforms & state
 

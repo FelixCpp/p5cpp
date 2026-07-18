@@ -155,7 +155,7 @@ namespace p5cpp
             m_writer.reset();
         }
 
-        void submit(DrawBufferWriter& /*scope*/, UniformCache& uniformCache, const Shader& shader, const BlendMode& blendMode, const Texture& texture) override
+        void submit(DrawBufferWriter& /*scope*/, std::span<const UniformSnapshot> uniforms, const Shader& shader, const BlendMode& blendMode, const Texture& texture) override
         {
             const size_t vertexStart = m_writer.m_submitVertexBase;
             const size_t vertexEnd = m_writer.m_vertexCount;
@@ -211,7 +211,7 @@ namespace p5cpp
             entry.textures.fill(0);
             entry.textures[0] = textureId;
             entry.textureCount = 1;
-            entry.uniforms = uniformCache.getUniforms(shader);
+            entry.uniforms.assign(uniforms.begin(), uniforms.end());
 
             for (size_t i = vertexStart; i < vertexEnd; ++i) {
                 m_vertices[i].textureSlot = 0.0f;

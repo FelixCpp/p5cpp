@@ -55,6 +55,7 @@ add_library(
   ./src/p5cpp/audio/sound.cpp
 
   ./src/p5cpp/graphics/color.cpp
+  ./src/p5cpp/graphics/effects_renderer.cpp
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/graphics/framebuffer.cpp
   ./src/p5cpp/graphics/graphics_api.cpp
@@ -63,6 +64,8 @@ add_library(
   ./src/p5cpp/graphics/image.cpp
   ./src/p5cpp/graphics/internal_shaders.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
+  ./src/p5cpp/graphics/render_group.cpp
+  ./src/p5cpp/graphics/render_group_recorder.cpp
   ./src/p5cpp/graphics/render_state.cpp
   ./src/p5cpp/graphics/render_state_stack.cpp
   ./src/p5cpp/graphics/renderer.cpp

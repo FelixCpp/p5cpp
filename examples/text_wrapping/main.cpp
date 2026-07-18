@@ -43,7 +43,16 @@ struct TextWrappingSketch : p5cpp::Sketch
             textSize(24.0f);
             textAlign(TextAlign::topLeft);
             textWrap(TextWrap::word);
-            text("This is a long line of text that should wrap at word boundaries to fit within the box.", box.left, box.top, box.width);
+            constexpr std::string_view wrappedText = "This is a long line of text that should wrap at word boundaries to fit within the box.";
+            text(wrappedText, box.left, box.top, box.width);
+
+            // Demonstrates textLayout(): measure the same call without drawing it, then
+            // outline its bounding box in red to show it lines up with the rendered text.
+            const TextLayout layout = textLayout(wrappedText, box.left, box.top, box.width);
+            noFill();
+            stroke(255, 0, 0);
+            strokeWeight(1.0f);
+            rect(layout.bounds.left, layout.bounds.top, layout.bounds.width, layout.bounds.height);
         }
 
         {

@@ -7,8 +7,14 @@
 #include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/text.hpp>
+#include <p5cpp/graphics/text_layout.hpp>
+#include <p5cpp/graphics/render_group.hpp>
+#include <p5cpp/graphics/render_group_recorder.hpp>
+#include <p5cpp/graphics/effects_renderer.hpp>
 
 #include <array>
+#include <functional>
+#include <span>
 
 namespace p5cpp
 {
@@ -92,10 +98,16 @@ namespace p5cpp
         void text(std::string_view text, float x, float y);
         void text(std::string_view text, float x, float y, float maxWidth);
 
+        TextLayout layoutText(std::string_view text, float x, float y);
+        TextLayout layoutText(std::string_view text, float x, float y, float maxWidth);
+
         void beginShape();
         void endShape(ShapeType type, bool close);
         void vertex(float x, float y, float u, float v);
         void curveVertex(float x, float y);
+
+        RenderGroup buildRenderGroup(const std::function<void()>& buildFn);
+        void drawRenderGroup(const RenderGroup& group);
 
     private:
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
@@ -105,13 +117,18 @@ namespace p5cpp
         void submitFill(const PathPoints& pts, ShapeType type, const Texture& texture);
         void submitStroke(const PathPoints& pts, ShapeType type, bool close);
 
-        void applyBlur(float amount);
-        void applyGrayscale(float amount);
-        void applyInvert(float amount);
-        void applyThreshold(float amount);
-        void ensureEffectScratch(uint2 size);
-        void runEffectPass(const Framebuffer& source, const Framebuffer& dest, const Shader& shader);
-        static void blitFramebuffer(const Framebuffer& source, const Framebuffer& dest);
+        // Every draw call reads state through these two funnels (never the raw stack
+        // members below) so that buildRenderGroup() can redirect "the active state" to
+        // its own isolated matrix/render-state stacks just by delegating to m_recorder —
+        // no swapping/restoring of the concrete stack objects. See RenderGroupRecorder.
+        MatrixStack& activeMatrixStack();
+        RenderStateStack& activeRenderStateStack();
+
+        // Analogous redirection for where tessellated/stroked triangles go: the live
+        // renderer's frame buffer normally, or m_recorder's active recording sink while
+        // inside buildRenderGroup().
+        DrawBufferWriter& beginDrawOp();
+        void endDrawOp(DrawBufferWriter& writer, const Shader& shader, const BlendMode& blendMode, const Texture& texture, std::span<const UniformSnapshot> uniforms);
 
         std::unique_ptr<float2[]> m_drawPointPositions;
         std::unique_ptr<float2[]> m_drawPointTexCoords;
@@ -162,14 +179,11 @@ namespace p5cpp
 
         RenderStateStack m_renderStateStack;
         MatrixStack m_matrixStack;
+        RenderGroupRecorder m_recorder;
+
         Shader m_defaultShader;
         Shader m_textShader;
-        Shader m_blurShader;
-        Shader m_grayscaleShader;
-        Shader m_invertShader;
-        Shader m_thresholdShader;
-        std::array<Framebuffer, 2> m_effectScratchFramebuffers;
-        uint2 m_effectScratchSize {0, 0};
+        EffectsRenderer m_effects;
         Texture m_whiteTexture;
         UniformCache m_uniformCache;
         Font m_defaultFont;

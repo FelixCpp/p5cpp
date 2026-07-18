@@ -14,11 +14,13 @@
 #include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/font.hpp>
 #include <p5cpp/graphics/image.hpp>
+#include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/texture.hpp>
 #include <p5cpp/graphics/text.hpp>
+#include <p5cpp/graphics/text_layout.hpp>
 
 #include <p5cpp/math/angle.hpp>
 #include <p5cpp/math/constants.hpp>
@@ -31,6 +33,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -208,4 +211,24 @@ namespace p5cpp
     void image(const Texture& texture, float left, float top, float width, float height);
     void text(std::string_view text, float x, float y);
     void text(std::string_view text, float x, float y, float maxWidth);
+
+    // Computes how text(text, x, y[, maxWidth]) would lay the text out (line count,
+    // width, height, bounding box, ...) without drawing anything.
+    TextLayout textLayout(std::string_view text, float x, float y);
+    TextLayout textLayout(std::string_view text, float x, float y, float maxWidth);
+
+    // Builds geometry once by running buildFn (which can call fill()/stroke()/rect()/
+    // ellipse()/beginShape()-vertex()-endShape()/image()/shader()+setUniform()/etc., or
+    // drawRenderGroup() another group to compose) and returns a handle that replays the
+    // already-tessellated geometry cheaply, as many times as you like, via
+    // drawRenderGroup() — without re-tessellating on every call. buildFn runs with its
+    // own isolated transform and fill/stroke state (starts at identity / sketch defaults,
+    // independent of whatever is active at the call site); text()/background()/
+    // pushCanvas()/popCanvas() are not supported inside buildFn.
+    RenderGroup buildRenderGroup(const std::function<void()>& buildFn);
+
+    // Replays a RenderGroup's recorded geometry at the current transform (pushMatrix()/
+    // translate()/rotate()/scale() before calling this moves/rotates/scales the group).
+    void drawRenderGroup(const RenderGroup& group);
+    void drawRenderGroup(const RenderGroup& group, float x, float y); // sugar: translate(x,y) + drawRenderGroup(group)
 } // namespace p5cpp

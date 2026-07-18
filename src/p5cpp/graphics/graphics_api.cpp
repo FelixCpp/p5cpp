@@ -108,4 +108,16 @@ namespace p5cpp
     void image(const Texture& texture, float left, float top, float width, float height) { getGraphicsComponent().image(texture, left, top, width, height); }
     void text(std::string_view text, float x, float y) { getGraphicsComponent().text(text, x, y); }
     void text(std::string_view text, float x, float y, float maxWidth) { getGraphicsComponent().text(text, x, y, maxWidth); }
+    TextLayout textLayout(std::string_view text, float x, float y) { return getGraphicsComponent().layoutText(text, x, y); }
+    TextLayout textLayout(std::string_view text, float x, float y, float maxWidth) { return getGraphicsComponent().layoutText(text, x, y, maxWidth); }
+
+    RenderGroup buildRenderGroup(const std::function<void()>& buildFn) { return getGraphicsComponent().buildRenderGroup(buildFn); }
+    void drawRenderGroup(const RenderGroup& group) { getGraphicsComponent().drawRenderGroup(group); }
+    void drawRenderGroup(const RenderGroup& group, float x, float y)
+    {
+        pushMatrix();
+        translate(x, y);
+        drawRenderGroup(group);
+        popMatrix();
+    }
 } // namespace p5cpp

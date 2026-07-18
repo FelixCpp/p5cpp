@@ -6,6 +6,8 @@
 #include <p5cpp/math/constants.hpp>
 
 #include <glad/glad.h>
+#include <cassert>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
@@ -94,6 +96,106 @@ namespace p5cpp
             static_cast<float>(alpha(color)) * inv255,
         };
     }
+
+    // A run of shaped glyphs making up one visual (post-wrap) line, shared by
+    // text() (which draws it) and GraphicsComponent::layoutText() (which only
+    // measures it) so the wrapping rules can't drift between the two.
+    struct VisualLine
+    {
+        std::vector<ShapedGlyph> glyphs;
+        float width = 0.0f;
+    };
+
+    static std::vector<VisualLine> shapeTextLines(const Font& font, std::string_view text, int textSizeInt, const RenderState& rs, float maxWidth)
+    {
+        const bool doWrap = (maxWidth > 0.0f) && (rs.textWrap != TextWrap::none);
+
+        std::vector<VisualLine> lines;
+
+        auto shapeParagraph = [&](std::string_view para) {
+            if (para.empty()) {
+                lines.push_back(VisualLine {});
+                return;
+            }
+
+            std::vector<ShapedGlyph> shaped = font.shape(para, textSizeInt);
+
+            if (!doWrap) {
+                float w = 0.0f;
+                for (const ShapedGlyph& g : shaped) w += g.xAdvance + rs.textLetterSpacing;
+                lines.push_back(VisualLine {std::move(shaped), w});
+                return;
+            }
+
+            if (rs.textWrap == TextWrap::character) {
+                VisualLine current;
+                for (const ShapedGlyph& g : shaped) {
+                    const float adv = g.xAdvance + rs.textLetterSpacing;
+                    if (current.width + adv > maxWidth && !current.glyphs.empty()) {
+                        lines.push_back(std::move(current));
+                        current = {};
+                    }
+                    current.glyphs.push_back(g);
+                    current.width += adv;
+                }
+                if (!current.glyphs.empty()) lines.push_back(std::move(current));
+                return;
+            }
+
+            // TextWrap::word — greedy fill at whitespace boundaries
+            VisualLine current;
+            for (size_t i = 0; i < shaped.size(); ++i) {
+                const ShapedGlyph& g = shaped[i];
+                const float adv = g.xAdvance + rs.textLetterSpacing;
+
+                if (current.width + adv > maxWidth && !current.glyphs.empty()) {
+                    int breakIdx = -1;
+                    for (int j = static_cast<int>(current.glyphs.size()) - 1; j >= 0; --j) {
+                        if (current.glyphs[j].isWhitespace) {
+                            breakIdx = j;
+                            break;
+                        }
+                    }
+
+                    if (breakIdx >= 0) {
+                        VisualLine completedLine;
+                        for (size_t k = 0; k < static_cast<size_t>(breakIdx); ++k) {
+                            completedLine.glyphs.push_back(current.glyphs[k]);
+                            completedLine.width += current.glyphs[k].xAdvance + rs.textLetterSpacing;
+                        }
+                        lines.push_back(std::move(completedLine));
+
+                        VisualLine newCurrent;
+                        for (size_t k = static_cast<size_t>(breakIdx) + 1; k < current.glyphs.size(); ++k) {
+                            newCurrent.glyphs.push_back(current.glyphs[k]);
+                            newCurrent.width += current.glyphs[k].xAdvance + rs.textLetterSpacing;
+                        }
+                        current = std::move(newCurrent);
+                    } else {
+                        lines.push_back(std::move(current));
+                        current = {};
+                    }
+                }
+
+                current.glyphs.push_back(g);
+                current.width += adv;
+            }
+
+            if (!current.glyphs.empty()) lines.push_back(std::move(current));
+        };
+
+        // Split on newlines and shape each paragraph
+        size_t pos = 0;
+        while (true) {
+            const size_t nl = text.find('\n', pos);
+            const size_t end = (nl == std::string_view::npos) ? text.size() : nl;
+            shapeParagraph(text.substr(pos, end - pos));
+            if (nl == std::string_view::npos) break;
+            pos = nl + 1;
+        }
+
+        return lines;
+    }
 } // namespace p5cpp
 
 namespace p5cpp
@@ -112,10 +214,6 @@ namespace p5cpp
     {
         m_defaultShader = Shader(std::shared_ptr<ShaderImpl>(createPrimitiveShader()));
         m_textShader = Shader(std::shared_ptr<ShaderImpl>(createTextShader()));
-        m_blurShader = Shader(std::shared_ptr<ShaderImpl>(createBlurShader()));
-        m_grayscaleShader = Shader(std::shared_ptr<ShaderImpl>(createGrayscaleShader()));
-        m_invertShader = Shader(std::shared_ptr<ShaderImpl>(createInvertShader()));
-        m_thresholdShader = Shader(std::shared_ptr<ShaderImpl>(createThresholdShader()));
 
         const color_t white = rgba(255, 255, 255, 255);
         m_whiteTexture = Texture(loadTexture(1, 1, &white));
@@ -166,6 +264,11 @@ namespace p5cpp
 
     void GraphicsComponent::pushCanvas(Framebuffer framebuffer)
     {
+        if (m_recorder.isActive()) {
+            assert(false && "pushCanvas() is not supported inside buildRenderGroup()");
+            return;
+        }
+
         m_renderer->flush();
         m_renderer->end();
 
@@ -178,6 +281,11 @@ namespace p5cpp
 
     void GraphicsComponent::popCanvas()
     {
+        if (m_recorder.isActive()) {
+            assert(false && "popCanvas() is not supported inside buildRenderGroup()");
+            return;
+        }
+
         m_renderer->flush();
         m_renderer->end();
 
@@ -210,24 +318,44 @@ namespace p5cpp
         return m_framebufferStack.back().readPixels();
     }
 
+    MatrixStack& GraphicsComponent::activeMatrixStack()
+    {
+        return m_recorder.activeMatrixStack(m_matrixStack);
+    }
+
+    RenderStateStack& GraphicsComponent::activeRenderStateStack()
+    {
+        return m_recorder.activeRenderStateStack(m_renderStateStack);
+    }
+
+    DrawBufferWriter& GraphicsComponent::beginDrawOp()
+    {
+        return m_recorder.beginDrawOp(*m_renderer);
+    }
+
+    void GraphicsComponent::endDrawOp(DrawBufferWriter& writer, const Shader& shader, const BlendMode& blendMode, const Texture& texture, std::span<const UniformSnapshot> uniforms)
+    {
+        m_recorder.endDrawOp(*m_renderer, writer, shader, blendMode, texture, uniforms);
+    }
+
     void GraphicsComponent::pushState()
     {
-        m_renderStateStack.push();
+        activeRenderStateStack().push();
     }
 
     void GraphicsComponent::popState()
     {
-        m_renderStateStack.pop();
+        activeRenderStateStack().pop();
     }
 
     void GraphicsComponent::pushMatrix()
     {
-        m_matrixStack.push();
+        activeMatrixStack().push();
     }
 
     void GraphicsComponent::popMatrix()
     {
-        m_matrixStack.pop();
+        activeMatrixStack().pop();
     }
 
     void GraphicsComponent::resetMatrix()
@@ -237,18 +365,18 @@ namespace p5cpp
 
     matrix4x4& GraphicsComponent::peekMatrix()
     {
-        return m_matrixStack.peek();
+        return activeMatrixStack().peek();
     }
 
     void GraphicsComponent::applyMatrix(const matrix4x4& matrix)
     {
-        matrix4x4& currentMatrix = m_matrixStack.peek();
+        matrix4x4& currentMatrix = activeMatrixStack().peek();
         currentMatrix = matrix * currentMatrix;
     }
 
     void GraphicsComponent::setMatrix(const matrix4x4& matrix)
     {
-        m_matrixStack.peek() = matrix;
+        activeMatrixStack().peek() = matrix;
     }
 
     void GraphicsComponent::translate(float x, float y)
@@ -413,11 +541,16 @@ namespace p5cpp
 
     RenderState& GraphicsComponent::peekRenderState()
     {
-        return m_renderStateStack.peek();
+        return activeRenderStateStack().peek();
     }
 
     void GraphicsComponent::background(color_t color)
     {
+        if (m_recorder.isActive()) {
+            assert(false && "background() is not supported inside buildRenderGroup()");
+            return;
+        }
+
         const uint2 canvasSize = getCanvasSize();
         const float w = static_cast<float>(canvasSize.x);
         const float h = static_cast<float>(canvasSize.y);
@@ -433,13 +566,13 @@ namespace p5cpp
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
-        m_renderer->submit(writer, m_uniformCache, m_defaultShader, BlendMode::alpha, m_whiteTexture);
+        m_renderer->submit(writer, m_uniformCache.getUniforms(m_defaultShader), m_defaultShader, BlendMode::alpha, m_whiteTexture);
     }
 
     void GraphicsComponent::rect(float left, float top, float w, float h)
     {
         const RenderState& rs = peekRenderState();
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
 
         const float2 p0 = mtx.transformPoint(left, top);
         const float2 p1 = mtx.transformPoint(left + w, top);
@@ -463,7 +596,7 @@ namespace p5cpp
     void GraphicsComponent::rect(float left, float top, float w, float h, BorderRadius borderRadius)
     {
         const RenderState& rs = peekRenderState();
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
 
         m_roundedRectPositions.clear();
 
@@ -508,7 +641,7 @@ namespace p5cpp
         const float ry = h * 0.5f;
         const float maxRadius = std::max(rx, ry);
         const size_t segments = computeCircleSegmentCount(TWO_PI, maxRadius);
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
         const std::vector<float2>& unitCircle = unitCircleTableCache.getFullCircle(segments);
 
         // Build center + (segments+1) perimeter points for a closed fan.
@@ -548,7 +681,7 @@ namespace p5cpp
     void GraphicsComponent::triangle(float x1, float y1, float x2, float y2, float x3, float y3)
     {
         const RenderState& rs = peekRenderState();
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
 
         const float2 positions[3] = {
             mtx.transformPoint(x1, y1),
@@ -574,7 +707,7 @@ namespace p5cpp
         if (rs.isStrokeDisabled) return;
 
         const float halfSize = rs.strokeWeight * 0.5f;
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
         const float2 center = mtx.transformPoint(px, py);
 
         if (rs.strokeCap.start == StrokeCapStyle::round) {
@@ -609,7 +742,7 @@ namespace p5cpp
         const RenderState& rs = peekRenderState();
         if (rs.isStrokeDisabled) return;
 
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
         const float2 positions[2] = {mtx.transformPoint(x1, y1), mtx.transformPoint(x2, y2)};
         const float2 uvs[2] = {float2::zero, float2::zero};
         const color_t colors[2] = {rs.strokeColor, rs.strokeColor};
@@ -624,7 +757,7 @@ namespace p5cpp
         const float ry = h * 0.5f;
         const float maxRadius = std::max(rx, ry);
         const size_t segments = computeCircleSegmentCount(std::abs(sweepAngle), maxRadius);
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
 
         // Arc perimeter points
         m_arcPositions.resize(segments + 1);
@@ -678,7 +811,7 @@ namespace p5cpp
 
         const size_t detail = rs.bezierDetail;
         const float invDetail = rs.invBezierDetail;
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
 
         const size_t count = detail + 1;
         m_curvePositions.resize(count);
@@ -708,7 +841,7 @@ namespace p5cpp
         const float alpha = (1.0f - rs.curveTightness) * 0.5f;
         const size_t detail = rs.curveDetail;
         const float invDetail = rs.invCurveDetail;
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
 
         const size_t count = detail + 1;
         m_curvePositions.resize(count);
@@ -730,10 +863,10 @@ namespace p5cpp
     void GraphicsComponent::image(const Texture& texture, float left, float top, float w, float h)
     {
         const RenderState& rs = peekRenderState();
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
         const float4 tint = colorToFloat4(rs.tintColor);
 
-        DrawBufferWriter& writer = m_renderer->getDrawScope();
+        DrawBufferWriter& writer = beginDrawOp();
         const uint32_t base = writer.getRelativeCursor();
 
         writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 0.0f}, tint);
@@ -743,7 +876,8 @@ namespace p5cpp
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
-        m_renderer->submit(writer, m_uniformCache, getShader(rs), rs.blendMode, texture);
+        const Shader shaderToUse = getShader(rs);
+        endDrawOp(writer, shaderToUse, rs.blendMode, texture, m_uniformCache.getUniforms(shaderToUse));
     }
 
     void GraphicsComponent::text(std::string_view text, float x, float y)
@@ -763,99 +897,8 @@ namespace p5cpp
         const FontMetrics* metrics = font.getMetrics(textSizeInt);
         if (!metrics) return;
 
-        const bool doWrap = (maxWidth > 0.0f) && (rs.textWrap != TextWrap::none);
         const float lineH = metrics->lineHeight * rs.textLineSpacing;
-
-        struct VisualLine
-        {
-            std::vector<ShapedGlyph> glyphs;
-            float width = 0.0f;
-        };
-
-        std::vector<VisualLine> lines;
-
-        auto shapeParagraph = [&](std::string_view para) {
-            if (para.empty()) {
-                lines.push_back(VisualLine {});
-                return;
-            }
-
-            std::vector<ShapedGlyph> shaped = font.shape(para, textSizeInt);
-
-            if (!doWrap) {
-                float w = 0.0f;
-                for (const ShapedGlyph& g : shaped) w += g.xAdvance + rs.textLetterSpacing;
-                lines.push_back(VisualLine {std::move(shaped), w});
-                return;
-            }
-
-            if (rs.textWrap == TextWrap::character) {
-                VisualLine current;
-                for (const ShapedGlyph& g : shaped) {
-                    const float adv = g.xAdvance + rs.textLetterSpacing;
-                    if (current.width + adv > maxWidth && !current.glyphs.empty()) {
-                        lines.push_back(std::move(current));
-                        current = {};
-                    }
-                    current.glyphs.push_back(g);
-                    current.width += adv;
-                }
-                if (!current.glyphs.empty()) lines.push_back(std::move(current));
-                return;
-            }
-
-            // TextWrap::word — greedy fill at whitespace boundaries
-            VisualLine current;
-            for (size_t i = 0; i < shaped.size(); ++i) {
-                const ShapedGlyph& g = shaped[i];
-                const float adv = g.xAdvance + rs.textLetterSpacing;
-
-                if (current.width + adv > maxWidth && !current.glyphs.empty()) {
-                    int breakIdx = -1;
-                    for (int j = static_cast<int>(current.glyphs.size()) - 1; j >= 0; --j) {
-                        if (current.glyphs[j].isWhitespace) {
-                            breakIdx = j;
-                            break;
-                        }
-                    }
-
-                    if (breakIdx >= 0) {
-                        VisualLine completedLine;
-                        for (size_t k = 0; k < static_cast<size_t>(breakIdx); ++k) {
-                            completedLine.glyphs.push_back(current.glyphs[k]);
-                            completedLine.width += current.glyphs[k].xAdvance + rs.textLetterSpacing;
-                        }
-                        lines.push_back(std::move(completedLine));
-
-                        VisualLine newCurrent;
-                        for (size_t k = static_cast<size_t>(breakIdx) + 1; k < current.glyphs.size(); ++k) {
-                            newCurrent.glyphs.push_back(current.glyphs[k]);
-                            newCurrent.width += current.glyphs[k].xAdvance + rs.textLetterSpacing;
-                        }
-                        current = std::move(newCurrent);
-                    } else {
-                        lines.push_back(std::move(current));
-                        current = {};
-                    }
-                }
-
-                current.glyphs.push_back(g);
-                current.width += adv;
-            }
-
-            if (!current.glyphs.empty()) lines.push_back(std::move(current));
-        };
-
-        // Split on newlines and shape each paragraph
-        size_t pos = 0;
-        while (true) {
-            const size_t nl = text.find('\n', pos);
-            const size_t end = (nl == std::string_view::npos) ? text.size() : nl;
-            shapeParagraph(text.substr(pos, end - pos));
-            if (nl == std::string_view::npos) break;
-            pos = nl + 1;
-        }
-
+        std::vector<VisualLine> lines = shapeTextLines(font, text, textSizeInt, rs, maxWidth);
         if (lines.empty()) return;
 
         // Vertical alignment
@@ -878,7 +921,7 @@ namespace p5cpp
                 break;
         }
 
-        const matrix4x4& mtx = m_matrixStack.peek();
+        const matrix4x4& mtx = peekMatrix();
         const float4 fillColor = colorToFloat4(rs.fillColor);
 
         for (size_t li = 0; li < lines.size(); ++li) {
@@ -915,7 +958,7 @@ namespace p5cpp
                         const float u1 = sg.uvRect.left + sg.uvRect.width;
                         const float v1 = sg.uvRect.top + sg.uvRect.height;
 
-                        DrawBufferWriter& writer = m_renderer->getDrawScope();
+                        DrawBufferWriter& writer = beginDrawOp();
                         const uint32_t base = writer.getRelativeCursor();
 
                         writer.pushVertex(mtx.transformPoint(gLeft, gTop), {u0, v0}, fillColor);
@@ -925,7 +968,7 @@ namespace p5cpp
                         writer.pushTriangle(base + 0, base + 1, base + 2);
                         writer.pushTriangle(base + 0, base + 2, base + 3);
 
-                        m_renderer->submit(writer, m_uniformCache, m_textShader, rs.blendMode, *atlasTexture);
+                        endDrawOp(writer, m_textShader, rs.blendMode, *atlasTexture, m_uniformCache.getUniforms(m_textShader));
                     }
                 }
 
@@ -933,6 +976,84 @@ namespace p5cpp
                 penY += sg.yAdvance;
             }
         }
+    }
+
+    TextLayout GraphicsComponent::layoutText(std::string_view text, float x, float y)
+    {
+        return this->layoutText(text, x, y, -1.0f);
+    }
+
+    TextLayout GraphicsComponent::layoutText(std::string_view text, float x, float y, float maxWidth)
+    {
+        TextLayout layout;
+
+        const RenderState& rs = peekRenderState();
+        const Font& font = rs.font.value_or(m_defaultFont);
+
+        const int textSizeInt = static_cast<int>(rs.textSize);
+        if (textSizeInt <= 0) return layout;
+
+        const FontMetrics* metrics = font.getMetrics(textSizeInt);
+        if (!metrics) return layout;
+
+        const float lineH = metrics->lineHeight * rs.textLineSpacing;
+        std::vector<VisualLine> lines = shapeTextLines(font, text, textSizeInt, rs, maxWidth);
+        if (lines.empty()) return layout;
+
+        const float totalH = lineH * static_cast<float>(lines.size());
+
+        float penY0 = y;
+        switch (rs.textAlign.vertical) {
+            case VerticalTextAlign::top:
+                penY0 = y + metrics->ascender;
+                break;
+            case VerticalTextAlign::center:
+                penY0 = y - totalH * 0.5f + metrics->ascender;
+                break;
+            case VerticalTextAlign::bottom:
+                penY0 = y - totalH + metrics->ascender;
+                break;
+            case VerticalTextAlign::baseline:
+            default:
+                penY0 = y;
+                break;
+        }
+
+        layout.lines.reserve(lines.size());
+        layout.ascender = metrics->ascender;
+        layout.descender = metrics->descender;
+        layout.lineHeight = lineH;
+        layout.height = totalH;
+
+        float minX = std::numeric_limits<float>::max();
+        float maxX = std::numeric_limits<float>::lowest();
+
+        for (size_t li = 0; li < lines.size(); ++li) {
+            const VisualLine& line = lines[li];
+            const float baseY = penY0 + static_cast<float>(li) * lineH;
+
+            float startX = x;
+            switch (rs.textAlign.horizontal) {
+                case HorizontalTextAlign::left:
+                    startX = x;
+                    break;
+                case HorizontalTextAlign::center:
+                    startX = x - line.width * 0.5f;
+                    break;
+                case HorizontalTextAlign::right:
+                    startX = x - line.width;
+                    break;
+            }
+
+            layout.lines.push_back(TextLineLayout {.width = line.width, .x = startX, .baselineY = baseY});
+            layout.width = std::max(layout.width, line.width);
+            minX = std::min(minX, startX);
+            maxX = std::max(maxX, startX + line.width);
+        }
+
+        layout.bounds = float_rect {minX, penY0 - metrics->ascender, maxX - minX, totalH};
+
+        return layout;
     }
 
     void GraphicsComponent::beginShape()
@@ -971,7 +1092,7 @@ namespace p5cpp
         }
 
         const RenderState& renderState = peekRenderState();
-        const matrix4x4& matrix = m_matrixStack.peek();
+        const matrix4x4& matrix = peekMatrix();
         const float2 transformedPosition = matrix.transformPoint(x, y);
 
         m_drawPointPositions[m_drawPointCount] = transformedPosition;
@@ -1040,6 +1161,34 @@ namespace p5cpp
         m_drawPointCount = 0;
     }
 
+    RenderGroup GraphicsComponent::buildRenderGroup(const std::function<void()>& buildFn)
+    {
+        return m_recorder.build(buildFn);
+    }
+
+    void GraphicsComponent::drawRenderGroup(const RenderGroup& group)
+    {
+        const std::shared_ptr<const RenderGroupImpl>& impl = group.getImpl();
+        if (!impl) return;
+
+        const matrix4x4& mtx = peekMatrix();
+
+        for (const RecordedOp& op : impl->ops) {
+            DrawBufferWriter& writer = beginDrawOp();
+            const uint32_t base = writer.getRelativeCursor();
+
+            for (const RecordedVertex& v : op.vertices) {
+                writer.pushVertex(mtx.transformPoint(v.position.x, v.position.y), v.texcoord, v.color);
+            }
+
+            for (size_t i = 0; i + 2 < op.indices.size(); i += 3) {
+                writer.pushTriangle(base + op.indices[i], base + op.indices[i + 1], base + op.indices[i + 2]);
+            }
+
+            endDrawOp(writer, op.shader, op.blendMode, op.texture, op.uniforms);
+        }
+    }
+
     Shader GraphicsComponent::getShader(const RenderState& renderState)
     {
         if (renderState.shader.has_value()) {
@@ -1052,7 +1201,7 @@ namespace p5cpp
     void GraphicsComponent::submitFill(const PathPoints& pts, ShapeType type, const Texture& texture)
     {
         const RenderState& rs = peekRenderState();
-        DrawBufferWriter& writer = m_renderer->getDrawScope();
+        DrawBufferWriter& writer = beginDrawOp();
 
         switch (type) {
             case ShapeType::triangles: tesselate_triangles(writer, pts); break;
@@ -1063,13 +1212,14 @@ namespace p5cpp
             default: tesselate_polygon(writer, pts); break;
         }
 
-        m_renderer->submit(writer, m_uniformCache, getShader(rs), rs.blendMode, texture);
+        const Shader shaderToUse = getShader(rs);
+        endDrawOp(writer, shaderToUse, rs.blendMode, texture, m_uniformCache.getUniforms(shaderToUse));
     }
 
     void GraphicsComponent::submitStroke(const PathPoints& pts, ShapeType type, bool close)
     {
         const RenderState& rs = peekRenderState();
-        DrawBufferWriter& writer = m_renderer->getDrawScope();
+        DrawBufferWriter& writer = beginDrawOp();
 
         switch (type) {
             case ShapeType::lines:
@@ -1101,139 +1251,44 @@ namespace p5cpp
                 break;
         }
 
-        m_renderer->submit(writer, m_uniformCache, m_defaultShader, rs.blendMode, m_whiteTexture);
+        endDrawOp(writer, m_defaultShader, rs.blendMode, m_whiteTexture, m_uniformCache.getUniforms(m_defaultShader));
     }
 
     void GraphicsComponent::filter(FilterType type, float amount)
     {
+        if (m_recorder.isActive()) {
+            assert(false && "filter() is not supported inside buildRenderGroup()");
+            return;
+        }
+
+        if (m_framebufferStack.empty()) return;
+        Framebuffer& current = m_framebufferStack.back();
+
         switch (type) {
             case FilterType::blur:
-                applyBlur(amount);
+                m_effects.applyBlur(*m_renderer, m_uniformCache, current, amount);
                 break;
             case FilterType::grayscale:
-                applyGrayscale(amount);
+                m_effects.applyGrayscale(*m_renderer, m_uniformCache, current, amount);
                 break;
             case FilterType::invert:
-                applyInvert(amount);
+                m_effects.applyInvert(*m_renderer, m_uniformCache, current, amount);
                 break;
             case FilterType::threshold:
-                applyThreshold(amount);
+                m_effects.applyThreshold(*m_renderer, m_uniformCache, current, amount);
                 break;
         }
     }
 
     void GraphicsComponent::effect(const Shader& shader)
     {
+        if (m_recorder.isActive()) {
+            assert(false && "effect() is not supported inside buildRenderGroup()");
+            return;
+        }
+
         if (m_framebufferStack.empty()) return;
 
-        m_renderer->flush();
-        m_renderer->end();
-
-        Framebuffer& current = m_framebufferStack.back();
-        const uint2 size = current.getSize();
-        ensureEffectScratch(size);
-
-        const float texelX = (size.x > 0) ? (1.0f / static_cast<float>(size.x)) : 0.0f;
-        const float texelY = (size.y > 0) ? (1.0f / static_cast<float>(size.y)) : 0.0f;
-        m_uniformCache.setUniform(shader, "u_TexelSize", uniform(texelX, texelY));
-
-        runEffectPass(current, m_effectScratchFramebuffers[0], shader);
-        blitFramebuffer(m_effectScratchFramebuffers[0], current);
-
-        m_renderer->begin(current);
-    }
-
-    void GraphicsComponent::applyBlur(float amount)
-    {
-        if (m_framebufferStack.empty()) return;
-
-        m_renderer->flush();
-        m_renderer->end();
-
-        Framebuffer& current = m_framebufferStack.back();
-        const uint2 size = current.getSize();
-        ensureEffectScratch(size);
-
-        const float radius = std::max(amount, 0.0f);
-        const float texelX = (size.x > 0) ? (1.0f / static_cast<float>(size.x)) : 0.0f;
-        const float texelY = (size.y > 0) ? (1.0f / static_cast<float>(size.y)) : 0.0f;
-
-        m_uniformCache.setUniform(m_blurShader, "u_TexelSize", uniform(texelX, texelY));
-        m_uniformCache.setUniform(m_blurShader, "u_Radius", uniform(radius));
-
-        m_uniformCache.setUniform(m_blurShader, "u_Direction", uniform(1.0f, 0.0f));
-        runEffectPass(current, m_effectScratchFramebuffers[0], m_blurShader);
-
-        m_uniformCache.setUniform(m_blurShader, "u_Direction", uniform(0.0f, 1.0f));
-        runEffectPass(m_effectScratchFramebuffers[0], m_effectScratchFramebuffers[1], m_blurShader);
-
-        blitFramebuffer(m_effectScratchFramebuffers[1], current);
-
-        m_renderer->begin(current);
-    }
-
-    void GraphicsComponent::applyGrayscale(float amount)
-    {
-        m_uniformCache.setUniform(m_grayscaleShader, "u_Amount", uniform(amount));
-        effect(m_grayscaleShader);
-    }
-
-    void GraphicsComponent::applyInvert(float amount)
-    {
-        m_uniformCache.setUniform(m_invertShader, "u_Amount", uniform(amount));
-        effect(m_invertShader);
-    }
-
-    void GraphicsComponent::applyThreshold(float amount)
-    {
-        m_uniformCache.setUniform(m_thresholdShader, "u_Amount", uniform(amount));
-        effect(m_thresholdShader);
-    }
-
-    void GraphicsComponent::ensureEffectScratch(uint2 size)
-    {
-        if (m_effectScratchSize.x == size.x && m_effectScratchSize.y == size.y) return;
-
-        m_effectScratchFramebuffers[0] = createFramebuffer(size.x, size.y);
-        m_effectScratchFramebuffers[1] = createFramebuffer(size.x, size.y);
-        m_effectScratchSize = size;
-    }
-
-    // Draws a fullscreen quad sampling `source`'s color texture into `dest`, using `shader`.
-    // Bypasses transform/tint/getShader() entirely — a screen-space pass is neither
-    // transformed nor tinted, matching how background() bypasses them too.
-    void GraphicsComponent::runEffectPass(const Framebuffer& source, const Framebuffer& dest, const Shader& shader)
-    {
-        m_renderer->begin(dest);
-
-        const uint2 size = dest.getSize();
-        const float w = static_cast<float>(size.x);
-        const float h = static_cast<float>(size.y);
-        const float4 white {1.0f, 1.0f, 1.0f, 1.0f};
-
-        DrawBufferWriter& writer = m_renderer->getDrawScope();
-        const uint32_t base = writer.getRelativeCursor();
-
-        writer.pushVertex({0.0f, 0.0f}, {0.0f, 1.0f}, white);
-        writer.pushVertex({w, 0.0f}, {1.0f, 1.0f}, white);
-        writer.pushVertex({w, h}, {1.0f, 0.0f}, white);
-        writer.pushVertex({0.0f, h}, {0.0f, 0.0f}, white);
-        writer.pushTriangle(base + 0, base + 1, base + 2);
-        writer.pushTriangle(base + 0, base + 2, base + 3);
-
-        m_renderer->submit(writer, m_uniformCache, shader, BlendMode::none, *source.getColorTexture());
-        m_renderer->flush();
-        m_renderer->end();
-    }
-
-    void GraphicsComponent::blitFramebuffer(const Framebuffer& source, const Framebuffer& dest)
-    {
-        const uint2 size = dest.getSize();
-
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, source.getFramebufferId().value);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dest.getFramebufferId().value);
-        glBlitFramebuffer(0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), 0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        m_effects.runEffect(*m_renderer, m_uniformCache, m_framebufferStack.back(), shader);
     }
 } // namespace p5cpp
