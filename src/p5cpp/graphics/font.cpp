@@ -883,7 +883,7 @@ namespace p5cpp
             return *m_shapedTextCache.put(text, textSize, std::move(result));
         }
 
-        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail) override
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap) override
         {
             std::vector<TextContour> result;
 
@@ -912,6 +912,15 @@ namespace p5cpp
             hb_feature_from_string("calt", -1, &features[1]); // contextual alternates
             hb_feature_from_string("kern", -1, &features[2]); // kerning
 
+            const bool doWrap = (maxWidth > 0.0f) && (wrap != TextWrap::none);
+
+            // A contiguous run of glyphs [start, end) making up one visual (post-wrap) line.
+            struct GlyphRange
+            {
+                unsigned int start;
+                unsigned int end;
+            };
+
             float penY = y;
             size_t lineStart = 0;
             while (lineStart <= text.size()) {
@@ -929,27 +938,84 @@ namespace p5cpp
                 hb_glyph_info_t* glyphInfos = hb_buffer_get_glyph_infos(buf, &numGlyphs);
                 hb_glyph_position_t* glyphPositions = hb_buffer_get_glyph_positions(buf, nullptr);
 
-                float penX = x;
-                for (unsigned int i = 0; i < numGlyphs; ++i) {
-                    const uint32_t glyphId = glyphInfos[i].codepoint; // HarfBuzz renames this field to hold glyph ID
-                    const float xOffset = glyphPositions[i].x_offset / 64.0f;
-                    const float yOffset = glyphPositions[i].y_offset / 64.0f;
-                    const float xAdvance = glyphPositions[i].x_advance / 64.0f;
-                    const float yAdvance = glyphPositions[i].y_advance / 64.0f;
+                auto glyphAdvance = [&](unsigned int i) { return glyphPositions[i].x_advance / 64.0f; };
+                auto isWhitespaceGlyph = [&](unsigned int i) {
+                    const char32_t cp = decodeUtf8CodepointAt(line, glyphInfos[i].cluster);
+                    return cp == U' ' || cp == U'\t';
+                };
 
-                    if (FT_Load_Glyph(m_face.get(), glyphId, FT_LOAD_NO_BITMAP) == 0) {
-                        FT_Outline& outline = m_face->glyph->outline;
-                        if (outline.n_points > 0) {
-                            OutlineDecomposeContext ctx;
-                            ctx.contours = &result;
-                            ctx.penOffset = float2 {penX + xOffset, penY - yOffset};
-                            ctx.curveDetail = curveDetail < 1 ? 1 : curveDetail;
-                            FT_Outline_Decompose(&outline, &funcs, &ctx);
+                // Split this paragraph's glyphs into visual sub-lines according to maxWidth/wrap,
+                // mirroring the wrap rules of shapeTextLines() in graphics_component.cpp.
+                std::vector<GlyphRange> visualLines;
+                if (!doWrap || numGlyphs == 0) {
+                    visualLines.push_back({0, numGlyphs});
+                } else if (wrap == TextWrap::character) {
+                    unsigned int rangeStart = 0;
+                    float width = 0.0f;
+                    for (unsigned int i = 0; i < numGlyphs; ++i) {
+                        const float adv = glyphAdvance(i);
+                        if (width + adv > maxWidth && i > rangeStart) {
+                            visualLines.push_back({rangeStart, i});
+                            rangeStart = i;
+                            width = 0.0f;
                         }
+                        width += adv;
+                    }
+                    visualLines.push_back({rangeStart, numGlyphs});
+                } else {
+                    // TextWrap::word — greedy fill at whitespace boundaries
+                    unsigned int rangeStart = 0;
+                    float width = 0.0f;
+                    unsigned int lastWhitespace = numGlyphs; // sentinel: none seen yet in this range
+                    for (unsigned int i = 0; i < numGlyphs; ++i) {
+                        const float adv = glyphAdvance(i);
+                        if (width + adv > maxWidth && i > rangeStart) {
+                            if (lastWhitespace != numGlyphs && lastWhitespace >= rangeStart) {
+                                visualLines.push_back({rangeStart, lastWhitespace});
+                                rangeStart = lastWhitespace + 1;
+                            } else {
+                                visualLines.push_back({rangeStart, i});
+                                rangeStart = i;
+                            }
+                            width = 0.0f;
+                            for (unsigned int k = rangeStart; k <= i; ++k) width += glyphAdvance(k);
+                            lastWhitespace = numGlyphs;
+                        } else {
+                            width += adv;
+                        }
+                        if (isWhitespaceGlyph(i)) lastWhitespace = i;
+                    }
+                    visualLines.push_back({rangeStart, numGlyphs});
+                }
+
+                for (size_t vi = 0; vi < visualLines.size(); ++vi) {
+                    const GlyphRange range = visualLines[vi];
+                    float penX = x;
+                    for (unsigned int i = range.start; i < range.end; ++i) {
+                        const uint32_t glyphId = glyphInfos[i].codepoint; // HarfBuzz renames this field to hold glyph ID
+                        const float xOffset = glyphPositions[i].x_offset / 64.0f;
+                        const float yOffset = glyphPositions[i].y_offset / 64.0f;
+                        const float xAdvance = glyphPositions[i].x_advance / 64.0f;
+                        const float yAdvance = glyphPositions[i].y_advance / 64.0f;
+
+                        if (FT_Load_Glyph(m_face.get(), glyphId, FT_LOAD_NO_BITMAP) == 0) {
+                            FT_Outline& outline = m_face->glyph->outline;
+                            if (outline.n_points > 0) {
+                                OutlineDecomposeContext ctx;
+                                ctx.contours = &result;
+                                ctx.penOffset = float2 {penX + xOffset, penY - yOffset};
+                                ctx.curveDetail = curveDetail < 1 ? 1 : curveDetail;
+                                FT_Outline_Decompose(&outline, &funcs, &ctx);
+                            }
+                        }
+
+                        penX += xAdvance;
+                        penY += yAdvance;
                     }
 
-                    penX += xAdvance;
-                    penY += yAdvance;
+                    if (vi + 1 < visualLines.size()) {
+                        penY += lineHeight;
+                    }
                 }
 
                 hb_buffer_destroy(buf);
@@ -1145,7 +1211,7 @@ namespace
         float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override { return m_shared->getKerning(leftCodepoint, rightCodepoint, textSize); }
         const p5cpp::Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override { return m_shared->getGlyphAtlasTexture(glyphAtlasIndex); }
         std::vector<p5cpp::ShapedGlyph> shape(std::string_view text, int textSize) override { return m_shared->shape(text, textSize); }
-        std::vector<p5cpp::TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail) override { return m_shared->textToPoints(text, x, y, textSize, curveDetail); }
+        std::vector<p5cpp::TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, p5cpp::TextWrap wrap) override { return m_shared->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap); }
 
     private:
         std::shared_ptr<p5cpp::FontImpl> m_shared;
@@ -1228,10 +1294,10 @@ namespace p5cpp
         return impl->shape(text, textSize);
     }
 
-    std::vector<TextContour> Font::textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float spacing) const
+    std::vector<TextContour> Font::textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float spacing, float maxWidth, TextWrap wrap) const
     {
         assert(impl != nullptr && "Font implementation is not initialized.");
-        std::vector<TextContour> contours = impl->textToPoints(text, x, y, textSize, curveDetail);
+        std::vector<TextContour> contours = impl->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap);
 
         if (spacing > 0.0f) {
             for (TextContour& contour : contours) {

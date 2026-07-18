@@ -104,6 +104,7 @@ namespace p5cpp
         TextLayout layoutText(std::string_view text, float x, float y, float maxWidth);
 
         std::vector<TextContour> textToPoints(std::string_view text, float x, float y);
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, float maxWidth);
 
         void beginShape();
         void endShape(ShapeType type, bool close);

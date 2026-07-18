@@ -1068,13 +1068,18 @@ namespace p5cpp
 
     std::vector<TextContour> GraphicsComponent::textToPoints(std::string_view text, float x, float y)
     {
+        return this->textToPoints(text, x, y, -1.0f);
+    }
+
+    std::vector<TextContour> GraphicsComponent::textToPoints(std::string_view text, float x, float y, float maxWidth)
+    {
         const RenderState& rs = peekRenderState();
         const Font& font = rs.font.value_or(m_defaultFont);
 
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return {};
 
-        std::vector<TextContour> contours = font.textToPoints(text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing);
+        std::vector<TextContour> contours = font.textToPoints(text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing, maxWidth, rs.textWrap);
 
         const matrix4x4& mtx = peekMatrix();
         for (TextContour& contour : contours) {

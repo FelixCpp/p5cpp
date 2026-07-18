@@ -1,6 +1,7 @@
 #pragma once
 
 #include <p5cpp/graphics/texture.hpp>
+#include <p5cpp/graphics/text.hpp>
 
 #include <p5cpp/math/value2.hpp>
 #include <p5cpp/math/rectangle.hpp>
@@ -74,7 +75,7 @@ namespace p5cpp
         virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
         virtual const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) = 0;
         virtual std::vector<ShapedGlyph> shape(std::string_view text, int textSize) = 0;
-        virtual std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail) = 0;
+        virtual std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap) = 0;
     };
 
     std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath);
@@ -103,8 +104,10 @@ namespace p5cpp
         // each curve in the glyph outline is flattened into. If `spacing` is greater than 0, every
         // contour is additionally resampled to points evenly spaced `spacing` pixels apart along
         // its arc length (matching p5.js's textToPoints()); otherwise contours keep the raw,
-        // curvature-biased points produced by the outline decomposition.
-        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail = 8, float spacing = 0.0f) const;
+        // curvature-biased points produced by the outline decomposition. If `maxWidth` is greater
+        // than 0 and `wrap` is not TextWrap::none, text additionally wraps the same way as
+        // text(text, x, y, maxWidth) does.
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail = 8, float spacing = 0.0f, float maxWidth = -1.0f, TextWrap wrap = TextWrap::none) const;
 
     private:
         std::shared_ptr<FontImpl> impl;

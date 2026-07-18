@@ -114,6 +114,7 @@ namespace p5cpp
     TextLayout textLayout(std::string_view text, float x, float y, float maxWidth) { return getGraphicsComponent().layoutText(text, x, y, maxWidth); }
 
     std::vector<TextContour> textToPoints(std::string_view text, float x, float y) { return getGraphicsComponent().textToPoints(text, x, y); }
+    std::vector<TextContour> textToPoints(std::string_view text, float x, float y, float maxWidth) { return getGraphicsComponent().textToPoints(text, x, y, maxWidth); }
 
     RenderGroup buildRenderGroup(const std::function<void()>& buildFn) { return getGraphicsComponent().buildRenderGroup(buildFn); }
     void drawRenderGroup(const RenderGroup& group) { getGraphicsComponent().drawRenderGroup(group); }
