@@ -6,6 +6,7 @@
 #include <p5cpp/math/constants.hpp>
 
 #include <glad/glad.h>
+#include <algorithm>
 #include <cassert>
 #include <limits>
 #include <unordered_map>
@@ -308,14 +309,42 @@ namespace p5cpp
         return m_framebufferStack.back().getSize();
     }
 
-    std::vector<color_t> GraphicsComponent::loadPixels()
+    std::vector<color_t> GraphicsComponent::flipRows(std::span<const color_t> src, uint32_t width, uint32_t height)
+    {
+        std::vector<color_t> flipped(src.size());
+        for (uint32_t y = 0; y < height; ++y) {
+            const size_t srcRow = static_cast<size_t>(height - 1 - y) * width;
+            const size_t dstRow = static_cast<size_t>(y) * width;
+            std::copy_n(src.begin() + static_cast<ptrdiff_t>(srcRow), width, flipped.begin() + static_cast<ptrdiff_t>(dstRow));
+        }
+        return flipped;
+    }
+
+    Pixels GraphicsComponent::loadPixels()
     {
         if (m_framebufferStack.empty()) {
-            return {};
+            return Pixels();
         }
 
         m_renderer->flush();
-        return m_framebufferStack.back().readPixels();
+
+        const Framebuffer& framebuffer = m_framebufferStack.back();
+        const uint2 size = framebuffer.getSize();
+        return Pixels(size.x, size.y, flipRows(framebuffer.readPixels(), size.x, size.y));
+    }
+
+    void GraphicsComponent::updatePixels(const Pixels& pixels)
+    {
+        if (m_framebufferStack.empty()) {
+            return;
+        }
+
+        Framebuffer& framebuffer = m_framebufferStack.back();
+        const uint2 size = framebuffer.getSize();
+        assert(pixels.getWidth() == size.x && pixels.getHeight() == size.y);
+
+        m_renderer->flush();
+        framebuffer.writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
     }
 
     MatrixStack& GraphicsComponent::activeMatrixStack()
@@ -356,6 +385,18 @@ namespace p5cpp
     void GraphicsComponent::popMatrix()
     {
         activeMatrixStack().pop();
+    }
+
+    void GraphicsComponent::push()
+    {
+        pushState();
+        pushMatrix();
+    }
+
+    void GraphicsComponent::pop()
+    {
+        popMatrix();
+        popState();
     }
 
     void GraphicsComponent::resetMatrix()
@@ -879,10 +920,15 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
         const uint32_t base = writer.getRelativeCursor();
 
-        writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 0.0f}, tint);
-        writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 0.0f}, tint);
-        writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 1.0f}, tint);
-        writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 1.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 1.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 1.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 0.0f}, tint);
+        writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 0.0f}, tint);
+
+        // writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 0.0f}, tint);
+        // writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 0.0f}, tint);
+        // writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 1.0f}, tint);
+        // writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 1.0f}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 

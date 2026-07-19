@@ -1,6 +1,7 @@
 #include <p5cpp/graphics/texture.hpp>
 
 #include <glad/glad.h>
+#include <p5cpp/graphics/image.hpp>
 
 namespace p5cpp
 {
@@ -13,12 +14,17 @@ namespace p5cpp
         {
             glGenTextures(1, &textureId);
             glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, reinterpret_cast<const GLchar*>(data.data()));
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
+        ~OpenGLTextureImpl()
+        {
+            glDeleteTextures(1, &textureId);
         }
 
         uint2 getSize() const override

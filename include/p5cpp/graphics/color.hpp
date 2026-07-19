@@ -32,7 +32,8 @@ namespace p5cpp
 
     inline constexpr color_t rgba(int red, int green, int blue, int alpha)
     {
-        return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha);
+        // return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha);
+        return (static_cast<color_t>(alpha) << 24) | (static_cast<color_t>(blue) << 16) | (static_cast<color_t>(green) << 8) | static_cast<color_t>(red);
     }
 
     inline constexpr color_t lighten(color_t color, float factor)
@@ -73,11 +74,11 @@ namespace p5cpp
         return rgba(r, g, b, a);
     }
 
-    inline constexpr color_t withAlpha(color_t color, int alpha) { return (color & 0xFFFFFF00) | (static_cast<color_t>(alpha) & 0xFF); }
-    inline constexpr int red(color_t color) { return (color >> 24) & 0xFF; }
-    inline constexpr int green(color_t color) { return (color >> 16) & 0xFF; }
-    inline constexpr int blue(color_t color) { return (color >> 8) & 0xFF; }
-    inline constexpr int alpha(color_t color) { return color & 0xFF; }
+    inline constexpr color_t withAlpha(color_t color, int alpha) { return (color & 0x00FFFFFF) | (static_cast<color_t>(alpha) << 24); }
+    inline constexpr int red(color_t color) { return (color >> 0) & 0xFF; }
+    inline constexpr int green(color_t color) { return (color >> 8) & 0xFF; }
+    inline constexpr int blue(color_t color) { return (color >> 16) & 0xFF; }
+    inline constexpr int alpha(color_t color) { return (color >> 24) & 0xFF; }
 
     inline constexpr int brightness(color_t color)
     {

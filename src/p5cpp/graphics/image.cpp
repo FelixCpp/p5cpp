@@ -15,6 +15,7 @@ namespace p5cpp
         int width = 0;
         int height = 0;
         int channels = 0;
+        stbi_set_flip_vertically_on_load(true);
 
         // Force 4 channels (STBI_rgb_alpha) so the decoded buffer is directly usable as
         // raw R,G,B,A bytes — the same memory layout loadTexture()/Texture::upload()

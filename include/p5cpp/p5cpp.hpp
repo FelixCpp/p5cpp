@@ -14,6 +14,7 @@
 #include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/font.hpp>
 #include <p5cpp/graphics/image.hpp>
+#include <p5cpp/graphics/pixels.hpp>
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
@@ -129,7 +130,8 @@ namespace p5cpp
     void pushCanvas(const Framebuffer& framebuffer);
     void popCanvas();
     uint2 getCanvasSize();
-    std::vector<color_t> loadPixels();
+    Pixels loadPixels();
+    void updatePixels(const Pixels& pixels);
 
     void pushState();
     void popState();
@@ -143,6 +145,11 @@ namespace p5cpp
     void translate(float x, float y);
     void scale(float x, float y);
     void rotate(float radians);
+
+    // Bundles pushState()+pushMatrix() / popMatrix()+popState() into one call, mirroring
+    // p5.js's push()/pop(). Use pushState()/pushMatrix() directly if you only need one of the two.
+    void push();
+    void pop();
 
     void fill(int grey, int alpha = 255);
     void fill(int red, int green, int blue, int alpha = 255);

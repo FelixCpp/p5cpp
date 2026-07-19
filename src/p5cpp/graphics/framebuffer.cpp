@@ -61,6 +61,11 @@ namespace p5cpp
             return pixels;
         }
 
+        void writePixels(std::span<const color_t> data) override
+        {
+            colorTexture.upload(data);
+        }
+
     private:
         GLuint framebufferId;
         GLuint renderbufferId;
@@ -111,5 +116,10 @@ namespace p5cpp
     std::vector<color_t> Framebuffer::readPixels() const
     {
         return impl->readPixels();
+    }
+
+    void Framebuffer::writePixels(std::span<const color_t> data)
+    {
+        impl->writePixels(data);
     }
 } // namespace p5cpp

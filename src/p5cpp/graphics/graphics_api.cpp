@@ -26,7 +26,8 @@ namespace p5cpp
     void pushCanvas(const Framebuffer& framebuffer) { getGraphicsComponent().pushCanvas(framebuffer); }
     void popCanvas() { getGraphicsComponent().popCanvas(); }
     uint2 getCanvasSize() { return getGraphicsComponent().getCanvasSize(); }
-    std::vector<color_t> loadPixels() { return getGraphicsComponent().loadPixels(); }
+    Pixels loadPixels() { return getGraphicsComponent().loadPixels(); }
+    void updatePixels(const Pixels& pixels) { getGraphicsComponent().updatePixels(pixels); }
 
     void pushState() { getGraphicsComponent().pushState(); }
     void popState() { getGraphicsComponent().popState(); }
@@ -40,6 +41,9 @@ namespace p5cpp
     void translate(float x, float y) { getGraphicsComponent().translate(x, y); }
     void scale(float x, float y) { getGraphicsComponent().scale(x, y); }
     void rotate(float radians) { getGraphicsComponent().rotate(radians); }
+
+    void push() { getGraphicsComponent().push(); }
+    void pop() { getGraphicsComponent().pop(); }
 
     void noFill() { getGraphicsComponent().noFill(); }
     void fill(color_t color) { getGraphicsComponent().fill(color); }

@@ -11,6 +11,7 @@
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/render_group_recorder.hpp>
 #include <p5cpp/graphics/effects_renderer.hpp>
+#include <p5cpp/graphics/pixels.hpp>
 
 #include <array>
 #include <functional>
@@ -32,7 +33,8 @@ namespace p5cpp
         void pushCanvas(Framebuffer framebuffer);
         void popCanvas();
         uint2 getCanvasSize();
-        std::vector<color_t> loadPixels();
+        Pixels loadPixels();
+        void updatePixels(const Pixels& pixels);
 
         void pushState();
         void popState();
@@ -46,6 +48,9 @@ namespace p5cpp
         void translate(float x, float y);
         void scale(float x, float y);
         void rotate(float radians);
+
+        void push();
+        void pop();
 
         void fill(color_t color);
         void noFill();
@@ -115,6 +120,10 @@ namespace p5cpp
         void drawRenderGroup(const RenderGroup& group);
 
     private:
+        // Framebuffer::readPixels()/writePixels() use raw bottom-to-top GL row order;
+        // Pixels exposes top-left origin like the rest of the API. This flips between them.
+        static std::vector<color_t> flipRows(std::span<const color_t> src, uint32_t width, uint32_t height);
+
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
 
         Shader getShader(const RenderState& renderState);
