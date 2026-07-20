@@ -24,7 +24,10 @@ struct PixelGrid
     uint2 getCellAtPosition(float x, float y) const
     {
         const uint32_t column = static_cast<uint32_t>(x / (static_cast<float>(getLogicalWidth()) / columns));
-        const uint32_t row = static_cast<uint32_t>(y / (static_cast<float>(getLogicalHeight()) / rows));
+        const uint32_t rowFromTop = static_cast<uint32_t>(y / (static_cast<float>(getLogicalHeight()) / rows));
+        // pixels[] row 0 uploads to texture v=0 (bottom, see TextureImpl::upload()), so
+        // invert: screen-top (y=0) must land in the last row, not row 0.
+        const uint32_t row = static_cast<uint32_t>(rows - 1) - std::min(rowFromTop, static_cast<uint32_t>(rows - 1));
         return {column, row};
     }
 

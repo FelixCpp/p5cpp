@@ -920,15 +920,12 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
         const uint32_t base = writer.getRelativeCursor();
 
+        // Texture v-origin is bottom (GL row order, see TextureImpl::upload()), so the
+        // top edge of the destination rect samples v=1 and the bottom edge samples v=0.
         writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 1.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 1.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 0.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 0.0f}, tint);
-
-        // writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 0.0f}, tint);
-        // writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 0.0f}, tint);
-        // writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 1.0f}, tint);
-        // writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 1.0f}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 

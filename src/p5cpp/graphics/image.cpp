@@ -37,6 +37,7 @@ namespace p5cpp
         int width = 0;
         int height = 0;
         int channels = 0;
+        stbi_set_flip_vertically_on_load(true);
 
         stbi_uc* data = stbi_load_from_memory(imageData.data(), static_cast<int>(imageData.size()), &width, &height, &channels, STBI_rgb_alpha);
         if (data == nullptr) {
