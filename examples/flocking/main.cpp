@@ -369,12 +369,13 @@ struct FlockingSimulation : Sketch
         }
 
         // Avoid moving into the mouse position
-        const float mouseAvoidanceRadius = 200.0f;
-        const float mouseAvoidanceStrength = 400.0f;
+        const float mouseAvoidanceRadius = 50.0f;
+        const float mouseAvoidanceStrength = 800.0f;
         noFill();
         stroke(255, 100);
         strokeWeight(1.0f);
-        circle(static_cast<float>(getMouseX()), static_cast<float>(getMouseY()), mouseAvoidanceRadius * 2.0f);
+        circle(static_cast<float>(getMouseX()), static_cast<float>(getMouseY()), mouseAvoidanceRadius);
+
         for (Boid& boid : boids) {
             float2 mousePos(static_cast<float>(getMouseX()), static_cast<float>(getMouseY()));
             float2 diff = boid.position - mousePos;
@@ -426,8 +427,10 @@ struct FlockingSimulation : Sketch
         //
         // setUniform(pixelateShader, "u_BlockSize", uniform(4.0f));
         // effect(pixelateShader);
-        // filter(FilterType::blur, 2.0f);
+        // filter(FilterType::grayscale, 1.0f);
+        // filter(FilterType::threshold, 0.6f);
 
+        fill(255);
         textAlign(TextAlign::topLeft);
         textSize(14.0f);
         text(std::format("Alignment (Q/A): {:.2f}", alignmentBehavior->weight), 10.0f, 10.0f);

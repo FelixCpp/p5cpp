@@ -685,11 +685,9 @@ namespace p5cpp
         }
     }
 
-    void GraphicsComponent::ellipse(float cx, float cy, float w, float h)
+    void GraphicsComponent::ellipse(float cx, float cy, float rx, float ry)
     {
         const RenderState& rs = peekRenderState();
-        const float rx = w * 0.5f;
-        const float ry = h * 0.5f;
         const float maxRadius = std::max(rx, ry);
         const size_t segments = computeCircleSegmentCount(TWO_PI, maxRadius);
         const matrix4x4& mtx = peekMatrix();
