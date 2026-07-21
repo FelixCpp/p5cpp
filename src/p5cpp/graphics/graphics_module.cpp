@@ -41,7 +41,7 @@ namespace p5cpp
         m_component->endFrame();
 
         const InputComponent& inputData = context.require<InputComponent>();
-        m_component->blitDefaultCanvasToScreen(inputData.getLogicalWidth(), inputData.getLogicalHeight());
+        m_component->blitDefaultCanvasToScreen(inputData.getPhysicalWidth(), inputData.getPhysicalHeight());
     }
 
     void GraphicsModule::destroy(AppContext& context, Next next)
