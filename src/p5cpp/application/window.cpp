@@ -163,6 +163,7 @@ namespace p5cpp
             glfwSetScrollCallback(window, &mouseScrollCallback);
             glfwSetKeyCallback(window, &keyCallback);
             glfwSetCharCallback(window, &characterCallback);
+            glfwSetDropCallback(window, &dropCallback);
         }
 
         void publish(const WindowEvent& event)
@@ -215,7 +216,22 @@ namespace p5cpp
                 event.mouseMove.x = xpos;
                 event.mouseMove.y = ypos;
                 self->publish(event);
+
+                // Additionally published (not instead of mouseMove, to not change
+                // existing mouseMove semantics) whenever a button is held, mirroring
+                // Processing/p5.js's separate mouseDragged() callback.
+                if (isAnyMouseButtonDown(window)) {
+                    event.type = EventType::mouseDrag;
+                    self->publish(event);
+                }
             }
+        }
+
+        static bool isAnyMouseButtonDown(GLFWwindow* window)
+        {
+            return glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS
+                or glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS
+                or glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS;
         }
 
         static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
@@ -279,6 +295,18 @@ namespace p5cpp
                 WindowEvent event;
                 event.type = EventType::character;
                 event.charEvent.codepoint = static_cast<char32_t>(codepoint);
+                self->publish(event);
+            }
+        }
+
+        static void dropCallback(GLFWwindow* window, int count, const char** paths)
+        {
+            auto self = static_cast<GLFWWindow*>(glfwGetWindowUserPointer(window));
+            if (self != nullptr) {
+                WindowEvent event;
+                event.type = EventType::fileDrop;
+                event.fileDrop.paths = paths;
+                event.fileDrop.count = count;
                 self->publish(event);
             }
         }

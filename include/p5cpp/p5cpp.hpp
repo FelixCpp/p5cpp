@@ -106,6 +106,23 @@ namespace p5cpp
     bool isMousePressed(MouseButton button);
     bool isMouseReleased(MouseButton button);
 
+    // True while a/any mouse button is held down and the mouse moved since the
+    // last mouse-move sample — mirrors Processing/p5.js's mouseDragged().
+    // EventType::mouseDrag fires the same way on the event() callback, published
+    // alongside (not instead of) mouseMove whenever a button is held.
+    bool isMouseDragging();
+    bool isMouseDragging(MouseButton button);
+
+    // Accumulated scroll-wheel delta for the current frame (reset to 0 every frame).
+    float getScrollX();
+    float getScrollY();
+
+    // Unicode codepoints typed this frame, in order, for text-input fields.
+    std::span<const char32_t> getCharsTyped();
+
+    // Paths dropped onto the window this frame (drag & drop).
+    std::span<const std::filesystem::path> getDroppedFiles();
+
 } // namespace p5cpp
 
 namespace p5cpp

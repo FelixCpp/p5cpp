@@ -10,7 +10,9 @@ namespace p5cpp
           logicalWidth(0),
           logicalHeight(0),
           physicalWidth(0),
-          physicalHeight(0)
+          physicalHeight(0),
+          scrollX(0.f),
+          scrollY(0.f)
     {
     }
 
@@ -65,12 +67,36 @@ namespace p5cpp
         }
     }
 
+    void InputComponent::addScrollDelta(float dx, float dy)
+    {
+        scrollX += dx;
+        scrollY += dy;
+    }
+
+    void InputComponent::addCharTyped(char32_t codepoint)
+    {
+        charsTyped.push_back(codepoint);
+    }
+
+    void InputComponent::addDroppedFiles(const char* const* paths, int count)
+    {
+        droppedFiles.reserve(droppedFiles.size() + static_cast<size_t>(count));
+        for (int i = 0; i < count; ++i) {
+            droppedFiles.emplace_back(paths[i]);
+        }
+    }
+
     void InputComponent::clearFrameState()
     {
         keysPressed.clear();
         keysReleased.clear();
         mouseButtonsPressed.clear();
         mouseButtonsReleased.clear();
+
+        scrollX = 0.f;
+        scrollY = 0.f;
+        charsTyped.clear();
+        droppedFiles.clear();
     }
 
     bool InputComponent::isKeyDown(Key key) const { return keysDown.contains(key); }
@@ -80,4 +106,20 @@ namespace p5cpp
     bool InputComponent::isMouseDown(MouseButton button) const { return mouseButtonsDown.contains(button); }
     bool InputComponent::isMousePressed(MouseButton button) const { return mouseButtonsPressed.contains(button); }
     bool InputComponent::isMouseReleased(MouseButton button) const { return mouseButtonsReleased.contains(button); }
+
+    bool InputComponent::isMouseDragging() const
+    {
+        return not mouseButtonsDown.empty() and (mouseX != pmouseX or mouseY != pmouseY);
+    }
+
+    bool InputComponent::isMouseDragging(MouseButton button) const
+    {
+        return mouseButtonsDown.contains(button) and (mouseX != pmouseX or mouseY != pmouseY);
+    }
+
+    float InputComponent::getScrollX() const { return scrollX; }
+    float InputComponent::getScrollY() const { return scrollY; }
+
+    std::span<const char32_t> InputComponent::getCharsTyped() const { return charsTyped; }
+    std::span<const std::filesystem::path> InputComponent::getDroppedFiles() const { return droppedFiles; }
 } // namespace p5cpp

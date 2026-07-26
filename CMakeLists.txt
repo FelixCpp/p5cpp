@@ -64,6 +64,7 @@ add_library(
   ./src/p5cpp/graphics/image.cpp
   ./src/p5cpp/graphics/internal_shaders.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
+  ./src/p5cpp/graphics/pixels.cpp
   ./src/p5cpp/graphics/render_group.cpp
   ./src/p5cpp/graphics/render_group_recorder.cpp
   ./src/p5cpp/graphics/render_state.cpp

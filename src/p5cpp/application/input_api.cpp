@@ -39,4 +39,13 @@ namespace p5cpp
     bool isMouseDown(MouseButton button) { return getInputComponent().isMouseDown(button); }
     bool isMousePressed(MouseButton button) { return getInputComponent().isMousePressed(button); }
     bool isMouseReleased(MouseButton button) { return getInputComponent().isMouseReleased(button); }
+
+    bool isMouseDragging() { return getInputComponent().isMouseDragging(); }
+    bool isMouseDragging(MouseButton button) { return getInputComponent().isMouseDragging(button); }
+
+    float getScrollX() { return getInputComponent().getScrollX(); }
+    float getScrollY() { return getInputComponent().getScrollY(); }
+
+    std::span<const char32_t> getCharsTyped() { return getInputComponent().getCharsTyped(); }
+    std::span<const std::filesystem::path> getDroppedFiles() { return getInputComponent().getDroppedFiles(); }
 } // namespace p5cpp

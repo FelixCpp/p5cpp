@@ -51,6 +51,7 @@ namespace p5cpp
     enum class EventType {
         close,
         mouseMove,
+        mouseDrag,
         mousePress,
         mouseRelease,
         mouseScroll,
@@ -60,6 +61,7 @@ namespace p5cpp
         character,
         windowResize,
         framebufferResize,
+        fileDrop,
     };
 
     struct WindowEvent
@@ -99,14 +101,23 @@ namespace p5cpp
             int width, height;
         };
 
+        // Non-owning: paths point into memory owned by the platform layer and are
+        // only valid for the duration of the event dispatch that carries them.
+        struct FileDropData
+        {
+            const char* const* paths;
+            int count;
+        };
+
         union {
-            MouseMoveData mouseMove;
+            MouseMoveData mouseMove; // used for both mouseMove and mouseDrag
             MouseButtonData mouseButton; // used for both mousePress and mouseRelease
             MouseScrollData mouseScroll;
             KeyData keyEvent; // used for keyPress, keyRelease and keyRepeat
             CharData charEvent;
             ResizeData windowResize;
             ResizeData framebufferResize;
+            FileDropData fileDrop;
         };
     };
 } // namespace p5cpp

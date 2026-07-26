@@ -177,7 +177,17 @@ namespace p5cpp
             GLuint textureId = 0;
             glGenTextures(1, &textureId);
             glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+
+            // Zero-initialize: glTexImage2D(..., nullptr) leaves GPU memory
+            // undefined (not guaranteed to be 0). With GL_LINEAR filtering,
+            // sampling near a packed glyph's UV-rect edge (only 1px padding,
+            // see GlyphAtlas's paddingX/Y below) can read a texel or two of
+            // never-written atlas space — undefined coverage there blends a
+            // visible gray halo around glyphs, most noticeable at large text
+            // sizes. An all-zero atlas guarantees that bleed reads as
+            // "no coverage" instead of garbage.
+            const std::vector<uint8_t> zeroed(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, zeroed.data());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

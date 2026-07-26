@@ -56,6 +56,18 @@ namespace p5cpp
                 m_inputComponent.setMouseButtonDown(event.mouseButton.button, false);
                 break;
 
+            case EventType::mouseScroll:
+                m_inputComponent.addScrollDelta(event.mouseScroll.dx, event.mouseScroll.dy);
+                break;
+
+            case EventType::character:
+                m_inputComponent.addCharTyped(event.charEvent.codepoint);
+                break;
+
+            case EventType::fileDrop:
+                m_inputComponent.addDroppedFiles(event.fileDrop.paths, event.fileDrop.count);
+                break;
+
             default:
                 break;
         }
