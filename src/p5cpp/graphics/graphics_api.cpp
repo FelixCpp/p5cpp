@@ -89,6 +89,9 @@ namespace p5cpp
     void filter(FilterType type, float amount) { getGraphicsComponent().filter(type, amount); }
     void effect(const Shader& shader) { getGraphicsComponent().effect(shader); }
 
+    void smooth(uint32_t samples) { getGraphicsComponent().smooth(samples); }
+    void noSmooth() { getGraphicsComponent().noSmooth(); }
+
     void setUniform(const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(name, variable); }
     void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(shader, name, variable); }
 

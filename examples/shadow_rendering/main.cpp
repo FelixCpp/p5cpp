@@ -91,6 +91,7 @@ struct ShadowRendering : Sketch
     void setup() override
     {
         setWindowSize(800, 800);
+        smooth(4);
 
         shadows.setup(800, 800);
     }
@@ -99,14 +100,17 @@ struct ShadowRendering : Sketch
     {
         background(255);
 
-        shadows.drawShadow(
-            [] {
-                noStroke();
-                fill(255);
-                rect(300.0f, 150.0f, 120.0f, 80.0f);
-            },
-            4.0f
-        );
+        // shadows.drawShadow(
+        //     [] {
+        noStroke();
+        fill(0, 255, 0);
+        rect(getMouseX(), getMouseY(), 120.0f, 80.0f);
+        fill(255, 0, 0);
+        textSize(64.0f);
+        text("Hello, World!", 300.0f, 150.0f);
+        // },
+        // 0.5f
+        // );
     }
 };
 

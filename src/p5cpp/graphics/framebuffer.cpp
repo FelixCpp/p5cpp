@@ -75,9 +75,92 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    class OpenGLMultisampleFramebufferImpl : public FramebufferImpl
+    {
+    public:
+        explicit OpenGLMultisampleFramebufferImpl(uint32_t width, uint32_t height, uint32_t samples)
+            : framebufferId(0),
+              colorRenderbufferId(0),
+              depthStencilRenderbufferId(0),
+              size {width, height}
+        {
+            glGenRenderbuffers(1, &colorRenderbufferId);
+            glBindRenderbuffer(GL_RENDERBUFFER, colorRenderbufferId);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, static_cast<GLsizei>(samples), GL_RGBA8, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+
+            glGenRenderbuffers(1, &depthStencilRenderbufferId);
+            glBindRenderbuffer(GL_RENDERBUFFER, depthStencilRenderbufferId);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, static_cast<GLsizei>(samples), GL_DEPTH24_STENCIL8, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+
+            glGenFramebuffers(1, &framebufferId);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebufferId);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorRenderbufferId);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencilRenderbufferId);
+
+            GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            if (status != GL_FRAMEBUFFER_COMPLETE) {
+                error("Failed to create multisample framebuffer");
+            }
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        }
+
+        ~OpenGLMultisampleFramebufferImpl() override
+        {
+            glDeleteFramebuffers(1, &framebufferId);
+            glDeleteRenderbuffers(1, &colorRenderbufferId);
+            glDeleteRenderbuffers(1, &depthStencilRenderbufferId);
+        }
+
+        uint2 getSize() const override
+        {
+            return size;
+        }
+
+        FramebufferId getFramebufferId() const override
+        {
+            return FramebufferId {.value = framebufferId};
+        }
+
+        // Unreachable in normal use: GraphicsComponent always resolves this into a
+        // regular Framebuffer (see resolveMsaaToDefaultFramebuffer()) before anything
+        // needs to sample or read its color content.
+        const Texture* getColorTexture() const override
+        {
+            error("getColorTexture() called on a multisample framebuffer - resolve it first");
+            return nullptr;
+        }
+
+        std::vector<color_t> readPixels() const override
+        {
+            error("readPixels() called on a multisample framebuffer - resolve it first");
+            return {};
+        }
+
+        void writePixels(std::span<const color_t> /*data*/) override
+        {
+            error("writePixels() called on a multisample framebuffer - resolve it first");
+        }
+
+    private:
+        GLuint framebufferId;
+        GLuint colorRenderbufferId;
+        GLuint depthStencilRenderbufferId;
+        uint2 size;
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
     std::unique_ptr<FramebufferImpl> createFramebuffer(uint32_t width, uint32_t height)
     {
         return std::make_unique<OpenGLFramebufferImpl>(width, height);
+    }
+
+    std::unique_ptr<FramebufferImpl> createMultisampleFramebuffer(uint32_t width, uint32_t height, uint32_t samples)
+    {
+        return std::make_unique<OpenGLMultisampleFramebufferImpl>(width, height, samples);
     }
 } // namespace p5cpp
 

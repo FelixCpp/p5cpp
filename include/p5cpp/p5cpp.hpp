@@ -220,6 +220,13 @@ namespace p5cpp
     void filter(FilterType type, float amount);
     void effect(const Shader& shader);
 
+    // Antialiases shape edges by rendering the default canvas at `samples`x MSAA and
+    // resolving it before it's presented (clamped to what the driver supports). Off by
+    // default; noSmooth() turns it back off. Costs extra GPU memory/time per frame -
+    // enable it only where you want the softer edges.
+    void smooth(uint32_t samples = 4);
+    void noSmooth();
+
     void setUniform(const std::string& name, const UniformVariable& variable);
     void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
 

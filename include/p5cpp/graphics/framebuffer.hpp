@@ -32,6 +32,14 @@ namespace p5cpp
 
     std::unique_ptr<FramebufferImpl> createFramebuffer(uint32_t width, uint32_t height);
 
+    // A pure multisample render target (renderbuffer-backed color+depth/stencil, no
+    // texture attachment) used only as an intermediate draw target for smooth()/
+    // noSmooth() antialiasing. Its color content can't be sampled or read directly -
+    // it must be resolved (glBlitFramebuffer) into a regular single-sample Framebuffer
+    // first, since neither glReadPixels nor texture sampling work on multisample
+    // renderbuffers.
+    std::unique_ptr<FramebufferImpl> createMultisampleFramebuffer(uint32_t width, uint32_t height, uint32_t samples);
+
     class Framebuffer
     {
     public:

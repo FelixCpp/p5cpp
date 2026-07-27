@@ -30,6 +30,12 @@ namespace p5cpp
         void resizeDefaultCanvas(uint32_t width, uint32_t height);
         void blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight);
 
+        // Enables MSAA on the default canvas: shapes are drawn into a multisample
+        // target and resolved into the presented canvas once per frame. samples is
+        // clamped to what the driver supports (GL_MAX_SAMPLES). Off by default.
+        void smooth(uint32_t samples);
+        void noSmooth();
+
         void pushCanvas(Framebuffer framebuffer);
         void popCanvas();
         uint2 getCanvasSize();
@@ -129,6 +135,26 @@ namespace p5cpp
 
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
 
+        // Swaps whichever canvas beginFrame() would push (m_defaultFramebuffer or, once
+        // smooth() is active, m_msaaFramebuffer) into the still-open outermost stack
+        // bracket. See resizeDefaultCanvas() for why this matters mid-bracket.
+        void swapActiveDefaultCanvas(const Framebuffer& newDefaultCanvas);
+        void rebuildMsaaFramebuffer();
+        bool isMsaaFramebuffer(const Framebuffer& framebuffer) const;
+
+        // Resolves m_msaaFramebuffer's multisampled content into m_defaultFramebuffer.
+        // Called once per frame in endFrame(), and on demand before anything (loadPixels(),
+        // filter(), effect()) needs to read the canvas mid-frame while smooth() is active.
+        void resolveMsaaToDefaultFramebuffer();
+
+        // Inverse of the above: pushes m_defaultFramebuffer's current color content back
+        // into the live m_msaaFramebuffer via a textured full-screen draw (a plain GL blit
+        // can't target a multisample destination). Needed after updatePixels()/filter()/
+        // effect() mutate m_defaultFramebuffer out-of-band while smooth() is active, so
+        // that drawing continues on top of the mutated result instead of the next
+        // automatic resolve silently overwriting it with the stale unmutated content.
+        void syncMsaaFromDefaultFramebuffer();
+
         Shader getShader(const RenderState& renderState);
 
         void submitFill(const PathPoints& pts, ShapeType type, const Texture& texture);
@@ -193,6 +219,10 @@ namespace p5cpp
 
         std::vector<Framebuffer> m_framebufferStack;
         Framebuffer m_defaultFramebuffer;
+
+        // Valid only while m_smoothSamples > 0 (see smooth()/noSmooth()).
+        Framebuffer m_msaaFramebuffer;
+        uint32_t m_smoothSamples = 0;
 
         RenderStateStack m_renderStateStack;
         MatrixStack m_matrixStack;
