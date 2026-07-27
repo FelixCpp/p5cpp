@@ -710,12 +710,12 @@ namespace p5cpp
             m_ellipseFanUVs[1 + i] = {0.5f + 0.5f * cosA, 0.5f + 0.5f * sinA};
         }
 
-        if (!rs.isFillDisabled) {
+        if (not rs.isFillDisabled) {
             m_ellipseFillColors.assign(fanCount, rs.fillColor);
             submitFill(PathPoints {fanCount, m_ellipseFanPositions, m_ellipseFanUVs, m_ellipseFillColors}, ShapeType::triangleFan, m_whiteTexture);
         }
 
-        if (!rs.isStrokeDisabled) {
+        if (not rs.isStrokeDisabled) {
             // Stroke uses exactly `segments` perimeter points (no center, no closing duplicate).
             m_ellipseStrokeUVs.assign(segments, float2::zero);
             m_ellipseStrokeColors.assign(segments, rs.strokeColor);

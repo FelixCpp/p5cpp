@@ -227,6 +227,105 @@ namespace
         }
     }
 
+    // text() is rendered with standard non-premultiplied "src-over" alpha
+    // blending (BlendMode::alpha), which is correct when compositing onto an
+    // opaque destination (that's why the live preview, drawn over the opaque
+    // window background, looks fine) but produces a visible gray/dark halo on
+    // anti-aliased glyph edges when composited directly onto a
+    // transparent-background layer: the blend factors mix the edge color
+    // toward the destination's RGB even where the destination's alpha is 0
+    // and its RGB is meant to be irrelevant. This is a well-known limitation
+    // of straight-alpha compositing shared by many simple 2D APIs (including
+    // the browser Canvas2D underneath p5.js itself), not something fixable by
+    // changing the blend *mode* — it needs actual premultiplied-alpha math.
+    //
+    // Fixed here by routing around the GPU blend entirely: render opaque
+    // white-on-black into a small scratch Framebuffer (blending correctly,
+    // exactly like the preview), read the luminance back as a coverage mask,
+    // and alpha-composite it onto the layer ourselves with the correct
+    // Porter-Duff "over" formula.
+    void compositeTextOntoLayer(Canvas& canvas, const std::string& text_, float2 anchor, color_t fillColor)
+    {
+        textAlign(TextAlign::topLeft);
+        textSize(kTextToolSize);
+        const TextLayout layout = textLayout(text_, anchor.x, anchor.y);
+
+        constexpr float margin = 8.0f;
+        const int scratchWidth = static_cast<int>(std::ceil(layout.bounds.width)) + static_cast<int>(margin * 2.0f);
+        const int scratchHeight = static_cast<int>(std::ceil(layout.bounds.height)) + static_cast<int>(margin * 2.0f);
+        if (scratchWidth <= 0 or scratchHeight <= 0) {
+            return;
+        }
+
+        const float originX = layout.bounds.left - margin;
+        const float originY = layout.bounds.top - margin;
+
+        Framebuffer scratch = createFramebuffer(static_cast<uint32_t>(scratchWidth), static_cast<uint32_t>(scratchHeight));
+        pushCanvas(scratch);
+            blendMode(BlendMode::alpha);
+            background(0); // opaque black
+            fill(255);      // opaque white
+            noStroke();
+            textAlign(TextAlign::topLeft);
+            textSize(kTextToolSize);
+            text(text_, anchor.x - originX, anchor.y - originY);
+        popCanvas();
+
+        pushCanvas(scratch);
+            const Pixels coverage = loadPixels();
+        popCanvas();
+
+        const int fillR = red(fillColor);
+        const int fillG = green(fillColor);
+        const int fillB = blue(fillColor);
+        const float fillAlpha01 = static_cast<float>(alpha(fillColor)) / 255.0f;
+
+        pushCanvas(canvas.activeLayer().framebuffer);
+            Pixels layerPixels = loadPixels();
+            const uint32_t layerWidth = layerPixels.getWidth();
+            const uint32_t layerHeight = layerPixels.getHeight();
+
+            for (int sy = 0; sy < scratchHeight; ++sy) {
+                const int ty = static_cast<int>(originY) + sy;
+                if (ty < 0 or static_cast<uint32_t>(ty) >= layerHeight) {
+                    continue;
+                }
+                for (int sx = 0; sx < scratchWidth; ++sx) {
+                    const int tx = static_cast<int>(originX) + sx;
+                    if (tx < 0 or static_cast<uint32_t>(tx) >= layerWidth) {
+                        continue;
+                    }
+
+                    const float srcA = (static_cast<float>(red(coverage.get(static_cast<uint32_t>(sx), static_cast<uint32_t>(sy)))) / 255.0f) * fillAlpha01;
+                    if (srcA <= 0.0f) {
+                        continue;
+                    }
+
+                    const color_t dst = layerPixels.get(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
+                    const float dstA = static_cast<float>(alpha(dst)) / 255.0f;
+                    const float outA = srcA + dstA * (1.0f - srcA);
+
+                    if (outA <= 0.0001f) {
+                        layerPixels.set(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty), rgba(0, 0, 0, 0));
+                        continue;
+                    }
+
+                    const float outR = (static_cast<float>(fillR) * srcA + static_cast<float>(red(dst)) * dstA * (1.0f - srcA)) / outA;
+                    const float outG = (static_cast<float>(fillG) * srcA + static_cast<float>(green(dst)) * dstA * (1.0f - srcA)) / outA;
+                    const float outB = (static_cast<float>(fillB) * srcA + static_cast<float>(blue(dst)) * dstA * (1.0f - srcA)) / outA;
+
+                    layerPixels.set(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty),
+                                     rgba(static_cast<int>(std::clamp(outR, 0.0f, 255.0f)),
+                                          static_cast<int>(std::clamp(outG, 0.0f, 255.0f)),
+                                          static_cast<int>(std::clamp(outB, 0.0f, 255.0f)),
+                                          static_cast<int>(std::clamp(outA * 255.0f, 0.0f, 255.0f))));
+                }
+            }
+
+            updatePixels(layerPixels);
+        popCanvas();
+    }
+
     void commitTextIfAny(ToolContext& ctx, ToolState& state)
     {
         if (not state.textComposing) {
@@ -239,14 +338,7 @@ namespace
         }
 
         ctx.history.push(ctx.canvas.captureState());
-        pushCanvas(ctx.canvas.activeLayer().framebuffer);
-            blendMode(BlendMode::alpha);
-            fill(ctx.primaryColor);
-            noStroke();
-            textAlign(TextAlign::topLeft);
-            textSize(kTextToolSize);
-            text(state.textBuffer, state.textAnchorCanvas.x, state.textAnchorCanvas.y);
-        popCanvas();
+        compositeTextOntoLayer(ctx.canvas, state.textBuffer, state.textAnchorCanvas, ctx.primaryColor);
     }
 
     void updateTextTool(ToolContext& ctx, ToolState& state)
