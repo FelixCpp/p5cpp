@@ -65,6 +65,8 @@ namespace p5cpp
         void tint(color_t color);
         void noTint();
 
+        void textureMode(TextureMode textureMode);
+
         void bezierDetail(uint32_t detail);
         void curveTightness(float tightness);
         void curveDetail(uint32_t detail);
@@ -102,6 +104,7 @@ namespace p5cpp
         void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void image(const Texture& texture, float left, float top, float width, float height);
+        void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight);
         void text(std::string_view text, float x, float y);
         void text(std::string_view text, float x, float y, float maxWidth);
 

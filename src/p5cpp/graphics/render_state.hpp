@@ -6,6 +6,7 @@
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/font.hpp>
 #include <p5cpp/graphics/blendmode.hpp>
+#include <p5cpp/graphics/texture.hpp>
 
 namespace p5cpp
 {
@@ -23,6 +24,8 @@ namespace p5cpp
         float roundJoinThreshold;
 
         color_t tintColor;
+
+        TextureMode textureMode;
 
         uint32_t bezierDetail;
         float invBezierDetail;

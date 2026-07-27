@@ -189,6 +189,12 @@ namespace p5cpp
     void tint(color_t color);
     void noTint();
 
+    // Controls how the sx/sy/sWidth/sHeight source-rect arguments of the 9-argument
+    // image() overload below are interpreted: normalized (default) expects a 0..1 UV
+    // range, image expects pixel coordinates/extents of the source texture. Both use a
+    // top-left origin. Part of push()/pop()'d render state, like blendMode()/textAlign().
+    void textureMode(TextureMode textureMode);
+
     void bezierDetail(uint32_t detail);
     void curveTightness(float tightness);
     void curveDetail(uint32_t detail);
@@ -239,6 +245,13 @@ namespace p5cpp
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
     void image(const Texture& texture, float left, float top, float width, float height);
+
+    // Draws the sx/sy/sWidth/sHeight sub-region of texture (e.g. one frame of a sprite
+    // sheet) into the left/top/width/height destination rect, letting sprite/character
+    // animations sample a single texture atlas. sx/sy/sWidth/sHeight are interpreted
+    // according to the current textureMode(): normalized 0..1 UVs (the default) or
+    // TextureMode::image pixel coordinates/extents of the source texture.
+    void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight);
     void text(std::string_view text, float x, float y);
     void text(std::string_view text, float x, float y, float maxWidth);
 

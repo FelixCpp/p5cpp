@@ -498,6 +498,11 @@ namespace p5cpp
         currentState.tintColor = rgba(255, 255, 255, 255);
     }
 
+    void GraphicsComponent::textureMode(TextureMode textureMode)
+    {
+        peekRenderState().textureMode = textureMode;
+    }
+
     void GraphicsComponent::bezierDetail(uint32_t detail)
     {
         RenderState& currentState = peekRenderState();
@@ -924,6 +929,50 @@ namespace p5cpp
         writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 1.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 0.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 0.0f}, tint);
+        writer.pushTriangle(base + 0, base + 1, base + 2);
+        writer.pushTriangle(base + 0, base + 2, base + 3);
+
+        const Shader shaderToUse = getShader(rs);
+        endDrawOp(writer, shaderToUse, rs.blendMode, texture, m_uniformCache.getUniforms(shaderToUse));
+    }
+
+    void GraphicsComponent::image(const Texture& texture, float left, float top, float w, float h, float sx, float sy, float sw, float sh)
+    {
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = peekMatrix();
+        const float4 tint = colorToFloat4(rs.tintColor);
+
+        // Normalize sx/sy/sw/sh (top-left origin, see TextureMode) to a 0..1 UV rect
+        // in that same top-left-origin space first...
+        float nsx = sx;
+        float nsy = sy;
+        float nsw = sw;
+        float nsh = sh;
+        if (rs.textureMode == TextureMode::image) {
+            const uint2 texSize = texture.getSize();
+            const float invW = texSize.x > 0 ? 1.0f / static_cast<float>(texSize.x) : 0.0f;
+            const float invH = texSize.y > 0 ? 1.0f / static_cast<float>(texSize.y) : 0.0f;
+            nsx = sx * invW;
+            nsy = sy * invH;
+            nsw = sw * invW;
+            nsh = sh * invH;
+        }
+
+        // ...then flip to the texture's bottom-origin GL v (see TextureImpl::upload()):
+        // the source rect's top edge (nsy) samples the higher v, its bottom edge
+        // (nsy + nsh) samples the lower v — mirroring the plain image() overload above.
+        const float u0 = nsx;
+        const float u1 = nsx + nsw;
+        const float v0 = 1.0f - nsy;
+        const float v1 = 1.0f - (nsy + nsh);
+
+        DrawBufferWriter& writer = beginDrawOp();
+        const uint32_t base = writer.getRelativeCursor();
+
+        writer.pushVertex(mtx.transformPoint(left, top), {u0, v0}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top), {u1, v0}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top + h), {u1, v1}, tint);
+        writer.pushVertex(mtx.transformPoint(left, top + h), {u0, v1}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
