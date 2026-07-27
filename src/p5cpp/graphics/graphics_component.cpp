@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -208,7 +209,7 @@ namespace p5cpp
         : m_drawPointCount(0),
           m_drawPointCapacity(0),
           m_curveVertexCount(0),
-          m_defaultFramebuffer(createFramebuffer(width, height)),
+          m_canvas(width, height),
           m_renderStateStack(),
           m_defaultFont(loadFont(std::span {DejaVuSans_ttf, DejaVuSans_ttf_len})),
           m_renderer(NativeRenderer::create(MAX_VERTICES, MAX_INDICES))
@@ -222,7 +223,7 @@ namespace p5cpp
 
     void GraphicsComponent::beginFrame()
     {
-        pushCanvas(m_smoothSamples > 0 ? m_msaaFramebuffer : m_defaultFramebuffer);
+        pushCanvas(m_canvas.activeFramebuffer());
     }
 
     void GraphicsComponent::endFrame()
@@ -233,10 +234,7 @@ namespace p5cpp
 
     void GraphicsComponent::resizeDefaultCanvas(uint32_t width, uint32_t height)
     {
-        m_defaultFramebuffer = createFramebuffer(width, height);
-        if (m_smoothSamples > 0) {
-            rebuildMsaaFramebuffer();
-        }
+        m_canvas.resize(width, height);
 
         // beginFrame() pushes a *copy* of the active default canvas onto the stack (always
         // at index 0 - the outermost canvas). If a resize happens while that bracket is
@@ -245,23 +243,22 @@ namespace p5cpp
         // otherwise keep referencing the old, now-orphaned framebuffer, so any further
         // drawing in the same setup()/draw() would silently land in a canvas nobody ever
         // presents to the screen again.
-        swapActiveDefaultCanvas(m_smoothSamples > 0 ? m_msaaFramebuffer : m_defaultFramebuffer);
+        swapActiveDefaultCanvas(m_canvas.activeFramebuffer());
     }
 
     void GraphicsComponent::smooth(uint32_t samples)
     {
         const uint32_t clamped = std::max<uint32_t>(samples, 1);
-        if (m_smoothSamples == clamped) return;
+        if (m_canvas.samples() == clamped) return;
 
         // If we were already mid-frame in the (old) msaa target, carry forward what's
-        // been drawn so far into m_defaultFramebuffer before swapping it out - otherwise
-        // calling smooth()/noSmooth() partway through draw() would silently drop
-        // whatever was drawn before the call. No-op if we weren't smoothing yet.
+        // been drawn so far into the default framebuffer before swapping it out -
+        // otherwise calling smooth()/noSmooth() partway through draw() would silently
+        // drop whatever was drawn before the call. No-op if we weren't smoothing yet.
         resolveMsaaToDefaultFramebuffer();
 
-        m_smoothSamples = clamped;
-        rebuildMsaaFramebuffer();
-        swapActiveDefaultCanvas(m_msaaFramebuffer);
+        m_canvas.smooth(clamped);
+        swapActiveDefaultCanvas(m_canvas.activeFramebuffer());
 
         // ...and paint that carried-forward content into the fresh msaa target so
         // drawing continues on top of it instead of a blank canvas.
@@ -270,12 +267,11 @@ namespace p5cpp
 
     void GraphicsComponent::noSmooth()
     {
-        if (m_smoothSamples == 0) return;
+        if (!m_canvas.isEnabled()) return;
 
         resolveMsaaToDefaultFramebuffer();
-        m_smoothSamples = 0;
-        m_msaaFramebuffer = Framebuffer();
-        swapActiveDefaultCanvas(m_defaultFramebuffer);
+        m_canvas.noSmooth();
+        swapActiveDefaultCanvas(m_canvas.defaultFramebuffer());
     }
 
     void GraphicsComponent::swapActiveDefaultCanvas(const Framebuffer& newDefaultCanvas)
@@ -288,21 +284,6 @@ namespace p5cpp
         }
     }
 
-    void GraphicsComponent::rebuildMsaaFramebuffer()
-    {
-        GLint maxSamples = 1;
-        glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
-        const uint32_t samples = std::min(m_smoothSamples, static_cast<uint32_t>(std::max(maxSamples, 1)));
-
-        const uint2 size = m_defaultFramebuffer.getSize();
-        m_msaaFramebuffer = Framebuffer(createMultisampleFramebuffer(size.x, size.y, samples));
-    }
-
-    bool GraphicsComponent::isMsaaFramebuffer(const Framebuffer& framebuffer) const
-    {
-        return m_smoothSamples > 0 && framebuffer.getFramebufferId().value == m_msaaFramebuffer.getFramebufferId().value;
-    }
-
     void GraphicsComponent::resolveMsaaToDefaultFramebuffer()
     {
         // Always flush, even if there's nothing to resolve: callers (smooth() chief
@@ -311,14 +292,9 @@ namespace p5cpp
         // under them - begin() on the new target would otherwise silently discard them
         // (it resets the writer/batch buffers without issuing their draw calls first).
         m_renderer->flush();
-        if (m_smoothSamples == 0) return;
+        if (!m_canvas.isEnabled()) return;
 
-        const uint2 size = m_defaultFramebuffer.getSize();
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_msaaFramebuffer.getFramebufferId().value);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_defaultFramebuffer.getFramebufferId().value);
-        glBlitFramebuffer(0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), 0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        m_canvas.resolveToDefault();
 
         if (not m_framebufferStack.empty()) {
             m_renderer->begin(m_framebufferStack.back());
@@ -327,42 +303,40 @@ namespace p5cpp
 
     void GraphicsComponent::syncMsaaFromDefaultFramebuffer()
     {
-        if (m_smoothSamples == 0) return;
+        if (!m_canvas.isEnabled()) return;
 
         m_renderer->flush();
         m_renderer->end();
-        m_renderer->begin(m_msaaFramebuffer);
 
-        const uint2 size = m_defaultFramebuffer.getSize();
-        const float w = static_cast<float>(size.x);
-        const float h = static_cast<float>(size.y);
-        const float4 white {1.0f, 1.0f, 1.0f, 1.0f};
-
-        DrawBufferWriter& writer = m_renderer->getDrawScope();
-        const uint32_t base = writer.getRelativeCursor();
-
-        // Same UV arrangement as EffectsRenderer::runPass()/GraphicsComponent::image():
-        // the texture's v-origin is bottom, so the quad's top edge samples v=1.
-        writer.pushVertex({0.0f, 0.0f}, {0.0f, 1.0f}, white);
-        writer.pushVertex({w, 0.0f}, {1.0f, 1.0f}, white);
-        writer.pushVertex({w, h}, {1.0f, 0.0f}, white);
-        writer.pushVertex({0.0f, h}, {0.0f, 0.0f}, white);
-        writer.pushTriangle(base + 0, base + 1, base + 2);
-        writer.pushTriangle(base + 0, base + 2, base + 3);
-
-        m_renderer->submit(writer, m_uniformCache.getUniforms(m_defaultShader), m_defaultShader, BlendMode::none, *m_defaultFramebuffer.getColorTexture());
-        m_renderer->flush();
-        m_renderer->end();
+        m_canvas.syncFromDefault(*m_renderer, m_uniformCache, m_defaultShader);
 
         if (not m_framebufferStack.empty()) {
             m_renderer->begin(m_framebufferStack.back());
         }
     }
 
+    void GraphicsComponent::withEffectTarget(const std::function<void(Framebuffer&)>& fn)
+    {
+        if (m_framebufferStack.empty()) return;
+        Framebuffer& current = m_framebufferStack.back();
+
+        // EffectsRenderer samples `target`'s color texture directly, which the
+        // multisample target doesn't have - resolve first and run the effect against
+        // the default framebuffer, then push the filtered result back so drawing
+        // continues on top of it instead of the next automatic resolve reverting it.
+        const bool isMsaa = m_canvas.isMsaaFramebuffer(current);
+        if (isMsaa) resolveMsaaToDefaultFramebuffer();
+        Framebuffer& target = isMsaa ? m_canvas.defaultFramebuffer() : current;
+
+        fn(target);
+
+        if (isMsaa) syncMsaaFromDefaultFramebuffer();
+    }
+
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
-        const uint2 canvasSize = m_defaultFramebuffer.getSize();
-        const GLuint fboId = m_defaultFramebuffer.getFramebufferId().value;
+        const uint2 canvasSize = m_canvas.defaultFramebuffer().getSize();
+        const GLuint fboId = m_canvas.defaultFramebuffer().getFramebufferId().value;
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -439,11 +413,12 @@ namespace p5cpp
         m_renderer->flush();
 
         // The multisample target can't be read directly (see OpenGLMultisampleFramebufferImpl);
-        // resolve what's been drawn so far this frame into m_defaultFramebuffer first.
-        if (isMsaaFramebuffer(m_framebufferStack.back())) {
+        // resolve what's been drawn so far this frame into the default framebuffer first.
+        if (m_canvas.isMsaaFramebuffer(m_framebufferStack.back())) {
             resolveMsaaToDefaultFramebuffer();
-            const uint2 size = m_defaultFramebuffer.getSize();
-            return Pixels(size.x, size.y, flipRows(m_defaultFramebuffer.readPixels(), size.x, size.y));
+            const Framebuffer& resolved = m_canvas.defaultFramebuffer();
+            const uint2 size = resolved.getSize();
+            return Pixels(size.x, size.y, flipRows(resolved.readPixels(), size.x, size.y));
         }
 
         const Framebuffer& framebuffer = m_framebufferStack.back();
@@ -463,8 +438,8 @@ namespace p5cpp
 
         m_renderer->flush();
 
-        if (isMsaaFramebuffer(framebuffer)) {
-            m_defaultFramebuffer.writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+        if (m_canvas.isMsaaFramebuffer(framebuffer)) {
+            m_canvas.defaultFramebuffer().writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
             syncMsaaFromDefaultFramebuffer();
             return;
         }
@@ -1459,7 +1434,8 @@ namespace p5cpp
             case ShapeType::triangleFan: tesselate_triangle_fan(writer, pts); break;
             case ShapeType::quads: tesselate_quads(writer, pts); break;
             case ShapeType::quadStrip: tesselate_quad_strip(writer, pts); break;
-            default: tesselate_polygon(writer, pts); break;
+            case ShapeType::polygon: tesselate_polygon(writer, pts); break;
+            default: throw std::invalid_argument("Unsupported shape type for fill"); break;
         }
 
         const Shader shaderToUse = getShader(rs);
@@ -1472,33 +1448,15 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
 
         switch (type) {
-            case ShapeType::lines:
-                stroke_lines(writer, pts, rs.strokeWeight, rs.strokeCap, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::lineStrip:
-                stroke_line_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::lineLoop:
-                stroke_line_loop(writer, pts, rs.strokeWeight, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::triangles:
-                stroke_triangles(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::triangleStrip:
-                stroke_triangle_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::triangleFan:
-                stroke_triangle_fan(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::quads:
-                stroke_quads(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::quadStrip:
-                stroke_quad_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            default:
-                stroke_polygon(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, close, computeCircleSegmentCount);
-                break;
+            case ShapeType::lines: stroke_lines(writer, pts, rs.strokeWeight, rs.strokeCap, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::lineStrip: stroke_line_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::lineLoop: stroke_line_loop(writer, pts, rs.strokeWeight, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::triangles: stroke_triangles(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::triangleStrip: stroke_triangle_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::triangleFan: stroke_triangle_fan(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::quads: stroke_quads(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::quadStrip: stroke_quad_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::polygon: stroke_polygon(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, close, computeCircleSegmentCount); break;
         }
 
         endDrawOp(writer, m_defaultShader, rs.blendMode, m_whiteTexture, m_uniformCache.getUniforms(m_defaultShader));
@@ -1511,33 +1469,14 @@ namespace p5cpp
             return;
         }
 
-        if (m_framebufferStack.empty()) return;
-        Framebuffer& current = m_framebufferStack.back();
-
-        // EffectsRenderer samples `target`'s color texture directly, which the
-        // multisample target doesn't have - resolve first and run the effect against
-        // m_defaultFramebuffer, then push the filtered result back so drawing continues
-        // on top of it instead of the next automatic resolve reverting it.
-        const bool isMsaa = isMsaaFramebuffer(current);
-        if (isMsaa) resolveMsaaToDefaultFramebuffer();
-        Framebuffer& target = isMsaa ? m_defaultFramebuffer : current;
-
-        switch (type) {
-            case FilterType::blur:
-                m_effects.applyBlur(*m_renderer, m_uniformCache, target, amount);
-                break;
-            case FilterType::grayscale:
-                m_effects.applyGrayscale(*m_renderer, m_uniformCache, target, amount);
-                break;
-            case FilterType::invert:
-                m_effects.applyInvert(*m_renderer, m_uniformCache, target, amount);
-                break;
-            case FilterType::threshold:
-                m_effects.applyThreshold(*m_renderer, m_uniformCache, target, amount);
-                break;
-        }
-
-        if (isMsaa) syncMsaaFromDefaultFramebuffer();
+        withEffectTarget([&](Framebuffer& target) {
+            switch (type) {
+                case FilterType::blur: m_effects.applyBlur(*m_renderer, m_uniformCache, target, amount); break;
+                case FilterType::grayscale: m_effects.applyGrayscale(*m_renderer, m_uniformCache, target, amount); break;
+                case FilterType::invert: m_effects.applyInvert(*m_renderer, m_uniformCache, target, amount); break;
+                case FilterType::threshold: m_effects.applyThreshold(*m_renderer, m_uniformCache, target, amount); break;
+            }
+        });
     }
 
     void GraphicsComponent::effect(const Shader& shader)
@@ -1547,15 +1486,8 @@ namespace p5cpp
             return;
         }
 
-        if (m_framebufferStack.empty()) return;
-        Framebuffer& current = m_framebufferStack.back();
-
-        const bool isMsaa = isMsaaFramebuffer(current);
-        if (isMsaa) resolveMsaaToDefaultFramebuffer();
-        Framebuffer& target = isMsaa ? m_defaultFramebuffer : current;
-
-        m_effects.runEffect(*m_renderer, m_uniformCache, target, shader);
-
-        if (isMsaa) syncMsaaFromDefaultFramebuffer();
+        withEffectTarget([&](Framebuffer& target) {
+            m_effects.runEffect(*m_renderer, m_uniformCache, target, shader);
+        });
     }
 } // namespace p5cpp

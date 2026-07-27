@@ -4,6 +4,7 @@
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/render_state_stack.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
+#include <p5cpp/graphics/antialiased_canvas.hpp>
 #include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/text.hpp>
@@ -135,25 +136,27 @@ namespace p5cpp
 
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
 
-        // Swaps whichever canvas beginFrame() would push (m_defaultFramebuffer or, once
-        // smooth() is active, m_msaaFramebuffer) into the still-open outermost stack
-        // bracket. See resizeDefaultCanvas() for why this matters mid-bracket.
+        // Swaps whichever canvas beginFrame() would push (m_canvas.activeFramebuffer())
+        // into the still-open outermost stack bracket. See resizeDefaultCanvas() for why
+        // this matters mid-bracket.
         void swapActiveDefaultCanvas(const Framebuffer& newDefaultCanvas);
-        void rebuildMsaaFramebuffer();
-        bool isMsaaFramebuffer(const Framebuffer& framebuffer) const;
 
-        // Resolves m_msaaFramebuffer's multisampled content into m_defaultFramebuffer.
-        // Called once per frame in endFrame(), and on demand before anything (loadPixels(),
-        // filter(), effect()) needs to read the canvas mid-frame while smooth() is active.
+        // Resolves m_canvas's multisampled target into its default framebuffer (no-op if
+        // smooth() isn't active). Called once per frame in endFrame(), and on demand
+        // before anything (loadPixels(), filter(), effect()) needs to read the canvas
+        // mid-frame while smooth() is active.
         void resolveMsaaToDefaultFramebuffer();
 
-        // Inverse of the above: pushes m_defaultFramebuffer's current color content back
-        // into the live m_msaaFramebuffer via a textured full-screen draw (a plain GL blit
-        // can't target a multisample destination). Needed after updatePixels()/filter()/
-        // effect() mutate m_defaultFramebuffer out-of-band while smooth() is active, so
-        // that drawing continues on top of the mutated result instead of the next
-        // automatic resolve silently overwriting it with the stale unmutated content.
+        // Inverse of the above: pushes m_canvas's default framebuffer content back into
+        // the live msaa target. Needed after updatePixels()/filter()/effect() mutate the
+        // default framebuffer out-of-band while smooth() is active, so that drawing
+        // continues on top of the mutated result instead of the next automatic resolve
+        // silently overwriting it with the stale unmutated content.
         void syncMsaaFromDefaultFramebuffer();
+
+        // Resolves+syncs around `fn` automatically if smooth() is active, so filter()/
+        // effect() land on real pixels instead of an unresolvable multisample target.
+        void withEffectTarget(const std::function<void(Framebuffer&)>& fn);
 
         Shader getShader(const RenderState& renderState);
 
@@ -218,11 +221,7 @@ namespace p5cpp
         std::vector<color_t> m_arcPieColors;
 
         std::vector<Framebuffer> m_framebufferStack;
-        Framebuffer m_defaultFramebuffer;
-
-        // Valid only while m_smoothSamples > 0 (see smooth()/noSmooth()).
-        Framebuffer m_msaaFramebuffer;
-        uint32_t m_smoothSamples = 0;
+        AntialiasedCanvas m_canvas;
 
         RenderStateStack m_renderStateStack;
         MatrixStack m_matrixStack;

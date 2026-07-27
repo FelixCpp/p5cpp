@@ -29,7 +29,6 @@ namespace p5cpp
 
     private:
         void ensureScratch(uint2 size);
-        void runPass(NativeRenderer& renderer, UniformCache& uniformCache, const Framebuffer& source, const Framebuffer& dest, const Shader& shader);
         static void blit(const Framebuffer& source, const Framebuffer& dest);
 
         Shader m_blurShader;
