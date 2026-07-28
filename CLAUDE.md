@@ -28,7 +28,7 @@ cmake --build build --target demo --parallel
 
 ### Middleware pipeline (`Module`)
 
-The engine (`src/p5cpp/application/engine.cpp`, `AppEngine`) is a linear chain of `Module`s (`include/p5cpp/application/module.hpp`), run in registration order for `setup`, `draw`, `event`, and `destroy`. Each module receives a `Next next` callback it must invoke to pass control to the next module — this is an explicit middleware/onion pattern (like Express/Koa), not a fixed set of virtual hooks. A module can do work before *and* after `next()` (e.g. `SketchModule::destroy` calls `next()` first, then tears down the sketch afterward). Module registration order matters and lives in `src/p5cpp/p5cpp.cpp`'s `main()`:
+The engine (`src/p5cpp/application/engine.cpp`, `AppEngine`) is a linear chain of `Module`s (`include/p5cpp/application/module.hpp`), run in registration order for `setup`, `draw`, `event`, and `destroy`. Each module receives a `Next next` callback it must invoke to pass control to the next module — this is an explicit middleware/onion pattern (like Express/Koa), not a fixed set of virtual hooks. A module can do work before _and_ after `next()` (e.g. `SketchModule::destroy` calls `next()` first, then tears down the sketch afterward). Module registration order matters and lives in `src/p5cpp/p5cpp.cpp`'s `main()`:
 
 ```
 FrameModule → WindowModule → InputModule → GraphicsModule → SketchModule
@@ -52,7 +52,7 @@ When adding a new public API function: add the declaration to the appropriate he
 
 ### Sketch entry point
 
-User code implements `p5cpp::Sketch` (`include/p5cpp/application/sketch.hpp`) and defines `p5cpp::createSketch()`, which `SketchModule` calls once during `setup`. `Sketch::plugins(Engine&)` is the extension point for registering additional custom `Module`s before the sketch itself runs (see the "Custom Engine Modules" section of README.md for an example — e.g. a shared `TimerModule` other modules/sketches can `require<T>()` from `AppContext`).
+User code implements `p5cpp::Sketch` (`include/p5cpp/application/sketch.hpp`) and defines `p5cpp::createSketch()`, which `SketchModule` calls once during `setup`. `Sketch::registerModules(Engine&)` is the extension point for registering additional custom `Module`s before the sketch itself runs (see the "Custom Engine Modules" section of README.md for an example — e.g. a shared `TimerModule` other modules/sketches can `require<T>()` from `AppContext`).
 
 ### Directory layout
 

@@ -22,7 +22,6 @@ namespace p5cpp
         Engine& engine = context.require<Engine>();
 
         sketch = createSketch();
-        sketch->plugins(engine);
         sketch->registerModules(*this);
 
         context.registerService(sketch.get());
@@ -101,7 +100,7 @@ namespace p5cpp
             m_drawNext();
         };
 
-        for (size_t i = m_postModules.size(); i-- > 0; ) {
+        for (size_t i = m_postModules.size(); i-- > 0;) {
             Module* module = m_postModules[i].get();
             Next inner = std::move(chain);
             chain = [this, &context, module, inner]() {
@@ -117,7 +116,7 @@ namespace p5cpp
         };
 
         Next fullChain = std::move(afterPreModules);
-        for (size_t i = m_preModules.size(); i-- > 0; ) {
+        for (size_t i = m_preModules.size(); i-- > 0;) {
             Module* module = m_preModules[i].get();
             Next inner = std::move(fullChain);
             fullChain = [this, &context, module, inner]() {

@@ -12,7 +12,6 @@ namespace p5cpp
     {
         virtual ~Sketch() = default;
 
-        virtual void plugins(Engine& engine) {}
         virtual void registerModules(ModuleRegistrar& registrar) {}
 
         virtual void setup() = 0;
