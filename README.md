@@ -377,38 +377,60 @@ struct PostFXSketch : Sketch
 
 ---
 
-### Post-Processing Effects (Blur)
+### Post-Processing Effects
 
-`filter()` applies a built-in screen-space effect to whatever has been drawn to the current
-canvas so far this frame — no manual framebuffer juggling required. `effect()` is the same
-mechanism with an arbitrary custom shader instead of a built-in one, so you can write your own
-full-screen passes (vignettes, chromatic aberration, pixelation, …) using the exact same
-`loadShader()`/`setUniform()` API you already use for shapes:
+There's no dedicated "effect"/"filter" API — a post-processing pass is just a `Shader`,
+applied like any other `shader()` call while drawing a `Framebuffer`'s contents back out
+via `image()`. Render the scene you want to post-process into an offscreen `Framebuffer`
+first (see above), then draw it through the shader:
 
 ```cpp
-void draw() override
+struct PostFXSketch : Sketch
 {
-    background(10);
+    Framebuffer scene;
+    Shader glowShader;
 
-    noStroke();
-    for (auto& p : particles)
+    void setup() override
     {
-        fill(p.color);
-        circle(p.pos.x, p.pos.y, p.size);
+        setWindowSize(800, 600);
+        scene = createFramebuffer(800, 600);
+        glowShader = loadBlurShader(); // built-in convenience shader, see shader.hpp
     }
 
-    filter(FilterType::blur, 6.0f); // radius in pixels — glow/bloom-style softening
+    void draw() override
+    {
+        pushCanvas(scene);
+            background(10);
+            noStroke();
+            for (auto& p : particles)
+            {
+                fill(p.color);
+                circle(p.pos.x, p.pos.y, p.size);
+            }
+        popCanvas();
 
-    // A custom full-screen shader works the same way:
-    // shader(myPostFxShader);
-    // setUniform("uTime", uniform(getGlobalTime()));
-    // effect(myPostFxShader);
-}
+        shader(glowShader);
+        setUniform(glowShader, "u_TexelSize", uniform(1.0f / 800.0f, 1.0f / 600.0f));
+        setUniform(glowShader, "u_Radius", uniform(6.0f));
+        setUniform(glowShader, "u_Direction", uniform(1.0f, 0.0f));
+        image(*scene.getColorTexture(), 0, 0, 800, 600); // horizontal blur pass
+
+        // A custom full-screen shader works the same way — write only the pixel
+        // function, loadEffectShader() supplies the rest:
+        //     shader(myPostFxShader);
+        //     setUniform(myPostFxShader, "uTime", uniform(getGlobalTime()));
+        //     image(*scene.getColorTexture(), 0, 0, 800, 600);
+        noShader();
+    }
+};
 ```
 
-`filter()`/`effect()` operate on the currently active canvas — the main window canvas by
-default, or whatever `Framebuffer` you last `pushCanvas()`'d — so post-processing composes
-naturally with offscreen rendering.
+Built-in convenience shaders (`loadGrayscaleShader()`, `loadInvertShader()`,
+`loadThresholdShader()`, `loadBlurShader()`) live in `shader.hpp` — they're regular
+`Shader`s, nothing about applying them is special. `loadBlurShader()` is a *separable*
+gaussian blur, so a real blur needs two passes (horizontal into a scratch `Framebuffer`,
+then vertical from that scratch buffer onto the final target) — see
+`examples/custom_effects` for the full two-pass version.
 
 ---
 
@@ -749,8 +771,7 @@ anchored relative to your sketch instead of the global module list.
 | `image(texture,x,y,w,h)`                               | draw texture             |
 | `text(str,x,y)` / `text(str,x,y,maxWidth)`             | draw text                |
 | `textLayout(str,x,y[,maxWidth])` → `TextLayout`        | measure text (lines, width, height, bounds) without drawing |
-| `filter(FilterType::blur, amount)`                     | built-in post-processing |
-| `effect(shader)`                                       | custom full-screen pass  |
+| `shader(s)` / `noShader()`                             | active shader for drawing (incl. post-processing, see above) |
 
 ### RenderGroup
 

@@ -66,6 +66,8 @@ namespace p5cpp
     void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
     void tint(int grey, int alpha) { tint(rgba(grey, alpha)); }
 
+    void textureMode(TextureMode textureMode) { getGraphicsComponent().textureMode(textureMode); }
+
     void bezierDetail(uint32_t detail) { getGraphicsComponent().bezierDetail(detail); }
     void curveTightness(float tightness) { getGraphicsComponent().curveTightness(tightness); }
     void curveDetail(uint32_t detail) { getGraphicsComponent().curveDetail(detail); }
@@ -84,8 +86,8 @@ namespace p5cpp
     void noShader() { getGraphicsComponent().noShader(); }
     void blendMode(const BlendMode& blendMode) { getGraphicsComponent().blendMode(blendMode); }
 
-    void filter(FilterType type, float amount) { getGraphicsComponent().filter(type, amount); }
-    void effect(const Shader& shader) { getGraphicsComponent().effect(shader); }
+    void smooth(uint32_t samples) { getGraphicsComponent().smooth(samples); }
+    void noSmooth() { getGraphicsComponent().noSmooth(); }
 
     void setUniform(const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(name, variable); }
     void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable) { getGraphicsComponent().setUniform(shader, name, variable); }
@@ -112,6 +114,7 @@ namespace p5cpp
     void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { getGraphicsComponent().bezier(x1, y1, x2, y2, x3, y3, x4, y4); }
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { getGraphicsComponent().curve(x1, y1, x2, y2, x3, y3, x4, y4); }
     void image(const Texture& texture, float left, float top, float width, float height) { getGraphicsComponent().image(texture, left, top, width, height); }
+    void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight) { getGraphicsComponent().image(texture, left, top, width, height, sx, sy, sWidth, sHeight); }
     void text(std::string_view text, float x, float y) { getGraphicsComponent().text(text, x, y); }
     void text(std::string_view text, float x, float y, float maxWidth) { getGraphicsComponent().text(text, x, y, maxWidth); }
     TextLayout textLayout(std::string_view text, float x, float y) { return getGraphicsComponent().layoutText(text, x, y); }

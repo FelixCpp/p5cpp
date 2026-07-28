@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -208,7 +209,7 @@ namespace p5cpp
         : m_drawPointCount(0),
           m_drawPointCapacity(0),
           m_curveVertexCount(0),
-          m_defaultFramebuffer(createFramebuffer(width, height)),
+          m_canvas(width, height),
           m_renderStateStack(),
           m_defaultFont(loadFont(std::span {DejaVuSans_ttf, DejaVuSans_ttf_len})),
           m_renderer(NativeRenderer::create(MAX_VERTICES, MAX_INDICES))
@@ -222,37 +223,102 @@ namespace p5cpp
 
     void GraphicsComponent::beginFrame()
     {
-        pushCanvas(m_defaultFramebuffer);
+        pushCanvas(m_canvas.activeFramebuffer());
     }
 
     void GraphicsComponent::endFrame()
     {
         popCanvas();
+        resolveMsaaToDefaultFramebuffer();
     }
 
     void GraphicsComponent::resizeDefaultCanvas(uint32_t width, uint32_t height)
     {
-        m_defaultFramebuffer = createFramebuffer(width, height);
+        m_canvas.resize(width, height);
 
-        // beginFrame() pushes a *copy* of m_defaultFramebuffer onto the stack (always
+        // beginFrame() pushes a *copy* of the active default canvas onto the stack (always
         // at index 0 - the outermost canvas). If a resize happens while that bracket is
         // still open (e.g. a Sketch calling setWindowSize() from within its own setup(),
         // after some earlier draw call already opened the frame), the stack entry would
         // otherwise keep referencing the old, now-orphaned framebuffer, so any further
         // drawing in the same setup()/draw() would silently land in a canvas nobody ever
         // presents to the screen again.
+        swapActiveDefaultCanvas(m_canvas.activeFramebuffer());
+    }
+
+    void GraphicsComponent::smooth(uint32_t samples)
+    {
+        const uint32_t clamped = std::max<uint32_t>(samples, 1);
+        if (m_canvas.samples() == clamped) return;
+
+        // If we were already mid-frame in the (old) msaa target, carry forward what's
+        // been drawn so far into the default framebuffer before swapping it out -
+        // otherwise calling smooth()/noSmooth() partway through draw() would silently
+        // drop whatever was drawn before the call. No-op if we weren't smoothing yet.
+        resolveMsaaToDefaultFramebuffer();
+
+        m_canvas.smooth(clamped);
+        swapActiveDefaultCanvas(m_canvas.activeFramebuffer());
+
+        // ...and paint that carried-forward content into the fresh msaa target so
+        // drawing continues on top of it instead of a blank canvas.
+        syncMsaaFromDefaultFramebuffer();
+    }
+
+    void GraphicsComponent::noSmooth()
+    {
+        if (!m_canvas.isEnabled()) return;
+
+        resolveMsaaToDefaultFramebuffer();
+        m_canvas.noSmooth();
+        swapActiveDefaultCanvas(m_canvas.defaultFramebuffer());
+    }
+
+    void GraphicsComponent::swapActiveDefaultCanvas(const Framebuffer& newDefaultCanvas)
+    {
+        if (m_framebufferStack.empty()) return;
+
+        m_framebufferStack.front() = newDefaultCanvas;
+        if (m_framebufferStack.size() == 1) {
+            m_renderer->begin(m_framebufferStack.back());
+        }
+    }
+
+    void GraphicsComponent::resolveMsaaToDefaultFramebuffer()
+    {
+        // Always flush, even if there's nothing to resolve: callers (smooth() chief
+        // among them) rely on this to push any pending-but-unflushed batches through to
+        // GL before the framebuffer they were queued against might get swapped out from
+        // under them - begin() on the new target would otherwise silently discard them
+        // (it resets the writer/batch buffers without issuing their draw calls first).
+        m_renderer->flush();
+        if (!m_canvas.isEnabled()) return;
+
+        m_canvas.resolveToDefault();
+
         if (not m_framebufferStack.empty()) {
-            m_framebufferStack.front() = m_defaultFramebuffer;
-            if (m_framebufferStack.size() == 1) {
-                m_renderer->begin(m_framebufferStack.back());
-            }
+            m_renderer->begin(m_framebufferStack.back());
+        }
+    }
+
+    void GraphicsComponent::syncMsaaFromDefaultFramebuffer()
+    {
+        if (!m_canvas.isEnabled()) return;
+
+        m_renderer->flush();
+        m_renderer->end();
+
+        m_canvas.syncFromDefault(*m_renderer, m_uniformCache, m_defaultShader);
+
+        if (not m_framebufferStack.empty()) {
+            m_renderer->begin(m_framebufferStack.back());
         }
     }
 
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
-        const uint2 canvasSize = m_defaultFramebuffer.getSize();
-        const GLuint fboId = m_defaultFramebuffer.getFramebufferId().value;
+        const uint2 canvasSize = m_canvas.defaultFramebuffer().getSize();
+        const GLuint fboId = m_canvas.defaultFramebuffer().getFramebufferId().value;
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -328,6 +394,15 @@ namespace p5cpp
 
         m_renderer->flush();
 
+        // The multisample target can't be read directly (see OpenGLMultisampleFramebufferImpl);
+        // resolve what's been drawn so far this frame into the default framebuffer first.
+        if (m_canvas.isMsaaFramebuffer(m_framebufferStack.back())) {
+            resolveMsaaToDefaultFramebuffer();
+            const Framebuffer& resolved = m_canvas.defaultFramebuffer();
+            const uint2 size = resolved.getSize();
+            return Pixels(size.x, size.y, flipRows(resolved.readPixels(), size.x, size.y));
+        }
+
         const Framebuffer& framebuffer = m_framebufferStack.back();
         const uint2 size = framebuffer.getSize();
         return Pixels(size.x, size.y, flipRows(framebuffer.readPixels(), size.x, size.y));
@@ -344,6 +419,13 @@ namespace p5cpp
         assert(pixels.getWidth() == size.x && pixels.getHeight() == size.y);
 
         m_renderer->flush();
+
+        if (m_canvas.isMsaaFramebuffer(framebuffer)) {
+            m_canvas.defaultFramebuffer().writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+            syncMsaaFromDefaultFramebuffer();
+            return;
+        }
+
         framebuffer.writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
     }
 
@@ -496,6 +578,11 @@ namespace p5cpp
     {
         RenderState& currentState = peekRenderState();
         currentState.tintColor = rgba(255, 255, 255, 255);
+    }
+
+    void GraphicsComponent::textureMode(TextureMode textureMode)
+    {
+        peekRenderState().textureMode = textureMode;
     }
 
     void GraphicsComponent::bezierDetail(uint32_t detail)
@@ -710,12 +797,12 @@ namespace p5cpp
             m_ellipseFanUVs[1 + i] = {0.5f + 0.5f * cosA, 0.5f + 0.5f * sinA};
         }
 
-        if (!rs.isFillDisabled) {
+        if (not rs.isFillDisabled) {
             m_ellipseFillColors.assign(fanCount, rs.fillColor);
             submitFill(PathPoints {fanCount, m_ellipseFanPositions, m_ellipseFanUVs, m_ellipseFillColors}, ShapeType::triangleFan, m_whiteTexture);
         }
 
-        if (!rs.isStrokeDisabled) {
+        if (not rs.isStrokeDisabled) {
             // Stroke uses exactly `segments` perimeter points (no center, no closing duplicate).
             m_ellipseStrokeUVs.assign(segments, float2::zero);
             m_ellipseStrokeColors.assign(segments, rs.strokeColor);
@@ -924,6 +1011,50 @@ namespace p5cpp
         writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 1.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 0.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 0.0f}, tint);
+        writer.pushTriangle(base + 0, base + 1, base + 2);
+        writer.pushTriangle(base + 0, base + 2, base + 3);
+
+        const Shader shaderToUse = getShader(rs);
+        endDrawOp(writer, shaderToUse, rs.blendMode, texture, m_uniformCache.getUniforms(shaderToUse));
+    }
+
+    void GraphicsComponent::image(const Texture& texture, float left, float top, float w, float h, float sx, float sy, float sw, float sh)
+    {
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = peekMatrix();
+        const float4 tint = colorToFloat4(rs.tintColor);
+
+        // Normalize sx/sy/sw/sh (top-left origin, see TextureMode) to a 0..1 UV rect
+        // in that same top-left-origin space first...
+        float nsx = sx;
+        float nsy = sy;
+        float nsw = sw;
+        float nsh = sh;
+        if (rs.textureMode == TextureMode::image) {
+            const uint2 texSize = texture.getSize();
+            const float invW = texSize.x > 0 ? 1.0f / static_cast<float>(texSize.x) : 0.0f;
+            const float invH = texSize.y > 0 ? 1.0f / static_cast<float>(texSize.y) : 0.0f;
+            nsx = sx * invW;
+            nsy = sy * invH;
+            nsw = sw * invW;
+            nsh = sh * invH;
+        }
+
+        // ...then flip to the texture's bottom-origin GL v (see TextureImpl::upload()):
+        // the source rect's top edge (nsy) samples the higher v, its bottom edge
+        // (nsy + nsh) samples the lower v — mirroring the plain image() overload above.
+        const float u0 = nsx;
+        const float u1 = nsx + nsw;
+        const float v0 = 1.0f - nsy;
+        const float v1 = 1.0f - (nsy + nsh);
+
+        DrawBufferWriter& writer = beginDrawOp();
+        const uint32_t base = writer.getRelativeCursor();
+
+        writer.pushVertex(mtx.transformPoint(left, top), {u0, v0}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top), {u1, v0}, tint);
+        writer.pushVertex(mtx.transformPoint(left + w, top + h), {u1, v1}, tint);
+        writer.pushVertex(mtx.transformPoint(left, top + h), {u0, v1}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
@@ -1285,7 +1416,8 @@ namespace p5cpp
             case ShapeType::triangleFan: tesselate_triangle_fan(writer, pts); break;
             case ShapeType::quads: tesselate_quads(writer, pts); break;
             case ShapeType::quadStrip: tesselate_quad_strip(writer, pts); break;
-            default: tesselate_polygon(writer, pts); break;
+            case ShapeType::polygon: tesselate_polygon(writer, pts); break;
+            default: throw std::invalid_argument("Unsupported shape type for fill"); break;
         }
 
         const Shader shaderToUse = getShader(rs);
@@ -1298,73 +1430,18 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
 
         switch (type) {
-            case ShapeType::lines:
-                stroke_lines(writer, pts, rs.strokeWeight, rs.strokeCap, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::lineStrip:
-                stroke_line_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::lineLoop:
-                stroke_line_loop(writer, pts, rs.strokeWeight, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::triangles:
-                stroke_triangles(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::triangleStrip:
-                stroke_triangle_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::triangleFan:
-                stroke_triangle_fan(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::quads:
-                stroke_quads(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            case ShapeType::quadStrip:
-                stroke_quad_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount);
-                break;
-            default:
-                stroke_polygon(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, close, computeCircleSegmentCount);
-                break;
+            case ShapeType::lines: stroke_lines(writer, pts, rs.strokeWeight, rs.strokeCap, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::lineStrip: stroke_line_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::lineLoop: stroke_line_loop(writer, pts, rs.strokeWeight, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::triangles: stroke_triangles(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::triangleStrip: stroke_triangle_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::triangleFan: stroke_triangle_fan(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::quads: stroke_quads(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::quadStrip: stroke_quad_strip(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, computeCircleSegmentCount); break;
+            case ShapeType::polygon: stroke_polygon(writer, pts, rs.strokeWeight, rs.strokeCap, rs.strokeJoin, rs.miterLimit, rs.roundJoinThreshold, close, computeCircleSegmentCount); break;
         }
 
         endDrawOp(writer, m_defaultShader, rs.blendMode, m_whiteTexture, m_uniformCache.getUniforms(m_defaultShader));
     }
 
-    void GraphicsComponent::filter(FilterType type, float amount)
-    {
-        if (m_recorder.isActive()) {
-            assert(false && "filter() is not supported inside buildRenderGroup()");
-            return;
-        }
-
-        if (m_framebufferStack.empty()) return;
-        Framebuffer& current = m_framebufferStack.back();
-
-        switch (type) {
-            case FilterType::blur:
-                m_effects.applyBlur(*m_renderer, m_uniformCache, current, amount);
-                break;
-            case FilterType::grayscale:
-                m_effects.applyGrayscale(*m_renderer, m_uniformCache, current, amount);
-                break;
-            case FilterType::invert:
-                m_effects.applyInvert(*m_renderer, m_uniformCache, current, amount);
-                break;
-            case FilterType::threshold:
-                m_effects.applyThreshold(*m_renderer, m_uniformCache, current, amount);
-                break;
-        }
-    }
-
-    void GraphicsComponent::effect(const Shader& shader)
-    {
-        if (m_recorder.isActive()) {
-            assert(false && "effect() is not supported inside buildRenderGroup()");
-            return;
-        }
-
-        if (m_framebufferStack.empty()) return;
-
-        m_effects.runEffect(*m_renderer, m_uniformCache, m_framebufferStack.back(), shader);
-    }
 } // namespace p5cpp

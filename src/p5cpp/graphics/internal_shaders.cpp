@@ -179,8 +179,8 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    // Built via loadEffectShader() - the same helper user code uses for custom
-    // effects - so these built-in filters only need to define `effect()` too.
+    // Built via loadEffectShader() - the same helper user code uses for custom effects -
+    // so these built-ins only need to define `effect()` too.
     inline static constexpr const char* grayscaleSource = R"(
         uniform float u_Amount;
 
@@ -225,4 +225,13 @@ namespace p5cpp
     {
         return loadEffectShader(thresholdSource);
     }
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    // Public wrappers exposing the built-ins above as ordinary Shaders (see shader.hpp).
+    Shader loadGrayscaleShader() { return Shader(createGrayscaleShader()); }
+    Shader loadInvertShader() { return Shader(createInvertShader()); }
+    Shader loadThresholdShader() { return Shader(createThresholdShader()); }
+    Shader loadBlurShader() { return Shader(createBlurShader()); }
 } // namespace p5cpp

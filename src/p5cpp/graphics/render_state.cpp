@@ -16,6 +16,7 @@ namespace p5cpp
             .miterLimit = 10.0f,
             .roundJoinThreshold = radians(25.0f),
             .tintColor = rgba(255, 255, 255),
+            .textureMode = TextureMode::normalized,
             .bezierDetail = 20,
             .invBezierDetail = 1.0f / 20.0f,
             .curveTightness = 0.0f,

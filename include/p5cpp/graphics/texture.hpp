@@ -8,6 +8,19 @@
 
 namespace p5cpp
 {
+    // Controls how the sx/sy/sWidth/sHeight source-rect arguments of image() (and the
+    // u/v arguments of vertex()) are interpreted: normalized expects the standard 0..1
+    // UV range, image expects pixel coordinates/extents of the source texture. Both use
+    // a top-left origin, matching the rest of p5cpp's pixel coordinate conventions (see
+    // Pixels) regardless of the texture's actual bottom-to-top GL storage order.
+    enum class TextureMode {
+        normalized,
+        image,
+    };
+}
+
+namespace p5cpp
+{
     struct TextureId
     {
         uint32_t value;

@@ -1,3 +1,4 @@
+#include <p5cpp/graphics/shader.hpp>
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/uniform_cache.hpp>
 #include <p5cpp/math/matrix4x4.hpp>
@@ -347,12 +348,15 @@ namespace p5cpp
                 case UniformVariable::Type::float1:
                     return a.floatValue == b.floatValue;
                 case UniformVariable::Type::float2:
-                    return a.float2Value.x == b.float2Value.x && a.float2Value.y == b.float2Value.y;
+                    return a.float2Value.x == b.float2Value.x and a.float2Value.y == b.float2Value.y;
+                case UniformVariable::Type::float3:
+                    return a.float3Value.x == b.float3Value.x and a.float3Value.y == b.float3Value.y and a.float3Value.z == b.float3Value.z;
                 case UniformVariable::Type::float4:
-                    return a.float4Value.x == b.float4Value.x && a.float4Value.y == b.float4Value.y
-                        && a.float4Value.z == b.float4Value.z && a.float4Value.w == b.float4Value.w;
+                    return a.float4Value.x == b.float4Value.x and a.float4Value.y == b.float4Value.y and a.float4Value.z == b.float4Value.z and a.float4Value.w == b.float4Value.w;
                 case UniformVariable::Type::matrix4x4:
                     return std::memcmp(a.matrix4x4Value.data(), b.matrix4x4Value.data(), 16 * sizeof(float)) == 0;
+                case UniformVariable::Type::texture:
+                    return a.textureValue == b.textureValue;
             }
             return false;
         }
@@ -361,6 +365,16 @@ namespace p5cpp
         // since uniform state lives on the GL program object and survives across batches/frames.
         void applyUniformCached(GLuint programId, const UniformLocation& location, const UniformVariable& variable)
         {
+            // Texture bindings live in global GL texture-unit state, not in the program's
+            // uniform state, so another draw call can rebind the same unit between two
+            // uses of this program/uniform. Always re-bind rather than trusting the cache.
+            if (variable.type == UniformVariable::Type::texture) {
+                glActiveTexture(GL_TEXTURE0 + variable.textureValue.unit);
+                glBindTexture(GL_TEXTURE_2D, variable.textureValue.textureId.value);
+                glUniform1i(location.value, variable.textureValue.unit);
+                return;
+            }
+
             std::unordered_map<int32_t, UniformVariable>& programCache = m_appliedUniforms.try_emplace(programId).first->second;
             const auto it = programCache.find(location.value);
             if (it != programCache.end() && uniformVariableEquals(it->second, variable))
@@ -373,11 +387,16 @@ namespace p5cpp
                 case UniformVariable::Type::float2:
                     glUniform2f(location.value, variable.float2Value.x, variable.float2Value.y);
                     break;
+                case UniformVariable::Type::float3:
+                    glUniform3f(location.value, variable.float3Value.x, variable.float3Value.y, variable.float3Value.z);
+                    break;
                 case UniformVariable::Type::float4:
                     glUniform4f(location.value, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w);
                     break;
                 case UniformVariable::Type::matrix4x4:
                     glUniformMatrix4fv(location.value, 1, GL_FALSE, variable.matrix4x4Value.data());
+                    break;
+                case UniformVariable::Type::texture:
                     break;
             }
             programCache.insert_or_assign(location.value, variable);

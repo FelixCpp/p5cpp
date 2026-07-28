@@ -4,13 +4,12 @@
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/render_state_stack.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
-#include <p5cpp/graphics/filter.hpp>
+#include <p5cpp/graphics/antialiased_canvas.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/text.hpp>
 #include <p5cpp/graphics/text_layout.hpp>
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/render_group_recorder.hpp>
-#include <p5cpp/graphics/effects_renderer.hpp>
 #include <p5cpp/graphics/pixels.hpp>
 
 #include <array>
@@ -29,6 +28,12 @@ namespace p5cpp
 
         void resizeDefaultCanvas(uint32_t width, uint32_t height);
         void blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight);
+
+        // Enables MSAA on the default canvas: shapes are drawn into a multisample
+        // target and resolved into the presented canvas once per frame. samples is
+        // clamped to what the driver supports (GL_MAX_SAMPLES). Off by default.
+        void smooth(uint32_t samples);
+        void noSmooth();
 
         void pushCanvas(Framebuffer framebuffer);
         void popCanvas();
@@ -65,6 +70,8 @@ namespace p5cpp
         void tint(color_t color);
         void noTint();
 
+        void textureMode(TextureMode textureMode);
+
         void bezierDetail(uint32_t detail);
         void curveTightness(float tightness);
         void curveDetail(uint32_t detail);
@@ -83,9 +90,6 @@ namespace p5cpp
         void noShader();
         void blendMode(BlendMode blendMode);
 
-        void filter(FilterType type, float amount);
-        void effect(const Shader& shader);
-
         void setUniform(const std::string& name, const UniformVariable& variable);
         void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
 
@@ -102,6 +106,7 @@ namespace p5cpp
         void bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void image(const Texture& texture, float left, float top, float width, float height);
+        void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight);
         void text(std::string_view text, float x, float y);
         void text(std::string_view text, float x, float y, float maxWidth);
 
@@ -125,6 +130,24 @@ namespace p5cpp
         static std::vector<color_t> flipRows(std::span<const color_t> src, uint32_t width, uint32_t height);
 
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
+
+        // Swaps whichever canvas beginFrame() would push (m_canvas.activeFramebuffer())
+        // into the still-open outermost stack bracket. See resizeDefaultCanvas() for why
+        // this matters mid-bracket.
+        void swapActiveDefaultCanvas(const Framebuffer& newDefaultCanvas);
+
+        // Resolves m_canvas's multisampled target into its default framebuffer (no-op if
+        // smooth() isn't active). Called once per frame in endFrame(), and on demand
+        // before anything (loadPixels()) needs to read the canvas mid-frame while
+        // smooth() is active.
+        void resolveMsaaToDefaultFramebuffer();
+
+        // Inverse of the above: pushes m_canvas's default framebuffer content back into
+        // the live msaa target. Needed after updatePixels() mutates the default
+        // framebuffer out-of-band while smooth() is active, so that drawing continues on
+        // top of the mutated result instead of the next automatic resolve silently
+        // overwriting it with the stale unmutated content.
+        void syncMsaaFromDefaultFramebuffer();
 
         Shader getShader(const RenderState& renderState);
 
@@ -189,7 +212,7 @@ namespace p5cpp
         std::vector<color_t> m_arcPieColors;
 
         std::vector<Framebuffer> m_framebufferStack;
-        Framebuffer m_defaultFramebuffer;
+        AntialiasedCanvas m_canvas;
 
         RenderStateStack m_renderStateStack;
         MatrixStack m_matrixStack;
@@ -197,7 +220,6 @@ namespace p5cpp
 
         Shader m_defaultShader;
         Shader m_textShader;
-        EffectsRenderer m_effects;
         Texture m_whiteTexture;
         UniformCache m_uniformCache;
         Font m_defaultFont;
