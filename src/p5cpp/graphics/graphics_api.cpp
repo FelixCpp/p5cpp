@@ -86,9 +86,6 @@ namespace p5cpp
     void noShader() { getGraphicsComponent().noShader(); }
     void blendMode(const BlendMode& blendMode) { getGraphicsComponent().blendMode(blendMode); }
 
-    void filter(FilterType type, float amount) { getGraphicsComponent().filter(type, amount); }
-    void effect(const Shader& shader) { getGraphicsComponent().effect(shader); }
-
     void smooth(uint32_t samples) { getGraphicsComponent().smooth(samples); }
     void noSmooth() { getGraphicsComponent().noSmooth(); }
 

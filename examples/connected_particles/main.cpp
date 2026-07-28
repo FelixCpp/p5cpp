@@ -393,6 +393,10 @@ namespace
 
         void show() const
         {
+            // These connection segments are stroke-only (endShape(ShapeType::lines, ...)
+            // doesn't support fill) - particle.show() below re-enables fill for the dots.
+            noFill();
+
             // Check for nearby particles using QuadTree
             for (const Particle& particle : particles) {
                 const float2 queryPosition = particle.position;
@@ -457,17 +461,22 @@ namespace
 
     struct ConnectedParticleSketch : Sketch
     {
+        static constexpr int W = 1280;
+        static constexpr int H = 720;
+
         std::unique_ptr<ParticleSystem> particleSystem;
         Shader pixelateShader;
         Shader vignetteShader;
+        Framebuffer scene;
         bool isMouseDown;
 
         void setup() override
         {
-            setWindowSize(1280, 720);
+            setWindowSize(W, H);
             setWindowTitle("Connected Particles");
             frameRate(60);
 
+            scene = createFramebuffer(W, H);
             pixelateShader = loadEffectShader(pixelateSource);
             vignetteShader = loadEffectShader(vignetteSource);
 
@@ -490,8 +499,6 @@ namespace
         {
             s_colorizer->update(getDeltaTime());
 
-            background(21, 75);
-
             const int dragThreshold = 2;
             const int mouseDragX = getMouseX() - getPMouseX();
             const int mouseDragY = getMouseY() - getPMouseY();
@@ -510,15 +517,29 @@ namespace
                 );
             }
 
-            blendMode(BlendMode::additive);
-            particleSystem->update(getDeltaTime());
-            particleSystem->show();
+            // The particle system is rendered into its own Framebuffer rather than
+            // straight onto the window canvas, since the vignette shader pass needs to
+            // read "everything drawn so far" as a texture.
+            pushCanvas(scene);
+            {
+                background(21, 75);
+                blendMode(BlendMode::additive);
+                particleSystem->update(getDeltaTime());
+                particleSystem->show();
+            }
+            popCanvas();
 
+            shader(vignetteShader);
             setUniform(vignetteShader, "u_Strength", uniform(2.5f));
-            effect(vignetteShader);
+            image(*scene.getColorTexture(), 0, 0, W, H);
+            noShader();
 
+            // Pixelate instead, as an alternative:
+            // shader(pixelateShader);
             // setUniform(pixelateShader, "u_BlockSize", uniform(3.5f));
-            // effect(pixelateShader);
+            // setUniform(pixelateShader, "u_TexelSize", uniform(1.0f / W, 1.0f / H));
+            // image(*scene.getColorTexture(), 0, 0, W, H);
+            // noShader();
 
             blendMode(BlendMode::alpha);
             fill(255);

@@ -212,7 +212,6 @@ struct AudioDemoSketch : Sketch
             vertex(x, y);
         }
         endShape(ShapeType::lineStrip, false);
-        // filter(FilterType::blur, 1.5f);
 
         noFill();
         stroke(230, 140, 80, 255);

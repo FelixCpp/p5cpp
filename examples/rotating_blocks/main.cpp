@@ -100,6 +100,7 @@ namespace
         inline static constexpr int BLOCK_WIDTH = W / COLS;
         inline static constexpr int BLOCK_HEIGHT = H / ROWS;
         Shader pixelateShader;
+        Framebuffer scene;
 
         std::vector<Block> blocks;
 
@@ -108,6 +109,7 @@ namespace
             setWindowSize(W, H);
             setWindowTitle("Interactive Display with rotating Blocks");
 
+            scene = createFramebuffer(W, H);
             pixelateShader = loadEffectShader(pixelateSource);
 
             constexpr float padding = static_cast<float>(BLOCK_WIDTH) * 0.5f;
@@ -124,20 +126,24 @@ namespace
 
         void draw() override
         {
-            pushMatrix();
-            scale(1.0f, 1.0f);
-            background(0);
-            const int2 mousePosition = int2 {getMouseX(), getMouseY()};
+            pushCanvas(scene);
+            {
+                background(0);
+                const int2 mousePosition = int2 {getMouseX(), getMouseY()};
 
-            for (Block& block : blocks) {
-                block.lookAt(mousePosition);
-                block.update();
-                block.show();
+                for (Block& block : blocks) {
+                    block.lookAt(mousePosition);
+                    block.update();
+                    block.show();
+                }
             }
-            popMatrix();
+            popCanvas();
 
+            shader(pixelateShader);
             setUniform(pixelateShader, "u_BlockSize", uniform(4.0f));
-            effect(pixelateShader);
+            setUniform(pixelateShader, "u_TexelSize", uniform(1.0f / static_cast<float>(W), 1.0f / static_cast<float>(H)));
+            image(*scene.getColorTexture(), 0, 0, W, H);
+            noShader();
         }
     };
 } // namespace

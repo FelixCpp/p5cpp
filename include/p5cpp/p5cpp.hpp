@@ -11,7 +11,6 @@
 
 #include <p5cpp/graphics/blendmode.hpp>
 #include <p5cpp/graphics/color.hpp>
-#include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/font.hpp>
 #include <p5cpp/graphics/image.hpp>
 #include <p5cpp/graphics/pixels.hpp>
@@ -216,9 +215,6 @@ namespace p5cpp
     void shader(const Shader& shader);
     void noShader();
     void blendMode(const BlendMode& blendMode);
-
-    void filter(FilterType type, float amount);
-    void effect(const Shader& shader);
 
     // Antialiases shape edges by rendering the default canvas at `samples`x MSAA and
     // resolving it before it's presented (clamped to what the driver supports). Off by

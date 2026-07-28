@@ -56,7 +56,6 @@ add_library(
 
   ./src/p5cpp/graphics/antialiased_canvas.cpp
   ./src/p5cpp/graphics/color.cpp
-  ./src/p5cpp/graphics/effects_renderer.cpp
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/graphics/framebuffer.cpp
   ./src/p5cpp/graphics/fullscreen_pass.cpp

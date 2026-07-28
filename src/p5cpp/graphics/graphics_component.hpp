@@ -5,13 +5,11 @@
 #include <p5cpp/graphics/render_state_stack.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/graphics/antialiased_canvas.hpp>
-#include <p5cpp/graphics/filter.hpp>
 #include <p5cpp/graphics/shaping.hpp>
 #include <p5cpp/graphics/text.hpp>
 #include <p5cpp/graphics/text_layout.hpp>
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/render_group_recorder.hpp>
-#include <p5cpp/graphics/effects_renderer.hpp>
 #include <p5cpp/graphics/pixels.hpp>
 
 #include <array>
@@ -92,9 +90,6 @@ namespace p5cpp
         void noShader();
         void blendMode(BlendMode blendMode);
 
-        void filter(FilterType type, float amount);
-        void effect(const Shader& shader);
-
         void setUniform(const std::string& name, const UniformVariable& variable);
         void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
 
@@ -143,20 +138,16 @@ namespace p5cpp
 
         // Resolves m_canvas's multisampled target into its default framebuffer (no-op if
         // smooth() isn't active). Called once per frame in endFrame(), and on demand
-        // before anything (loadPixels(), filter(), effect()) needs to read the canvas
-        // mid-frame while smooth() is active.
+        // before anything (loadPixels()) needs to read the canvas mid-frame while
+        // smooth() is active.
         void resolveMsaaToDefaultFramebuffer();
 
         // Inverse of the above: pushes m_canvas's default framebuffer content back into
-        // the live msaa target. Needed after updatePixels()/filter()/effect() mutate the
-        // default framebuffer out-of-band while smooth() is active, so that drawing
-        // continues on top of the mutated result instead of the next automatic resolve
-        // silently overwriting it with the stale unmutated content.
+        // the live msaa target. Needed after updatePixels() mutates the default
+        // framebuffer out-of-band while smooth() is active, so that drawing continues on
+        // top of the mutated result instead of the next automatic resolve silently
+        // overwriting it with the stale unmutated content.
         void syncMsaaFromDefaultFramebuffer();
-
-        // Resolves+syncs around `fn` automatically if smooth() is active, so filter()/
-        // effect() land on real pixels instead of an unresolvable multisample target.
-        void withEffectTarget(const std::function<void(Framebuffer&)>& fn);
 
         Shader getShader(const RenderState& renderState);
 
@@ -229,7 +220,6 @@ namespace p5cpp
 
         Shader m_defaultShader;
         Shader m_textShader;
-        EffectsRenderer m_effects;
         Texture m_whiteTexture;
         UniformCache m_uniformCache;
         Font m_defaultFont;

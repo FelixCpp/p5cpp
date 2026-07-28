@@ -284,35 +284,12 @@ struct QuadTree
     bool isSubdivided = false;
 };
 
-constexpr const char* pixelateSource = R"(
-        uniform float u_BlockSize;
-
-        vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex) {
-            vec2 block = texelSize * max(u_BlockSize, 1.0);
-            vec2 blockUV = (floor(uv / block) + 0.5) * block;
-            return texture(tex, blockUV);
-        }
-    )";
-
-constexpr const char* vignetteSource = R"(
-        uniform float u_Strength;
-
-        vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex) {
-            vec4 c = texture(tex, uv);
-            vec2 centered = uv - 0.5;
-            float vignette = 1.0 - dot(centered, centered) * u_Strength;
-            return vec4(c.rgb * clamp(vignette, 0.0, 1.0), c.a);
-        }
-    )";
-
 struct FlockingSimulation : Sketch
 {
     static constexpr float weightChangeSpeed = 1.0f;
     static constexpr float maxWeight = 5.0f;
 
     std::vector<Boid> boids;
-    Shader pixelateShader;
-    Shader vignetteShader;
 
     std::vector<std::unique_ptr<MovementBehavior>> behaviors;
 
@@ -323,8 +300,6 @@ struct FlockingSimulation : Sketch
     void setup() override
     {
         setWindowSize(800, 600);
-        pixelateShader = loadEffectShader(pixelateSource);
-        vignetteShader = loadEffectShader(vignetteSource);
 
         auto alignment = std::make_unique<AlignmentBehavior>(1.0f);
         auto separation = std::make_unique<SeparationBehavior>(1.5f);
@@ -421,14 +396,6 @@ struct FlockingSimulation : Sketch
         for (Boid& boid : boids) {
             boid.show();
         }
-
-        // setUniform(vignetteShader, "u_Strength", uniform(2.0f));
-        // effect(vignetteShader);
-        //
-        // setUniform(pixelateShader, "u_BlockSize", uniform(4.0f));
-        // effect(pixelateShader);
-        // filter(FilterType::grayscale, 1.0f);
-        // filter(FilterType::threshold, 0.6f);
 
         fill(255);
         textAlign(TextAlign::topLeft);

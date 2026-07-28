@@ -315,24 +315,6 @@ namespace p5cpp
         }
     }
 
-    void GraphicsComponent::withEffectTarget(const std::function<void(Framebuffer&)>& fn)
-    {
-        if (m_framebufferStack.empty()) return;
-        Framebuffer& current = m_framebufferStack.back();
-
-        // EffectsRenderer samples `target`'s color texture directly, which the
-        // multisample target doesn't have - resolve first and run the effect against
-        // the default framebuffer, then push the filtered result back so drawing
-        // continues on top of it instead of the next automatic resolve reverting it.
-        const bool isMsaa = m_canvas.isMsaaFramebuffer(current);
-        if (isMsaa) resolveMsaaToDefaultFramebuffer();
-        Framebuffer& target = isMsaa ? m_canvas.defaultFramebuffer() : current;
-
-        fn(target);
-
-        if (isMsaa) syncMsaaFromDefaultFramebuffer();
-    }
-
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
         const uint2 canvasSize = m_canvas.defaultFramebuffer().getSize();
@@ -1462,32 +1444,4 @@ namespace p5cpp
         endDrawOp(writer, m_defaultShader, rs.blendMode, m_whiteTexture, m_uniformCache.getUniforms(m_defaultShader));
     }
 
-    void GraphicsComponent::filter(FilterType type, float amount)
-    {
-        if (m_recorder.isActive()) {
-            assert(false && "filter() is not supported inside buildRenderGroup()");
-            return;
-        }
-
-        withEffectTarget([&](Framebuffer& target) {
-            switch (type) {
-                case FilterType::blur: m_effects.applyBlur(*m_renderer, m_uniformCache, target, amount); break;
-                case FilterType::grayscale: m_effects.applyGrayscale(*m_renderer, m_uniformCache, target, amount); break;
-                case FilterType::invert: m_effects.applyInvert(*m_renderer, m_uniformCache, target, amount); break;
-                case FilterType::threshold: m_effects.applyThreshold(*m_renderer, m_uniformCache, target, amount); break;
-            }
-        });
-    }
-
-    void GraphicsComponent::effect(const Shader& shader)
-    {
-        if (m_recorder.isActive()) {
-            assert(false && "effect() is not supported inside buildRenderGroup()");
-            return;
-        }
-
-        withEffectTarget([&](Framebuffer& target) {
-            m_effects.runEffect(*m_renderer, m_uniformCache, target, shader);
-        });
-    }
 } // namespace p5cpp

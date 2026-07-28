@@ -8,14 +8,8 @@ uniform vec4 u_ShadowColor;
 vec4 effect(vec2 uv, vec2 texelSize, sampler2D tex)
 {
     vec4 color = texture(tex, uv);
-
-    // Nur Alpha des Objekts verwenden
     float alpha = color.a;
-
-    return vec4(
-        u_ShadowColor.rgb,
-        alpha * u_ShadowColor.a
-    );
+    return vec4(u_ShadowColor.rgb, alpha * u_ShadowColor.a);
 }
 )";
 
@@ -23,8 +17,10 @@ struct ShadowRenderer
 {
     Framebuffer layer;
     Framebuffer shadow;
+    Framebuffer blurScratch;
 
     Shader shadowShader;
+    Shader blurShader;
 
     int width;
     int height;
@@ -36,8 +32,10 @@ struct ShadowRenderer
 
         layer = createFramebuffer(width, height);
         shadow = createFramebuffer(width, height);
+        blurScratch = createFramebuffer(width, height);
 
         shadowShader = loadEffectShader(shadowEffect);
+        blurShader = loadBlurShader();
     }
 
     template <typename DrawFunction>
@@ -55,30 +53,51 @@ struct ShadowRenderer
         popCanvas();
 
         //
-        // 2. Shadow Texture erzeugen
+        // 2. Silhouette in Schattenfarbe einfärben
         //
         pushCanvas(shadow);
         {
             background(0, 0);
+            shader(shadowShader);
             setUniform(shadowShader, "u_ShadowColor", uniform(0.0f, 0.0f, 0.0f, 0.5f));
             image(*layer.getColorTexture(), 0, 0, width, height);
-
-            effect(shadowShader);
-
-            //
-            // Blur abhängig von Elevation
-            //
-            filter(FilterType::blur, elevation * 2.0f);
+            noShader();
         }
         popCanvas();
 
         //
-        // 3. Schatten zeichnen
+        // 3. Weichzeichnen abhängig von Elevation (separables Gauß-Blur, zwei Durchgänge)
+        //
+        const float texelX = 1.0f / static_cast<float>(width);
+        const float texelY = 1.0f / static_cast<float>(height);
+        setUniform(blurShader, "u_TexelSize", uniform(texelX, texelY));
+        setUniform(blurShader, "u_Radius", uniform(elevation * 2.0f));
+
+        pushCanvas(blurScratch);
+        {
+            shader(blurShader);
+            setUniform(blurShader, "u_Direction", uniform(1.0f, 0.0f));
+            image(*shadow.getColorTexture(), 0, 0, width, height);
+            noShader();
+        }
+        popCanvas();
+
+        pushCanvas(shadow);
+        {
+            shader(blurShader);
+            setUniform(blurShader, "u_Direction", uniform(0.0f, 1.0f));
+            image(*blurScratch.getColorTexture(), 0, 0, width, height);
+            noShader();
+        }
+        popCanvas();
+
+        //
+        // 4. Schatten zeichnen
         //
         image(*shadow.getColorTexture(), elevation * 0.5f, elevation, width, height);
 
         //
-        // 4. Original zeichnen
+        // 5. Original zeichnen
         //
         image(*layer.getColorTexture(), 0, 0, width, height);
     }
@@ -100,17 +119,19 @@ struct ShadowRendering : Sketch
     {
         background(255);
 
-        // shadows.drawShadow(
-        //     [] {
-        noStroke();
-        fill(0, 255, 0);
-        rect(getMouseX(), getMouseY(), 120.0f, 80.0f);
-        fill(255, 0, 0);
-        textSize(64.0f);
-        text("Hello, World!", 300.0f, 150.0f);
-        // },
-        // 0.5f
-        // );
+        shadows.drawShadow(
+            [] {
+                noStroke();
+                fill(255);
+                rect(300.0f, 300.0f, 200.0f, 200.0f);
+                // ellipse(getMouseX(), getMouseY(), 100.0f, 100.0f);
+                // rect(getMouseX(), getMouseY(), 120.0f, 80.0f);
+                // fill(255, 0, 0);
+                // textSize(64.0f);
+                // text("Hello, World!", 300.0f, 150.0f);
+            },
+            20.0f
+        );
     }
 };
 

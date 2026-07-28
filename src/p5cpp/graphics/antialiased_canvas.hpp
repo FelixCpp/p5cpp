@@ -15,12 +15,12 @@ namespace p5cpp
     // pixels between the two targets, which used to be five separate GraphicsComponent
     // members/methods (m_defaultFramebuffer, m_msaaFramebuffer, m_smoothSamples,
     // rebuildMsaaFramebuffer(), isMsaaFramebuffer()) plus duplicated resolve/sync
-    // sequences inline in smooth()/noSmooth()/loadPixels()/updatePixels()/filter()/effect().
+    // sequences inline in smooth()/noSmooth()/loadPixels()/updatePixels().
     //
     // Deliberately unaware of GraphicsComponent's canvas stack: resolveToDefault()/
     // syncFromDefault() only do the GL work of moving pixels between the two targets.
     // Flushing the renderer beforehand and re-begin()ing whatever framebuffer should be
-    // active afterward stays the caller's job, mirroring how EffectsRenderer's passes work.
+    // active afterward stays the caller's job, mirroring drawFullscreenPass() itself.
     class AntialiasedCanvas
     {
     public:
