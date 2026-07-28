@@ -459,6 +459,18 @@ namespace p5cpp
         activeRenderStateStack().pop();
     }
 
+    void GraphicsComponent::withState(const std::function<void()>& fn)
+    {
+        pushState();
+        try {
+            fn();
+        } catch (...) {
+            popState();
+            throw;
+        }
+        popState();
+    }
+
     void GraphicsComponent::pushMatrix()
     {
         activeMatrixStack().push();
@@ -530,6 +542,16 @@ namespace p5cpp
         currentState.isFillDisabled = true;
     }
 
+    color_t GraphicsComponent::getFillColor()
+    {
+        return peekRenderState().fillColor;
+    }
+
+    bool GraphicsComponent::isFillDisabled()
+    {
+        return peekRenderState().isFillDisabled;
+    }
+
     void GraphicsComponent::stroke(color_t color)
     {
         RenderState& currentState = peekRenderState();
@@ -543,9 +565,24 @@ namespace p5cpp
         currentState.isStrokeDisabled = true;
     }
 
+    color_t GraphicsComponent::getStrokeColor()
+    {
+        return peekRenderState().strokeColor;
+    }
+
+    bool GraphicsComponent::isStrokeDisabled()
+    {
+        return peekRenderState().isStrokeDisabled;
+    }
+
     void GraphicsComponent::strokeWeight(float strokeWeight)
     {
         peekRenderState().strokeWeight = strokeWeight;
+    }
+
+    float GraphicsComponent::getStrokeWeight()
+    {
+        return peekRenderState().strokeWeight;
     }
 
     void GraphicsComponent::strokeCap(StrokeCap strokeCap)
@@ -568,6 +605,26 @@ namespace p5cpp
         peekRenderState().roundJoinThreshold = roundJoinThreshold;
     }
 
+    StrokeCap GraphicsComponent::getStrokeCap()
+    {
+        return peekRenderState().strokeCap;
+    }
+
+    StrokeJoin GraphicsComponent::getStrokeJoin()
+    {
+        return peekRenderState().strokeJoin;
+    }
+
+    float GraphicsComponent::getMiterLimit()
+    {
+        return peekRenderState().miterLimit;
+    }
+
+    float GraphicsComponent::getRoundJoinThreshold()
+    {
+        return peekRenderState().roundJoinThreshold;
+    }
+
     void GraphicsComponent::tint(color_t color)
     {
         RenderState& currentState = peekRenderState();
@@ -580,9 +637,19 @@ namespace p5cpp
         currentState.tintColor = rgba(255, 255, 255, 255);
     }
 
+    color_t GraphicsComponent::getTintColor()
+    {
+        return peekRenderState().tintColor;
+    }
+
     void GraphicsComponent::textureMode(TextureMode textureMode)
     {
         peekRenderState().textureMode = textureMode;
+    }
+
+    TextureMode GraphicsComponent::getTextureMode()
+    {
+        return peekRenderState().textureMode;
     }
 
     void GraphicsComponent::bezierDetail(uint32_t detail)
@@ -602,6 +669,21 @@ namespace p5cpp
         RenderState& currentState = peekRenderState();
         currentState.curveDetail = detail;
         currentState.invCurveDetail = 1.0f / static_cast<float>(detail);
+    }
+
+    uint32_t GraphicsComponent::getBezierDetail()
+    {
+        return peekRenderState().bezierDetail;
+    }
+
+    float GraphicsComponent::getCurveTightness()
+    {
+        return peekRenderState().curveTightness;
+    }
+
+    uint32_t GraphicsComponent::getCurveDetail()
+    {
+        return peekRenderState().curveDetail;
     }
 
     void GraphicsComponent::textFont(const Font& font)
@@ -639,6 +721,36 @@ namespace p5cpp
         peekRenderState().textWrap = wrap;
     }
 
+    Font GraphicsComponent::getTextFont()
+    {
+        return peekRenderState().font.value_or(m_defaultFont);
+    }
+
+    float GraphicsComponent::getTextSize()
+    {
+        return peekRenderState().textSize;
+    }
+
+    float GraphicsComponent::getTextLetterSpacing()
+    {
+        return peekRenderState().textLetterSpacing;
+    }
+
+    float GraphicsComponent::getTextLineSpacing()
+    {
+        return peekRenderState().textLineSpacing;
+    }
+
+    TextAlign GraphicsComponent::getTextAlign()
+    {
+        return peekRenderState().textAlign;
+    }
+
+    TextWrap GraphicsComponent::getTextWrap()
+    {
+        return peekRenderState().textWrap;
+    }
+
     void GraphicsComponent::textToPointsDetail(uint32_t detail)
     {
         peekRenderState().textToPointsDetail = detail;
@@ -647,6 +759,16 @@ namespace p5cpp
     void GraphicsComponent::textToPointsSpacing(float spacing)
     {
         peekRenderState().textToPointsSpacing = spacing;
+    }
+
+    uint32_t GraphicsComponent::getTextToPointsDetail()
+    {
+        return peekRenderState().textToPointsDetail;
+    }
+
+    float GraphicsComponent::getTextToPointsSpacing()
+    {
+        return peekRenderState().textToPointsSpacing;
     }
 
     void GraphicsComponent::shader(const Shader& shader)
@@ -662,6 +784,16 @@ namespace p5cpp
     void GraphicsComponent::blendMode(BlendMode blendMode)
     {
         peekRenderState().blendMode = blendMode;
+    }
+
+    Shader GraphicsComponent::getShader()
+    {
+        return getShader(peekRenderState());
+    }
+
+    BlendMode GraphicsComponent::getBlendMode()
+    {
+        return peekRenderState().blendMode;
     }
 
     void GraphicsComponent::setUniform(const std::string& name, const UniformVariable& variable)
@@ -1057,6 +1189,39 @@ namespace p5cpp
         writer.pushVertex(mtx.transformPoint(left, top + h), {u0, v1}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
+
+        const Shader shaderToUse = getShader(rs);
+        endDrawOp(writer, shaderToUse, rs.blendMode, texture, m_uniformCache.getUniforms(shaderToUse));
+    }
+
+    void GraphicsComponent::mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices)
+    {
+        mesh(vertices, indices, m_whiteTexture);
+    }
+
+    void GraphicsComponent::mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices, const Texture& texture)
+    {
+        if (vertices.empty() || indices.size() < 3) return;
+
+        const RenderState& rs = peekRenderState();
+        const matrix4x4& mtx = peekMatrix();
+        const float4 tint = colorToFloat4(rs.tintColor);
+
+        DrawBufferWriter& writer = beginDrawOp();
+        const uint32_t base = writer.getRelativeCursor();
+
+        for (const MeshVertex& v : vertices) {
+            const float4 c = colorToFloat4(v.color);
+            writer.pushVertex(
+                mtx.transformPoint(v.position.x, v.position.y),
+                v.texcoord,
+                float4 {c.x * tint.x, c.y * tint.y, c.z * tint.z, c.w * tint.w}
+            );
+        }
+
+        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+            writer.pushTriangle(base + indices[i], base + indices[i + 1], base + indices[i + 2]);
+        }
 
         const Shader shaderToUse = getShader(rs);
         endDrawOp(writer, shaderToUse, rs.blendMode, texture, m_uniformCache.getUniforms(shaderToUse));

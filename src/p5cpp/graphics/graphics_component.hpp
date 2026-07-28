@@ -11,6 +11,7 @@
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/render_group_recorder.hpp>
 #include <p5cpp/graphics/pixels.hpp>
+#include <p5cpp/graphics/mesh.hpp>
 
 #include <array>
 #include <functional>
@@ -43,6 +44,7 @@ namespace p5cpp
 
         void pushState();
         void popState();
+        void withState(const std::function<void()>& fn);
 
         void pushMatrix();
         void popMatrix();
@@ -59,22 +61,36 @@ namespace p5cpp
 
         void fill(color_t color);
         void noFill();
+        color_t getFillColor();
+        bool isFillDisabled();
         void stroke(color_t color);
         void noStroke();
+        color_t getStrokeColor();
+        bool isStrokeDisabled();
         void strokeWeight(float strokeWeight);
         void strokeCap(StrokeCap strokeCap);
         void strokeJoin(StrokeJoin strokeJoin);
         void miterLimit(float miterLimit);
         void roundJoinThreshold(float roundJoinThreshold);
+        float getStrokeWeight();
+        StrokeCap getStrokeCap();
+        StrokeJoin getStrokeJoin();
+        float getMiterLimit();
+        float getRoundJoinThreshold();
 
         void tint(color_t color);
         void noTint();
+        color_t getTintColor();
 
         void textureMode(TextureMode textureMode);
+        TextureMode getTextureMode();
 
         void bezierDetail(uint32_t detail);
         void curveTightness(float tightness);
         void curveDetail(uint32_t detail);
+        uint32_t getBezierDetail();
+        float getCurveTightness();
+        uint32_t getCurveDetail();
 
         void textFont(const Font& font);
         void noTextFont();
@@ -85,10 +101,20 @@ namespace p5cpp
         void textWrap(TextWrap wrap);
         void textToPointsDetail(uint32_t detail);
         void textToPointsSpacing(float spacing);
+        Font getTextFont();
+        float getTextSize();
+        float getTextLetterSpacing();
+        float getTextLineSpacing();
+        TextAlign getTextAlign();
+        TextWrap getTextWrap();
+        uint32_t getTextToPointsDetail();
+        float getTextToPointsSpacing();
 
         void shader(const Shader& shader);
         void noShader();
         void blendMode(BlendMode blendMode);
+        Shader getShader();
+        BlendMode getBlendMode();
 
         void setUniform(const std::string& name, const UniformVariable& variable);
         void setUniform(const Shader& shader, const std::string& name, const UniformVariable& variable);
@@ -107,6 +133,10 @@ namespace p5cpp
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
         void image(const Texture& texture, float left, float top, float width, float height);
         void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight);
+
+        void mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices);
+        void mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices, const Texture& texture);
+
         void text(std::string_view text, float x, float y);
         void text(std::string_view text, float x, float y, float maxWidth);
 

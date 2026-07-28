@@ -31,6 +31,7 @@ namespace p5cpp
 
     void pushState() { getGraphicsComponent().pushState(); }
     void popState() { getGraphicsComponent().popState(); }
+    void withState(const std::function<void()>& fn) { getGraphicsComponent().withState(fn); }
 
     void pushMatrix() { getGraphicsComponent().pushMatrix(); }
     void popMatrix() { getGraphicsComponent().popMatrix(); }
@@ -49,28 +50,42 @@ namespace p5cpp
     void fill(color_t color) { getGraphicsComponent().fill(color); }
     void fill(int red, int green, int blue, int alpha) { fill(rgba(red, green, blue, alpha)); }
     void fill(int grey, int alpha) { fill(grey, grey, grey, alpha); }
+    color_t getFillColor() { return getGraphicsComponent().getFillColor(); }
+    bool isFillDisabled() { return getGraphicsComponent().isFillDisabled(); }
 
     void noStroke() { getGraphicsComponent().noStroke(); }
     void stroke(color_t color) { getGraphicsComponent().stroke(color); }
     void stroke(int red, int green, int blue, int alpha) { stroke(rgba(red, green, blue, alpha)); }
     void stroke(int grey, int alpha) { stroke(grey, grey, grey, alpha); }
+    color_t getStrokeColor() { return getGraphicsComponent().getStrokeColor(); }
+    bool isStrokeDisabled() { return getGraphicsComponent().isStrokeDisabled(); }
 
     void strokeWeight(float strokeWeight) { getGraphicsComponent().strokeWeight(strokeWeight); }
     void strokeCap(StrokeCap strokeCap) { getGraphicsComponent().strokeCap(strokeCap); }
     void strokeJoin(StrokeJoin strokeJoin) { getGraphicsComponent().strokeJoin(strokeJoin); }
     void miterLimit(float miterLimit) { getGraphicsComponent().miterLimit(miterLimit); }
     void roundJoinThreshold(float roundJoinThreshold) { getGraphicsComponent().roundJoinThreshold(roundJoinThreshold); }
+    float getStrokeWeight() { return getGraphicsComponent().getStrokeWeight(); }
+    StrokeCap getStrokeCap() { return getGraphicsComponent().getStrokeCap(); }
+    StrokeJoin getStrokeJoin() { return getGraphicsComponent().getStrokeJoin(); }
+    float getMiterLimit() { return getGraphicsComponent().getMiterLimit(); }
+    float getRoundJoinThreshold() { return getGraphicsComponent().getRoundJoinThreshold(); }
 
     void noTint() { getGraphicsComponent().noTint(); }
     void tint(color_t color) { getGraphicsComponent().tint(color); }
     void tint(int red, int green, int blue, int alpha) { tint(rgba(red, green, blue, alpha)); }
     void tint(int grey, int alpha) { tint(rgba(grey, alpha)); }
+    color_t getTintColor() { return getGraphicsComponent().getTintColor(); }
 
     void textureMode(TextureMode textureMode) { getGraphicsComponent().textureMode(textureMode); }
+    TextureMode getTextureMode() { return getGraphicsComponent().getTextureMode(); }
 
     void bezierDetail(uint32_t detail) { getGraphicsComponent().bezierDetail(detail); }
     void curveTightness(float tightness) { getGraphicsComponent().curveTightness(tightness); }
     void curveDetail(uint32_t detail) { getGraphicsComponent().curveDetail(detail); }
+    uint32_t getBezierDetail() { return getGraphicsComponent().getBezierDetail(); }
+    float getCurveTightness() { return getGraphicsComponent().getCurveTightness(); }
+    uint32_t getCurveDetail() { return getGraphicsComponent().getCurveDetail(); }
 
     void textFont(Font font) { getGraphicsComponent().textFont(font); }
     void noTextFont() { getGraphicsComponent().noTextFont(); }
@@ -79,12 +94,22 @@ namespace p5cpp
     void textLineSpacing(float spacing) { getGraphicsComponent().textLineSpacing(spacing); }
     void textAlign(TextAlign textAlign) { getGraphicsComponent().textAlign(textAlign); }
     void textWrap(TextWrap textWrap) { getGraphicsComponent().textWrap(textWrap); }
+    Font getTextFont() { return getGraphicsComponent().getTextFont(); }
+    float getTextSize() { return getGraphicsComponent().getTextSize(); }
+    float getTextLetterSpacing() { return getGraphicsComponent().getTextLetterSpacing(); }
+    float getTextLineSpacing() { return getGraphicsComponent().getTextLineSpacing(); }
+    TextAlign getTextAlign() { return getGraphicsComponent().getTextAlign(); }
+    TextWrap getTextWrap() { return getGraphicsComponent().getTextWrap(); }
     void textToPointsDetail(uint32_t detail) { getGraphicsComponent().textToPointsDetail(detail); }
     void textToPointsSpacing(float spacing) { getGraphicsComponent().textToPointsSpacing(spacing); }
+    uint32_t getTextToPointsDetail() { return getGraphicsComponent().getTextToPointsDetail(); }
+    float getTextToPointsSpacing() { return getGraphicsComponent().getTextToPointsSpacing(); }
 
     void shader(const Shader& shader) { getGraphicsComponent().shader(shader); }
     void noShader() { getGraphicsComponent().noShader(); }
     void blendMode(const BlendMode& blendMode) { getGraphicsComponent().blendMode(blendMode); }
+    Shader getShader() { return getGraphicsComponent().getShader(); }
+    BlendMode getBlendMode() { return getGraphicsComponent().getBlendMode(); }
 
     void smooth(uint32_t samples) { getGraphicsComponent().smooth(samples); }
     void noSmooth() { getGraphicsComponent().noSmooth(); }
@@ -115,6 +140,8 @@ namespace p5cpp
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { getGraphicsComponent().curve(x1, y1, x2, y2, x3, y3, x4, y4); }
     void image(const Texture& texture, float left, float top, float width, float height) { getGraphicsComponent().image(texture, left, top, width, height); }
     void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight) { getGraphicsComponent().image(texture, left, top, width, height, sx, sy, sWidth, sHeight); }
+    void mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices) { getGraphicsComponent().mesh(vertices, indices); }
+    void mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices, const Texture& texture) { getGraphicsComponent().mesh(vertices, indices, texture); }
     void text(std::string_view text, float x, float y) { getGraphicsComponent().text(text, x, y); }
     void text(std::string_view text, float x, float y, float maxWidth) { getGraphicsComponent().text(text, x, y, maxWidth); }
     TextLayout textLayout(std::string_view text, float x, float y) { return getGraphicsComponent().layoutText(text, x, y); }

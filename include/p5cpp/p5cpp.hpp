@@ -13,6 +13,7 @@
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/font.hpp>
 #include <p5cpp/graphics/image.hpp>
+#include <p5cpp/graphics/mesh.hpp>
 #include <p5cpp/graphics/pixels.hpp>
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/shader.hpp>
@@ -152,6 +153,14 @@ namespace p5cpp
     void pushState();
     void popState();
 
+    // Runs fn() with pushState()/popState() bracketed around it, guaranteeing popState()
+    // even if fn() throws or returns early. Prefer this over xxx(...); ...; noXxx(); inside
+    // reusable drawing code: noFill()/noStroke()/noTint()/noShader()/noTextFont() reset to
+    // "off"/default, not to whatever was active before — which silently clobbers a caller's
+    // own fill()/shader()/etc. if this code ends up nested inside theirs. withState()
+    // restores the exact previous state regardless of what it was.
+    void withState(const std::function<void()>& fn);
+
     void pushMatrix();
     void popMatrix();
     void resetMatrix();
@@ -171,32 +180,46 @@ namespace p5cpp
     void fill(int red, int green, int blue, int alpha = 255);
     void fill(color_t color);
     void noFill();
+    color_t getFillColor();
+    bool isFillDisabled();
 
     void stroke(int grey, int alpha = 255);
     void stroke(int red, int green, int blue, int alpha = 255);
     void stroke(color_t color);
     void noStroke();
+    color_t getStrokeColor();
+    bool isStrokeDisabled();
 
     void strokeWeight(float strokeWeight);
     void strokeCap(StrokeCap strokeCap);
     void strokeJoin(StrokeJoin strokeJoin);
     void miterLimit(float miterLimit);
     void roundJoinThreshold(float roundJoinThreshold);
+    float getStrokeWeight();
+    StrokeCap getStrokeCap();
+    StrokeJoin getStrokeJoin();
+    float getMiterLimit();
+    float getRoundJoinThreshold();
 
     void tint(int grey, int alpha = 255);
     void tint(int red, int green, int blue, int alpha = 255);
     void tint(color_t color);
     void noTint();
+    color_t getTintColor();
 
     // Controls how the sx/sy/sWidth/sHeight source-rect arguments of the 9-argument
     // image() overload below are interpreted: normalized (default) expects a 0..1 UV
     // range, image expects pixel coordinates/extents of the source texture. Both use a
     // top-left origin. Part of push()/pop()'d render state, like blendMode()/textAlign().
     void textureMode(TextureMode textureMode);
+    TextureMode getTextureMode();
 
     void bezierDetail(uint32_t detail);
     void curveTightness(float tightness);
     void curveDetail(uint32_t detail);
+    uint32_t getBezierDetail();
+    float getCurveTightness();
+    uint32_t getCurveDetail();
 
     void textFont(Font font);
     void noTextFont();
@@ -206,15 +229,31 @@ namespace p5cpp
     void textAlign(TextAlign textAlign);
     void textWrap(TextWrap textWrap);
 
+    // Getters return the effective value in use, e.g. getTextFont() resolves to the
+    // built-in default font (like text()/textToPoints() do) when noTextFont() is active.
+    Font getTextFont();
+    float getTextSize();
+    float getTextLetterSpacing();
+    float getTextLineSpacing();
+    TextAlign getTextAlign();
+    TextWrap getTextWrap();
+
     // Detail/spacing used by textToPoints(text, x, y) below: curveDetail controls how many line
     // segments each curve in a glyph outline is flattened into, spacing (if > 0) additionally
     // resamples every contour to points evenly spaced that many pixels apart along its arc length.
     void textToPointsDetail(uint32_t detail);
     void textToPointsSpacing(float spacing);
+    uint32_t getTextToPointsDetail();
+    float getTextToPointsSpacing();
 
     void shader(const Shader& shader);
     void noShader();
     void blendMode(const BlendMode& blendMode);
+
+    // Resolves to the built-in default shader (like every draw call does internally) when
+    // noShader() is active.
+    Shader getShader();
+    BlendMode getBlendMode();
 
     // Antialiases shape edges by rendering the default canvas at `samples`x MSAA and
     // resolving it before it's presented (clamped to what the driver supports). Off by
@@ -255,6 +294,16 @@ namespace p5cpp
     // according to the current textureMode(): normalized 0..1 UVs (the default) or
     // TextureMode::image pixel coordinates/extents of the source texture.
     void image(const Texture& texture, float left, float top, float width, float height, float sx, float sy, float sWidth, float sHeight);
+
+    // Raw indexed triangle submission: an escape hatch for geometry beginShape()/vertex()/
+    // endShape() can't express efficiently (shared vertices between triangles — procedural
+    // meshes, imported geometry, ...). Like every other draw call it still reads shader()/
+    // blendMode()/tint() and the active transform from state; only the geometry itself
+    // (positions/uvs/per-vertex color) is explicit. indices is a flat triangle list (every
+    // 3 entries = one triangle). The no-texture overload draws flat-shaded per-vertex color.
+    void mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices);
+    void mesh(std::span<const MeshVertex> vertices, std::span<const uint32_t> indices, const Texture& texture);
+
     void text(std::string_view text, float x, float y);
     void text(std::string_view text, float x, float y, float maxWidth);
 

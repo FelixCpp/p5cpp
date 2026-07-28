@@ -348,7 +348,7 @@ namespace p5cpp
                 case UniformVariable::Type::float1:
                     return a.floatValue == b.floatValue;
                 case UniformVariable::Type::float2:
-                    return a.float2Value.x == b.float2Value.x and a.float2Value.y == b.float2Value.y;
+                    return a.float2Value == b.float2Value;
                 case UniformVariable::Type::float3:
                     return a.float3Value.x == b.float3Value.x and a.float3Value.y == b.float3Value.y and a.float3Value.z == b.float3Value.z;
                 case UniformVariable::Type::float4:
