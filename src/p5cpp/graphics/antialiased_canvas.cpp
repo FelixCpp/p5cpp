@@ -34,7 +34,7 @@ namespace p5cpp
 
     bool AntialiasedCanvas::isMsaaFramebuffer(const Framebuffer& framebuffer) const
     {
-        return m_samples > 0 && framebuffer.getFramebufferId().value == m_msaa.getFramebufferId().value;
+        return m_samples > 0 && framebuffer.getFramebufferId() == m_msaa.getFramebufferId();
     }
 
     void AntialiasedCanvas::rebuildMsaaFramebuffer()
@@ -44,7 +44,7 @@ namespace p5cpp
         const uint32_t samples = std::min(m_samples, static_cast<uint32_t>(std::max(maxSamples, 1)));
 
         const uint2 size = m_default.getSize();
-        m_msaa = Framebuffer(createMultisampleFramebuffer(size.x, size.y, samples));
+        m_msaa = createMultisampleFramebuffer(size.x, size.y, samples);
     }
 
     void AntialiasedCanvas::resolveToDefault()

@@ -12,6 +12,9 @@ namespace p5cpp
     struct FramebufferId
     {
         uint32_t value;
+
+        inline constexpr bool operator==(const FramebufferId& other) const = default;
+        inline constexpr bool operator!=(const FramebufferId& other) const = default;
     };
 
     struct FramebufferImpl
