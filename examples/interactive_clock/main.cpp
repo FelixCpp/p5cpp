@@ -197,7 +197,7 @@ struct InteractiveClock : Sketch
                     continue;
                 }
 
-                const float distanceSq = (contourPoints[i].centroid - contourCenter).lengthSquared();
+                const float distanceSq = lengthSquared(contourPoints[i].centroid - contourCenter);
                 if (distanceSq < bestDistanceSq) {
                     bestDistanceSq = distanceSq;
                     bestSlot = i;

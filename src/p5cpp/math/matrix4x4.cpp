@@ -4,21 +4,6 @@
 
 namespace p5cpp
 {
-    void matrix4x4::translate(float x, float y)
-    {
-        *this *= translation(x, y);
-    }
-
-    void matrix4x4::scale(float x, float y)
-    {
-        *this *= scaling(x, y);
-    }
-
-    void matrix4x4::rotate(float radians)
-    {
-        *this *= rotation(radians);
-    }
-
     matrix4x4& matrix4x4::operator*=(const matrix4x4& rhs)
     {
         return *this = *this * rhs;
@@ -56,16 +41,16 @@ namespace p5cpp
 
     matrix4x4 matrix4x4::lookAt(float2 eye, float2 center, float2 up)
     {
-        const float2 f = (center - eye).normalized();
-        const float2 s = f.perpendicular().normalized();
-        const float2 u = s.perpendicular();
+        const float2 f = normalized(center - eye);
+        const float2 s = normalized(perpendicular(f));
+        const float2 u = perpendicular(s);
 
         // clang-format off
         return {
             s.x, u.x, -f.x, 0.0f,
             s.y, u.y, -f.y, 0.0f,
             0.0f, 0.0f, 1.0f, 0.0f,
-            -s.dot(eye), -u.dot(eye), f.dot(eye), 1.0f
+            -dot(s, eye), -dot(u, eye), dot(f, eye), 1.0f
         };
         // clang-format on
     }

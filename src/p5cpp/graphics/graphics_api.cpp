@@ -36,7 +36,7 @@ namespace p5cpp
     void pushMatrix() { getGraphicsComponent().pushMatrix(); }
     void popMatrix() { getGraphicsComponent().popMatrix(); }
     void resetMatrix() { getGraphicsComponent().resetMatrix(); }
-    matrix4x4& peekMatrix() { return getGraphicsComponent().peekMatrix(); }
+    const matrix4x4& peekMatrix() { return getGraphicsComponent().peekMatrix(); }
     void applyMatrix(const matrix4x4& matrix) { getGraphicsComponent().applyMatrix(matrix); }
     void setMatrix(const matrix4x4& matrix) { getGraphicsComponent().setMatrix(matrix); }
     void translate(float x, float y) { getGraphicsComponent().translate(x, y); }

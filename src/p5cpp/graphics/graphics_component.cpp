@@ -99,16 +99,7 @@ namespace p5cpp
         };
     }
 
-    // A run of shaped glyphs making up one visual (post-wrap) line, shared by
-    // text() (which draws it) and GraphicsComponent::layoutText() (which only
-    // measures it) so the wrapping rules can't drift between the two.
-    struct VisualLine
-    {
-        std::vector<ShapedGlyph> glyphs;
-        float width = 0.0f;
-    };
-
-    static std::vector<VisualLine> shapeTextLines(const Font& font, std::string_view text, int textSizeInt, const RenderState& rs, float maxWidth)
+    std::vector<GraphicsComponent::VisualLine> GraphicsComponent::shapeTextLines(const Font& font, std::string_view text, int textSizeInt, const RenderState& rs, float maxWidth)
     {
         const bool doWrap = (maxWidth > 0.0f) && (rs.textWrap != TextWrap::none);
 
@@ -322,9 +313,7 @@ namespace p5cpp
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(
-            0, 0, static_cast<GLint>(canvasSize.x), static_cast<GLint>(canvasSize.y), 0, 0, static_cast<GLint>(screenWidth), static_cast<GLint>(screenHeight), GL_COLOR_BUFFER_BIT, (canvasSize.x == screenWidth && canvasSize.y == screenHeight) ? GL_NEAREST : GL_LINEAR
-        );
+        glBlitFramebuffer( 0, 0, static_cast<GLint>(canvasSize.x), static_cast<GLint>(canvasSize.y), 0, 0, static_cast<GLint>(screenWidth), static_cast<GLint>(screenHeight), GL_COLOR_BUFFER_BIT, (canvasSize.x == screenWidth && canvasSize.y == screenHeight) ? GL_NEAREST : GL_LINEAR);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
@@ -498,7 +487,7 @@ namespace p5cpp
         setMatrix(matrix4x4::identity);
     }
 
-    matrix4x4& GraphicsComponent::peekMatrix()
+    const matrix4x4& GraphicsComponent::peekMatrix()
     {
         return activeMatrixStack().peek();
     }

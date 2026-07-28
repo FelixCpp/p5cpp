@@ -38,10 +38,10 @@ struct Agent
 
 static p5cpp::float2 steer(p5cpp::float2 current_vel, p5cpp::float2 desired, float maxSpd)
 {
-    if (desired.length() < 0.0001f) return {0, 0};
-    desired = desired.fixedLength(maxSpd);
+    if (length(desired) < 0.0001f) return {0, 0};
+    desired = fixedLength(desired, maxSpd);
     p5cpp::float2 f = desired - current_vel;
-    return f.limited(MAX_FORCE);
+    return limited(f, MAX_FORCE);
 }
 
 struct SimSketch : p5cpp::Sketch
@@ -98,7 +98,7 @@ struct SimSketch : p5cpp::Sketch
             if (!agents[i].alive || agents[i].role != Role::Predator) continue;
             for (int j = 0; j < (int)agents.size(); ++j) {
                 if (!agents[j].alive || agents[j].role != Role::Prey) continue;
-                if ((agents[i].pos - agents[j].pos).length() < EAT_RADIUS) {
+                if (length(agents[i].pos - agents[j].pos) < EAT_RADIUS) {
                     agents[j].alive = false;
                     agents[i].energy += PRED_ENERGY_MAX * 0.4f;
                     if (agents[i].energy > PRED_ENERGY_MAX)
@@ -147,7 +147,7 @@ struct SimSketch : p5cpp::Sketch
             p5cpp::float2 steering = (a.role == Role::Prey)
                                          ? preyBehavior(i)
                                          : predatorBehavior(i);
-            a.vel = (a.vel + steering * dt).limited(a.maxSpeed());
+            a.vel = limited(a.vel + steering * dt, a.maxSpeed());
             a.pos += a.vel * dt;
 
             if (a.pos.x < 0) a.pos.x += WIDTH;
@@ -187,7 +187,7 @@ struct SimSketch : p5cpp::Sketch
             if (i == idx || !agents[i].alive) continue;
             const Agent& other = agents[i];
             p5cpp::float2 diff = self.pos - other.pos;
-            float d = diff.length();
+            float d = length(diff);
 
             if (other.role == Role::Predator && d < PERCEPTION_R * 1.5f) {
                 flee += (d > 0.1f) ? diff * (1.0f / (d * d)) : p5cpp::float2::randomUnit();
@@ -206,8 +206,8 @@ struct SimSketch : p5cpp::Sketch
         }
 
         p5cpp::float2 total {0, 0};
-        if (fleeCount > 0) total += steer(self.vel, flee.normalized() * self.maxSpeed(), self.maxSpeed()) * 3.0f;
-        if (sepCount > 0) total += steer(self.vel, sep.normalized() * self.maxSpeed(), self.maxSpeed()) * 1.5f;
+        if (fleeCount > 0) total += steer(self.vel, normalized(flee) * self.maxSpeed(), self.maxSpeed()) * 3.0f;
+        if (sepCount > 0) total += steer(self.vel, normalized(sep) * self.maxSpeed(), self.maxSpeed()) * 1.5f;
         if (cohCount > 0) total += steer(self.vel, (coh * (1.0f / cohCount)) - self.pos, self.maxSpeed()) * 0.8f;
         if (aliCount > 0) total += steer(self.vel, ali * (1.0f / aliCount), self.maxSpeed()) * 1.0f;
         total += p5cpp::float2::randomUnit() * 15.0f;
@@ -227,7 +227,7 @@ struct SimSketch : p5cpp::Sketch
             if (i == idx || !agents[i].alive) continue;
             const Agent& other = agents[i];
             p5cpp::float2 diff = other.pos - self.pos;
-            float d = diff.length();
+            float d = length(diff);
 
             if (other.role == Role::Prey && d < PERCEPTION_R * 1.2f) {
                 if (d < closestDist) {
@@ -248,7 +248,7 @@ struct SimSketch : p5cpp::Sketch
         else
             total += p5cpp::float2::randomUnit() * 20.0f;
         if (sepCount > 0)
-            total += steer(self.vel, sep.normalized() * self.maxSpeed(), self.maxSpeed()) * 1.2f;
+            total += steer(self.vel, normalized(sep) * self.maxSpeed(), self.maxSpeed()) * 1.2f;
         return total;
     }
 

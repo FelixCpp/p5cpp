@@ -84,18 +84,14 @@ namespace p5cpp
 
 namespace p5cpp
 {
+    class GraphicsComponent;
+
     class Font
     {
     public:
         Font();
         Font(std::unique_ptr<FontImpl> impl);
         Font(std::shared_ptr<FontImpl> impl);
-
-        const Glyph* getGlyph(char32_t codepoint, int textSize) const;
-        const FontMetrics* getMetrics(int textSize) const;
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const;
-        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) const;
-        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) const;
 
         // Returns the outline of `text` as a list of closed contours (one per letter part —
         // e.g. "O" yields two: the outer boundary and the inner hole), in the same coordinate
@@ -110,6 +106,14 @@ namespace p5cpp
         std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail = 8, float spacing = 0.0f, float maxWidth = -1.0f, TextWrap wrap = TextWrap::none) const;
 
     private:
+        friend class GraphicsComponent;
+
+        const Glyph* getGlyph(char32_t codepoint, int textSize) const;
+        const FontMetrics* getMetrics(int textSize) const;
+        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const;
+        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) const;
+        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) const;
+
         std::shared_ptr<FontImpl> impl;
     };
 } // namespace p5cpp

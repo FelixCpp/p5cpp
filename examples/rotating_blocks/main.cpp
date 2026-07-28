@@ -22,7 +22,7 @@ namespace
             static constexpr float affectionRadius = 50.0f;
 
             const float2 direction = float2 {point} - position;
-            isAffectedByMouse = direction.lengthSquared() < (affectionRadius * affectionRadius);
+            isAffectedByMouse = lengthSquared(direction) < (affectionRadius * affectionRadius);
 
             if (isAffectedByMouse) {
                 const float angle = std::atan2(direction.y, direction.x);

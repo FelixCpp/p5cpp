@@ -16,10 +16,6 @@ namespace p5cpp
             float m30, float m31, float m32, float m33
         );
 
-        void translate(float x, float y);
-        void scale(float x, float y);
-        void rotate(float radians);
-
         constexpr const float* data() const;
 
         constexpr float2 transformPoint(float x, float y) const;

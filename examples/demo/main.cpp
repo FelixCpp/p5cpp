@@ -351,25 +351,25 @@ public:
 
         for (Particle& p : particles) {
             const float2 toCenter = gravityCenter - p.pos;
-            const float distance = toCenter.length();
+            const float distance = length(toCenter);
             const float2 direction = distance > 0.0001f ? toCenter / distance : float2::zero;
-            const float2 tangent = direction.perpendicular();
+            const float2 tangent = perpendicular(direction);
 
             float2 accel = direction * ATTRACTION + tangent * SWIRL;
 
             for (const Repulsor& r : repulsors) {
                 const float2 away = p.pos - r.pos;
-                const float distSq = std::max(away.lengthSquared(), 250.0f);
+                const float distSq = std::max(lengthSquared(away), 250.0f);
                 const float t = r.life / r.maxLife;
-                accel += away.normalized() * (REPULSOR_STRENGTH * t / distSq);
+                accel += normalized(away) * (REPULSOR_STRENGTH * t / distSq);
             }
 
             p.vel += accel * dt;
             p.vel *= DRAG;
-            p.vel = p.vel.limited(MAX_SPEED);
+            p.vel = limited(p.vel, MAX_SPEED);
             p.pos += p.vel * dt;
 
-            if ((p.pos - gravityCenter).length() > RESPAWN_RADIUS) {
+            if (length(p.pos - gravityCenter) > RESPAWN_RADIUS) {
                 p = makeParticle(gravityCenter + float2::fromAngle(randomFloat(0.0f, TWO_PI)) * randomFloat(20.0f, 80.0f));
             }
 
@@ -377,7 +377,7 @@ public:
 
             int r, g, b;
             hsbToRgb(p.hue, 0.8f, 1.0f, r, g, b);
-            const float speedT = std::min(p.vel.length() / MAX_SPEED, 1.0f);
+            const float speedT = std::min(length(p.vel) / MAX_SPEED, 1.0f);
             fill(r, g, b, static_cast<int>(140.0f + speedT * 100.0f));
             circle(p.pos.x, p.pos.y, p.size);
         }

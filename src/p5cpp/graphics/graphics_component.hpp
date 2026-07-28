@@ -49,7 +49,7 @@ namespace p5cpp
         void pushMatrix();
         void popMatrix();
         void resetMatrix();
-        matrix4x4& peekMatrix();
+        const matrix4x4& peekMatrix();
         void applyMatrix(const matrix4x4& matrix);
         void setMatrix(const matrix4x4& matrix);
         void translate(float x, float y);
@@ -180,6 +180,17 @@ namespace p5cpp
         void syncMsaaFromDefaultFramebuffer();
 
         Shader getShader(const RenderState& renderState);
+
+        // A run of shaped glyphs making up one visual (post-wrap) line, shared by
+        // text() (which draws it) and layoutText() (which only measures it) so the
+        // wrapping rules can't drift between the two.
+        struct VisualLine
+        {
+            std::vector<ShapedGlyph> glyphs;
+            float width = 0.0f;
+        };
+
+        static std::vector<VisualLine> shapeTextLines(const Font& font, std::string_view text, int textSizeInt, const RenderState& rs, float maxWidth);
 
         void submitFill(const PathPoints& pts, ShapeType type, const Texture& texture);
         void submitStroke(const PathPoints& pts, ShapeType type, bool close);

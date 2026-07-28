@@ -5,6 +5,7 @@
 namespace p5cpp
 {
     struct RenderGroupImpl;
+    class GraphicsComponent;
 
     // A handle to geometry pre-tessellated once by buildRenderGroup() and replayed cheaply
     // by drawRenderGroup(), instead of re-tessellating on every draw() call. Value type
@@ -16,9 +17,11 @@ namespace p5cpp
         RenderGroup();
         explicit RenderGroup(std::shared_ptr<const RenderGroupImpl> impl);
 
+    private:
+        friend class GraphicsComponent;
+
         const std::shared_ptr<const RenderGroupImpl>& getImpl() const;
 
-    private:
         std::shared_ptr<const RenderGroupImpl> impl;
     };
 } // namespace p5cpp

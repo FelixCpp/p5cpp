@@ -164,7 +164,7 @@ namespace p5cpp
     void pushMatrix();
     void popMatrix();
     void resetMatrix();
-    matrix4x4& peekMatrix();
+    const matrix4x4& peekMatrix();
     void applyMatrix(const matrix4x4& matrix);
     void setMatrix(const matrix4x4& matrix);
     void translate(float x, float y);
