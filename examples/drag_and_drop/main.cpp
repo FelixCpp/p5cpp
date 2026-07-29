@@ -43,11 +43,11 @@ namespace
         void loadDroppedImages()
         {
             for (const std::filesystem::path& path : getDroppedFiles()) {
-                std::unique_ptr<TextureImpl> loaded = loadImage(path);
-                if (loaded == nullptr) {
+                Texture loaded = loadImage(path);
+                if (!loaded.isValid()) {
                     continue; // not an image loadImage() understands; it already logged why
                 }
-                images.push_back(DroppedImage {Texture(std::move(loaded)), path.filename().string()});
+                images.push_back(DroppedImage {loaded, path.filename().string()});
             }
         }
 

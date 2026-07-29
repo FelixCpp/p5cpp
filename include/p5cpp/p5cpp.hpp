@@ -12,7 +12,6 @@
 #include <p5cpp/graphics/blendmode.hpp>
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/font.hpp>
-#include <p5cpp/graphics/image.hpp>
 #include <p5cpp/graphics/pixels.hpp>
 #include <p5cpp/graphics/render_group.hpp>
 #include <p5cpp/graphics/shader.hpp>

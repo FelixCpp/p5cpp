@@ -83,15 +83,18 @@ namespace p5cpp
         constexpr size_t operator()(const ShaderId& shaderId) const noexcept;
     };
 
-    struct ShaderImpl
+    namespace detail
     {
-        virtual ~ShaderImpl() = default;
+        struct ShaderResource;
+    }
 
-        virtual std::optional<UniformLocation> getUniformLocation(const std::string& name) const = 0;
-        virtual ShaderId getShaderId() const = 0;
-    };
+    class Shader;
 
-    std::unique_ptr<ShaderImpl> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+    // Compiles and links a shader program, caching by (vertexShaderSource,
+    // fragmentShaderSource) pair — a repeated call with the same source pair returns a
+    // Shader that aliases the same underlying compiled program instead of recompiling.
+    // Returns an invalid Shader (see Shader::isValid()) on a compile/link error.
+    Shader loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
 
     // Compiles a custom full-screen post-processing shader from a small GLSL snippet, for
     // use with shader() like any other shader (see loadGrayscaleShader() etc. below for
@@ -105,23 +108,30 @@ namespace p5cpp
     // the color texture of a Framebuffer you rendered into), `uv` is the texture
     // coordinate to sample/output for, and `texelSize` is a uniform (1/width, 1/height)
     // the caller is responsible for setting via setUniform() if the effect uses it.
-    std::unique_ptr<ShaderImpl> loadEffectShader(std::string_view effectSource);
+    Shader loadEffectShader(std::string_view effectSource);
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    class Shader : public ShaderImpl
+    // A compiled+linked shader program handle. Copies are cheap and alias the same GL
+    // program (shared_ptr-backed); the program is deleted automatically once the last
+    // copy is destroyed. Default-constructed instances are "invalid" (getShaderId().value
+    // == 0) - see isValid().
+    class Shader
     {
     public:
         Shader();
-        Shader(std::unique_ptr<ShaderImpl> shader);
-        Shader(std::shared_ptr<ShaderImpl> shader);
 
-        std::optional<UniformLocation> getUniformLocation(const std::string& name) const override;
-        virtual ShaderId getShaderId() const override;
+        bool isValid() const;
+        std::optional<UniformLocation> getUniformLocation(const std::string& name) const;
+        ShaderId getShaderId() const;
 
     private:
-        std::shared_ptr<ShaderImpl> shader;
+        explicit Shader(std::shared_ptr<detail::ShaderResource> resource);
+
+        friend Shader loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+
+        std::shared_ptr<detail::ShaderResource> m_resource;
     };
 
 } // namespace p5cpp

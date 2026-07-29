@@ -54,7 +54,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> createPrimitiveShader()
+    Shader createPrimitiveShader()
     {
         return loadShader(defaultVSource, defaultFSource);
     }
@@ -115,7 +115,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> createTextShader()
+    Shader createTextShader()
     {
         return loadShader(textVSource, textFSource);
     }
@@ -171,7 +171,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> createBlurShader()
+    Shader createBlurShader()
     {
         return loadShader(defaultVSource, blurFSource);
     }
@@ -191,7 +191,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> createGrayscaleShader()
+    Shader createGrayscaleShader()
     {
         return loadEffectShader(grayscaleSource);
     }
@@ -205,7 +205,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> createInvertShader()
+    Shader createInvertShader()
     {
         return loadEffectShader(invertSource);
     }
@@ -221,7 +221,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> createThresholdShader()
+    Shader createThresholdShader()
     {
         return loadEffectShader(thresholdSource);
     }
@@ -230,8 +230,8 @@ namespace p5cpp
 namespace p5cpp
 {
     // Public wrappers exposing the built-ins above as ordinary Shaders (see shader.hpp).
-    Shader loadGrayscaleShader() { return Shader(createGrayscaleShader()); }
-    Shader loadInvertShader() { return Shader(createInvertShader()); }
-    Shader loadThresholdShader() { return Shader(createThresholdShader()); }
-    Shader loadBlurShader() { return Shader(createBlurShader()); }
+    Shader loadGrayscaleShader() { return createGrayscaleShader(); }
+    Shader loadInvertShader() { return createInvertShader(); }
+    Shader loadThresholdShader() { return createThresholdShader(); }
+    Shader loadBlurShader() { return createBlurShader(); }
 } // namespace p5cpp

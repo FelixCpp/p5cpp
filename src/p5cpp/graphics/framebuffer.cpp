@@ -3,12 +3,25 @@
 
 #include <glad/glad.h>
 
-namespace p5cpp
+namespace p5cpp::detail
 {
-    class OpenGLFramebufferImpl : public FramebufferImpl
+    struct FramebufferBackend
     {
-    public:
-        explicit OpenGLFramebufferImpl(uint32_t width, uint32_t height)
+        virtual ~FramebufferBackend() = default;
+
+        virtual uint2 getSize() const = 0;
+        virtual FramebufferId getFramebufferId() const = 0;
+        virtual const Texture* getColorTexture() const = 0;
+        virtual std::vector<color_t> readPixels() const = 0;
+        virtual void writePixels(std::span<const color_t> data) = 0;
+    };
+} // namespace p5cpp::detail
+
+namespace p5cpp::detail
+{
+    struct RegularFramebufferBackend : FramebufferBackend
+    {
+        explicit RegularFramebufferBackend(uint32_t width, uint32_t height)
             : framebufferId(0),
               renderbufferId(0),
               colorTexture(loadTexture(width, height, nullptr))
@@ -28,6 +41,12 @@ namespace p5cpp
             if (status != GL_FRAMEBUFFER_COMPLETE) {
                 error("Failed to create framebuffer");
             }
+        }
+
+        ~RegularFramebufferBackend() override
+        {
+            glDeleteFramebuffers(1, &framebufferId);
+            glDeleteRenderbuffers(1, &renderbufferId);
         }
 
         uint2 getSize() const override
@@ -66,19 +85,17 @@ namespace p5cpp
             colorTexture.upload(data);
         }
 
-    private:
         GLuint framebufferId;
         GLuint renderbufferId;
         Texture colorTexture;
     };
-} // namespace p5cpp
+} // namespace p5cpp::detail
 
-namespace p5cpp
+namespace p5cpp::detail
 {
-    class OpenGLMultisampleFramebufferImpl : public FramebufferImpl
+    struct MultisampleFramebufferBackend : FramebufferBackend
     {
-    public:
-        explicit OpenGLMultisampleFramebufferImpl(uint32_t width, uint32_t height, uint32_t samples)
+        explicit MultisampleFramebufferBackend(uint32_t width, uint32_t height, uint32_t samples)
             : framebufferId(0),
               colorRenderbufferId(0),
               depthStencilRenderbufferId(0),
@@ -106,7 +123,7 @@ namespace p5cpp
             glBindRenderbuffer(GL_RENDERBUFFER, 0);
         }
 
-        ~OpenGLMultisampleFramebufferImpl() override
+        ~MultisampleFramebufferBackend() override
         {
             glDeleteFramebuffers(1, &framebufferId);
             glDeleteRenderbuffers(1, &colorRenderbufferId);
@@ -143,66 +160,85 @@ namespace p5cpp
             error("writePixels() called on a multisample framebuffer - resolve it first");
         }
 
-    private:
         GLuint framebufferId;
         GLuint colorRenderbufferId;
         GLuint depthStencilRenderbufferId;
         uint2 size;
     };
-} // namespace p5cpp
+} // namespace p5cpp::detail
 
 namespace p5cpp
 {
-    std::unique_ptr<FramebufferImpl> createFramebuffer(uint32_t width, uint32_t height)
+    Framebuffer createFramebuffer(uint32_t width, uint32_t height)
     {
-        return std::make_unique<OpenGLFramebufferImpl>(width, height);
+        return Framebuffer(std::make_shared<detail::RegularFramebufferBackend>(width, height));
     }
 
-    std::unique_ptr<FramebufferImpl> createMultisampleFramebuffer(uint32_t width, uint32_t height, uint32_t samples)
+    Framebuffer createMultisampleFramebuffer(uint32_t width, uint32_t height, uint32_t samples)
     {
-        return std::make_unique<OpenGLMultisampleFramebufferImpl>(width, height, samples);
+        return Framebuffer(std::make_shared<detail::MultisampleFramebufferBackend>(width, height, samples));
     }
 } // namespace p5cpp
 
 namespace p5cpp
 {
     Framebuffer::Framebuffer()
-        : impl(nullptr)
+        : m_backend(nullptr)
     {
     }
 
-    Framebuffer::Framebuffer(std::unique_ptr<FramebufferImpl> impl)
-        : impl(std::move(impl))
+    Framebuffer::Framebuffer(std::shared_ptr<detail::FramebufferBackend> backend)
+        : m_backend(std::move(backend))
     {
     }
 
-    Framebuffer::Framebuffer(std::shared_ptr<FramebufferImpl> impl)
-        : impl(std::move(impl))
+    bool Framebuffer::isValid() const
     {
+        return m_backend != nullptr;
     }
 
     uint2 Framebuffer::getSize() const
     {
-        return impl->getSize();
+        if (!m_backend) {
+            return uint2 {0, 0};
+        }
+
+        return m_backend->getSize();
     }
 
     FramebufferId Framebuffer::getFramebufferId() const
     {
-        return impl->getFramebufferId();
+        if (!m_backend) {
+            return FramebufferId {.value = 0};
+        }
+
+        return m_backend->getFramebufferId();
     }
 
     const Texture* Framebuffer::getColorTexture() const
     {
-        return impl->getColorTexture();
+        if (!m_backend) {
+            return nullptr;
+        }
+
+        return m_backend->getColorTexture();
     }
 
     std::vector<color_t> Framebuffer::readPixels() const
     {
-        return impl->readPixels();
+        if (!m_backend) {
+            return {};
+        }
+
+        return m_backend->readPixels();
     }
 
     void Framebuffer::writePixels(std::span<const color_t> data)
     {
-        impl->writePixels(data);
+        if (!m_backend) {
+            return;
+        }
+
+        m_backend->writePixels(data);
     }
 } // namespace p5cpp

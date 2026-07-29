@@ -3,6 +3,8 @@
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/math/value2.hpp>
 
+#include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <span>
 
@@ -17,10 +19,11 @@ namespace p5cpp
         normalized,
         image,
     };
-}
 
-namespace p5cpp
-{
+    // Forward-declared so saveImage(path, const Framebuffer&) below can be declared
+    // without including framebuffer.hpp, which itself includes this header.
+    class Framebuffer;
+
     struct TextureId
     {
         uint32_t value;
@@ -29,35 +32,78 @@ namespace p5cpp
         constexpr bool operator!=(const TextureId& other) const = default;
     };
 
-    struct TextureImpl
+    // rgba8: regular 4-byte-per-pixel color texture (loadTexture()/loadImage()).
+    // r8: single-channel 1-byte-per-pixel texture, used internally for the font glyph
+    // atlas (see detail::makeGlyphAtlasTexture()) - not expected to be created by sketch
+    // authors directly.
+    enum class TextureFormat {
+        rgba8,
+        r8,
+    };
+
+    class Texture;
+
+    namespace detail
     {
-        virtual ~TextureImpl() = default;
-        virtual TextureId getTextureId() const = 0;
-        virtual uint2 getSize() const = 0;
+        struct TextureResource;
+
+        // Zero-initialized single-channel (r8) atlas texture for Font's glyph atlas -
+        // internal use only, not part of the sketch-author API.
+        Texture makeGlyphAtlasTexture(uint32_t width, uint32_t height);
+    }
+
+    // See Texture::upload() — `data` must already be in bottom-to-top row order.
+    // Returns an invalid Texture on failure.
+    Texture loadTexture(uint32_t width, uint32_t height, const color_t* data);
+
+    // A GPU texture handle. Copies are cheap and alias the same underlying GL texture
+    // (shared_ptr-backed); the GL texture is deleted automatically once the last copy
+    // is destroyed. Default-constructed instances are "invalid" (getTextureId().value
+    // == 0, getSize() == {0, 0}) - see isValid().
+    class Texture
+    {
+    public:
+        Texture();
+
+        bool isValid() const;
+        TextureId getTextureId() const;
+        uint2 getSize() const;
+        TextureFormat getFormat() const;
 
         // Expects the same raw GL row order (bottom-to-top) as Framebuffer::writePixels()
         // and the data loadImage() produces — row 0 of `data` becomes v=0 (bottom) of the
         // texture. Callers holding top-left-origin pixel data (e.g. row 0 == y == 0) must
         // flip it before uploading, or sampling will be vertically mirrored relative to
         // images loaded via loadImage() or textures read back from a Framebuffer.
-        virtual void upload(std::span<const color_t> data) = 0;
-    };
+        // Pure convenience for the common rgba8 case: equivalent to
+        // updateRegion(0, 0, size.x, size.y, <data reinterpreted as raw bytes>).
+        void upload(std::span<const color_t> data);
 
-    // See TextureImpl::upload() — `data` must already be in bottom-to-top row order.
-    std::unique_ptr<TextureImpl> loadTexture(uint32_t width, uint32_t height, const color_t* data);
-
-    class Texture : public TextureImpl
-    {
-    public:
-        Texture();
-        Texture(std::unique_ptr<TextureImpl> impl);
-        Texture(std::shared_ptr<TextureImpl> impl);
-
-        TextureId getTextureId() const override;
-        uint2 getSize() const override;
-        void upload(std::span<const color_t> data) override;
+        // Uploads a sub-region of raw bytes (glTexSubImage2D). Byte layout depends on
+        // getFormat(): rgba8 expects 4 bytes/pixel, r8 expects 1 byte/pixel. Same
+        // bottom-to-top row order as upload().
+        void updateRegion(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> rawBytes);
 
     private:
-        std::shared_ptr<TextureImpl> impl;
+        explicit Texture(std::shared_ptr<detail::TextureResource> resource, uint2 size, TextureFormat format);
+
+        friend Texture loadTexture(uint32_t width, uint32_t height, const color_t* data);
+        friend Texture detail::makeGlyphAtlasTexture(uint32_t width, uint32_t height);
+
+        std::shared_ptr<detail::TextureResource> m_resource;
+        uint2 m_size;
+        TextureFormat m_format;
     };
+} // namespace p5cpp
+
+namespace p5cpp
+{
+    // Decodes a PNG/JPG/BMP/... file into a GPU texture. Returns an invalid Texture
+    // (see Texture::isValid()) on failure.
+    Texture loadImage(const std::filesystem::path& imageFilePath);
+    Texture loadImage(std::span<const uint8_t> imageData);
+
+    // Encodes to PNG. Returns false on failure.
+    bool saveImage(const std::filesystem::path& imageFilePath, const Framebuffer& framebuffer);
+    bool saveImage(const std::filesystem::path& imageFilePath, uint32_t width, uint32_t height, std::span<const color_t> pixels);
 } // namespace p5cpp

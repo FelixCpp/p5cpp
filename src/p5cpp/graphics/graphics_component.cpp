@@ -214,11 +214,11 @@ namespace p5cpp
           m_defaultFont(loadFont(std::span {DejaVuSans_ttf, DejaVuSans_ttf_len})),
           m_renderer(NativeRenderer::create(MAX_VERTICES, MAX_INDICES))
     {
-        m_defaultShader = Shader(std::shared_ptr<ShaderImpl>(createPrimitiveShader()));
-        m_textShader = Shader(std::shared_ptr<ShaderImpl>(createTextShader()));
+        m_defaultShader = createPrimitiveShader();
+        m_textShader = createTextShader();
 
         const color_t white = rgba(255, 255, 255, 255);
-        m_whiteTexture = Texture(loadTexture(1, 1, &white));
+        m_whiteTexture = loadTexture(1, 1, &white);
     }
 
     void GraphicsComponent::beginFrame()
@@ -394,7 +394,7 @@ namespace p5cpp
 
         m_renderer->flush();
 
-        // The multisample target can't be read directly (see OpenGLMultisampleFramebufferImpl);
+        // The multisample target can't be read directly (see detail::MultisampleFramebufferBackend);
         // resolve what's been drawn so far this frame into the default framebuffer first.
         if (m_canvas.isMsaaFramebuffer(m_framebufferStack.back())) {
             resolveMsaaToDefaultFramebuffer();
@@ -1005,7 +1005,7 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
         const uint32_t base = writer.getRelativeCursor();
 
-        // Texture v-origin is bottom (GL row order, see TextureImpl::upload()), so the
+        // Texture v-origin is bottom (GL row order, see Texture::upload()), so the
         // top edge of the destination rect samples v=1 and the bottom edge samples v=0.
         writer.pushVertex(transformPoint(mtx, left, top), {0.0f, 1.0f}, tint);
         writer.pushVertex(transformPoint(mtx, left + w, top), {1.0f, 1.0f}, tint);
@@ -1040,7 +1040,7 @@ namespace p5cpp
             nsh = sh * invH;
         }
 
-        // ...then flip to the texture's bottom-origin GL v (see TextureImpl::upload()):
+        // ...then flip to the texture's bottom-origin GL v (see Texture::upload()):
         // the source rect's top edge (nsy) samples the higher v, its bottom edge
         // (nsy + nsh) samples the lower v — mirroring the plain image() overload above.
         const float u0 = nsx;

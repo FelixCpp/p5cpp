@@ -5,134 +5,96 @@
 
 #include <unordered_map>
 
-namespace p5cpp
+namespace p5cpp::detail
 {
-    class OpenGLShaderImpl : public ShaderImpl
+    struct ShaderResource
     {
-    public:
-        static std::unique_ptr<OpenGLShaderImpl> create(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
-        {
-            GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-            const char* vertexSource = vertexShaderSource.data();
-            glShaderSource(vertexShader, 1, &vertexSource, nullptr);
-            glCompileShader(vertexShader);
-
-            {
-                GLint success = GL_FALSE;
-                glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-                if (success == GL_FALSE) {
-                    GLint logLength = 0;
-                    glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &logLength);
-                    std::string log(logLength, '\0');
-                    glGetShaderInfoLog(vertexShader, logLength, nullptr, log.data());
-                    error("Failed to compile vertex shader:\n" + log);
-                    glDeleteShader(vertexShader);
-                    return nullptr;
-                }
-            }
-
-            GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-            const char* fragmentSource = fragmentShaderSource.data();
-            glShaderSource(fragmentShader, 1, &fragmentSource, nullptr);
-            glCompileShader(fragmentShader);
-
-            {
-                GLint success = GL_FALSE;
-                glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-                if (success == GL_FALSE) {
-                    GLint logLength = 0;
-                    glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &logLength);
-                    std::string log(logLength, '\0');
-                    glGetShaderInfoLog(fragmentShader, logLength, nullptr, log.data());
-                    error("Failed to compile fragment shader:\n" + log);
-                    glDeleteShader(vertexShader);
-                    glDeleteShader(fragmentShader);
-                    return nullptr;
-                }
-            }
-
-            GLuint shaderProgram = glCreateProgram();
-            glAttachShader(shaderProgram, vertexShader);
-            glAttachShader(shaderProgram, fragmentShader);
-            glLinkProgram(shaderProgram);
-
-            {
-                GLint success = GL_FALSE;
-                glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-                if (success == GL_FALSE) {
-                    GLint logLength = 0;
-                    glGetProgramiv(shaderProgram, GL_INFO_LOG_LENGTH, &logLength);
-                    std::string log(logLength, '\0');
-                    glGetProgramInfoLog(shaderProgram, logLength, nullptr, log.data());
-                    error("Failed to link shader program:\n" + log);
-                    glDeleteShader(vertexShader);
-                    glDeleteShader(fragmentShader);
-                    glDeleteProgram(shaderProgram);
-                    return nullptr;
-                }
-            }
-
-            glDeleteShader(vertexShader);
-            glDeleteShader(fragmentShader);
-
-            return std::unique_ptr<OpenGLShaderImpl>(new OpenGLShaderImpl(shaderProgram));
-        }
-
-        ~OpenGLShaderImpl() override
-        {
-            glDeleteProgram(shaderId);
-        }
-
-        std::optional<UniformLocation> getUniformLocation(const std::string& name) const override
-        {
-            const auto itr = uniformLocations.find(name);
-            if (itr != uniformLocations.end()) {
-                return itr->second;
-            }
-
-            const GLint location = glGetUniformLocation(shaderId, name.c_str());
-            if (location == -1) {
-                return std::nullopt;
-            }
-
-            const auto insertion = uniformLocations.emplace(name, UniformLocation {.value = location});
-            return insertion.first->second;
-        }
-
-        ShaderId getShaderId() const override
-        {
-            return ShaderId {.value = shaderId};
-        }
-
-    private:
-        explicit OpenGLShaderImpl(GLuint shaderId)
-            : shaderId(shaderId)
-        {
-        }
-
-        GLuint shaderId;
+        GLuint programId;
         mutable std::unordered_map<std::string, UniformLocation> uniformLocations;
+
+        explicit ShaderResource(GLuint programId)
+            : programId(programId)
+        {
+        }
+
+        ~ShaderResource()
+        {
+            glDeleteProgram(programId);
+        }
     };
-} // namespace p5cpp
+} // namespace p5cpp::detail
 
 namespace
 {
-    // Forwards every call to a shared, already-compiled ShaderImpl so that repeated
-    // loadShader(vertexSrc, fragmentSrc) calls for the same source pair can return a
-    // lightweight handle instead of recompiling/relinking, while still handing back a
-    // genuinely unique_ptr-owned object at each call site. ShaderImpl is read-only
-    // after construction, so aliasing is safe.
-    class SharedShaderImpl : public p5cpp::ShaderImpl
+    std::shared_ptr<p5cpp::detail::ShaderResource> compileShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
-    public:
-        explicit SharedShaderImpl(std::shared_ptr<p5cpp::ShaderImpl> shared) : m_shared(std::move(shared)) {}
+        using namespace p5cpp;
 
-        std::optional<p5cpp::UniformLocation> getUniformLocation(const std::string& name) const override { return m_shared->getUniformLocation(name); }
-        p5cpp::ShaderId getShaderId() const override { return m_shared->getShaderId(); }
+        GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        const char* vertexSource = vertexShaderSource.data();
+        glShaderSource(vertexShader, 1, &vertexSource, nullptr);
+        glCompileShader(vertexShader);
 
-    private:
-        std::shared_ptr<p5cpp::ShaderImpl> m_shared;
-    };
+        {
+            GLint success = GL_FALSE;
+            glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+            if (success == GL_FALSE) {
+                GLint logLength = 0;
+                glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &logLength);
+                std::string log(logLength, '\0');
+                glGetShaderInfoLog(vertexShader, logLength, nullptr, log.data());
+                error("Failed to compile vertex shader:\n" + log);
+                glDeleteShader(vertexShader);
+                return nullptr;
+            }
+        }
+
+        GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        const char* fragmentSource = fragmentShaderSource.data();
+        glShaderSource(fragmentShader, 1, &fragmentSource, nullptr);
+        glCompileShader(fragmentShader);
+
+        {
+            GLint success = GL_FALSE;
+            glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+            if (success == GL_FALSE) {
+                GLint logLength = 0;
+                glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &logLength);
+                std::string log(logLength, '\0');
+                glGetShaderInfoLog(fragmentShader, logLength, nullptr, log.data());
+                error("Failed to compile fragment shader:\n" + log);
+                glDeleteShader(vertexShader);
+                glDeleteShader(fragmentShader);
+                return nullptr;
+            }
+        }
+
+        GLuint shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        {
+            GLint success = GL_FALSE;
+            glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+            if (success == GL_FALSE) {
+                GLint logLength = 0;
+                glGetProgramiv(shaderProgram, GL_INFO_LOG_LENGTH, &logLength);
+                std::string log(logLength, '\0');
+                glGetProgramInfoLog(shaderProgram, logLength, nullptr, log.data());
+                error("Failed to link shader program:\n" + log);
+                glDeleteShader(vertexShader);
+                glDeleteShader(fragmentShader);
+                glDeleteProgram(shaderProgram);
+                return nullptr;
+            }
+        }
+
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+
+        return std::make_shared<p5cpp::detail::ShaderResource>(shaderProgram);
+    }
 
     std::string makeShaderCacheKey(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
@@ -144,28 +106,31 @@ namespace
         return key;
     }
 
-    std::unordered_map<std::string, std::weak_ptr<p5cpp::ShaderImpl>> s_shaderCache;
+    std::unordered_map<std::string, std::weak_ptr<p5cpp::detail::ShaderResource>> s_shaderCache;
 } // namespace
 
 namespace p5cpp
 {
-    std::unique_ptr<ShaderImpl> loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
+    // loadShader(vertexSrc, fragmentSrc) caches by source pair: a repeated call for the
+    // same source returns a Shader that aliases the already-compiled program (via the
+    // shared_ptr this Shader already carries for RAII) instead of recompiling/relinking.
+    Shader loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
         const std::string key = makeShaderCacheKey(vertexShaderSource, fragmentShaderSource);
 
         if (const auto it = s_shaderCache.find(key); it != s_shaderCache.end()) {
-            if (std::shared_ptr<ShaderImpl> cached = it->second.lock()) {
-                return std::make_unique<SharedShaderImpl>(std::move(cached));
+            if (std::shared_ptr<detail::ShaderResource> cached = it->second.lock()) {
+                return Shader(std::move(cached));
             }
         }
 
-        std::shared_ptr<ShaderImpl> fresh = OpenGLShaderImpl::create(vertexShaderSource, fragmentShaderSource);
+        std::shared_ptr<detail::ShaderResource> fresh = compileShader(vertexShaderSource, fragmentShaderSource);
         if (!fresh) {
-            return nullptr;
+            return Shader();
         }
 
         s_shaderCache[key] = fresh;
-        return std::make_unique<SharedShaderImpl>(std::move(fresh));
+        return Shader(std::move(fresh));
     }
 } // namespace p5cpp
 
@@ -214,7 +179,7 @@ namespace p5cpp
         }
     )";
 
-    std::unique_ptr<ShaderImpl> loadEffectShader(std::string_view effectSource)
+    Shader loadEffectShader(std::string_view effectSource)
     {
         const std::string fragmentSource = std::string(effectFHeader) + std::string(effectSource) + std::string(effectFFooter);
         return loadShader(effectVSource, fragmentSource);
@@ -224,35 +189,46 @@ namespace p5cpp
 namespace p5cpp
 {
     Shader::Shader()
-        : shader(nullptr)
+        : m_resource(nullptr)
     {
     }
 
-    Shader::Shader(std::unique_ptr<ShaderImpl> shader)
-        : shader(std::move(shader))
+    Shader::Shader(std::shared_ptr<detail::ShaderResource> resource)
+        : m_resource(std::move(resource))
     {
     }
 
-    Shader::Shader(std::shared_ptr<ShaderImpl> shader)
-        : shader(std::move(shader))
+    bool Shader::isValid() const
     {
+        return m_resource != nullptr;
     }
 
     std::optional<UniformLocation> Shader::getUniformLocation(const std::string& name) const
     {
-        if (shader) {
-            return shader->getUniformLocation(name);
+        if (!m_resource) {
+            return std::nullopt;
         }
 
-        return std::nullopt;
+        const auto itr = m_resource->uniformLocations.find(name);
+        if (itr != m_resource->uniformLocations.end()) {
+            return itr->second;
+        }
+
+        const GLint location = glGetUniformLocation(m_resource->programId, name.c_str());
+        if (location == -1) {
+            return std::nullopt;
+        }
+
+        const auto insertion = m_resource->uniformLocations.emplace(name, UniformLocation {.value = location});
+        return insertion.first->second;
     }
 
     ShaderId Shader::getShaderId() const
     {
-        if (shader) {
-            return shader->getShaderId();
+        if (!m_resource) {
+            return ShaderId {.value = 0};
         }
 
-        return ShaderId {.value = 0};
+        return ShaderId {.value = m_resource->programId};
     }
 } // namespace p5cpp

@@ -4,10 +4,10 @@
 
 namespace p5cpp
 {
-    std::unique_ptr<ShaderImpl> createPrimitiveShader();
-    std::unique_ptr<ShaderImpl> createTextShader();
-    std::unique_ptr<ShaderImpl> createBlurShader();
-    std::unique_ptr<ShaderImpl> createGrayscaleShader();
-    std::unique_ptr<ShaderImpl> createInvertShader();
-    std::unique_ptr<ShaderImpl> createThresholdShader();
+    Shader createPrimitiveShader();
+    Shader createTextShader();
+    Shader createBlurShader();
+    Shader createGrayscaleShader();
+    Shader createInvertShader();
+    Shader createThresholdShader();
 } // namespace p5cpp

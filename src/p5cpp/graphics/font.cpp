@@ -169,71 +169,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    class GlyphAtlasTexture : public TextureImpl
-    {
-    public:
-        static std::unique_ptr<GlyphAtlasTexture> create(int width, int height)
-        {
-            GLuint textureId = 0;
-            glGenTextures(1, &textureId);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-
-            // Zero-initialize: glTexImage2D(..., nullptr) leaves GPU memory
-            // undefined (not guaranteed to be 0). With GL_LINEAR filtering,
-            // sampling near a packed glyph's UV-rect edge (only 1px padding,
-            // see GlyphAtlas's paddingX/Y below) can read a texel or two of
-            // never-written atlas space — undefined coverage there blends a
-            // visible gray halo around glyphs, most noticeable at large text
-            // sizes. An all-zero atlas guarantees that bleed reads as
-            // "no coverage" instead of garbage.
-            const std::vector<uint8_t> zeroed(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, zeroed.data());
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-            constexpr GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
-            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
-
-            return std::unique_ptr<GlyphAtlasTexture>(new GlyphAtlasTexture(textureId, width, height));
-        }
-
-        uint2 getSize() const override
-        {
-            return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-        }
-
-        TextureId getTextureId() const override
-        {
-            return TextureId {.value = textureId};
-        }
-
-        void upload(std::span<const color_t> data) override
-        {
-            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture.");
-        }
-
-        void store(int x, int y, int width, int height, std::span<const uint8_t> bitmapData)
-        {
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
-        }
-
-    private:
-        explicit GlyphAtlasTexture(GLuint textureId, int width, int height)
-            : textureId(textureId), width(width), height(height)
-        {
-        }
-
-        GLuint textureId;
-        int width, height;
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
     class GlyphAtlas
     {
     public:
@@ -242,8 +177,7 @@ namespace p5cpp
               m_height(height),
               m_paddingX(paddingX),
               m_paddingY(paddingY),
-              m_atlasTexture(GlyphAtlasTexture::create(width, height)),
-              m_texture(m_atlasTexture),
+              m_texture(detail::makeGlyphAtlasTexture(static_cast<uint32_t>(width), static_cast<uint32_t>(height))),
               m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
         {
         }
@@ -263,7 +197,7 @@ namespace p5cpp
                 return std::nullopt;
             }
 
-            m_atlasTexture->store(placed->left, placed->top, bitmapWidth, bitmapHeight, bitmapData);
+            m_texture.updateRegion(static_cast<uint32_t>(placed->left), static_cast<uint32_t>(placed->top), static_cast<uint32_t>(bitmapWidth), static_cast<uint32_t>(bitmapHeight), bitmapData);
 
             const float uvLeft = static_cast<float>(placed->left) / static_cast<float>(m_width);
             const float uvTop = static_cast<float>(placed->top) / static_cast<float>(m_height);
@@ -292,7 +226,6 @@ namespace p5cpp
         int m_paddingX;
         int m_paddingY;
 
-        std::shared_ptr<GlyphAtlasTexture> m_atlasTexture;
         Texture m_texture;
 
         std::unique_ptr<BinPackingStrategy> m_packingStrategy;
