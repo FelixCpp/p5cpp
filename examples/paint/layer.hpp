@@ -39,6 +39,7 @@ namespace paint
     {
     public:
         Canvas(uint32_t width, uint32_t height);
+        ~Canvas();
 
         uint32_t getWidth() const { return m_width; }
         uint32_t getHeight() const { return m_height; }

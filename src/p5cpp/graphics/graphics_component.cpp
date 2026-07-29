@@ -111,7 +111,7 @@ namespace p5cpp
                 return;
             }
 
-            std::vector<ShapedGlyph> shaped = font.shape(para, textSizeInt);
+            std::vector<ShapedGlyph> shaped = shape(font, para, textSizeInt);
 
             if (!doWrap) {
                 float w = 0.0f;
@@ -205,11 +205,19 @@ namespace p5cpp
           m_defaultFont(loadFont(std::span {DejaVuSans_ttf, DejaVuSans_ttf_len})),
           m_renderer(NativeRenderer::create(MAX_VERTICES, MAX_INDICES))
     {
-        m_defaultShader = Shader(std::shared_ptr<ShaderImpl>(createPrimitiveShader()));
-        m_textShader = Shader(std::shared_ptr<ShaderImpl>(createTextShader()));
+        m_defaultShader = createPrimitiveShader();
+        m_textShader = createTextShader();
 
         const color_t white = rgba(255, 255, 255, 255);
-        m_whiteTexture = Texture(loadTexture(1, 1, &white));
+        m_whiteTexture = loadTexture(1, 1, &white);
+    }
+
+    void GraphicsComponent::releaseGpuResources()
+    {
+        unload(m_defaultShader);
+        unload(m_textShader);
+        unload(m_whiteTexture);
+        m_canvas.release();
     }
 
     void GraphicsComponent::beginFrame()
@@ -225,7 +233,7 @@ namespace p5cpp
 
     void GraphicsComponent::resizeDefaultCanvas(uint32_t width, uint32_t height)
     {
-        m_canvas.resize(width, height);
+        Framebuffer previousActive = m_canvas.resize(width, height);
 
         // beginFrame() pushes a *copy* of the active default canvas onto the stack (always
         // at index 0 - the outermost canvas). If a resize happens while that bracket is
@@ -235,6 +243,10 @@ namespace p5cpp
         // drawing in the same setup()/draw() would silently land in a canvas nobody ever
         // presents to the screen again.
         swapActiveDefaultCanvas(m_canvas.activeFramebuffer());
+
+        // Only safe to free now that the stack no longer references it - see
+        // AntialiasedCanvas::resize()'s handoff contract.
+        unload(previousActive);
     }
 
     void GraphicsComponent::smooth(uint32_t samples)
@@ -248,8 +260,9 @@ namespace p5cpp
         // drop whatever was drawn before the call. No-op if we weren't smoothing yet.
         resolveMsaaToDefaultFramebuffer();
 
-        m_canvas.smooth(clamped);
+        Framebuffer previousActive = m_canvas.smooth(clamped);
         swapActiveDefaultCanvas(m_canvas.activeFramebuffer());
+        unload(previousActive);
 
         // ...and paint that carried-forward content into the fresh msaa target so
         // drawing continues on top of it instead of a blank canvas.
@@ -261,8 +274,9 @@ namespace p5cpp
         if (!m_canvas.isEnabled()) return;
 
         resolveMsaaToDefaultFramebuffer();
-        m_canvas.noSmooth();
+        Framebuffer previousActive = m_canvas.noSmooth();
         swapActiveDefaultCanvas(m_canvas.defaultFramebuffer());
+        unload(previousActive);
     }
 
     void GraphicsComponent::swapActiveDefaultCanvas(const Framebuffer& newDefaultCanvas)
@@ -308,8 +322,8 @@ namespace p5cpp
 
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
-        const uint2 canvasSize = m_canvas.defaultFramebuffer().getSize();
-        const GLuint fboId = m_canvas.defaultFramebuffer().getFramebufferId().value;
+        const uint2 canvasSize = m_canvas.defaultFramebuffer().size;
+        const GLuint fboId = m_canvas.defaultFramebuffer().id.value;
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -361,7 +375,7 @@ namespace p5cpp
             return uint2::zero;
         }
 
-        return m_framebufferStack.back().getSize();
+        return m_framebufferStack.back().size;
     }
 
     std::vector<color_t> GraphicsComponent::flipRows(std::span<const color_t> src, uint32_t width, uint32_t height)
@@ -383,18 +397,18 @@ namespace p5cpp
 
         m_renderer->flush();
 
-        // The multisample target can't be read directly (see OpenGLMultisampleFramebufferImpl);
+        // The multisample target can't be read directly (see createMultisampleFramebuffer());
         // resolve what's been drawn so far this frame into the default framebuffer first.
         if (m_canvas.isMsaaFramebuffer(m_framebufferStack.back())) {
             resolveMsaaToDefaultFramebuffer();
             const Framebuffer& resolved = m_canvas.defaultFramebuffer();
-            const uint2 size = resolved.getSize();
-            return Pixels(size.x, size.y, flipRows(resolved.readPixels(), size.x, size.y));
+            const uint2 size = resolved.size;
+            return Pixels(size.x, size.y, flipRows(readPixels(resolved), size.x, size.y));
         }
 
         const Framebuffer& framebuffer = m_framebufferStack.back();
-        const uint2 size = framebuffer.getSize();
-        return Pixels(size.x, size.y, flipRows(framebuffer.readPixels(), size.x, size.y));
+        const uint2 size = framebuffer.size;
+        return Pixels(size.x, size.y, flipRows(readPixels(framebuffer), size.x, size.y));
     }
 
     void GraphicsComponent::updatePixels(const Pixels& pixels)
@@ -404,18 +418,18 @@ namespace p5cpp
         }
 
         Framebuffer& framebuffer = m_framebufferStack.back();
-        const uint2 size = framebuffer.getSize();
+        const uint2 size = framebuffer.size;
         assert(pixels.getWidth() == size.x && pixels.getHeight() == size.y);
 
         m_renderer->flush();
 
         if (m_canvas.isMsaaFramebuffer(framebuffer)) {
-            m_canvas.defaultFramebuffer().writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+            writePixels(m_canvas.defaultFramebuffer(), flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
             syncMsaaFromDefaultFramebuffer();
             return;
         }
 
-        framebuffer.writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+        writePixels(framebuffer, flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
     }
 
     MatrixStack& GraphicsComponent::activeMatrixStack()
@@ -1126,7 +1140,7 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
         const uint32_t base = writer.getRelativeCursor();
 
-        // Texture v-origin is bottom (GL row order, see TextureImpl::upload()), so the
+        // Texture v-origin is bottom (GL row order, see Texture::upload()), so the
         // top edge of the destination rect samples v=1 and the bottom edge samples v=0.
         writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 1.0f}, tint);
         writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 1.0f}, tint);
@@ -1152,7 +1166,7 @@ namespace p5cpp
         float nsw = sw;
         float nsh = sh;
         if (rs.textureMode == TextureMode::image) {
-            const uint2 texSize = texture.getSize();
+            const uint2 texSize = texture.size;
             const float invW = texSize.x > 0 ? 1.0f / static_cast<float>(texSize.x) : 0.0f;
             const float invH = texSize.y > 0 ? 1.0f / static_cast<float>(texSize.y) : 0.0f;
             nsx = sx * invW;
@@ -1161,7 +1175,7 @@ namespace p5cpp
             nsh = sh * invH;
         }
 
-        // ...then flip to the texture's bottom-origin GL v (see TextureImpl::upload()):
+        // ...then flip to the texture's bottom-origin GL v (see Texture::upload()):
         // the source rect's top edge (nsy) samples the higher v, its bottom edge
         // (nsy + nsh) samples the lower v — mirroring the plain image() overload above.
         const float u0 = nsx;
@@ -1230,7 +1244,7 @@ namespace p5cpp
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return;
 
-        const FontMetrics* metrics = font.getMetrics(textSizeInt);
+        const FontMetrics* metrics = getMetrics(font, textSizeInt);
         if (!metrics) return;
 
         const float lineH = metrics->lineHeight * rs.textLineSpacing;
@@ -1282,7 +1296,7 @@ namespace p5cpp
 
             for (const ShapedGlyph& sg : line.glyphs) {
                 if (!sg.isWhitespace && sg.size.x > 0 && sg.size.y > 0) {
-                    const Texture* atlasTexture = font.getGlyphAtlasTexture(sg.glyphAtlasIndex);
+                    const Texture* atlasTexture = getGlyphAtlasTexture(font, sg.glyphAtlasIndex);
                     if (atlasTexture) {
                         const float gLeft = penX + sg.xOffset + static_cast<float>(sg.bearing.x);
                         const float gTop = penY - sg.yOffset - static_cast<float>(sg.bearing.y);
@@ -1329,7 +1343,7 @@ namespace p5cpp
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return layout;
 
-        const FontMetrics* metrics = font.getMetrics(textSizeInt);
+        const FontMetrics* metrics = getMetrics(font, textSizeInt);
         if (!metrics) return layout;
 
         const float lineH = metrics->lineHeight * rs.textLineSpacing;
@@ -1405,7 +1419,7 @@ namespace p5cpp
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return {};
 
-        std::vector<TextContour> contours = font.textToPoints(text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing, maxWidth, rs.textWrap);
+        std::vector<TextContour> contours = p5cpp::textToPoints(font, text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing, maxWidth, rs.textWrap);
 
         const matrix4x4& mtx = peekMatrix();
         for (TextContour& contour : contours) {

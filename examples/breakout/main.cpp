@@ -154,8 +154,8 @@ struct BreakoutSketch : p5cpp::Sketch
     std::vector<ScorePopup> popups;
     std::vector<Star> stars;
 
-    std::shared_ptr<ShaderImpl> bgShader;
-    std::shared_ptr<FramebufferImpl> bgCanvas;
+    Shader bgShader;
+    Framebuffer bgCanvas;
 
     std::mt19937 rng {std::random_device {}()};
 
@@ -251,7 +251,10 @@ struct BreakoutSketch : p5cpp::Sketch
         initGame();
     }
 
-    void destroy() override {}
+    void destroy() override {
+        unload(bgShader);
+        unload(bgCanvas);
+    }
 
     void buildBgShader()
     {
@@ -789,7 +792,7 @@ struct BreakoutSketch : p5cpp::Sketch
         popCanvas();
 
         noTint();
-        image(*bgCanvas->getColorTexture(), 0.f, 0.f, float(W), float(H));
+        image(bgCanvas.colorTexture, 0.f, 0.f, float(W), float(H));
     }
 
     void drawStars()

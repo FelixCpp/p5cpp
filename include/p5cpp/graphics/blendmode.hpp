@@ -28,7 +28,6 @@ namespace p5cpp
         constexpr BlendMode(Factor srcColorFactor, Factor dstColorFactor, Equation colorEquation, Factor srcAlphaFactor, Factor dstAlphaFactor, Equation alphaEquation);
 
         inline constexpr bool operator==(const BlendMode& other) const = default;
-        inline constexpr bool operator!=(const BlendMode& other) const = default;
 
         static const BlendMode none;
         static const BlendMode alpha;

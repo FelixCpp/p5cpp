@@ -11,7 +11,7 @@
 //
 //   shader(someShader);
 //   setUniform(someShader, "u_Amount", uniform(1.0f));
-//   image(*scene.getColorTexture(), 0, 0, W, H);
+//   image(scene.colorTexture, 0, 0, W, H);
 //   noShader();
 //
 // loadGrayscaleShader()/loadInvertShader()/loadThresholdShader()/
@@ -176,7 +176,7 @@ private:
     {
         switch (mode) {
             case EffectMode::none:
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 break;
             case EffectMode::blur: {
                 const float texelX = 1.0f / static_cast<float>(W);
@@ -189,48 +189,60 @@ private:
                 pushCanvas(blurScratch);
                 shader(blurShader);
                 setUniform(blurShader, "u_Direction", uniform(1.0f, 0.0f));
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 noShader();
                 popCanvas();
 
                 shader(blurShader);
                 setUniform(blurShader, "u_Direction", uniform(0.0f, 1.0f));
-                image(*blurScratch.getColorTexture(), 0, 0, W, H);
+                image(blurScratch.colorTexture, 0, 0, W, H);
                 noShader();
                 break;
             }
             case EffectMode::grayscale:
                 shader(grayscaleShader);
                 setUniform(grayscaleShader, "u_Amount", uniform(1.0f));
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 noShader();
                 break;
             case EffectMode::invert:
                 shader(invertShader);
                 setUniform(invertShader, "u_Amount", uniform(1.0f));
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 noShader();
                 break;
             case EffectMode::threshold:
                 shader(thresholdShader);
                 setUniform(thresholdShader, "u_Amount", uniform(0.5f));
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 noShader();
                 break;
             case EffectMode::vignette:
                 shader(vignetteShader);
                 setUniform(vignetteShader, "u_Strength", uniform(1.4f + 0.3f * std::sin(time)));
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 noShader();
                 break;
             case EffectMode::pixelate:
                 shader(pixelateShader);
                 setUniform(pixelateShader, "u_BlockSize", uniform(4.0f + 4.0f * (0.5f + 0.5f * std::sin(time * 0.7f))));
                 setUniform(pixelateShader, "u_TexelSize", uniform(1.0f / static_cast<float>(W), 1.0f / static_cast<float>(H)));
-                image(*scene.getColorTexture(), 0, 0, W, H);
+                image(scene.colorTexture, 0, 0, W, H);
                 noShader();
                 break;
         }
+    }
+
+    void destroy() override
+    {
+        unload(scene);
+        unload(blurScratch);
+        unload(blurShader);
+        unload(grayscaleShader);
+        unload(invertShader);
+        unload(thresholdShader);
+        unload(vignetteShader);
+        unload(pixelateShader);
     }
 
     EffectMode mode = EffectMode::none;

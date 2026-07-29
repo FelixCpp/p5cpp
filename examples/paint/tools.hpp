@@ -70,6 +70,11 @@ namespace paint
         p5cpp::float2 selectionOffset {};   // accumulated move offset, canvas units
         p5cpp::Pixels selectionPixels;      // the floating selection's own pixel buffer
         p5cpp::Texture selectionTexture;    // uploaded once per cut, for the live preview
+
+        ~ToolState()
+        {
+            p5cpp::unload(selectionTexture);
+        }
     };
 
     // Reads mouse press/drag/release for the active tool directly (isMouseDown/

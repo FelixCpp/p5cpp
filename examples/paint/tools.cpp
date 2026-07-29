@@ -393,7 +393,7 @@ namespace
     {
         state.hasSelection = false;
         state.movingSelection = false;
-        state.selectionTexture = Texture();
+        unload(state.selectionTexture);
         state.selectionPixels = Pixels();
     }
 
@@ -470,7 +470,8 @@ namespace
 
         state.selectionRect = int_rect {left, top, width, height};
         state.selectionOffset = float2 {0.0f, 0.0f};
-        state.selectionTexture = Texture(loadTexture(static_cast<uint32_t>(width), static_cast<uint32_t>(height), flippedRows(cut).data()));
+        unload(state.selectionTexture); // in case a previous selection wasn't reset/committed
+        state.selectionTexture = loadTexture(static_cast<uint32_t>(width), static_cast<uint32_t>(height), flippedRows(cut).data());
         state.selectionPixels = std::move(cut);
         state.hasSelection = true;
     }

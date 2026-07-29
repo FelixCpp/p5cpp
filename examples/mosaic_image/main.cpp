@@ -13,12 +13,12 @@ struct MosaicImage : Sketch
         setWindowResizable(false);
 
         frog = loadImage("example_assets/beach.png");
-        offscreenFrog = createFramebuffer(frog.getSize().x, frog.getSize().y);
+        offscreenFrog = createFramebuffer(frog.size.x, frog.size.y);
 
         pushCanvas(offscreenFrog);
         {
             background(0, 0);
-            image(frog, 0.0f, 0.0f, frog.getSize().x, frog.getSize().y);
+            image(frog, 0.0f, 0.0f, frog.size.x, frog.size.y);
             frogPixels = loadPixels();
         }
         popCanvas();
@@ -30,7 +30,7 @@ struct MosaicImage : Sketch
 
         background(30);
 
-        const auto [frogWidth, frogHeight] = frog.getSize();
+        const auto [frogWidth, frogHeight] = frog.size;
 
         static constexpr float dotSize = 6.0f;
         static constexpr float spacing = dotSize + 2.0f;
@@ -84,6 +84,12 @@ struct MosaicImage : Sketch
         }
 
         // noLoop();
+    }
+
+    void destroy() override
+    {
+        unload(frog);
+        unload(offscreenFrog);
     }
 };
 

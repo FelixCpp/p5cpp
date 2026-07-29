@@ -40,7 +40,6 @@ namespace p5cpp
         value2& operator/=(T scalar);
 
         constexpr bool operator==(const value2& other) const;
-        constexpr bool operator!=(const value2& other) const;
 
         static const value2 zero;
         static const value2 one;
@@ -168,7 +167,6 @@ namespace p5cpp
     template <typename T> inline value2<T>& value2<T>::operator/=(T scalar) { return *this = *this / scalar; }
 
     template <typename T> inline constexpr bool value2<T>::operator==(const value2& other) const { return x == other.x and y == other.y; }
-    template <typename T> inline constexpr bool value2<T>::operator!=(const value2& other) const { return not(*this == other); }
 
     template <typename T> inline value2<T> value2<T>::fromAngle(float radians) { return {static_cast<T>(std::cos(radians)), static_cast<T>(std::sin(radians))}; }
     template <typename T> inline value2<T> value2<T>::randomUnit() { return fromAngle(randomFloat(0.0f, TWO_PI)); }

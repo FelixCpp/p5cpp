@@ -259,7 +259,7 @@ struct AudioPlaygroundSketch : Sketch
         std::snprintf(line, sizeof(line), "music: %s%s   %.1fs / %.1fs   ended %d time(s)", statusName, music.isLooping() ? " (loop)" : "", music.currentTime(), music.duration(), endedCount);
         text(line, 20.0f, 110.0f);
 
-        std::snprintf(line, sizeof(line), "%u Hz, %u channel(s), %llu frames", music.sampleRate(), music.channels(), static_cast<unsigned long long>(music.frameCount()));
+        std::snprintf(line, sizeof(line), "%u Hz, %u channel(s), %llu frames", music.sampleRate, music.channels, static_cast<unsigned long long>(music.frameCount()));
         text(line, 20.0f, 130.0f);
 
         drawSeekBar();

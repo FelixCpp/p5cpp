@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
+#include <span>
 
 namespace p5cpp
 {
@@ -13,55 +15,35 @@ namespace p5cpp
         playing,
     };
 
-    // Mutating methods are const: they act on the underlying audio-engine resource
-    // reached through `impl`/`m_sound`, not on the handle's own (empty) state —
-    // the same shallow-const-handle idiom Framebuffer/Font already use.
-    struct SoundImpl
+    class AudioComponent;
+
+    namespace detail
     {
-        virtual ~SoundImpl() = default;
-
-        virtual void play() const = 0;
-        virtual void stop() const = 0;
-        virtual void pause() const = 0;
-        virtual bool isPlaying() const = 0;
-        virtual SoundStatus status() const = 0;
-
-        virtual void setVolume(float volume) const = 0;
-        virtual float getVolume() const = 0;
-        virtual void setPan(float pan) const = 0;
-        virtual float getPan() const = 0;
-        virtual void setRate(float rate) const = 0;
-        virtual float getRate() const = 0;
-        virtual void setLoop(bool loop) const = 0;
-        virtual bool isLooping() const = 0;
-        virtual void setLoopPoints(float startSeconds, float endSeconds) const = 0;
-
-        virtual void seek(float seconds) const = 0;
-        virtual float currentTime() const = 0;
-        virtual float duration() const = 0;
-
-        virtual void setFade(float fromVolume, float toVolume, float milliseconds) const = 0;
-
-        virtual uint32_t sampleRate() const = 0;
-        virtual uint32_t channels() const = 0;
-        virtual uint64_t frameCount() const = 0;
-
-        virtual void onEnded(std::function<void()> callback) const = 0;
-        virtual std::shared_ptr<SoundImpl> clone() const = 0;
-    };
+        // Opaque - the real miniaudio-backed state, defined only in sound.cpp.
+        struct SoundResource;
+    }
 
     class Sound
     {
     public:
+        // A default-constructed Sound is invalid (no backing resource); all methods
+        // on an invalid handle are safe no-ops (getters return zero/default values).
         Sound();
-        Sound(std::unique_ptr<SoundImpl> impl);
-        Sound(std::shared_ptr<SoundImpl> impl);
 
-        // A Sound is invalid when loading failed; all methods on an invalid
-        // handle are safe no-ops (getters return zero/default values).
+        // Playback-side format. Sounds loaded from a file (loadSound/loadMusic) are
+        // converted to the engine's playback format, so these may differ from the
+        // file's native values — they stay self-consistent (frameCount() / sampleRate
+        // == duration()), which is what matters for seek/loop-point math. Use
+        // loadAudioSamples() to inspect a file's native format.
+        uint32_t sampleRate {0};
+        uint32_t channels {0};
+
         bool isValid() const;
         explicit operator bool() const;
 
+        // Mutating methods are const: they act on the underlying audio-engine resource
+        // reached through m_resource, not on the handle's own (empty) state — the same
+        // shallow-const-handle idiom Framebuffer/Font already use.
         void play() const;
         void stop() const;
         void pause() const;
@@ -89,13 +71,10 @@ namespace p5cpp
         void fadeIn(float milliseconds) const;
         void fadeOut(float milliseconds) const;
 
-        // Playback-side format. Sounds loaded from a file (loadSound/loadMusic)
-        // are converted to the engine's playback format, so these may differ from
-        // the file's native values — they stay self-consistent (frameCount /
-        // sampleRate == duration), which is what matters for seek/loop-point
-        // math. Use loadAudioSamples() to inspect a file's native format.
-        uint32_t sampleRate() const;
-        uint32_t channels() const;
+        // Not promoted to a field like sampleRate/channels: for streamed music
+        // (loadMusic()), some formats can't report their length immediately after
+        // load, so this stays a live, on-demand query rather than a value cached
+        // once at construction.
         uint64_t frameCount() const;
 
         // The callback is invoked on the main thread (during the frame update)
@@ -108,6 +87,13 @@ namespace p5cpp
         Sound clone() const;
 
     private:
-        std::shared_ptr<SoundImpl> impl;
+        friend class detail::SoundResource;
+        friend Sound loadSoundImpl(AudioComponent& audio, const std::filesystem::path& soundFilePath, bool stream);
+        friend Sound loadSoundImpl(AudioComponent& audio, std::span<const uint8_t> soundData);
+        friend Sound createSoundImpl(AudioComponent& audio, std::span<const float> samples, uint32_t sampleRate, uint32_t channels);
+
+        Sound(uint32_t sampleRate, uint32_t channels, std::shared_ptr<detail::SoundResource> resource);
+
+        std::shared_ptr<detail::SoundResource> m_resource;
     };
 } // namespace p5cpp

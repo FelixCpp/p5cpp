@@ -88,7 +88,7 @@ namespace
                 pixels[y * size + x] = even ? rgba(255, 255) : rgba(60, 255);
             }
         }
-        return Texture(loadTexture(size, size, pixels));
+        return loadTexture(size, size, pixels);
     }
 } // namespace
 
@@ -158,6 +158,11 @@ public:
         textSize(16.0f);
         text("mesh(vertices, indices) - animated, per-vertex color", 20.0f, 20.0f);
         text("mesh(vertices, indices, texture) - textured + tint()", 480.0f, 20.0f);
+    }
+
+    void destroy() override
+    {
+        unload(checkerTexture);
     }
 
 private:

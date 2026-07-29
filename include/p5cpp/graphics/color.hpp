@@ -32,7 +32,6 @@ namespace p5cpp
 
     inline constexpr color_t rgba(int red, int green, int blue, int alpha)
     {
-        // return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha);
         return (static_cast<color_t>(alpha) << 24) | (static_cast<color_t>(blue) << 16) | (static_cast<color_t>(green) << 8) | static_cast<color_t>(red);
     }
 

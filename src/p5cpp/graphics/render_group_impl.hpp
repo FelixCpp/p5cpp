@@ -28,9 +28,9 @@ namespace p5cpp
     {
         std::vector<RecordedVertex> vertices;
         std::vector<uint32_t> indices; // triples, 0-based relative to this op's own vertices
-        Shader shader;
+        Shader shader;                 // id only - does not keep the GL program alive, see buildRenderGroup()'s ownership note (p5cpp.hpp)
         BlendMode blendMode;
-        Texture texture;
+        Texture texture;               // id only - same caveat as shader above
         std::vector<UniformSnapshot> uniforms; // frozen at build time, independent of the live UniformCache
     };
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <p5cpp/graphics/shader.hpp>
+#include "shader_hasher.hpp"
 
 #include <string>
 #include <vector>

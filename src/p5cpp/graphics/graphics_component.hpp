@@ -24,6 +24,16 @@ namespace p5cpp
     public:
         explicit GraphicsComponent(uint32_t width, uint32_t height);
 
+        // Frees every GL resource this component owns directly (m_defaultShader,
+        // m_textShader, m_whiteTexture, m_canvas's framebuffers). Must be called
+        // explicitly from GraphicsModule::destroy() while the GL context is still
+        // current - GraphicsComponent has no destructor that does this, since by the
+        // time it's actually destructed (via GraphicsModule's unique_ptr, torn down
+        // when AppEngine::modules is destroyed) the GL context is already gone (see
+        // WindowModule::destroy()'s window.reset(), which runs after every module
+        // nested inside its next() call has already finished destroy()).
+        void releaseGpuResources();
+
         void beginFrame();
         void endFrame();
 

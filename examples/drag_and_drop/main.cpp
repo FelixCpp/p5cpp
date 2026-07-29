@@ -43,11 +43,12 @@ namespace
         void loadDroppedImages()
         {
             for (const std::filesystem::path& path : getDroppedFiles()) {
-                std::unique_ptr<TextureImpl> loaded = loadImage(path);
-                if (loaded == nullptr) {
+                Texture loaded = loadImage(path);
+                if (!isTextureValid(loaded)) {
                     continue; // not an image loadImage() understands; it already logged why
                 }
-                images.push_back(DroppedImage {Texture(std::move(loaded)), path.filename().string()});
+
+                images.push_back(DroppedImage {loaded, path.filename().string()});
             }
         }
 
@@ -82,6 +83,13 @@ namespace
                 textSize(14.0f);
                 textAlign(TextAlign::topLeft);
                 text(images[i].filename, x, y + thumbHeight + 4.0f, thumbWidth);
+            }
+        }
+
+        void destroy() override
+        {
+            for (DroppedImage& dropped : images) {
+                unload(dropped.texture);
             }
         }
     };

@@ -25,7 +25,7 @@ struct PixelGrid
     {
         const uint32_t column = static_cast<uint32_t>(x / (static_cast<float>(getLogicalWidth()) / columns));
         const uint32_t rowFromTop = static_cast<uint32_t>(y / (static_cast<float>(getLogicalHeight()) / rows));
-        // pixels[] row 0 uploads to texture v=0 (bottom, see TextureImpl::upload()), so
+        // pixels[] row 0 uploads to texture v=0 (bottom, see Texture::upload()), so
         // invert: screen-top (y=0) must land in the last row, not row 0.
         const uint32_t row = static_cast<uint32_t>(rows - 1) - std::min(rowFromTop, static_cast<uint32_t>(rows - 1));
         return {column, row};
@@ -92,7 +92,7 @@ struct PixelGrid
     void show()
     {
         const color_t* data = reinterpret_cast<const color_t*>(pixels.data());
-        texture.upload(std::span {data, pixels.size() / 4});
+        upload(texture, std::span {data, pixels.size() / 4});
         image(texture, 0, 0, getLogicalWidth(), getLogicalHeight());
     }
 };
@@ -241,6 +241,11 @@ struct SlimeMoldsSimulation : Sketch
             mold.update(*grid, getDeltaTime());
             // mold.show();
         }
+    }
+
+    void destroy() override
+    {
+        unload(grid->texture);
     }
 };
 

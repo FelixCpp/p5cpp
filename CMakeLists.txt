@@ -62,7 +62,6 @@ add_library(
   ./src/p5cpp/graphics/graphics_api.cpp
   ./src/p5cpp/graphics/graphics_component.cpp
   ./src/p5cpp/graphics/graphics_module.cpp
-  ./src/p5cpp/graphics/image.cpp
   ./src/p5cpp/graphics/internal_shaders.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
   ./src/p5cpp/graphics/pixels.cpp

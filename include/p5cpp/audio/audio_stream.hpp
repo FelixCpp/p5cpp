@@ -25,36 +25,31 @@ namespace p5cpp
     // Do not call any p5cpp functions or allocate inside the callback.
     using AudioStreamCallback = std::function<void(std::span<float> frames, uint32_t channels)>;
 
-    // Same shallow-const-handle idiom as SoundImpl (see sound.hpp).
-    struct AudioStreamImpl
+    namespace detail
     {
-        virtual ~AudioStreamImpl() = default;
+        // Opaque - the real miniaudio-backed state, defined only in audio_stream.cpp.
+        struct AudioStreamResource;
+    }
 
-        virtual void play() const = 0;
-        virtual void stop() const = 0;
-        virtual void pause() const = 0;
-        virtual bool isPlaying() const = 0;
-
-        virtual void setVolume(float volume) const = 0;
-        virtual float getVolume() const = 0;
-        virtual void setPan(float pan) const = 0;
-        virtual float getPan() const = 0;
-        virtual void setRate(float rate) const = 0;
-        virtual float getRate() const = 0;
-    };
+    class AudioComponent;
 
     class AudioStream
     {
     public:
+        // A default-constructed AudioStream is invalid (no backing resource); all
+        // methods on an invalid handle are safe no-ops (getters return zero/default
+        // values).
         AudioStream();
-        AudioStream(std::unique_ptr<AudioStreamImpl> impl);
-        AudioStream(std::shared_ptr<AudioStreamImpl> impl);
 
-        // An AudioStream is invalid when creation failed; all methods on an
-        // invalid handle are safe no-ops (getters return zero/default values).
+        uint32_t sampleRate {0};
+        uint32_t channels {0};
+
         bool isValid() const;
         explicit operator bool() const;
 
+        // Mutating methods are const: they act on the underlying miniaudio resource
+        // reached through m_resource, not the handle's own (empty) state - same
+        // shallow-const-handle idiom as Sound (see sound.hpp).
         void play() const;
         void stop() const;
         void pause() const;
@@ -68,6 +63,10 @@ namespace p5cpp
         float getRate() const;
 
     private:
-        std::shared_ptr<AudioStreamImpl> impl;
+        friend AudioStream createAudioStreamImpl(AudioComponent& audio, uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback);
+
+        AudioStream(uint32_t sampleRate, uint32_t channels, std::shared_ptr<detail::AudioStreamResource> resource);
+
+        std::shared_ptr<detail::AudioStreamResource> m_resource;
     };
 } // namespace p5cpp

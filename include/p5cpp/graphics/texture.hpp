@@ -3,16 +3,10 @@
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/math/value2.hpp>
 
-#include <memory>
 #include <span>
 
 namespace p5cpp
 {
-    // Controls how the sx/sy/sWidth/sHeight source-rect arguments of image() (and the
-    // u/v arguments of vertex()) are interpreted: normalized expects the standard 0..1
-    // UV range, image expects pixel coordinates/extents of the source texture. Both use
-    // a top-left origin, matching the rest of p5cpp's pixel coordinate conventions (see
-    // Pixels) regardless of the texture's actual bottom-to-top GL storage order.
     enum class TextureMode {
         normalized,
         image,
@@ -26,38 +20,32 @@ namespace p5cpp
         uint32_t value;
 
         constexpr bool operator==(const TextureId& other) const = default;
-        constexpr bool operator!=(const TextureId& other) const = default;
     };
+} // namespace p5cpp
 
-    struct TextureImpl
+namespace p5cpp
+{
+    enum class TextureFormat {
+        rgba8,
+        r8,
+    };
+}
+
+namespace p5cpp
+{
+    struct Texture
     {
-        virtual ~TextureImpl() = default;
-        virtual TextureId getTextureId() const = 0;
-        virtual uint2 getSize() const = 0;
-
-        // Expects the same raw GL row order (bottom-to-top) as Framebuffer::writePixels()
-        // and the data loadImage() produces — row 0 of `data` becomes v=0 (bottom) of the
-        // texture. Callers holding top-left-origin pixel data (e.g. row 0 == y == 0) must
-        // flip it before uploading, or sampling will be vertically mirrored relative to
-        // images loaded via loadImage() or textures read back from a Framebuffer.
-        virtual void upload(std::span<const color_t> data) = 0;
+        TextureId id;
+        uint2 size;
+        TextureFormat format;
     };
 
-    // See TextureImpl::upload() — `data` must already be in bottom-to-top row order.
-    std::unique_ptr<TextureImpl> loadTexture(uint32_t width, uint32_t height, const color_t* data);
+    Texture loadTexture(uint32_t width, uint32_t height, const color_t* data);
+    Texture makeGlyphAtlasTexture(int width, int height);
 
-    class Texture : public TextureImpl
-    {
-    public:
-        Texture();
-        Texture(std::unique_ptr<TextureImpl> impl);
-        Texture(std::shared_ptr<TextureImpl> impl);
+    void unload(Texture& texture); // no-op if already unloaded/invalid
 
-        TextureId getTextureId() const override;
-        uint2 getSize() const override;
-        void upload(std::span<const color_t> data) override;
-
-    private:
-        std::shared_ptr<TextureImpl> impl;
-    };
+    bool isTextureValid(const Texture& texture);
+    void upload(Texture& texture, std::span<const color_t> data);
+    void updateRegion(Texture& texture, int x, int y, int width, int height, std::span<const uint8_t> data);
 } // namespace p5cpp

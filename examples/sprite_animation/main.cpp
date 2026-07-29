@@ -91,7 +91,7 @@ namespace
 
             // Blue character, row 0 — pixel-space source rect.
             textureMode(TextureMode::image);
-            image(*spriteSheet.getColorTexture(),
+            image(spriteSheet.colorTexture,
                   80, 50, displaySize, displaySize,
                   static_cast<float>(frame) * kFrameSize, 0.0f, kFrameSize, kFrameSize);
 
@@ -100,9 +100,14 @@ namespace
             // sprite sheet.
             textureMode(TextureMode::normalized);
             const float u = static_cast<float>(frame) / static_cast<float>(kColumns);
-            image(*spriteSheet.getColorTexture(),
+            image(spriteSheet.colorTexture,
                   350, 230, displaySize, displaySize,
                   u, 0.5f, 1.0f / kColumns, 0.5f);
+        }
+
+        void destroy() override
+        {
+            unload(spriteSheet);
         }
     };
 } // namespace

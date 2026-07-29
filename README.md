@@ -338,6 +338,11 @@ struct GradientSketch : Sketch
         rect(0, 0, (float)getLogicalWidth(), (float)getLogicalHeight());
         noShader();
     }
+
+    void destroy() override
+    {
+        unload(sh);
+    }
 };
 ```
 
@@ -369,8 +374,13 @@ struct PostFXSketch : Sketch
 
         background(20);
         tint(200, 150, 255); // colour-grade the result
-        image(*canvas.getColorTexture(), 144, 44, 512, 512);
+        image(canvas.colorTexture, 144, 44, 512, 512);
         noTint();
+    }
+
+    void destroy() override
+    {
+        unload(canvas);
     }
 };
 ```
@@ -413,14 +423,20 @@ struct PostFXSketch : Sketch
         setUniform(glowShader, "u_TexelSize", uniform(1.0f / 800.0f, 1.0f / 600.0f));
         setUniform(glowShader, "u_Radius", uniform(6.0f));
         setUniform(glowShader, "u_Direction", uniform(1.0f, 0.0f));
-        image(*scene.getColorTexture(), 0, 0, 800, 600); // horizontal blur pass
+        image(scene.colorTexture, 0, 0, 800, 600); // horizontal blur pass
 
         // A custom full-screen shader works the same way — write only the pixel
         // function, loadEffectShader() supplies the rest:
         //     shader(myPostFxShader);
         //     setUniform(myPostFxShader, "uTime", uniform(getGlobalTime()));
-        //     image(*scene.getColorTexture(), 0, 0, 800, 600);
+        //     image(scene.colorTexture, 0, 0, 800, 600);
         noShader();
+    }
+
+    void destroy() override
+    {
+        unload(scene);
+        unload(glowShader);
     }
 };
 ```
@@ -431,6 +447,36 @@ Built-in convenience shaders (`loadGrayscaleShader()`, `loadInvertShader()`,
 gaussian blur, so a real blur needs two passes (horizontal into a scratch `Framebuffer`,
 then vertical from that scratch buffer onto the final target) — see
 `examples/custom_effects` for the full two-pass version.
+
+---
+
+### Resource management
+
+`Texture`, `Framebuffer`, and `Shader` are plain structs with no automatic cleanup —
+`loadTexture()`/`loadImage()`/`createFramebuffer()`/`loadShader()` and friends must be
+paired with an explicit `unload()` call once you're done with the resource (typically in
+`destroy()` for anything loaded in `setup()`), the same way raylib's `LoadTexture()`/
+`UnloadTexture()` work:
+
+```cpp
+unload(texture);
+unload(framebuffer); // also unloads framebuffer.colorTexture
+unload(shader);
+```
+
+Calling `unload()` twice on the same variable is a harmless no-op; forgetting to call it
+at all leaks the underlying GPU resource. `Font`, `Sound`, and `AudioStream` are the
+exception — they're reference-counted and clean themselves up automatically, no
+`unload()` needed.
+
+These three types are plain data — no methods, matching raylib's `Texture2D`/`Shader`/
+`RenderTexture2D` structs. Everything that acts on them is a free function:
+`isTextureValid(texture)`/`isFramebufferValid(fb)`/`isShaderValid(shader)` (e.g. to
+check whether `loadImage()` actually decoded something), `upload()`/`updateRegion()`
+for `Texture`, `readPixels()`/`writePixels()` for `Framebuffer`, `getUniformLocation()`
+for `Shader`. None of these check their argument's validity for you (matching raylib's
+`UpdateTexture()`/`GetShaderLocation()`, which don't either) — only `unload()` does,
+silently, so double-unloading is still harmless.
 
 ---
 
@@ -453,7 +499,7 @@ struct ImageSketch : Sketch
     void draw() override
     {
         background(20);
-        image(logo, 50, 50, (float)logo.getSize().x, (float)logo.getSize().y);
+        image(logo, 50, 50, (float)logo.size.x, (float)logo.size.y);
     }
 
     void event(const WindowEvent& e) override
@@ -464,6 +510,11 @@ struct ImageSketch : Sketch
             const uint2 size = getCanvasSize();
             saveImage("screenshot.png", size.x, size.y, loadPixels());
         }
+    }
+
+    void destroy() override
+    {
+        unload(logo);
     }
 };
 ```
@@ -479,7 +530,9 @@ pushCanvas(fb);
 popCanvas();
 
 saveImage("red_square.png", fb);
-std::vector<color_t> pixels = fb.readPixels(); // raw R,G,B,A bytes per pixel, top-left origin
+std::vector<color_t> pixels = readPixels(fb); // raw R,G,B,A bytes per pixel, top-left origin
+
+unload(fb); // Texture/Framebuffer/Shader have no automatic cleanup - see "Resource management" below
 ```
 
 > **Note:** pixel buffers returned by `loadPixels()`/`readPixels()` (and consumed by
@@ -751,7 +804,7 @@ anchored relative to your sketch instead of the global module list.
 | `setup()`             | once at startup          |
 | `draw()`              | every frame              |
 | `event(WindowEvent&)` | on input / window events |
-| `destroy()`           | on shutdown              |
+| `destroy()`           | on shutdown - `unload()` any Texture/Framebuffer/Shader you loaded here |
 
 ### Drawing
 
@@ -852,7 +905,9 @@ saveImage("out.png", framebuffer);             // encode a Framebuffer to PNG
 saveImage("out.png", w, h, pixels);            // encode a raw pixel buffer to PNG
 
 std::vector<color_t> pixels = loadPixels();    // snapshot of the current canvas
-std::vector<color_t> pixels = fb.readPixels(); // snapshot of an offscreen Framebuffer
+std::vector<color_t> pixels = readPixels(fb); // snapshot of an offscreen Framebuffer
+
+unload(t);                                     // no automatic cleanup - see "Resource management" below
 ```
 
 ### Audio

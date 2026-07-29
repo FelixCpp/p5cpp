@@ -17,6 +17,13 @@ namespace paint
         popCanvas();
     }
 
+    Canvas::~Canvas()
+    {
+        for (Layer& layer : m_layers) {
+            unload(layer.framebuffer);
+        }
+    }
+
     void Canvas::setActiveLayerIndex(size_t index)
     {
         if (index < m_layers.size()) {
@@ -45,6 +52,7 @@ namespace paint
             return;
         }
 
+        unload(m_layers[index].framebuffer);
         m_layers.erase(m_layers.begin() + static_cast<std::ptrdiff_t>(index));
 
         if (m_activeLayerIndex >= m_layers.size()) {
@@ -118,7 +126,7 @@ namespace paint
                 continue;
             }
             tint(255, 255, 255, static_cast<int>(layer.opacity * 255.0f));
-            image(*layer.framebuffer.getColorTexture(), 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
+            image(layer.framebuffer.colorTexture, 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
         }
         noTint();
         popCanvasTransform();
@@ -135,7 +143,7 @@ namespace paint
                     continue;
                 }
                 tint(255, 255, 255, static_cast<int>(layer.opacity * 255.0f));
-                image(*layer.framebuffer.getColorTexture(), 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
+                image(layer.framebuffer.colorTexture, 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
             }
             noTint();
         popCanvas();
@@ -163,6 +171,9 @@ namespace paint
     void Canvas::restoreState(const HistoryState& state)
     {
         if (m_layers.size() > state.layers.size()) {
+            for (size_t i = state.layers.size(); i < m_layers.size(); ++i) {
+                unload(m_layers[i].framebuffer);
+            }
             m_layers.resize(state.layers.size());
         } else {
             while (m_layers.size() < state.layers.size()) {

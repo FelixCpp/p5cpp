@@ -142,8 +142,14 @@ namespace
             shader(pixelateShader);
             setUniform(pixelateShader, "u_BlockSize", uniform(4.0f));
             setUniform(pixelateShader, "u_TexelSize", uniform(1.0f / static_cast<float>(W), 1.0f / static_cast<float>(H)));
-            image(*scene.getColorTexture(), 0, 0, W, H);
+            image(scene.colorTexture, 0, 0, W, H);
             noShader();
+        }
+
+        void destroy() override
+        {
+            unload(pixelateShader);
+            unload(scene);
         }
     };
 } // namespace

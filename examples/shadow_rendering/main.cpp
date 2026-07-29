@@ -39,6 +39,15 @@ struct ShadowRenderer
         blurShader = loadBlurShader();
     }
 
+    ~ShadowRenderer()
+    {
+        unload(layer);
+        unload(shadow);
+        unload(blurScratch);
+        unload(shadowShader);
+        unload(blurShader);
+    }
+
     template <typename DrawFunction>
     void drawShadow(DrawFunction draw, float elevation)
     {
@@ -64,7 +73,7 @@ struct ShadowRenderer
             blendMode(BlendMode::none);
             shader(shadowShader);
             setUniform(shadowShader, "u_ShadowColor", uniform(0.0f, 0.0f, 0.0f, 1.0f));
-            image(*layer.getColorTexture(), 0, 0, width, height);
+            image(layer.colorTexture, 0, 0, width, height);
             noShader();
         }
         popCanvas();
@@ -85,7 +94,7 @@ struct ShadowRenderer
             blendMode(BlendMode::none);
             shader(blurShader);
             setUniform(blurShader, "u_Direction", uniform(1.0f, 0.0f));
-            image(*shadow.getColorTexture(), 0, 0, width, height);
+            image(shadow.colorTexture, 0, 0, width, height);
             noShader();
         }
         popCanvas();
@@ -99,7 +108,7 @@ struct ShadowRenderer
             blendMode(BlendMode::none);
             shader(blurShader);
             setUniform(blurShader, "u_Direction", uniform(0.0f, 1.0f));
-            image(*blurScratch.getColorTexture(), 0, 0, width, height);
+            image(blurScratch.colorTexture, 0, 0, width, height);
             noShader();
         }
         popCanvas();
@@ -107,12 +116,12 @@ struct ShadowRenderer
         //
         // 4. Schatten zeichnen
         //
-        image(*shadow.getColorTexture(), 0, 0, width, height);
+        image(shadow.colorTexture, 0, 0, width, height);
 
         //
         // 5. Original zeichnen
         //
-        image(*layer.getColorTexture(), 0, 0, width, height);
+        image(layer.colorTexture, 0, 0, width, height);
     }
 };
 

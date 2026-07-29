@@ -43,6 +43,9 @@ namespace p5cpp
         uint32_t textToPointsDetail;
         float textToPointsSpacing;
 
+        // Recorded by id only, same caveat as buildRenderGroup() (see p5cpp.hpp): a
+        // shader() set here must stay loaded for as long as this RenderState (pushed
+        // via pushState()/push()) is still on the stack.
         std::optional<Shader> shader;
         BlendMode blendMode;
     };

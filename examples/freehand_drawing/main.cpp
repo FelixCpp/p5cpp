@@ -61,12 +61,17 @@ namespace
             }
 
             background(20);
-            image(*canvas.getColorTexture(), 0, 0, static_cast<float>(W), static_cast<float>(H));
+            image(canvas.colorTexture, 0, 0, static_cast<float>(W), static_cast<float>(H));
 
             fill(0);
             textSize(16.0f);
             textAlign(TextAlign::topLeft);
             text("Left-drag to draw, right-drag to erase, C to clear", 20, 20);
+        }
+
+        void destroy() override
+        {
+            unload(canvas);
         }
     };
 } // namespace

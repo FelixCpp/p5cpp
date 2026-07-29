@@ -47,7 +47,7 @@ namespace
             const float hue = static_cast<float>(x) / static_cast<float>(width - 1) * 360.0f;
             pixels.set(x, 0, hsv(hue, 1.0f, 1.0f));
         }
-        ui.hueStripTexture = Texture(loadTexture(width, 1, flippedRows(pixels).data()));
+        ui.hueStripTexture = loadTexture(width, 1, flippedRows(pixels).data());
     }
 
     void rebuildSvSquare(UiState& ui)
@@ -61,7 +61,8 @@ namespace
                 pixels.set(x, y, hsv(ui.hue, saturation, value));
             }
         }
-        ui.svSquareTexture = Texture(loadTexture(size, size, flippedRows(pixels).data()));
+        unload(ui.svSquareTexture);
+        ui.svSquareTexture = loadTexture(size, size, flippedRows(pixels).data());
         ui.svSquareHue = ui.hue;
     }
 

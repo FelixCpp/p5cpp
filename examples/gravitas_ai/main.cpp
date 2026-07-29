@@ -147,8 +147,8 @@ struct GravitasSketch : p5cpp::Sketch
     float shakeX = 0.f, shakeY = 0.f, shakeDur = 0.f;
 
     // ── Rendering ─────────────────────────────────────────────────────────────
-    std::shared_ptr<ShaderImpl> bgShader;
-    std::shared_ptr<FramebufferImpl> bgCanvas;
+    Shader bgShader;
+    Framebuffer bgCanvas;
 
     // ── RNG ───────────────────────────────────────────────────────────────────
     std::mt19937 rng {std::random_device {}()};
@@ -201,7 +201,7 @@ struct GravitasSketch : p5cpp::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<FramebufferImpl>(createFramebuffer(W, H).release());
+        bgCanvas = createFramebuffer(W, H);
 
         for (auto& s : bgStars) {
             s.x = fr(0.f, W);
@@ -217,7 +217,10 @@ struct GravitasSketch : p5cpp::Sketch
         portals[2] = {400.f, 635.f, 0.f, 0.f, 45.f};  // amber
     }
 
-    void destroy() override {}
+    void destroy() override {
+        unload(bgShader);
+        unload(bgCanvas);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // GLSL background: deep space with nebula + galaxies
@@ -697,7 +700,7 @@ struct GravitasSketch : p5cpp::Sketch
         popCanvas();
         blendMode(BlendMode::alpha);
         noTint();
-        image(*bgCanvas->getColorTexture(), 0.f, 0.f, (float)W, (float)H);
+        image(bgCanvas.colorTexture, 0.f, 0.f, (float)W, (float)H);
     }
 
     // ── Twinkling background stars ────────────────────────────────────────────

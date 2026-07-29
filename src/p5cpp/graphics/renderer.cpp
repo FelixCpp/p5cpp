@@ -9,8 +9,10 @@
 #include <cassert>
 #include <cstring>
 #include <functional>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 namespace p5cpp
@@ -136,9 +138,9 @@ namespace p5cpp
 
         void begin(const Framebuffer& framebuffer) override
         {
-            m_viewportSize = framebuffer.getSize();
+            m_viewportSize = framebuffer.size;
 
-            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.getFramebufferId().value);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.id.value);
             glViewport(0, 0, static_cast<GLsizei>(m_viewportSize.x), static_cast<GLsizei>(m_viewportSize.y));
 
             m_writer.reset();
@@ -170,12 +172,12 @@ namespace p5cpp
             if (indexCount == 0)
                 return;
 
-            const GLuint textureId = texture.getTextureId().value;
-            const GLuint programId = static_cast<GLuint>(shader.getShaderId().value);
+            const GLuint textureId = texture.id.value;
+            const GLuint programId = static_cast<GLuint>(shader.id.value);
 
             if (!m_batches.empty()) {
                 BatchEntry& last = m_batches.back();
-                const GLuint lastProgramId = static_cast<GLuint>(last.shader.getShaderId().value);
+                const GLuint lastProgramId = static_cast<GLuint>(last.shader.id.value);
 
                 if (lastProgramId == programId && last.blendMode == blendMode) {
                     uint8_t slot = 0;
@@ -288,19 +290,19 @@ namespace p5cpp
             bool firstBatch = true;
 
             for (const BatchEntry& batch : m_batches) {
-                const GLuint programId = static_cast<GLuint>(batch.shader.getShaderId().value);
+                const GLuint programId = static_cast<GLuint>(batch.shader.id.value);
                 if (programId == 0) continue;
 
                 if (firstBatch || programId != lastProgramId) {
                     glUseProgram(programId);
                     lastProgramId = programId;
 
-                    const auto projLoc = batch.shader.getUniformLocation("u_ProjectionMatrix");
+                    const auto projLoc = getUniformLocation(batch.shader, "u_ProjectionMatrix");
                     if (projLoc.has_value()) {
                         applyUniformCached(programId, *projLoc, uniform(projection));
                     }
 
-                    const auto texLoc = batch.shader.getUniformLocation("u_Textures");
+                    const auto texLoc = getUniformLocation(batch.shader, "u_Textures");
                     if (texLoc.has_value() && !m_samplerArrayApplied.contains(programId)) {
                         const GLint samplers[8] = {0, 1, 2, 3, 4, 5, 6, 7};
                         glUniform1iv(texLoc->value, 8, samplers);
@@ -339,26 +341,27 @@ namespace p5cpp
             m_writer.resetPreservingPending();
         }
 
+        // float3/float4/matrix4x4 don't have their own operator== (see math/value3.hpp,
+        // value4.hpp, matrix4x4.hpp), so std::variant's built-in == can't be used here -
+        // compare field-by-field instead, same as before the union->variant conversion.
         static bool uniformVariableEquals(const UniformVariable& a, const UniformVariable& b)
         {
-            if (a.type != b.type)
+            if (a.index() != b.index())
                 return false;
 
-            switch (a.type) {
-                case UniformVariable::Type::float1:
-                    return a.floatValue == b.floatValue;
-                case UniformVariable::Type::float2:
-                    return a.float2Value == b.float2Value;
-                case UniformVariable::Type::float3:
-                    return a.float3Value.x == b.float3Value.x and a.float3Value.y == b.float3Value.y and a.float3Value.z == b.float3Value.z;
-                case UniformVariable::Type::float4:
-                    return a.float4Value.x == b.float4Value.x and a.float4Value.y == b.float4Value.y and a.float4Value.z == b.float4Value.z and a.float4Value.w == b.float4Value.w;
-                case UniformVariable::Type::matrix4x4:
-                    return std::memcmp(a.matrix4x4Value.data(), b.matrix4x4Value.data(), 16 * sizeof(float)) == 0;
-                case UniformVariable::Type::texture:
-                    return a.textureValue == b.textureValue;
-            }
-            return false;
+            return std::visit([&](const auto& aValue) {
+                using T = std::decay_t<decltype(aValue)>;
+                const T& bValue = std::get<T>(b);
+                if constexpr (std::is_same_v<T, float3>) {
+                    return aValue.x == bValue.x and aValue.y == bValue.y and aValue.z == bValue.z;
+                } else if constexpr (std::is_same_v<T, float4>) {
+                    return aValue.x == bValue.x and aValue.y == bValue.y and aValue.z == bValue.z and aValue.w == bValue.w;
+                } else if constexpr (std::is_same_v<T, matrix4x4>) {
+                    return std::memcmp(aValue.data(), bValue.data(), 16 * sizeof(float)) == 0;
+                } else {
+                    return aValue == bValue; // float, float2, TextureUniformValue all have operator==
+                }
+            }, a);
         }
 
         // Skips the glUniform* call if the same value is already active for this program,
@@ -368,10 +371,10 @@ namespace p5cpp
             // Texture bindings live in global GL texture-unit state, not in the program's
             // uniform state, so another draw call can rebind the same unit between two
             // uses of this program/uniform. Always re-bind rather than trusting the cache.
-            if (variable.type == UniformVariable::Type::texture) {
-                glActiveTexture(GL_TEXTURE0 + variable.textureValue.unit);
-                glBindTexture(GL_TEXTURE_2D, variable.textureValue.textureId.value);
-                glUniform1i(location.value, variable.textureValue.unit);
+            if (const auto* tex = std::get_if<TextureUniformValue>(&variable)) {
+                glActiveTexture(GL_TEXTURE0 + tex->unit);
+                glBindTexture(GL_TEXTURE_2D, tex->textureId.value);
+                glUniform1i(location.value, tex->unit);
                 return;
             }
 
@@ -380,25 +383,21 @@ namespace p5cpp
             if (it != programCache.end() && uniformVariableEquals(it->second, variable))
                 return;
 
-            switch (variable.type) {
-                case UniformVariable::Type::float1:
-                    glUniform1f(location.value, variable.floatValue);
-                    break;
-                case UniformVariable::Type::float2:
-                    glUniform2f(location.value, variable.float2Value.x, variable.float2Value.y);
-                    break;
-                case UniformVariable::Type::float3:
-                    glUniform3f(location.value, variable.float3Value.x, variable.float3Value.y, variable.float3Value.z);
-                    break;
-                case UniformVariable::Type::float4:
-                    glUniform4f(location.value, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w);
-                    break;
-                case UniformVariable::Type::matrix4x4:
-                    glUniformMatrix4fv(location.value, 1, GL_FALSE, variable.matrix4x4Value.data());
-                    break;
-                case UniformVariable::Type::texture:
-                    break;
-            }
+            std::visit([&](const auto& value) {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<T, float>) {
+                    glUniform1f(location.value, value);
+                } else if constexpr (std::is_same_v<T, float2>) {
+                    glUniform2f(location.value, value.x, value.y);
+                } else if constexpr (std::is_same_v<T, float3>) {
+                    glUniform3f(location.value, value.x, value.y, value.z);
+                } else if constexpr (std::is_same_v<T, float4>) {
+                    glUniform4f(location.value, value.x, value.y, value.z, value.w);
+                } else if constexpr (std::is_same_v<T, matrix4x4>) {
+                    glUniformMatrix4fv(location.value, 1, GL_FALSE, value.data());
+                }
+                // TextureUniformValue already handled above via the early return.
+            }, variable);
             programCache.insert_or_assign(location.value, variable);
         }
 

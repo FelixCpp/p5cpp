@@ -50,6 +50,12 @@ namespace paint
         // a slider drag that spills outside the panel rect doesn't also start
         // painting on the canvas underneath it.
         bool isDraggingAnyWidget() const { return draggingHue or draggingSv or draggingBrushSlider or draggingOpacity; }
+
+        ~UiState()
+        {
+            p5cpp::unload(hueStripTexture);
+            p5cpp::unload(svSquareTexture);
+        }
     };
 
     // Builds the (hue-independent) hue-strip gradient texture once.

@@ -13,11 +13,11 @@ namespace p5cpp
 
     // `stream` selects MA_SOUND_FLAG_STREAM (decode on the fly while playing)
     // instead of MA_SOUND_FLAG_DECODE (fully decode into memory up front).
-    std::unique_ptr<SoundImpl> loadSoundImpl(AudioComponent& audio, const std::filesystem::path& soundFilePath, bool stream);
-    std::unique_ptr<SoundImpl> loadSoundImpl(AudioComponent& audio, std::span<const uint8_t> soundData);
-    std::unique_ptr<SoundImpl> createSoundImpl(AudioComponent& audio, std::span<const float> samples, uint32_t sampleRate, uint32_t channels);
+    Sound loadSoundImpl(AudioComponent& audio, const std::filesystem::path& soundFilePath, bool stream);
+    Sound loadSoundImpl(AudioComponent& audio, std::span<const uint8_t> soundData);
+    Sound createSoundImpl(AudioComponent& audio, std::span<const float> samples, uint32_t sampleRate, uint32_t channels);
 
-    std::unique_ptr<AudioStreamImpl> createAudioStreamImpl(AudioComponent& audio, uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback);
+    AudioStream createAudioStreamImpl(AudioComponent& audio, uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback);
 
     AudioSamples decodeAudioSamples(const std::filesystem::path& soundFilePath);
     AudioSamples decodeAudioSamples(std::span<const uint8_t> soundData);

@@ -17,6 +17,26 @@
 
 namespace p5cpp
 {
+    // Internal-only - not part of the public API (Font's public surface returns
+    // ShapedGlyph, not these) since nothing outside FontData's own shaping pipeline
+    // consumes them anymore.
+    struct GlyphRegion
+    {
+        int2 size;
+        float_rect uvRect;
+    };
+
+    struct Glyph
+    {
+        GlyphRegion region;
+        int2 bearing;
+        float advanceX;
+        size_t glyphAtlasIndex;
+    };
+} // namespace p5cpp
+
+namespace p5cpp
+{
     struct BinPackingStrategy
     {
         virtual ~BinPackingStrategy() = default;
@@ -169,71 +189,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    class GlyphAtlasTexture : public TextureImpl
-    {
-    public:
-        static std::unique_ptr<GlyphAtlasTexture> create(int width, int height)
-        {
-            GLuint textureId = 0;
-            glGenTextures(1, &textureId);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-
-            // Zero-initialize: glTexImage2D(..., nullptr) leaves GPU memory
-            // undefined (not guaranteed to be 0). With GL_LINEAR filtering,
-            // sampling near a packed glyph's UV-rect edge (only 1px padding,
-            // see GlyphAtlas's paddingX/Y below) can read a texel or two of
-            // never-written atlas space — undefined coverage there blends a
-            // visible gray halo around glyphs, most noticeable at large text
-            // sizes. An all-zero atlas guarantees that bleed reads as
-            // "no coverage" instead of garbage.
-            const std::vector<uint8_t> zeroed(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RED, GL_UNSIGNED_BYTE, zeroed.data());
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-            constexpr GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
-            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
-
-            return std::unique_ptr<GlyphAtlasTexture>(new GlyphAtlasTexture(textureId, width, height));
-        }
-
-        uint2 getSize() const override
-        {
-            return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-        }
-
-        TextureId getTextureId() const override
-        {
-            return TextureId {.value = textureId};
-        }
-
-        void upload(std::span<const color_t> data) override
-        {
-            throw std::runtime_error("GlyphAtlasTexture does not support updating the entire texture.");
-        }
-
-        void store(int x, int y, int width, int height, std::span<const uint8_t> bitmapData)
-        {
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RED, GL_UNSIGNED_BYTE, bitmapData.data());
-        }
-
-    private:
-        explicit GlyphAtlasTexture(GLuint textureId, int width, int height)
-            : textureId(textureId), width(width), height(height)
-        {
-        }
-
-        GLuint textureId;
-        int width, height;
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
     class GlyphAtlas
     {
     public:
@@ -242,10 +197,14 @@ namespace p5cpp
               m_height(height),
               m_paddingX(paddingX),
               m_paddingY(paddingY),
-              m_atlasTexture(GlyphAtlasTexture::create(width, height)),
-              m_texture(m_atlasTexture),
+              m_texture(makeGlyphAtlasTexture(width, height)),
               m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
         {
+        }
+
+        ~GlyphAtlas()
+        {
+            unload(m_texture);
         }
 
         std::optional<GlyphRegion> store(int bitmapWidth, int bitmapHeight, std::span<const uint8_t> bitmapData)
@@ -263,7 +222,7 @@ namespace p5cpp
                 return std::nullopt;
             }
 
-            m_atlasTexture->store(placed->left, placed->top, bitmapWidth, bitmapHeight, bitmapData);
+            updateRegion(m_texture, placed->left, placed->top, bitmapWidth, bitmapHeight, bitmapData);
 
             const float uvLeft = static_cast<float>(placed->left) / static_cast<float>(m_width);
             const float uvTop = static_cast<float>(placed->top) / static_cast<float>(m_height);
@@ -292,7 +251,6 @@ namespace p5cpp
         int m_paddingX;
         int m_paddingY;
 
-        std::shared_ptr<GlyphAtlasTexture> m_atlasTexture;
         Texture m_texture;
 
         std::unique_ptr<BinPackingStrategy> m_packingStrategy;
@@ -328,61 +286,6 @@ namespace p5cpp
     };
 
     using FreetypeFace = std::unique_ptr<std::remove_pointer_t<FT_Face>, FreetypeDeleter>;
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    struct KerningCacheKey
-    {
-        char32_t leftCodepoint;
-        char32_t rightCodepoint;
-        int textSize;
-
-        bool operator==(const KerningCacheKey& other) const
-        {
-            return leftCodepoint == other.leftCodepoint && rightCodepoint == other.rightCodepoint && textSize == other.textSize;
-        }
-    };
-
-    struct KerningCacheKeyHasher
-    {
-        std::size_t operator()(const KerningCacheKey& key) const
-        {
-            std::size_t h1 = std::hash<char32_t> {}(key.leftCodepoint);
-            std::size_t h2 = std::hash<char32_t> {}(key.rightCodepoint);
-            std::size_t h3 = std::hash<int> {}(key.textSize);
-            return h1 ^ (h2 << 1) ^ (h3 << 2); // Combine the hash values of the members.
-        }
-    };
-
-    class KerningCache
-    {
-    public:
-        std::optional<float> get(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const
-        {
-            const KerningCacheKey key {
-                .leftCodepoint = leftCodepoint,
-                .rightCodepoint = rightCodepoint,
-                .textSize = textSize,
-            };
-
-            const auto itr = m_cache.find(key);
-            if (itr != m_cache.end()) {
-                return itr->second;
-            }
-
-            return std::nullopt;
-        }
-
-        void put(char32_t leftCodepoint, char32_t rightCodepoint, int textSize, float kerning)
-        {
-            KerningCacheKey key {leftCodepoint, rightCodepoint, textSize};
-            m_cache.insert(std::make_pair(key, kerning));
-        }
-
-    private:
-        std::unordered_map<KerningCacheKey, float, KerningCacheKeyHasher> m_cache;
-    };
 } // namespace p5cpp
 
 namespace p5cpp
@@ -431,59 +334,6 @@ namespace p5cpp
 
     private:
         std::unordered_map<FontMetricsCacheKey, FontMetrics, FontMetricsCacheKeyHasher> m_cache;
-    };
-} // namespace p5cpp
-
-namespace p5cpp
-{
-    struct GlyphCacheKey
-    {
-        char32_t codepoint;
-        int textSize;
-
-        bool operator==(const GlyphCacheKey& other) const
-        {
-            return codepoint == other.codepoint && textSize == other.textSize;
-        }
-    };
-
-    struct GlyphCacheKeyHasher
-    {
-        std::size_t operator()(const GlyphCacheKey& key) const
-        {
-            std::size_t h1 = std::hash<char32_t> {}(key.codepoint);
-            std::size_t h2 = std::hash<int> {}(key.textSize);
-            return h1 ^ (h2 << 1); // Combine the hash values of the members.
-        }
-    };
-
-    class GlyphCache
-    {
-    public:
-        const Glyph* get(char32_t codepoint, int textSize) const
-        {
-            const GlyphCacheKey key {
-                .codepoint = codepoint,
-                .textSize = textSize,
-            };
-
-            const auto itr = m_cache.find(key);
-            if (itr != m_cache.end()) {
-                return &itr->second;
-            }
-
-            return nullptr;
-        }
-
-        const Glyph* put(char32_t codepoint, int textSize, const Glyph& glyph)
-        {
-            GlyphCacheKey key {codepoint, textSize};
-            const auto insertion = m_cache.emplace(std::make_pair(key, glyph));
-            return &insertion.first->second;
-        }
-
-    private:
-        std::unordered_map<GlyphCacheKey, Glyph, GlyphCacheKeyHasher> m_cache;
     };
 } // namespace p5cpp
 
@@ -682,12 +532,12 @@ namespace p5cpp
     }
 } // namespace p5cpp
 
-namespace p5cpp
+namespace p5cpp::detail
 {
-    class FreetypeFont : public FontImpl
+    class FontRasterizer
     {
     public:
-        static std::unique_ptr<FreetypeFont> loadFromFile(const std::filesystem::path& fontFilePath)
+        static std::unique_ptr<FontRasterizer> loadFromFile(const std::filesystem::path& fontFilePath)
         {
             FT_Face rawFace;
             FT_Error error = FT_New_Face(freetype.library, fontFilePath.string().c_str(), 0, &rawFace);
@@ -696,10 +546,10 @@ namespace p5cpp
             }
 
             FreetypeFace face(rawFace);
-            return std::unique_ptr<FreetypeFont>(new FreetypeFont(std::move(face)));
+            return std::unique_ptr<FontRasterizer>(new FontRasterizer(std::move(face)));
         }
 
-        static std::unique_ptr<FreetypeFont> loadFromMemory(std::span<const uint8_t> fontData)
+        static std::unique_ptr<FontRasterizer> loadFromMemory(std::span<const uint8_t> fontData)
         {
             FT_Face rawFace;
             FT_Error error = FT_New_Memory_Face(freetype.library, fontData.data(), static_cast<FT_Long>(fontData.size()), 0, &rawFace);
@@ -708,56 +558,10 @@ namespace p5cpp
             }
 
             FreetypeFace face(rawFace);
-            return std::unique_ptr<FreetypeFont>(new FreetypeFont(std::move(face)));
+            return std::unique_ptr<FontRasterizer>(new FontRasterizer(std::move(face)));
         }
 
-        const Glyph* getGlyph(char32_t codepoint, int textSize) override
-        {
-            if (const Glyph* cachedGlyph = m_glyphCache.get(codepoint, textSize)) {
-                return cachedGlyph;
-            }
-
-            if (FT_Set_Pixel_Sizes(m_face.get(), 0, static_cast<FT_UInt>(textSize))) {
-                return nullptr;
-            }
-
-            const FT_UInt glyphIndex = FT_Get_Char_Index(m_face.get(), codepoint);
-            if (glyphIndex == 0) {
-                return nullptr; // The font doesn't contain a glyph for the given codepoint.
-            }
-
-            if (FT_Load_Glyph(m_face.get(), glyphIndex, FT_LOAD_NO_BITMAP)) {
-                return nullptr; // Failed to load the glyph.
-            }
-
-            if (FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL)) {
-                return nullptr; // Failed to render the glyph.
-            }
-
-            const int bearingX = m_face->glyph->bitmap_left;
-            const int bearingY = m_face->glyph->bitmap_top;
-            const int advanceX = m_face->glyph->advance.x / 64;
-
-            const int bitmapWidth = static_cast<int>(m_face->glyph->bitmap.width);
-            const int bitmapHeight = static_cast<int>(m_face->glyph->bitmap.rows);
-            const std::span<const uint8_t> bitmapData(m_face->glyph->bitmap.buffer, bitmapWidth * bitmapHeight);
-
-            const auto [region, atlasPageIndex] = storeInAtlas(bitmapWidth, bitmapHeight, bitmapData);
-            if (!region.has_value()) {
-                return nullptr;
-            }
-
-            Glyph glyph {
-                .region = region.value(),
-                .bearing = int2 {bearingX, bearingY},
-                .advanceX = static_cast<float>(advanceX),
-                .glyphAtlasIndex = atlasPageIndex,
-            };
-
-            return m_glyphCache.put(codepoint, textSize, glyph);
-        }
-
-        const FontMetrics* getMetrics(int textSize) override
+        const FontMetrics* getMetrics(int textSize)
         {
             if (const FontMetrics* cachedMetrics = m_glyphMetricsCache.get(textSize)) {
                 return cachedMetrics;
@@ -780,40 +584,17 @@ namespace p5cpp
             return m_glyphMetricsCache.put(textSize, metrics);
         }
 
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override
+        size_t pageCount() const
         {
-            const std::optional<float> cachedKerning = m_kerningCache.get(leftCodepoint, rightCodepoint, textSize);
-            if (cachedKerning.has_value()) {
-                return cachedKerning.value();
-            }
-
-            if (FT_Set_Pixel_Sizes(m_face.get(), 0, static_cast<FT_UInt>(textSize))) {
-                return 0.0f;
-            }
-
-            const FT_UInt leftGlyphIndex = FT_Get_Char_Index(m_face.get(), leftCodepoint);
-            const FT_UInt rightGlyphIndex = FT_Get_Char_Index(m_face.get(), rightCodepoint);
-
-            FT_Vector kerning;
-            if (FT_Get_Kerning(m_face.get(), leftGlyphIndex, rightGlyphIndex, FT_KERNING_DEFAULT, &kerning)) {
-                return 0.0f;
-            }
-
-            const float kerningValue = kerning.x / 64.0f; // Convert from 26.6 fixed point format to float.
-            m_kerningCache.put(leftCodepoint, rightCodepoint, textSize, kerningValue);
-            return kerningValue;
+            return m_glyphAtlasPages.size();
         }
 
-        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override
+        const Texture* pageTexture(size_t index) const
         {
-            if (glyphAtlasIndex >= m_glyphAtlasPages.size()) {
-                return 0; // Invalid atlas index.
-            }
-
-            return m_glyphAtlasPages[glyphAtlasIndex]->getTexture();
+            return index < m_glyphAtlasPages.size() ? m_glyphAtlasPages[index]->getTexture() : nullptr;
         }
 
-        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) override
+        std::vector<ShapedGlyph> shape(std::string_view text, int textSize)
         {
             if (const std::vector<ShapedGlyph>* cached = m_shapedTextCache.get(text, textSize)) {
                 return *cached;
@@ -893,7 +674,7 @@ namespace p5cpp
             return *m_shapedTextCache.put(text, textSize, std::move(result));
         }
 
-        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap) override
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap)
         {
             std::vector<TextContour> result;
 
@@ -1041,7 +822,7 @@ namespace p5cpp
         }
 
     private:
-        explicit FreetypeFont(FreetypeFace face)
+        explicit FontRasterizer(FreetypeFace face)
             : m_face(std::move(face))
         {
         }
@@ -1139,8 +920,6 @@ namespace p5cpp
             return U' '; // Malformed byte — treat as space.
         }
 
-        KerningCache m_kerningCache;
-        GlyphCache m_glyphCache;
         GlyphByIdCache m_glyphByIdCache;
         FontMetricsCache m_glyphMetricsCache;
         ShapedTextCache m_shapedTextCache;
@@ -1149,6 +928,13 @@ namespace p5cpp
         FreetypeFace m_face;
         HbFont m_hbFont;
     };
+} // namespace p5cpp::detail
+
+namespace p5cpp
+{
+    // Defined here, not inline in font.hpp: needs detail::FontRasterizer to be a
+    // complete type to destroy the unique_ptr<FontRasterizer> member.
+    FontData::~FontData() = default;
 } // namespace p5cpp
 
 namespace p5cpp
@@ -1206,108 +992,93 @@ namespace p5cpp
 
 namespace
 {
-    // Forwards every call to a shared, already-loaded FontImpl so that repeated
-    // loadFont(path) calls for the same file can return a lightweight handle
-    // instead of re-running FT_New_Face, while still handing back a genuinely
-    // unique_ptr-owned object at each call site (loadFont()'s return type can't
-    // change). FontImpl is read-only after construction, so aliasing is safe.
-    class SharedFontImpl : public p5cpp::FontImpl
+    // loadFont(path) caches by file path: repeated calls for the same file while a
+    // prior handle is still alive return a new lightweight Font aliasing the same
+    // parsed FontData instead of re-running FT_New_Face (see CLAUDE.md's "Resource
+    // loading" section).
+    std::unordered_map<std::string, std::weak_ptr<p5cpp::FontData>> s_fontCache;
+
+    // Appends any glyph atlas pages the rasterizer created since the last call (see
+    // FontData::glyphAtlasPages in font.hpp) - called after shape()/textToPoints(),
+    // the only two operations that can rasterize a glyph that doesn't fit yet.
+    void syncGlyphAtlasPages(p5cpp::FontData& data)
     {
-    public:
-        explicit SharedFontImpl(std::shared_ptr<p5cpp::FontImpl> shared) : m_shared(std::move(shared)) {}
-
-        const p5cpp::Glyph* getGlyph(char32_t codepoint, int textSize) override { return m_shared->getGlyph(codepoint, textSize); }
-        const p5cpp::FontMetrics* getMetrics(int textSize) override { return m_shared->getMetrics(textSize); }
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override { return m_shared->getKerning(leftCodepoint, rightCodepoint, textSize); }
-        const p5cpp::Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override { return m_shared->getGlyphAtlasTexture(glyphAtlasIndex); }
-        std::vector<p5cpp::ShapedGlyph> shape(std::string_view text, int textSize) override { return m_shared->shape(text, textSize); }
-        std::vector<p5cpp::TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, p5cpp::TextWrap wrap) override { return m_shared->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap); }
-
-    private:
-        std::shared_ptr<p5cpp::FontImpl> m_shared;
-    };
-
-    std::unordered_map<std::string, std::weak_ptr<p5cpp::FontImpl>> s_fontCache;
+        while (data.glyphAtlasPages.size() < data.rasterizer->pageCount()) {
+            data.glyphAtlasPages.push_back(*data.rasterizer->pageTexture(data.glyphAtlasPages.size()));
+        }
+    }
 } // namespace
 
 namespace p5cpp
 {
-    std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath)
+    Font loadFont(const std::filesystem::path& fontFilePath)
     {
         const std::string key = fontFilePath.string();
 
         if (const auto it = s_fontCache.find(key); it != s_fontCache.end()) {
-            if (std::shared_ptr<FontImpl> cached = it->second.lock()) {
-                return std::make_unique<SharedFontImpl>(std::move(cached));
+            if (std::shared_ptr<FontData> cached = it->second.lock()) {
+                return Font {std::move(cached)};
             }
         }
 
-        std::shared_ptr<FontImpl> fresh = FreetypeFont::loadFromFile(fontFilePath);
-        if (!fresh) {
-            return nullptr;
+        std::unique_ptr<detail::FontRasterizer> rasterizer = detail::FontRasterizer::loadFromFile(fontFilePath);
+        if (!rasterizer) {
+            return Font();
         }
 
-        s_fontCache[key] = fresh;
-        return std::make_unique<SharedFontImpl>(std::move(fresh));
+        auto data = std::make_shared<FontData>();
+        data->rasterizer = std::move(rasterizer);
+
+        s_fontCache[key] = data;
+        return Font {std::move(data)};
     }
 
-    std::unique_ptr<FontImpl> loadFont(std::span<const uint8_t> fontData)
+    Font loadFont(std::span<const uint8_t> fontData)
     {
-        return FreetypeFont::loadFromMemory(fontData);
-    }
-} // namespace p5cpp
+        std::unique_ptr<detail::FontRasterizer> rasterizer = detail::FontRasterizer::loadFromMemory(fontData);
+        if (!rasterizer) {
+            return Font();
+        }
 
-namespace p5cpp
-{
-    Font::Font()
-        : impl(nullptr)
-    {
-    }
+        auto data = std::make_shared<FontData>();
+        data->rasterizer = std::move(rasterizer);
 
-    Font::Font(std::unique_ptr<FontImpl> impl)
-        : impl(std::move(impl))
-    {
+        return Font {std::move(data)};
     }
 
-    Font::Font(std::shared_ptr<FontImpl> impl)
-        : impl(std::move(impl))
+    bool isFontValid(const Font& font)
     {
+        return font.data != nullptr;
     }
 
-    const Glyph* Font::getGlyph(char32_t codepoint, int textSize) const
+    const FontMetrics* getMetrics(const Font& font, int textSize)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getGlyph(codepoint, textSize);
+        assert(font.data != nullptr && "Font is not initialized.");
+        return font.data->rasterizer->getMetrics(textSize);
     }
 
-    const FontMetrics* Font::getMetrics(int textSize) const
+    const Texture* getGlyphAtlasTexture(const Font& font, size_t glyphAtlasIndex)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getMetrics(textSize);
+        assert(font.data != nullptr && "Font is not initialized.");
+        if (glyphAtlasIndex >= font.data->glyphAtlasPages.size()) {
+            return nullptr;
+        }
+        return &font.data->glyphAtlasPages[glyphAtlasIndex];
     }
 
-    float Font::getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const
+    std::vector<ShapedGlyph> shape(const Font& font, std::string_view text, int textSize)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getKerning(leftCodepoint, rightCodepoint, textSize);
+        assert(font.data != nullptr && "Font is not initialized.");
+        std::vector<ShapedGlyph> result = font.data->rasterizer->shape(text, textSize);
+        syncGlyphAtlasPages(*font.data);
+        return result;
     }
 
-    const Texture* Font::getGlyphAtlasTexture(size_t glyphAtlasIndex) const
+    std::vector<TextContour> textToPoints(const Font& font, std::string_view text, float x, float y, int textSize, int curveDetail, float spacing, float maxWidth, TextWrap wrap)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getGlyphAtlasTexture(glyphAtlasIndex);
-    }
-
-    std::vector<ShapedGlyph> Font::shape(std::string_view text, int textSize) const
-    {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->shape(text, textSize);
-    }
-
-    std::vector<TextContour> Font::textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float spacing, float maxWidth, TextWrap wrap) const
-    {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        std::vector<TextContour> contours = impl->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap);
+        assert(font.data != nullptr && "Font is not initialized.");
+        std::vector<TextContour> contours = font.data->rasterizer->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap);
+        syncGlyphAtlasPages(*font.data);
 
         if (spacing > 0.0f) {
             for (TextContour& contour : contours) {

@@ -12,7 +12,6 @@
 #include <p5cpp/graphics/blendmode.hpp>
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/graphics/font.hpp>
-#include <p5cpp/graphics/image.hpp>
 #include <p5cpp/graphics/mesh.hpp>
 #include <p5cpp/graphics/pixels.hpp>
 #include <p5cpp/graphics/render_group.hpp>
@@ -314,8 +313,8 @@ namespace p5cpp
 
     // Returns the outline of text(text, x, y[, maxWidth]) as a list of closed contours, using the
     // current textFont()/textSize()/textWrap()/textToPointsDetail()/textToPointsSpacing() state
-    // and the active transform, instead of drawing anything. See Font::textToPoints() for the
-    // point semantics.
+    // and the active transform, instead of drawing anything. See textToPoints(const Font&, ...)
+    // for the point semantics.
     std::vector<TextContour> textToPoints(std::string_view text, float x, float y);
     std::vector<TextContour> textToPoints(std::string_view text, float x, float y, float maxWidth);
 
@@ -327,6 +326,13 @@ namespace p5cpp
     // own isolated transform and fill/stroke state (starts at identity / sketch defaults,
     // independent of whatever is active at the call site); text()/background()/
     // pushCanvas()/popCanvas() are not supported inside buildFn.
+    //
+    // Ownership note: any Texture passed to image() or Shader passed to shader() while
+    // buildFn runs is recorded by id only, not kept alive. You must keep those textures/
+    // shaders loaded (not unload()ed) for as long as the returned RenderGroup - or any
+    // other group composed from it via drawRenderGroup() inside a later buildFn - might
+    // still be drawn. Unlike Texture/Framebuffer/Shader themselves, a RenderGroup has no
+    // unload() of its own; it's freed automatically once its last copy goes out of scope.
     RenderGroup buildRenderGroup(const std::function<void()>& buildFn);
 
     // Replays a RenderGroup's recorded geometry at the current transform (pushMatrix()/

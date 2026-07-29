@@ -47,6 +47,13 @@ namespace p5cpp
     void GraphicsModule::destroy(AppContext& context, Next next)
     {
         next();
+
+        // Must happen here, not in ~GraphicsComponent() - by the time GraphicsComponent
+        // is actually destructed (later, via ~GraphicsModule()'s unique_ptr, when
+        // AppEngine::modules is torn down), the GL context is already gone. This runs
+        // while still nested inside WindowModule::destroy()'s next() call, i.e. before
+        // its window.reset().
+        m_component->releaseGpuResources();
         context.unregisterService<GraphicsComponent>();
     }
 } // namespace p5cpp

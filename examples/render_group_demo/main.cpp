@@ -115,7 +115,7 @@ namespace
                 pixels[y * size + x] = light ? rgba(255, 230, 120, 255) : rgba(60, 40, 120, 255);
             }
         }
-        return Texture(loadTexture(size, size, pixels.data()));
+        return loadTexture(size, size, pixels.data());
     }
 } // namespace
 
@@ -129,7 +129,7 @@ public:
         frameRate(0); // uncapped, so the FPS counter reflects the actual per-frame cost
 
         checkerTexture = createCheckerTexture();
-        pulseShader = Shader(loadShader(pulseVSource, pulseFSource));
+        pulseShader = loadShader(pulseVSource, pulseFSource);
 
         blobGroup = buildRenderGroup([]() {
             drawBlobPolygon(0.0f);
@@ -239,6 +239,12 @@ public:
         textSize(16.0f);
         text(std::format("FPS: {}", getFrameRate()), 20.0f, 640.0f);
         text(std::format("Mode: {}  (Space to toggle)", immediateMode ? "immediate (rebuilds every frame)" : "cached RenderGroup"), 20.0f, 662.0f);
+    }
+
+    void destroy() override
+    {
+        unload(checkerTexture);
+        unload(pulseShader);
     }
 
 private:

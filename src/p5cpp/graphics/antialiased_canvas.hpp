@@ -26,15 +26,24 @@ namespace p5cpp
     public:
         explicit AntialiasedCanvas(uint32_t width, uint32_t height);
 
-        void resize(uint32_t width, uint32_t height);
+        // resize()/smooth()/noSmooth() return the framebuffer that was "active" (see
+        // activeFramebuffer()) immediately before the call, now orphaned - or an
+        // invalid (default-constructed) Framebuffer if there was nothing to hand back
+        // (e.g. the very first smooth() call). The caller owns unloading it, and must
+        // do so only *after* it has finished updating anything that might still
+        // reference the old active framebuffer (GraphicsComponent's canvas stack) -
+        // this class has no visibility into that, so it can't safely free it itself.
+        // Any framebuffer that becomes orphaned but was *not* the active one (e.g.
+        // m_default while smoothing is active) is freed immediately internally, since
+        // nothing outside this class can be referencing it.
+        [[nodiscard]] Framebuffer resize(uint32_t width, uint32_t height);
+        [[nodiscard]] Framebuffer smooth(uint32_t samples);
+        [[nodiscard]] Framebuffer noSmooth();
 
-        // Rebuilds the multisample target for `samples` (clamped to >=1, then to what the
-        // driver supports). Caller is responsible for resolving any pending content
-        // before switching sample counts and syncing after (see resolveToDefault()/
-        // syncFromDefault()), since that requires renderer/canvas-stack coordination this
-        // class doesn't have.
-        void smooth(uint32_t samples);
-        void noSmooth();
+        // Frees m_default/m_msaa. For use during shutdown only, once nothing (no
+        // canvas stack entry) can still be referencing either - see
+        // GraphicsComponent::releaseGpuResources().
+        void release();
 
         uint32_t samples() const { return m_samples; }
         bool isEnabled() const { return m_samples > 0; }
@@ -58,7 +67,9 @@ namespace p5cpp
         void syncFromDefault(NativeRenderer& renderer, UniformCache& uniformCache, const Shader& shader);
 
     private:
-        void rebuildMsaaFramebuffer();
+        // Returns the previous m_msaa (possibly invalid), same handoff contract as
+        // resize()/smooth()/noSmooth() above.
+        [[nodiscard]] Framebuffer rebuildMsaaFramebuffer();
 
         Framebuffer m_default;
         Framebuffer m_msaa;

@@ -201,8 +201,8 @@ struct TowerSketch : p5cpp::Sketch
     float lastShotBgT = -100.f; // for background shader ripple
 
     float bgTime = 0.f;
-    std::shared_ptr<ShaderImpl> bgShader;
-    std::shared_ptr<FramebufferImpl> bgCanvas;
+    Shader bgShader;
+    Framebuffer bgCanvas;
     std::mt19937 rng {std::random_device {}()};
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -213,11 +213,14 @@ struct TowerSketch : p5cpp::Sketch
         setWindowResizable(false);
         frameRate(60);
         buildBgShader();
-        bgCanvas = std::shared_ptr<FramebufferImpl>(createFramebuffer(W, H).release());
+        bgCanvas = createFramebuffer(W, H);
         initStars();
     }
 
-    void destroy() override {}
+    void destroy() override {
+        unload(bgShader);
+        unload(bgCanvas);
+    }
 
     void initStars()
     {
@@ -789,7 +792,7 @@ struct TowerSketch : p5cpp::Sketch
         popCanvas();
         blendMode(BlendMode::alpha);
         noTint();
-        image(*bgCanvas->getColorTexture(), 0, 0, (float)W, (float)H);
+        image(bgCanvas.colorTexture, 0, 0, (float)W, (float)H);
     }
 
     // ── drawGame ─────────────────────────────────────────────────────────────

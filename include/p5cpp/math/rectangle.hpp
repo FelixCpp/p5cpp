@@ -26,7 +26,6 @@ namespace p5cpp
         constexpr std::optional<rectangle<T>> intersection(const rectangle<T>& other) const;
 
         constexpr bool operator==(const rectangle<T>& other) const;
-        constexpr bool operator!=(const rectangle<T>& other) const;
 
         union
         {
@@ -79,5 +78,4 @@ namespace p5cpp
     }
 
     template <typename T> inline constexpr bool rectangle<T>::operator==(const rectangle<T>& other) const { return left == other.left and top == other.top and width == other.width and height == other.height; }
-    template <typename T> inline constexpr bool rectangle<T>::operator!=(const rectangle<T>& other) const { return not(*this == other); }
 } // namespace p5cpp
