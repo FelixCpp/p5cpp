@@ -89,5 +89,6 @@ add_library(
 )
 
 target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio harfbuzz stb)
-target_include_directories(p5cpp PUBLIC include src)
+target_include_directories(p5cpp PUBLIC include)
+target_include_directories(p5cpp PRIVATE src)
 add_subdirectory(examples)

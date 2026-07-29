@@ -1,4 +1,5 @@
 #include <p5cpp/graphics/pixels.hpp>
+#include <p5cpp/graphics/pixel_ops.hpp>
 
 #include <algorithm>
 #include <cassert>

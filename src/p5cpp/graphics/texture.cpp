@@ -1,5 +1,7 @@
 #include <p5cpp/graphics/texture.hpp>
 #include <p5cpp/graphics/framebuffer.hpp>
+#include <p5cpp/graphics/glyph_atlas_texture_factory.hpp>
+#include <p5cpp/graphics/pixel_ops.hpp>
 #include <p5cpp/application/logging.hpp>
 
 #include <glad/glad.h>
@@ -47,7 +49,7 @@ namespace p5cpp
 
     namespace detail
     {
-        Texture makeGlyphAtlasTexture(uint32_t width, uint32_t height)
+        Texture GlyphAtlasTextureFactory::make(uint32_t width, uint32_t height)
         {
             GLuint textureId = 0;
             glGenTextures(1, &textureId);

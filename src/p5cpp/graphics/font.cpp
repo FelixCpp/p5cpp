@@ -1,4 +1,5 @@
 #include <p5cpp/graphics/font.hpp>
+#include <p5cpp/graphics/glyph_atlas_texture_factory.hpp>
 #include <p5cpp/application/logging.hpp>
 
 #include <glad/glad.h>
@@ -177,7 +178,7 @@ namespace p5cpp
               m_height(height),
               m_paddingX(paddingX),
               m_paddingY(paddingY),
-              m_texture(detail::makeGlyphAtlasTexture(static_cast<uint32_t>(width), static_cast<uint32_t>(height))),
+              m_texture(detail::GlyphAtlasTextureFactory::make(static_cast<uint32_t>(width), static_cast<uint32_t>(height))),
               m_packingStrategy(std::make_unique<MaxRectsBinPacking>(width, height))
         {
         }

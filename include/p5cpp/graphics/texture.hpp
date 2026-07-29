@@ -35,8 +35,7 @@ namespace p5cpp
 
     // rgba8: regular 4-byte-per-pixel color texture (loadTexture()).
     // r8: single-channel 1-byte-per-pixel texture, used internally for the font glyph
-    // atlas (see detail::makeGlyphAtlasTexture()) - not expected to be created by sketch
-    // authors directly.
+    // atlas - not expected to be created by sketch authors directly.
     enum class TextureFormat {
         rgba8,
         r8,
@@ -48,9 +47,11 @@ namespace p5cpp
     {
         struct TextureResource;
 
-        // Zero-initialized single-channel (r8) atlas texture for Font's glyph atlas -
-        // internal use only, not part of the sketch-author API.
-        Texture makeGlyphAtlasTexture(uint32_t width, uint32_t height);
+        // Grants Font's glyph atlas (src/p5cpp/graphics/glyph_atlas_texture_factory.hpp,
+        // .cpp-only) access to Texture's private constructor. Forward-declared here only
+        // as an opaque name for the friend statement below - its interface is never
+        // defined in a public header, so it isn't part of the sketch-author API.
+        class GlyphAtlasTextureFactory;
     }
 
     // See Texture::upload() — `data` must already be in bottom-to-top row order.
@@ -102,7 +103,7 @@ namespace p5cpp
         explicit Texture(std::shared_ptr<detail::TextureResource> resource, uint2 size, TextureFormat format);
 
         friend Texture loadTexture(uint32_t width, uint32_t height, const color_t* data);
-        friend Texture detail::makeGlyphAtlasTexture(uint32_t width, uint32_t height);
+        friend class detail::GlyphAtlasTextureFactory;
 
         std::shared_ptr<detail::TextureResource> m_resource;
         uint2 m_size;
