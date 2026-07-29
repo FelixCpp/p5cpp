@@ -354,7 +354,7 @@ namespace p5cpp
                 case UniformVariable::Type::float4:
                     return a.float4Value.x == b.float4Value.x and a.float4Value.y == b.float4Value.y and a.float4Value.z == b.float4Value.z and a.float4Value.w == b.float4Value.w;
                 case UniformVariable::Type::matrix4x4:
-                    return std::memcmp(a.matrix4x4Value.data(), b.matrix4x4Value.data(), 16 * sizeof(float)) == 0;
+                    return std::memcmp(a.matrix4x4Value.elements.data(), b.matrix4x4Value.elements.data(), 16 * sizeof(float)) == 0;
                 case UniformVariable::Type::texture:
                     return a.textureValue == b.textureValue;
             }
@@ -394,7 +394,7 @@ namespace p5cpp
                     glUniform4f(location.value, variable.float4Value.x, variable.float4Value.y, variable.float4Value.z, variable.float4Value.w);
                     break;
                 case UniformVariable::Type::matrix4x4:
-                    glUniformMatrix4fv(location.value, 1, GL_FALSE, variable.matrix4x4Value.data());
+                    glUniformMatrix4fv(location.value, 1, GL_FALSE, variable.matrix4x4Value.elements.data());
                     break;
                 case UniformVariable::Type::texture:
                     break;

@@ -67,7 +67,7 @@ public:
         timeAlive += deltaTime;
 
         velocity += acceleration * deltaTime;
-        velocity = velocity.limited(maxSpeed);
+        velocity = limited(velocity, maxSpeed);
 
         position += velocity * deltaTime;
         acceleration = float2(0.0f, 0.0f);
@@ -155,17 +155,17 @@ private:
     float2 seek(float2 target)
     {
         float2 desired = target - position;
-        desired = desired.normalized() * maxSpeed;
+        desired = normalized(desired) * maxSpeed;
 
         float2 steer = desired - velocity;
-        steer = steer.limited(maxForce);
+        steer = limited(steer, maxForce);
 
         return steer;
     }
 
     bool consume(std::vector<float2>& targets, size_t index)
     {
-        const float distance = (targets[index] - position).length();
+        const float distance = length(targets[index] - position);
         if (distance < size) {
             targets.erase(targets.begin() + index);
             return true;
@@ -180,7 +180,7 @@ private:
         float closestDistance = FLT_MAX;
 
         for (size_t i = 0; i < targets.size(); ++i) {
-            const float distance = (targets[i] - position).length();
+            const float distance = length(targets[i] - position);
             if (distance > viewRadius) {
                 continue;
             }

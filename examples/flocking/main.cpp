@@ -38,12 +38,12 @@ struct Boid
 
     float2 steer(const float2& desired) const
     {
-        return (desired.normalized() * maxVelocityStrength - velocity).limited(maxAccelerationStrength);
+        return limited(normalized(desired) * maxVelocityStrength - velocity, maxAccelerationStrength);
     }
 
     void update(float deltaTime)
     {
-        velocity = (velocity + acceleration * deltaTime).limited(maxVelocityStrength);
+        velocity = limited(velocity + acceleration * deltaTime, maxVelocityStrength);
         position += velocity * deltaTime;
         acceleration *= 0.0f;
     }
@@ -120,7 +120,7 @@ struct SeparationBehavior : MovementBehavior
 
         for (const Boid* neighbor : neighbors) {
             float2 diff = boid.position - neighbor->position;
-            float distance = diff.length();
+            float distance = length(diff);
 
             if (distance > 0.0f) {
                 diff /= distance;
@@ -210,7 +210,7 @@ struct QuadTree
 
     bool insert(float x, float y, void* userData)
     {
-        if (not boundary.contains(x, y)) {
+        if (not contains(boundary, x, y)) {
             return false;
         }
 
@@ -354,10 +354,10 @@ struct FlockingSimulation : Sketch
         for (Boid& boid : boids) {
             float2 mousePos(static_cast<float>(getMouseX()), static_cast<float>(getMouseY()));
             float2 diff = boid.position - mousePos;
-            float distance = diff.length();
+            float distance = length(diff);
 
             if (distance < mouseAvoidanceRadius && distance > 0.0f) {
-                float2 avoidanceForce = diff.normalized() * (mouseAvoidanceStrength * (1.0f - distance / mouseAvoidanceRadius));
+                float2 avoidanceForce = normalized(diff) * (mouseAvoidanceStrength * (1.0f - distance / mouseAvoidanceRadius));
                 boid.applyForce(avoidanceForce);
             }
         }

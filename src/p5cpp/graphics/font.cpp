@@ -1166,7 +1166,7 @@ namespace p5cpp
         std::vector<float> edgeLengths(n);
         float perimeter = 0.0f;
         for (size_t i = 0; i < n; ++i) {
-            edgeLengths[i] = (contour[(i + 1) % n] - contour[i]).length();
+            edgeLengths[i] = length(contour[(i + 1) % n] - contour[i]);
             perimeter += edgeLengths[i];
         }
 
@@ -1197,7 +1197,7 @@ namespace p5cpp
 
             const float edgeLen = edgeLengths[edgeIndex];
             const float t = edgeLen > 0.0f ? (targetDist - edgeStart) / edgeLen : 0.0f;
-            result.push_back(contour[edgeIndex].lerp(contour[(edgeIndex + 1) % n], t));
+            result.push_back(lerp(contour[edgeIndex], contour[(edgeIndex + 1) % n], t));
         }
 
         return result;

@@ -162,7 +162,7 @@ struct GalaxySketch : Sketch
                 const float speed = randomFloat(100.f, 320.f);
                 const float life = randomFloat(1.2f, 3.0f);
                 float2 dir = float2::fromAngle(angle);
-                float2 vel = dir * speed + dir.perpendicular() * randomFloat(-80.f, 80.f);
+                float2 vel = dir * speed + perpendicular(dir) * randomFloat(-80.f, 80.f);
                 vel.y -= randomFloat(10.f, 40.f); // slight upward bias
                 particles.push_back({
                     .pos = worldMouse + dir * randomFloat(0.f, 20.f),

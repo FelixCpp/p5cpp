@@ -377,7 +377,7 @@ namespace
                     if (otherParticle == &particle) continue;
 
                     const float2 direction = particle.position - otherParticle->position;
-                    const float distanceSquared = direction.lengthSquared();
+                    const float distanceSquared = lengthSquared(direction);
                     const float minDistance = 50.0f;
                     const float minDistanceSquared = minDistance * minDistance;
 
@@ -408,7 +408,7 @@ namespace
                     Particle* otherParticle = point.userData;
                     if (otherParticle == &particle) continue;
 
-                    const float distance = (particle.position - otherParticle->position).length();
+                    const float distance = length(particle.position - otherParticle->position);
                     if (distance > queryRadius) continue;
 
                     const float alpha = 1.0f - (distance / queryRadius);

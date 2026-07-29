@@ -6,26 +6,14 @@
 
 namespace p5cpp
 {
-    class matrix4x4
+    struct matrix4x4
     {
-    public:
         constexpr matrix4x4(
             float m00, float m01, float m02, float m03,
             float m10, float m11, float m12, float m13,
             float m20, float m21, float m22, float m23,
             float m30, float m31, float m32, float m33
         );
-
-        void translate(float x, float y);
-        void scale(float x, float y);
-        void rotate(float radians);
-
-        constexpr const float* data() const;
-
-        constexpr float2 transformPoint(float x, float y) const;
-
-        constexpr matrix4x4 operator*(const matrix4x4& other) const;
-        matrix4x4& operator*=(const matrix4x4& other);
 
         static constexpr matrix4x4 translation(float x, float y);
         static constexpr matrix4x4 scaling(float x, float y);
@@ -37,9 +25,17 @@ namespace p5cpp
 
         static const matrix4x4 identity;
 
-    private:
-        std::array<float, 16> m;
+        std::array<float, 16> elements;
     };
+
+    constexpr float2 transformPoint(const matrix4x4& m, float x, float y);
+
+    matrix4x4 translate(const matrix4x4& m, float x, float y);
+    matrix4x4 scale(const matrix4x4& m, float x, float y);
+    matrix4x4 rotate(const matrix4x4& m, float radians);
+
+    constexpr matrix4x4 operator*(const matrix4x4& a, const matrix4x4& b);
+    matrix4x4& operator*=(matrix4x4& a, const matrix4x4& b);
 } // namespace p5cpp
 
 namespace p5cpp
@@ -50,7 +46,7 @@ namespace p5cpp
         float m20, float m21, float m22, float m23,
         float m30, float m31, float m32, float m33
     )
-        : m {
+        : elements {
               // clang-format off
             m00, m01, m02, m03,
             m10, m11, m12, m13,
@@ -61,30 +57,25 @@ namespace p5cpp
     {
     }
 
-    inline constexpr const float* matrix4x4::data() const
-    {
-        return m.data();
-    }
-
-    inline constexpr float2 matrix4x4::transformPoint(float x, float y) const
+    inline constexpr float2 transformPoint(const matrix4x4& m, float x, float y)
     {
         return {
-            m[0] * x + m[4] * y + m[12],
-            m[1] * x + m[5] * y + m[13],
+            m.elements[0] * x + m.elements[4] * y + m.elements[12],
+            m.elements[1] * x + m.elements[5] * y + m.elements[13],
         };
     }
 
-    inline constexpr matrix4x4 matrix4x4::operator*(const matrix4x4& other) const
+    inline constexpr matrix4x4 operator*(const matrix4x4& a, const matrix4x4& b)
     {
         matrix4x4 result = matrix4x4::identity;
 
         for (int row = 0; row < 4; ++row) {
             for (int col = 0; col < 4; ++col) {
-                result.m[row * 4 + col] =
-                    m[row * 4 + 0] * other.m[0 * 4 + col] +
-                    m[row * 4 + 1] * other.m[1 * 4 + col] +
-                    m[row * 4 + 2] * other.m[2 * 4 + col] +
-                    m[row * 4 + 3] * other.m[3 * 4 + col];
+                result.elements[row * 4 + col] =
+                    a.elements[row * 4 + 0] * b.elements[0 * 4 + col] +
+                    a.elements[row * 4 + 1] * b.elements[1 * 4 + col] +
+                    a.elements[row * 4 + 2] * b.elements[2 * 4 + col] +
+                    a.elements[row * 4 + 3] * b.elements[3 * 4 + col];
             }
         }
 

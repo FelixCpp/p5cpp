@@ -712,10 +712,10 @@ namespace p5cpp
         const RenderState& rs = peekRenderState();
         const matrix4x4& mtx = peekMatrix();
 
-        const float2 p0 = mtx.transformPoint(left, top);
-        const float2 p1 = mtx.transformPoint(left + w, top);
-        const float2 p2 = mtx.transformPoint(left + w, top + h);
-        const float2 p3 = mtx.transformPoint(left, top + h);
+        const float2 p0 = transformPoint(mtx, left, top);
+        const float2 p1 = transformPoint(mtx, left + w, top);
+        const float2 p2 = transformPoint(mtx, left + w, top + h);
+        const float2 p3 = transformPoint(mtx, left, top + h);
 
         const float2 positions[4] = {p0, p1, p2, p3};
         const float2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
@@ -749,7 +749,7 @@ namespace p5cpp
                 const float sinQ = quarterCircle[i].y;
                 const float cosA = cosStart * cosQ - sinStart * sinQ;
                 const float sinA = sinStart * cosQ + cosStart * sinQ;
-                m_roundedRectPositions.push_back(mtx.transformPoint(cx + cosA * rx, cy + sinA * ry));
+                m_roundedRectPositions.push_back(transformPoint(mtx, cx + cosA * rx, cy + sinA * ry));
             }
         };
 
@@ -787,13 +787,13 @@ namespace p5cpp
         m_ellipseFanPositions.resize(fanCount);
         m_ellipseFanUVs.resize(fanCount);
 
-        m_ellipseFanPositions[0] = mtx.transformPoint(cx, cy);
+        m_ellipseFanPositions[0] = transformPoint(mtx, cx, cy);
         m_ellipseFanUVs[0] = {0.5f, 0.5f};
 
         for (size_t i = 0; i <= segments; ++i) {
             const float cosA = unitCircle[i].x;
             const float sinA = unitCircle[i].y;
-            m_ellipseFanPositions[1 + i] = mtx.transformPoint(cx + cosA * rx, cy + sinA * ry);
+            m_ellipseFanPositions[1 + i] = transformPoint(mtx, cx + cosA * rx, cy + sinA * ry);
             m_ellipseFanUVs[1 + i] = {0.5f + 0.5f * cosA, 0.5f + 0.5f * sinA};
         }
 
@@ -820,9 +820,9 @@ namespace p5cpp
         const matrix4x4& mtx = peekMatrix();
 
         const float2 positions[3] = {
-            mtx.transformPoint(x1, y1),
-            mtx.transformPoint(x2, y2),
-            mtx.transformPoint(x3, y3),
+            transformPoint(mtx, x1, y1),
+            transformPoint(mtx, x2, y2),
+            transformPoint(mtx, x3, y3),
         };
         const float2 uvs[3] = {float2::zero, float2::zero, float2::zero};
 
@@ -844,7 +844,7 @@ namespace p5cpp
 
         const float halfSize = rs.strokeWeight * 0.5f;
         const matrix4x4& mtx = peekMatrix();
-        const float2 center = mtx.transformPoint(px, py);
+        const float2 center = transformPoint(mtx, px, py);
 
         if (rs.strokeCap.start == StrokeCapStyle::round) {
             const size_t segments = computeCircleSegmentCount(TWO_PI, halfSize);
@@ -879,7 +879,7 @@ namespace p5cpp
         if (rs.isStrokeDisabled) return;
 
         const matrix4x4& mtx = peekMatrix();
-        const float2 positions[2] = {mtx.transformPoint(x1, y1), mtx.transformPoint(x2, y2)};
+        const float2 positions[2] = {transformPoint(mtx, x1, y1), transformPoint(mtx, x2, y2)};
         const float2 uvs[2] = {float2::zero, float2::zero};
         const color_t colors[2] = {rs.strokeColor, rs.strokeColor};
 
@@ -900,10 +900,10 @@ namespace p5cpp
         for (size_t i = 0; i <= segments; ++i) {
             const float t = static_cast<float>(i) / static_cast<float>(segments);
             const float angle = startAngle + sweepAngle * t;
-            m_arcPositions[i] = mtx.transformPoint(cx + std::cos(angle) * rx, cy + std::sin(angle) * ry);
+            m_arcPositions[i] = transformPoint(mtx, cx + std::cos(angle) * rx, cy + std::sin(angle) * ry);
         }
 
-        const float2 centerPos = mtx.transformPoint(cx, cy);
+        const float2 centerPos = transformPoint(mtx, cx, cy);
 
         if (!rs.isFillDisabled) {
             m_arcFillPositions.clear();
@@ -963,7 +963,7 @@ namespace p5cpp
             const float t3 = t2 * t;
             const float bx = mt3 * x1 + 3.0f * mt2 * t * x2 + 3.0f * mt * t2 * x3 + t3 * x4;
             const float by = mt3 * y1 + 3.0f * mt2 * t * y2 + 3.0f * mt * t2 * y3 + t3 * y4;
-            m_curvePositions[j] = mtx.transformPoint(bx, by);
+            m_curvePositions[j] = transformPoint(mtx, bx, by);
         }
 
         submitStroke(PathPoints {count, m_curvePositions, m_curveUVs, m_curveColors}, ShapeType::lineStrip, false);
@@ -990,7 +990,7 @@ namespace p5cpp
             const float t3 = t2 * t;
             const float bx = alpha * ((-x1 + 3.0f * x2 - 3.0f * x3 + x4) * t3 + (2.0f * x1 - 5.0f * x2 + 4.0f * x3 - x4) * t2 + (-x1 + x3) * t) + x2;
             const float by = alpha * ((-y1 + 3.0f * y2 - 3.0f * y3 + y4) * t3 + (2.0f * y1 - 5.0f * y2 + 4.0f * y3 - y4) * t2 + (-y1 + y3) * t) + y2;
-            m_curvePositions[j] = mtx.transformPoint(bx, by);
+            m_curvePositions[j] = transformPoint(mtx, bx, by);
         }
 
         submitStroke(PathPoints {count, m_curvePositions, m_curveUVs, m_curveColors}, ShapeType::lineStrip, false);
@@ -1007,10 +1007,10 @@ namespace p5cpp
 
         // Texture v-origin is bottom (GL row order, see TextureImpl::upload()), so the
         // top edge of the destination rect samples v=1 and the bottom edge samples v=0.
-        writer.pushVertex(mtx.transformPoint(left, top), {0.0f, 1.0f}, tint);
-        writer.pushVertex(mtx.transformPoint(left + w, top), {1.0f, 1.0f}, tint);
-        writer.pushVertex(mtx.transformPoint(left + w, top + h), {1.0f, 0.0f}, tint);
-        writer.pushVertex(mtx.transformPoint(left, top + h), {0.0f, 0.0f}, tint);
+        writer.pushVertex(transformPoint(mtx, left, top), {0.0f, 1.0f}, tint);
+        writer.pushVertex(transformPoint(mtx, left + w, top), {1.0f, 1.0f}, tint);
+        writer.pushVertex(transformPoint(mtx, left + w, top + h), {1.0f, 0.0f}, tint);
+        writer.pushVertex(transformPoint(mtx, left, top + h), {0.0f, 0.0f}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
@@ -1051,10 +1051,10 @@ namespace p5cpp
         DrawBufferWriter& writer = beginDrawOp();
         const uint32_t base = writer.getRelativeCursor();
 
-        writer.pushVertex(mtx.transformPoint(left, top), {u0, v0}, tint);
-        writer.pushVertex(mtx.transformPoint(left + w, top), {u1, v0}, tint);
-        writer.pushVertex(mtx.transformPoint(left + w, top + h), {u1, v1}, tint);
-        writer.pushVertex(mtx.transformPoint(left, top + h), {u0, v1}, tint);
+        writer.pushVertex(transformPoint(mtx, left, top), {u0, v0}, tint);
+        writer.pushVertex(transformPoint(mtx, left + w, top), {u1, v0}, tint);
+        writer.pushVertex(transformPoint(mtx, left + w, top + h), {u1, v1}, tint);
+        writer.pushVertex(transformPoint(mtx, left, top + h), {u0, v1}, tint);
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
@@ -1143,10 +1143,10 @@ namespace p5cpp
                         DrawBufferWriter& writer = beginDrawOp();
                         const uint32_t base = writer.getRelativeCursor();
 
-                        writer.pushVertex(mtx.transformPoint(gLeft, gTop), {u0, v0}, fillColor);
-                        writer.pushVertex(mtx.transformPoint(gLeft + gW, gTop), {u1, v0}, fillColor);
-                        writer.pushVertex(mtx.transformPoint(gLeft + gW, gTop + gH), {u1, v1}, fillColor);
-                        writer.pushVertex(mtx.transformPoint(gLeft, gTop + gH), {u0, v1}, fillColor);
+                        writer.pushVertex(transformPoint(mtx, gLeft, gTop), {u0, v0}, fillColor);
+                        writer.pushVertex(transformPoint(mtx, gLeft + gW, gTop), {u1, v0}, fillColor);
+                        writer.pushVertex(transformPoint(mtx, gLeft + gW, gTop + gH), {u1, v1}, fillColor);
+                        writer.pushVertex(transformPoint(mtx, gLeft, gTop + gH), {u0, v1}, fillColor);
                         writer.pushTriangle(base + 0, base + 1, base + 2);
                         writer.pushTriangle(base + 0, base + 2, base + 3);
 
@@ -1256,7 +1256,7 @@ namespace p5cpp
         const matrix4x4& mtx = peekMatrix();
         for (TextContour& contour : contours) {
             for (float2& p : contour) {
-                p = mtx.transformPoint(p.x, p.y);
+                p = transformPoint(mtx, p.x, p.y);
             }
         }
 
@@ -1300,7 +1300,7 @@ namespace p5cpp
 
         const RenderState& renderState = peekRenderState();
         const matrix4x4& matrix = peekMatrix();
-        const float2 transformedPosition = matrix.transformPoint(x, y);
+        const float2 transformedPosition = transformPoint(matrix, x, y);
 
         m_drawPointPositions[m_drawPointCount] = transformedPosition;
         m_drawPointTexCoords[m_drawPointCount] = float2 {u, v};
@@ -1385,7 +1385,7 @@ namespace p5cpp
             const uint32_t base = writer.getRelativeCursor();
 
             for (const RecordedVertex& v : op.vertices) {
-                writer.pushVertex(mtx.transformPoint(v.position.x, v.position.y), v.texcoord, v.color);
+                writer.pushVertex(transformPoint(mtx, v.position.x, v.position.y), v.texcoord, v.color);
             }
 
             for (size_t i = 0; i + 2 < op.indices.size(); i += 3) {

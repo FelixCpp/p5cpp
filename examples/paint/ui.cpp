@@ -67,7 +67,7 @@ namespace
 
     void drawButton(float_rect r, const std::string& label, bool active, float mouseX, float mouseY)
     {
-        const bool hovering = r.contains(mouseX, mouseY);
+        const bool hovering = contains(r, mouseX, mouseY);
         noStroke();
         fill(active ? rgba(90, 140, 220) : (hovering ? rgba(72, 72, 78) : rgba(56, 56, 60)));
         rect(r.left, r.top, r.width, r.height, BorderRadius::circular(6.0f));
@@ -98,7 +98,7 @@ namespace
             const float_rect r {10.0f, y, TOOLBAR_WIDTH - 20.0f, 42.0f};
             drawButton(r, toolLabel(tool), tool == ctx.tool, mouseX, mouseY);
 
-            if (r.contains(mouseX, mouseY) and isMousePressed(MouseButton::left) and tool != ctx.tool) {
+            if (contains(r, mouseX, mouseY) and isMousePressed(MouseButton::left) and tool != ctx.tool) {
                 ctx.tool = tool;
                 changed = true;
             }
@@ -120,7 +120,7 @@ namespace
         noTint();
         image(ui.hueStripTexture, hueRect.left, hueRect.top, hueRect.width, hueRect.height);
 
-        if (hueRect.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+        if (contains(hueRect, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
             ui.draggingHue = true;
         }
         if (ui.draggingHue) {
@@ -148,7 +148,7 @@ namespace
         noTint();
         image(ui.svSquareTexture, svRect.left, svRect.top, svRect.width, svRect.height);
 
-        if (svRect.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+        if (contains(svRect, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
             ui.draggingSv = true;
         }
         if (ui.draggingSv) {
@@ -187,7 +187,7 @@ namespace
         rect(primarySwatch.left, primarySwatch.top, primarySwatch.width, primarySwatch.height);
 
         drawButton(swapButton, "<>", false, mouseX, mouseY);
-        if (swapButton.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+        if (contains(swapButton, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
             std::swap(ctx.primaryColor, ctx.secondaryColor);
             rgbToHsv(ctx.primaryColor, ui.hue, ui.saturation, ui.value);
         }
@@ -213,7 +213,7 @@ namespace
             fill(kPresets[i]);
             rect(r.left, r.top, r.width, r.height);
 
-            if (r.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+            if (contains(r, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
                 ctx.primaryColor = kPresets[i];
                 rgbToHsv(ctx.primaryColor, ui.hue, ui.saturation, ui.value);
             }
@@ -239,7 +239,7 @@ namespace
         fill(90, 140, 220);
         circle(sliderRect.left + t * sliderRect.width, sliderRect.top + sliderRect.height * 0.5f, 10.0f);
 
-        if (sliderRect.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+        if (contains(sliderRect, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
             ui.draggingBrushSlider = true;
         }
         if (ui.draggingBrushSlider) {
@@ -283,9 +283,9 @@ namespace
             textSize(13.0f);
             text(layers[i].name, rowRect.left + 30.0f, rowRect.top + rowRect.height * 0.5f, rowRect.width - 34.0f);
 
-            if (visibilityRect.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+            if (contains(visibilityRect, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
                 layers[i].visible = not layers[i].visible;
-            } else if (rowRect.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+            } else if (contains(rowRect, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
                 ctx.canvas.setActiveLayerIndex(i);
             }
 
@@ -301,7 +301,7 @@ namespace
             const float_rect r {panelX + static_cast<float>(i) * (buttonWidth + buttonGap), buttonY, buttonWidth, 28.0f};
             drawButton(r, kLabels[i], false, mouseX, mouseY);
 
-            if (r.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+            if (contains(r, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
                 const size_t active = ctx.canvas.activeLayerIndex();
                 ctx.history.push(ctx.canvas.captureState());
                 switch (i) {
@@ -329,7 +329,7 @@ namespace
         fill(90, 140, 220);
         circle(opacityRect.left + activeLayer.opacity * opacityRect.width, opacityRect.top + opacityRect.height * 0.5f, 10.0f);
 
-        if (opacityRect.contains(mouseX, mouseY) and isMousePressed(MouseButton::left)) {
+        if (contains(opacityRect, mouseX, mouseY) and isMousePressed(MouseButton::left)) {
             ui.draggingOpacity = true;
         }
         if (ui.draggingOpacity) {
