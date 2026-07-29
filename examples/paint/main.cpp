@@ -120,7 +120,7 @@ namespace
 
             if (ctrlHeld and windowEvent.keyEvent.key == Key::s) {
                 Framebuffer flattened = canvas.flattenToFramebuffer();
-                saveImage("painting.png", flattened);
+                saveTexture("painting.png", flattened);
                 info("Paint: saved painting.png");
                 return;
             }

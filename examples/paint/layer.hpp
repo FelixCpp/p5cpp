@@ -77,7 +77,7 @@ namespace paint
         void compositeToScreen() const;
 
         // Flattens all visible layers (respecting opacity) into a fresh
-        // Framebuffer at canvas resolution, e.g. for saveImage().
+        // Framebuffer at canvas resolution, e.g. for saveTexture().
         p5cpp::Framebuffer flattenToFramebuffer() const;
 
         HistoryState captureState() const;

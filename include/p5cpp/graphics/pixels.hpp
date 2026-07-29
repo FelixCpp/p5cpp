@@ -3,6 +3,7 @@
 #include <p5cpp/graphics/color.hpp>
 #include <p5cpp/math/value2.hpp>
 
+#include <span>
 #include <vector>
 
 namespace p5cpp
@@ -41,4 +42,14 @@ namespace p5cpp
         uint32_t m_height;
         std::vector<color_t> m_data;
     };
+
+    namespace detail
+    {
+        // Reverses row order of a width*height color buffer - converts between OpenGL's
+        // bottom-to-top texture/framebuffer row order and Pixels' top-left-origin
+        // convention (used by both directions: reading GL data into a Pixels, and
+        // writing a Pixels' data back via Texture::upload()/Framebuffer::writePixels()).
+        // Self-inverse: applying it twice returns the original row order.
+        std::vector<color_t> flipRows(std::span<const color_t> src, uint32_t width, uint32_t height);
+    }
 } // namespace p5cpp

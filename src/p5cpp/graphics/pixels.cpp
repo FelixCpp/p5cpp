@@ -1,5 +1,6 @@
 #include <p5cpp/graphics/pixels.hpp>
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <utility>
@@ -41,3 +42,17 @@ namespace p5cpp
     std::vector<color_t>::const_iterator Pixels::begin() const { return m_data.begin(); }
     std::vector<color_t>::const_iterator Pixels::end() const { return m_data.end(); }
 } // namespace p5cpp
+
+namespace p5cpp::detail
+{
+    std::vector<color_t> flipRows(std::span<const color_t> src, uint32_t width, uint32_t height)
+    {
+        std::vector<color_t> flipped(src.size());
+        for (uint32_t y = 0; y < height; ++y) {
+            const size_t srcRow = static_cast<size_t>(height - 1 - y) * width;
+            const size_t dstRow = static_cast<size_t>(y) * width;
+            std::copy_n(src.begin() + static_cast<ptrdiff_t>(srcRow), width, flipped.begin() + static_cast<ptrdiff_t>(dstRow));
+        }
+        return flipped;
+    }
+} // namespace p5cpp::detail

@@ -12,7 +12,7 @@ struct MosaicImage : Sketch
         setWindowSize(800, 600);
         setWindowResizable(false);
 
-        frog = loadImage("example_assets/beach.png");
+        frog = loadTexture("example_assets/beach.png");
         offscreenFrog = createFramebuffer(frog.getSize().x, frog.getSize().y);
 
         pushCanvas(offscreenFrog);

@@ -125,10 +125,6 @@ namespace p5cpp
         void drawRenderGroup(const RenderGroup& group);
 
     private:
-        // Framebuffer::readPixels()/writePixels() use raw bottom-to-top GL row order;
-        // Pixels exposes top-left origin like the rest of the API. This flips between them.
-        static std::vector<color_t> flipRows(std::span<const color_t> src, uint32_t width, uint32_t height);
-
         void endShapeImpl(ShapeType type, bool close, const RenderState& renderState);
 
         // Swaps whichever canvas beginFrame() would push (m_canvas.activeFramebuffer())

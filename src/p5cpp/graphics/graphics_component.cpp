@@ -375,17 +375,6 @@ namespace p5cpp
         return m_framebufferStack.back().getSize();
     }
 
-    std::vector<color_t> GraphicsComponent::flipRows(std::span<const color_t> src, uint32_t width, uint32_t height)
-    {
-        std::vector<color_t> flipped(src.size());
-        for (uint32_t y = 0; y < height; ++y) {
-            const size_t srcRow = static_cast<size_t>(height - 1 - y) * width;
-            const size_t dstRow = static_cast<size_t>(y) * width;
-            std::copy_n(src.begin() + static_cast<ptrdiff_t>(srcRow), width, flipped.begin() + static_cast<ptrdiff_t>(dstRow));
-        }
-        return flipped;
-    }
-
     Pixels GraphicsComponent::loadPixels()
     {
         if (m_framebufferStack.empty()) {
@@ -400,12 +389,12 @@ namespace p5cpp
             resolveMsaaToDefaultFramebuffer();
             const Framebuffer& resolved = m_canvas.defaultFramebuffer();
             const uint2 size = resolved.getSize();
-            return Pixels(size.x, size.y, flipRows(resolved.readPixels(), size.x, size.y));
+            return Pixels(size.x, size.y, detail::flipRows(resolved.readPixels(), size.x, size.y));
         }
 
         const Framebuffer& framebuffer = m_framebufferStack.back();
         const uint2 size = framebuffer.getSize();
-        return Pixels(size.x, size.y, flipRows(framebuffer.readPixels(), size.x, size.y));
+        return Pixels(size.x, size.y, detail::flipRows(framebuffer.readPixels(), size.x, size.y));
     }
 
     void GraphicsComponent::updatePixels(const Pixels& pixels)
@@ -421,12 +410,12 @@ namespace p5cpp
         m_renderer->flush();
 
         if (m_canvas.isMsaaFramebuffer(framebuffer)) {
-            m_canvas.defaultFramebuffer().writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+            m_canvas.defaultFramebuffer().writePixels(detail::flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
             syncMsaaFromDefaultFramebuffer();
             return;
         }
 
-        framebuffer.writePixels(flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+        framebuffer.writePixels(detail::flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
     }
 
     MatrixStack& GraphicsComponent::activeMatrixStack()

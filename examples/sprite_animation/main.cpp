@@ -6,7 +6,7 @@
 // overload (image(texture, dx, dy, dWidth, dHeight, sx, sy, sWidth, sHeight)),
 // the building block for sprite sheet / character animation. Since we don't
 // ship a sprite sheet asset, one is generated procedurally on an offscreen
-// canvas in setup() — swap buildSpriteSheet() for loadImage("sheet.png") to
+// canvas in setup() — swap buildSpriteSheet() for loadTexture("sheet.png") to
 // use a real asset instead.
 namespace
 {

@@ -6,7 +6,7 @@
 #include <stb_image.h>
 #include <stb_image_write.h>
 
-#include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <vector>
 
@@ -134,11 +134,40 @@ namespace p5cpp
         glTexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat, GL_UNSIGNED_BYTE, rawBytes.data());
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+
+    Pixels Texture::loadPixels() const
+    {
+        if (!m_resource || m_format != TextureFormat::rgba8) {
+            return Pixels();
+        }
+
+        std::vector<color_t> raw(static_cast<size_t>(m_size.x) * static_cast<size_t>(m_size.y));
+
+        glBindTexture(GL_TEXTURE_2D, m_resource->id);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, raw.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        // GL row order is bottom-to-top; Pixels is top-left-origin.
+        return Pixels(m_size.x, m_size.y, detail::flipRows(raw, m_size.x, m_size.y));
+    }
+
+    void Texture::updatePixels(const Pixels& pixels)
+    {
+        if (!m_resource || m_format != TextureFormat::rgba8) {
+            return;
+        }
+
+        assert(pixels.getSize() == m_size);
+
+        // Pixels is top-left-origin; GL row order is bottom-to-top (matches upload()).
+        upload(detail::flipRows(std::span<const color_t>(pixels.data(), pixels.size()), m_size.x, m_size.y));
+    }
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    Texture loadImage(const std::filesystem::path& imageFilePath)
+    Texture loadTexture(const std::filesystem::path& imageFilePath)
     {
         int width = 0;
         int height = 0;
@@ -160,7 +189,7 @@ namespace p5cpp
         return texture;
     }
 
-    Texture loadImage(std::span<const uint8_t> imageData)
+    Texture loadTexture(std::span<const uint8_t> imageData)
     {
         int width = 0;
         int height = 0;
@@ -179,24 +208,18 @@ namespace p5cpp
         return texture;
     }
 
-    bool saveImage(const std::filesystem::path& imageFilePath, const Framebuffer& framebuffer)
+    bool saveTexture(const std::filesystem::path& imageFilePath, const Framebuffer& framebuffer)
     {
         const uint2 size = framebuffer.getSize();
-        std::vector<color_t> pixels = framebuffer.readPixels();
 
         // readPixels() returns rows bottom-to-top (raw GL order); PNG rows are
         // top-to-bottom, so flip before encoding.
-        std::vector<color_t> flipped(pixels.size());
-        for (uint32_t y = 0; y < size.y; ++y) {
-            const size_t srcRow = static_cast<size_t>(size.y - 1 - y) * size.x;
-            const size_t dstRow = static_cast<size_t>(y) * size.x;
-            std::copy_n(pixels.begin() + static_cast<ptrdiff_t>(srcRow), size.x, flipped.begin() + static_cast<ptrdiff_t>(dstRow));
-        }
+        std::vector<color_t> flipped = detail::flipRows(framebuffer.readPixels(), size.x, size.y);
 
-        return saveImage(imageFilePath, size.x, size.y, flipped);
+        return saveTexture(imageFilePath, size.x, size.y, flipped);
     }
 
-    bool saveImage(const std::filesystem::path& imageFilePath, uint32_t width, uint32_t height, std::span<const color_t> pixels)
+    bool saveTexture(const std::filesystem::path& imageFilePath, uint32_t width, uint32_t height, std::span<const color_t> pixels)
     {
         const int result = stbi_write_png(imageFilePath.string().c_str(), static_cast<int>(width), static_cast<int>(height), 4, pixels.data(), static_cast<int>(width) * 4);
         if (result == 0) {
