@@ -8,7 +8,7 @@ namespace p5cpp
     {
         renderer.begin(dest);
 
-        const uint2 size = dest.getSize();
+        const uint2 size = dest.size;
         const float w = static_cast<float>(size.x);
         const float h = static_cast<float>(size.y);
         const float4 white {1.0f, 1.0f, 1.0f, 1.0f};
@@ -24,7 +24,7 @@ namespace p5cpp
         writer.pushTriangle(base + 0, base + 1, base + 2);
         writer.pushTriangle(base + 0, base + 2, base + 3);
 
-        renderer.submit(writer, uniformCache.getUniforms(shader), shader, BlendMode::none, *source.getColorTexture());
+        renderer.submit(writer, uniformCache.getUniforms(shader), shader, BlendMode::none, source.colorTexture);
         renderer.flush();
         renderer.end();
     }

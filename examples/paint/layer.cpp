@@ -118,7 +118,7 @@ namespace paint
                 continue;
             }
             tint(255, 255, 255, static_cast<int>(layer.opacity * 255.0f));
-            image(*layer.framebuffer.getColorTexture(), 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
+            image(layer.framebuffer.colorTexture, 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
         }
         noTint();
         popCanvasTransform();
@@ -135,7 +135,7 @@ namespace paint
                     continue;
                 }
                 tint(255, 255, 255, static_cast<int>(layer.opacity * 255.0f));
-                image(*layer.framebuffer.getColorTexture(), 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
+                image(layer.framebuffer.colorTexture, 0, 0, static_cast<float>(m_width), static_cast<float>(m_height));
             }
             noTint();
         popCanvas();
@@ -189,14 +189,14 @@ namespace paint
 
     void floodFill(Pixels& pixels, int x, int y, color_t fillColor, int tolerance)
     {
-        const uint32_t width = pixels.getWidth();
-        const uint32_t height = pixels.getHeight();
+        const uint32_t width = pixels.width;
+        const uint32_t height = pixels.height;
 
         if (x < 0 or y < 0 or static_cast<uint32_t>(x) >= width or static_cast<uint32_t>(y) >= height) {
             return;
         }
 
-        const color_t seedColor = pixels.get(static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+        const color_t seedColor = get(pixels, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
         if (seedColor == fillColor) {
             return;
         }
@@ -224,12 +224,12 @@ namespace paint
             if (visited[index]) {
                 continue;
             }
-            if (not matches(pixels.get(static_cast<uint32_t>(cx), static_cast<uint32_t>(cy)))) {
+            if (not matches(get(pixels, static_cast<uint32_t>(cx), static_cast<uint32_t>(cy)))) {
                 continue;
             }
 
             visited[index] = true;
-            pixels.set(static_cast<uint32_t>(cx), static_cast<uint32_t>(cy), fillColor);
+            set(pixels, static_cast<uint32_t>(cx), static_cast<uint32_t>(cy), fillColor);
 
             stack.emplace_back(cx + 1, cy);
             stack.emplace_back(cx - 1, cy);
@@ -240,13 +240,13 @@ namespace paint
 
     std::vector<color_t> flippedRows(const Pixels& pixels)
     {
-        const uint32_t width = pixels.getWidth();
-        const uint32_t height = pixels.getHeight();
+        const uint32_t width = pixels.width;
+        const uint32_t height = pixels.height;
         std::vector<color_t> flipped(static_cast<size_t>(width) * height);
         for (uint32_t y = 0; y < height; ++y) {
             const uint32_t srcY = height - 1 - y;
             for (uint32_t x = 0; x < width; ++x) {
-                flipped[static_cast<size_t>(y) * width + x] = pixels.get(x, srcY);
+                flipped[static_cast<size_t>(y) * width + x] = get(pixels, x, srcY);
             }
         }
         return flipped;

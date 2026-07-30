@@ -121,7 +121,7 @@ namespace p5cpp
                 return;
             }
 
-            std::vector<ShapedGlyph> shaped = font.shape(para, textSizeInt);
+            std::vector<ShapedGlyph> shaped = shape(font, para, textSizeInt);
 
             if (!doWrap) {
                 float w = 0.0f;
@@ -318,8 +318,8 @@ namespace p5cpp
 
     void GraphicsComponent::blitDefaultCanvasToScreen(uint32_t screenWidth, uint32_t screenHeight)
     {
-        const uint2 canvasSize = m_canvas.defaultFramebuffer().getSize();
-        const GLuint fboId = m_canvas.defaultFramebuffer().getFramebufferId().value;
+        const uint2 canvasSize = m_canvas.defaultFramebuffer().size;
+        const GLuint fboId = m_canvas.defaultFramebuffer().id.value;
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -373,7 +373,7 @@ namespace p5cpp
             return uint2::zero;
         }
 
-        return m_framebufferStack.back().getSize();
+        return m_framebufferStack.back().size;
     }
 
     Pixels GraphicsComponent::loadPixels()
@@ -389,13 +389,13 @@ namespace p5cpp
         if (m_canvas.isMsaaFramebuffer(m_framebufferStack.back())) {
             resolveMsaaToDefaultFramebuffer();
             const Framebuffer& resolved = m_canvas.defaultFramebuffer();
-            const uint2 size = resolved.getSize();
-            return Pixels(size.x, size.y, detail::flipRows(resolved.readPixels(), size.x, size.y));
+            const uint2 size = resolved.size;
+            return Pixels {size.x, size.y, detail::flipRows(readPixels(resolved), size.x, size.y)};
         }
 
         const Framebuffer& framebuffer = m_framebufferStack.back();
-        const uint2 size = framebuffer.getSize();
-        return Pixels(size.x, size.y, detail::flipRows(framebuffer.readPixels(), size.x, size.y));
+        const uint2 size = framebuffer.size;
+        return Pixels {size.x, size.y, detail::flipRows(readPixels(framebuffer), size.x, size.y)};
     }
 
     void GraphicsComponent::updatePixels(const Pixels& pixels)
@@ -405,18 +405,18 @@ namespace p5cpp
         }
 
         Framebuffer& framebuffer = m_framebufferStack.back();
-        const uint2 size = framebuffer.getSize();
-        assert(pixels.getWidth() == size.x && pixels.getHeight() == size.y);
+        const uint2 size = framebuffer.size;
+        assert(pixels.width == size.x && pixels.height == size.y);
 
         m_renderer->flush();
 
         if (m_canvas.isMsaaFramebuffer(framebuffer)) {
-            m_canvas.defaultFramebuffer().writePixels(detail::flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+            writePixels(m_canvas.defaultFramebuffer(), detail::flipRows(pixels.data, size.x, size.y));
             syncMsaaFromDefaultFramebuffer();
             return;
         }
 
-        framebuffer.writePixels(detail::flipRows(std::span<const color_t>(pixels.data(), pixels.size()), size.x, size.y));
+        writePixels(framebuffer, detail::flipRows(pixels.data, size.x, size.y));
     }
 
     MatrixStack& GraphicsComponent::activeMatrixStack()
@@ -1021,7 +1021,7 @@ namespace p5cpp
         float nsw = sw;
         float nsh = sh;
         if (rs.textureMode == TextureMode::image) {
-            const uint2 texSize = texture.getSize();
+            const uint2 texSize = texture.size;
             const float invW = texSize.x > 0 ? 1.0f / static_cast<float>(texSize.x) : 0.0f;
             const float invH = texSize.y > 0 ? 1.0f / static_cast<float>(texSize.y) : 0.0f;
             nsx = sx * invW;
@@ -1066,7 +1066,7 @@ namespace p5cpp
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return;
 
-        const FontMetrics* metrics = font.getMetrics(textSizeInt);
+        const FontMetrics* metrics = getMetrics(font, textSizeInt);
         if (!metrics) return;
 
         const float lineH = metrics->lineHeight * rs.textLineSpacing;
@@ -1118,7 +1118,7 @@ namespace p5cpp
 
             for (const ShapedGlyph& sg : line.glyphs) {
                 if (!sg.isWhitespace && sg.size.x > 0 && sg.size.y > 0) {
-                    const Texture* atlasTexture = font.getGlyphAtlasTexture(sg.glyphAtlasIndex);
+                    const Texture* atlasTexture = getGlyphAtlasTexture(font, sg.glyphAtlasIndex);
                     if (atlasTexture) {
                         const float gLeft = penX + sg.xOffset + static_cast<float>(sg.bearing.x);
                         const float gTop = penY - sg.yOffset - static_cast<float>(sg.bearing.y);
@@ -1165,7 +1165,7 @@ namespace p5cpp
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return layout;
 
-        const FontMetrics* metrics = font.getMetrics(textSizeInt);
+        const FontMetrics* metrics = getMetrics(font, textSizeInt);
         if (!metrics) return layout;
 
         const float lineH = metrics->lineHeight * rs.textLineSpacing;
@@ -1241,7 +1241,7 @@ namespace p5cpp
         const int textSizeInt = static_cast<int>(rs.textSize);
         if (textSizeInt <= 0) return {};
 
-        std::vector<TextContour> contours = font.textToPoints(text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing, maxWidth, rs.textWrap);
+        std::vector<TextContour> contours = p5cpp::textToPoints(font, text, x, y, textSizeInt, static_cast<int>(rs.textToPointsDetail), rs.textToPointsSpacing, maxWidth, rs.textWrap);
 
         const matrix4x4& mtx = peekMatrix();
         for (TextContour& contour : contours) {
@@ -1365,7 +1365,7 @@ namespace p5cpp
 
     void GraphicsComponent::drawRenderGroup(const RenderGroup& group)
     {
-        const std::shared_ptr<const RenderGroupImpl>& impl = group.getImpl();
+        const std::shared_ptr<const RenderGroupImpl>& impl = group.impl;
         if (!impl) return;
 
         const matrix4x4& mtx = peekMatrix();

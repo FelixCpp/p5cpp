@@ -23,7 +23,7 @@ namespace p5cpp
 
     // Forward-declared so saveTexture(path, const Framebuffer&) below can be declared
     // without including framebuffer.hpp, which itself includes this header.
-    class Framebuffer;
+    struct Framebuffer;
 
     struct TextureId
     {
@@ -41,80 +41,67 @@ namespace p5cpp
         r8,
     };
 
-    class Texture;
-
     namespace detail
     {
         struct TextureResource;
-
-        // Grants Font's glyph atlas (src/p5cpp/graphics/glyph_atlas_texture_factory.hpp,
-        // .cpp-only) access to Texture's private constructor. Forward-declared here only
-        // as an opaque name for the friend statement below - its interface is never
-        // defined in a public header, so it isn't part of the sketch-author API.
-        class GlyphAtlasTextureFactory;
     }
+
+    // A GPU texture handle. Copies are cheap and alias the same underlying GL texture
+    // (shared_ptr-backed); the GL texture is deleted automatically once the last copy
+    // is destroyed. Default-constructed instances are "invalid" (id.value == 0, size
+    // == {0, 0}) - see isTextureValid().
+    struct Texture
+    {
+        TextureId id;
+        uint2 size;
+        TextureFormat format = TextureFormat::rgba8;
+
+        // Internal handle driving automatic cleanup - not meant to be read or written
+        // directly. Public (rather than private+friend) because detail::TextureResource
+        // is opaque outside texture.cpp: nothing outside p5cpp's own sources has its
+        // definition, so exposing the pointer can't be used to fabricate a working
+        // Texture, only to alias or null out this one.
+        std::shared_ptr<detail::TextureResource> resource;
+    };
 
     // See Texture::upload() — `data` must already be in bottom-to-top row order.
     // Returns an invalid Texture on failure.
     Texture loadTexture(uint32_t width, uint32_t height, const color_t* data);
 
-    // A GPU texture handle. Copies are cheap and alias the same underlying GL texture
-    // (shared_ptr-backed); the GL texture is deleted automatically once the last copy
-    // is destroyed. Default-constructed instances are "invalid" (getTextureId().value
-    // == 0, getSize() == {0, 0}) - see isValid().
-    class Texture
-    {
-    public:
-        Texture();
+    bool isTextureValid(const Texture& texture);
 
-        bool isValid() const;
-        TextureId getTextureId() const;
-        uint2 getSize() const;
-        TextureFormat getFormat() const;
+    // Expects the same raw GL row order (bottom-to-top) as writePixels(Framebuffer&, ...)
+    // and the data loadTexture(path)/loadTexture(span<uint8_t>) produce — row 0 of
+    // `data` becomes v=0 (bottom) of the texture. Callers holding top-left-origin
+    // pixel data (e.g. row 0 == y == 0) must flip it before uploading, or sampling
+    // will be vertically mirrored relative to images loaded via loadTexture() or
+    // textures read back from a Framebuffer.
+    // Pure convenience for the common rgba8 case: equivalent to
+    // updateRegion(texture, 0, 0, texture.size.x, texture.size.y, <data reinterpreted as raw bytes>).
+    void upload(Texture& texture, std::span<const color_t> data);
 
-        // Expects the same raw GL row order (bottom-to-top) as Framebuffer::writePixels()
-        // and the data loadTexture(path)/loadTexture(span<uint8_t>) produce — row 0 of
-        // `data` becomes v=0 (bottom) of the texture. Callers holding top-left-origin
-        // pixel data (e.g. row 0 == y == 0) must flip it before uploading, or sampling
-        // will be vertically mirrored relative to images loaded via loadTexture() or
-        // textures read back from a Framebuffer.
-        // Pure convenience for the common rgba8 case: equivalent to
-        // updateRegion(0, 0, size.x, size.y, <data reinterpreted as raw bytes>).
-        void upload(std::span<const color_t> data);
+    // Uploads a sub-region of raw bytes (glTexSubImage2D). Byte layout depends on
+    // texture.format: rgba8 expects 4 bytes/pixel, r8 expects 1 byte/pixel. Same
+    // bottom-to-top row order as upload().
+    void updateRegion(Texture& texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> rawBytes);
 
-        // Uploads a sub-region of raw bytes (glTexSubImage2D). Byte layout depends on
-        // getFormat(): rgba8 expects 4 bytes/pixel, r8 expects 1 byte/pixel. Same
-        // bottom-to-top row order as upload().
-        void updateRegion(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> rawBytes);
+    // Reads the texture's current GPU content back as a top-left-origin Pixels
+    // buffer, mirroring Processing's PImage.loadPixels()/.pixels[]. rgba8 only -
+    // r8 (the font glyph atlas format) returns an empty Pixels, since its
+    // GL_TEXTURE_SWIZZLE_RGBA doesn't apply to glGetTexImage the way it does to
+    // shader sampling, so a raw readback wouldn't match what's visually rendered.
+    Pixels loadPixels(const Texture& texture);
 
-        // Reads the texture's current GPU content back as a top-left-origin Pixels
-        // buffer, mirroring Processing's PImage.loadPixels()/.pixels[]. rgba8 only -
-        // r8 (the font glyph atlas format) returns an empty Pixels, since its
-        // GL_TEXTURE_SWIZZLE_RGBA doesn't apply to glGetTexImage the way it does to
-        // shader sampling, so a raw readback wouldn't match what's visually rendered.
-        Pixels loadPixels() const;
-
-        // Uploads a top-left-origin Pixels buffer (Processing's PImage.updatePixels()).
-        // pixels' size is expected to match getSize() - same trust-the-caller contract
-        // as upload(). rgba8 only, see loadPixels().
-        void updatePixels(const Pixels& pixels);
-
-    private:
-        explicit Texture(std::shared_ptr<detail::TextureResource> resource, uint2 size, TextureFormat format);
-
-        friend Texture loadTexture(uint32_t width, uint32_t height, const color_t* data);
-        friend class detail::GlyphAtlasTextureFactory;
-
-        std::shared_ptr<detail::TextureResource> m_resource;
-        uint2 m_size;
-        TextureFormat m_format;
-    };
+    // Uploads a top-left-origin Pixels buffer (Processing's PImage.updatePixels()).
+    // pixels' size is expected to match texture.size - same trust-the-caller contract
+    // as upload(). rgba8 only, see loadPixels().
+    void updatePixels(Texture& texture, const Pixels& pixels);
 } // namespace p5cpp
 
 namespace p5cpp
 {
     // Decodes a PNG/JPG/BMP/... file into a GPU texture. Returns an invalid Texture
-    // (see Texture::isValid()) on failure.
+    // (see isTextureValid()) on failure.
     Texture loadTexture(const std::filesystem::path& imageFilePath);
     Texture loadTexture(std::span<const uint8_t> imageData);
 

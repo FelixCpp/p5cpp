@@ -67,49 +67,50 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    struct FontImpl
+    namespace detail
     {
-        virtual ~FontImpl() = default;
-        virtual const Glyph* getGlyph(char32_t codepoint, int textSize) = 0;
-        virtual const FontMetrics* getMetrics(int textSize) = 0;
-        virtual float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) = 0;
-        virtual const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) = 0;
-        virtual std::vector<ShapedGlyph> shape(std::string_view text, int textSize) = 0;
-        virtual std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap) = 0;
+        struct FontResource;
+    }
+
+    struct Font;
+
+    // See isFontValid() — returns an invalid Font on parse failure. loadFont(path)
+    // caches by path (repeated calls for the same path return a Font that aliases the
+    // same underlying FreeType/HarfBuzz state instead of re-parsing); loadFont(span) is
+    // uncached, since there's no stable key to cache by.
+    Font loadFont(const std::filesystem::path& fontFilePath);
+    Font loadFont(std::span<const uint8_t> fontData);
+
+    // A loaded font handle (FreeType parsing + HarfBuzz shaping + a dynamically-growing
+    // glyph atlas). Copies are cheap and alias the same underlying state (shared_ptr-
+    // backed); everything is torn down automatically once the last copy is destroyed.
+    // Default-constructed instances are "invalid" - see isFontValid().
+    struct Font
+    {
+        // Internal handle driving automatic cleanup - not meant to be read or written
+        // directly. Public (rather than private+friend) because detail::FontResource
+        // is opaque outside font.cpp: exposing the pointer can't be used to fabricate
+        // a working Font, only to alias or null out this one.
+        std::shared_ptr<detail::FontResource> resource;
     };
 
-    std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath);
-    std::unique_ptr<FontImpl> loadFont(std::span<const uint8_t> fontData);
-} // namespace p5cpp
+    bool isFontValid(const Font& font);
 
-namespace p5cpp
-{
-    class Font
-    {
-    public:
-        Font();
-        Font(std::unique_ptr<FontImpl> impl);
-        Font(std::shared_ptr<FontImpl> impl);
+    const Glyph* getGlyph(const Font& font, char32_t codepoint, int textSize);
+    const FontMetrics* getMetrics(const Font& font, int textSize);
+    float getKerning(const Font& font, char32_t leftCodepoint, char32_t rightCodepoint, int textSize);
+    const Texture* getGlyphAtlasTexture(const Font& font, size_t glyphAtlasIndex);
+    std::vector<ShapedGlyph> shape(const Font& font, std::string_view text, int textSize);
 
-        const Glyph* getGlyph(char32_t codepoint, int textSize) const;
-        const FontMetrics* getMetrics(int textSize) const;
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const;
-        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) const;
-        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) const;
-
-        // Returns the outline of `text` as a list of closed contours (one per letter part —
-        // e.g. "O" yields two: the outer boundary and the inner hole), in the same coordinate
-        // space as the (x, y) baseline-left origin passed here. '\n' starts a new line, advanced
-        // by this font's line height at `textSize`. `curveDetail` controls how many line segments
-        // each curve in the glyph outline is flattened into. If `spacing` is greater than 0, every
-        // contour is additionally resampled to points evenly spaced `spacing` pixels apart along
-        // its arc length (matching p5.js's textToPoints()); otherwise contours keep the raw,
-        // curvature-biased points produced by the outline decomposition. If `maxWidth` is greater
-        // than 0 and `wrap` is not TextWrap::none, text additionally wraps the same way as
-        // text(text, x, y, maxWidth) does.
-        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail = 8, float spacing = 0.0f, float maxWidth = -1.0f, TextWrap wrap = TextWrap::none) const;
-
-    private:
-        std::shared_ptr<FontImpl> impl;
-    };
+    // Returns the outline of `text` as a list of closed contours (one per letter part —
+    // e.g. "O" yields two: the outer boundary and the inner hole), in the same coordinate
+    // space as the (x, y) baseline-left origin passed here. '\n' starts a new line, advanced
+    // by this font's line height at `textSize`. `curveDetail` controls how many line segments
+    // each curve in the glyph outline is flattened into. If `spacing` is greater than 0, every
+    // contour is additionally resampled to points evenly spaced `spacing` pixels apart along
+    // its arc length (matching p5.js's textToPoints()); otherwise contours keep the raw,
+    // curvature-biased points produced by the outline decomposition. If `maxWidth` is greater
+    // than 0 and `wrap` is not TextWrap::none, text additionally wraps the same way as
+    // text(text, x, y, maxWidth) does.
+    std::vector<TextContour> textToPoints(const Font& font, std::string_view text, float x, float y, int textSize, int curveDetail = 8, float spacing = 0.0f, float maxWidth = -1.0f, TextWrap wrap = TextWrap::none);
 } // namespace p5cpp

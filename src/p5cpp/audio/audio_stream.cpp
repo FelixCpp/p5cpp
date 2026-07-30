@@ -1,4 +1,4 @@
-#include <p5cpp/audio/sound_impl.hpp>
+#include <p5cpp/audio/audio_stream.hpp>
 #include <p5cpp/audio/audio_component.hpp>
 #include <p5cpp/application/logging.hpp>
 
@@ -69,17 +69,19 @@ namespace p5cpp
             0,
         };
     } // namespace
+} // namespace p5cpp
 
-    class MiniaudioAudioStreamImpl : public AudioStreamImpl
+namespace p5cpp::detail
+{
+    struct AudioStreamResource
     {
-    public:
-        MiniaudioAudioStreamImpl(std::unique_ptr<CallbackDataSource> dataSource, std::unique_ptr<ma_sound> sound)
+        AudioStreamResource(std::unique_ptr<CallbackDataSource> dataSource, std::unique_ptr<ma_sound> sound)
             : m_dataSource(std::move(dataSource)),
               m_sound(std::move(sound))
         {
         }
 
-        ~MiniaudioAudioStreamImpl() override
+        ~AudioStreamResource()
         {
             // Sound first: after ma_sound_uninit() the audio thread no longer reads
             // from the data source (and thus no longer invokes the user callback).
@@ -87,28 +89,30 @@ namespace p5cpp
             ma_data_source_uninit(&m_dataSource->base);
         }
 
-        void play() const override { ma_sound_start(m_sound.get()); }
-        void stop() const override { ma_sound_stop(m_sound.get()); }
-        void pause() const override { ma_sound_stop(m_sound.get()); }
-        bool isPlaying() const override { return ma_sound_is_playing(m_sound.get()) == MA_TRUE; }
+        void play() const { ma_sound_start(m_sound.get()); }
+        void stop() const { ma_sound_stop(m_sound.get()); }
+        void pause() const { ma_sound_stop(m_sound.get()); }
+        bool isPlaying() const { return ma_sound_is_playing(m_sound.get()) == MA_TRUE; }
 
-        void setVolume(float volume) const override { ma_sound_set_volume(m_sound.get(), volume); }
-        float getVolume() const override { return ma_sound_get_volume(m_sound.get()); }
-        void setPan(float pan) const override { ma_sound_set_pan(m_sound.get(), pan); }
-        float getPan() const override { return ma_sound_get_pan(m_sound.get()); }
-        void setRate(float rate) const override { ma_sound_set_pitch(m_sound.get(), rate); }
-        float getRate() const override { return ma_sound_get_pitch(m_sound.get()); }
+        void setVolume(float volume) const { ma_sound_set_volume(m_sound.get(), volume); }
+        float getVolume() const { return ma_sound_get_volume(m_sound.get()); }
+        void setPan(float pan) const { ma_sound_set_pan(m_sound.get(), pan); }
+        float getPan() const { return ma_sound_get_pan(m_sound.get()); }
+        void setRate(float rate) const { ma_sound_set_pitch(m_sound.get(), rate); }
+        float getRate() const { return ma_sound_get_pitch(m_sound.get()); }
 
-    private:
         std::unique_ptr<CallbackDataSource> m_dataSource;
         std::unique_ptr<ma_sound> m_sound;
     };
+} // namespace p5cpp::detail
 
-    std::unique_ptr<AudioStreamImpl> createAudioStreamImpl(AudioComponent& audio, uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback)
+namespace p5cpp
+{
+    AudioStream createAudioStream(uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback)
     {
         if (sampleRate == 0 || channels == 0) {
             error("createAudioStream: sampleRate and channels must be non-zero");
-            return nullptr;
+            return AudioStream();
         }
 
         auto dataSource = std::make_unique<CallbackDataSource>();
@@ -120,17 +124,23 @@ namespace p5cpp
         config.vtable = &callbackDataSourceVtable;
         if (ma_data_source_init(&config, &dataSource->base) != MA_SUCCESS) {
             error("createAudioStream: failed to initialize data source");
-            return nullptr;
+            return AudioStream();
         }
+
+        AudioComponent& audio = getAudioComponent();
 
         auto sound = std::make_unique<ma_sound>();
         if (ma_sound_init_from_data_source(audio.getEngine(), dataSource.get(), 0, nullptr, sound.get()) != MA_SUCCESS) {
             ma_data_source_uninit(&dataSource->base);
             error("createAudioStream: failed to create stream sound");
-            return nullptr;
+            return AudioStream();
         }
 
-        return std::make_unique<MiniaudioAudioStreamImpl>(std::move(dataSource), std::move(sound));
+        AudioStream stream;
+        stream.sampleRate = sampleRate;
+        stream.channels = channels;
+        stream.resource = std::make_shared<detail::AudioStreamResource>(std::move(dataSource), std::move(sound));
+        return stream;
     }
 } // namespace p5cpp
 
@@ -174,7 +184,7 @@ namespace p5cpp
         }
     } // namespace
 
-    AudioSamples decodeAudioSamples(const std::filesystem::path& soundFilePath)
+    AudioSamples loadAudioSamples(const std::filesystem::path& soundFilePath)
     {
         const ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0); // native channels/rate
 
@@ -186,7 +196,7 @@ namespace p5cpp
         return readAllFrames(decoder);
     }
 
-    AudioSamples decodeAudioSamples(std::span<const uint8_t> soundData)
+    AudioSamples loadAudioSamples(std::span<const uint8_t> soundData)
     {
         const ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0); // native channels/rate
 
@@ -203,33 +213,17 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    AudioStream::AudioStream()
-        : impl(nullptr)
-    {
-    }
+    bool isAudioStreamValid(const AudioStream& stream) { return stream.resource != nullptr; }
 
-    AudioStream::AudioStream(std::unique_ptr<AudioStreamImpl> impl)
-        : impl(std::move(impl))
-    {
-    }
+    void playAudioStream(const AudioStream& stream) { if (stream.resource) stream.resource->play(); }
+    void stopAudioStream(const AudioStream& stream) { if (stream.resource) stream.resource->stop(); }
+    void pauseAudioStream(const AudioStream& stream) { if (stream.resource) stream.resource->pause(); }
+    bool isPlaying(const AudioStream& stream) { return stream.resource ? stream.resource->isPlaying() : false; }
 
-    AudioStream::AudioStream(std::shared_ptr<AudioStreamImpl> impl)
-        : impl(std::move(impl))
-    {
-    }
-
-    bool AudioStream::isValid() const { return impl != nullptr; }
-    AudioStream::operator bool() const { return impl != nullptr; }
-
-    void AudioStream::play() const { if (impl) impl->play(); }
-    void AudioStream::stop() const { if (impl) impl->stop(); }
-    void AudioStream::pause() const { if (impl) impl->pause(); }
-    bool AudioStream::isPlaying() const { return impl ? impl->isPlaying() : false; }
-
-    void AudioStream::setVolume(float volume) const { if (impl) impl->setVolume(volume); }
-    float AudioStream::getVolume() const { return impl ? impl->getVolume() : 0.0f; }
-    void AudioStream::setPan(float pan) const { if (impl) impl->setPan(pan); }
-    float AudioStream::getPan() const { return impl ? impl->getPan() : 0.0f; }
-    void AudioStream::setRate(float rate) const { if (impl) impl->setRate(rate); }
-    float AudioStream::getRate() const { return impl ? impl->getRate() : 0.0f; }
+    void setAudioStreamVolume(const AudioStream& stream, float volume) { if (stream.resource) stream.resource->setVolume(volume); }
+    float getAudioStreamVolume(const AudioStream& stream) { return stream.resource ? stream.resource->getVolume() : 0.0f; }
+    void setAudioStreamPan(const AudioStream& stream, float pan) { if (stream.resource) stream.resource->setPan(pan); }
+    float getAudioStreamPan(const AudioStream& stream) { return stream.resource ? stream.resource->getPan() : 0.0f; }
+    void setAudioStreamRate(const AudioStream& stream, float rate) { if (stream.resource) stream.resource->setRate(rate); }
+    float getAudioStreamRate(const AudioStream& stream) { return stream.resource ? stream.resource->getRate() : 0.0f; }
 } // namespace p5cpp

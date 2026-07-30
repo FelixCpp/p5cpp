@@ -789,7 +789,7 @@ struct BreakoutSketch : p5cpp::Sketch
         popCanvas();
 
         noTint();
-        image(*bgCanvas.getColorTexture(), 0.f, 0.f, float(W), float(H));
+        image(bgCanvas.colorTexture, 0.f, 0.f, float(W), float(H));
     }
 
     void drawStars()

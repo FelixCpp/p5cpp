@@ -34,7 +34,7 @@ namespace
             }
         }
 
-        // x/y pixel access via Pixels::get()/set() — inverts colors in a circular
+        // x/y pixel access via get()/set() — inverts colors in a circular
         // brush that follows the mouse.
         void invertUnderMouse(Pixels& pixels) const
         {
@@ -42,9 +42,9 @@ namespace
             const int mouseYPos = getMouseY();
 
             const int minX = std::max(0, static_cast<int>(static_cast<float>(mouseXPos) - BRUSH_RADIUS));
-            const int maxX = std::min(static_cast<int>(pixels.getWidth()) - 1, static_cast<int>(static_cast<float>(mouseXPos) + BRUSH_RADIUS));
+            const int maxX = std::min(static_cast<int>(pixels.width) - 1, static_cast<int>(static_cast<float>(mouseXPos) + BRUSH_RADIUS));
             const int minY = std::max(0, static_cast<int>(static_cast<float>(mouseYPos) - BRUSH_RADIUS));
-            const int maxY = std::min(static_cast<int>(pixels.getHeight()) - 1, static_cast<int>(static_cast<float>(mouseYPos) + BRUSH_RADIUS));
+            const int maxY = std::min(static_cast<int>(pixels.height) - 1, static_cast<int>(static_cast<float>(mouseYPos) + BRUSH_RADIUS));
 
             for (int y = minY; y <= maxY; ++y) {
                 for (int x = minX; x <= maxX; ++x) {
@@ -54,19 +54,19 @@ namespace
                         continue;
                     }
 
-                    const color_t original = pixels.get(static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+                    const color_t original = get(pixels, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
                     const color_t inverted = rgba(255 - red(original), 255 - green(original), 255 - blue(original), alpha(original));
-                    pixels.set(static_cast<uint32_t>(x), static_cast<uint32_t>(y), inverted);
+                    set(pixels, static_cast<uint32_t>(x), static_cast<uint32_t>(y), inverted);
                 }
             }
         }
 
-        // Flat operator[]/data() access — darkens every 4th row across the whole canvas.
+        // Flat data access — darkens every 4th row across the whole canvas.
         void darkenScanlines(Pixels& pixels) const
         {
-            const uint32_t width = pixels.getWidth();
-            const uint32_t height = pixels.getHeight();
-            color_t* raw = pixels.data();
+            const uint32_t width = pixels.width;
+            const uint32_t height = pixels.height;
+            color_t* raw = pixels.data.data();
 
             for (uint32_t y = 0; y < height; y += 4) {
                 color_t* scanline = raw + static_cast<size_t>(y) * width;

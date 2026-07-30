@@ -157,7 +157,7 @@ struct AudioPlaygroundSketch : Sketch
         std::ofstream(musicPath, std::ios::binary).write(reinterpret_cast<const char*>(wavBytes.data()), static_cast<std::streamsize>(wavBytes.size()));
 
         music = loadMusic(musicPath);
-        music.onEnded([this] { ++endedCount; });
+        onSoundEnded(music, [this] { ++endedCount; });
 
         const std::vector<float> blipSamples = makeBlipSamples();
         blip = createSound(blipSamples, SAMPLE_RATE, 1);
@@ -177,7 +177,7 @@ struct AudioPlaygroundSketch : Sketch
                 if (state->phase > TWO_PI) state->phase -= TWO_PI;
             }
         });
-        synth.play(); // runs continuously; targetGain gates the tone
+        playAudioStream(synth); // runs continuously; targetGain gates the tone
     }
 
     void event(const WindowEvent& e) override
@@ -185,14 +185,14 @@ struct AudioPlaygroundSketch : Sketch
         if (e.type == EventType::keyPress) {
             switch (e.keyEvent.key) {
                 case Key::escape: quit(); break;
-                case Key::space: music.status() == SoundStatus::playing ? music.pause() : music.play(); break;
-                case Key::s: music.stop(); break;
-                case Key::l: music.setLoop(!music.isLooping()); break;
-                case Key::f: music.fadeIn(1500.0f); break;
-                case Key::g: music.fadeOut(1500.0f); break;
+                case Key::space: getSoundStatus(music) == SoundStatus::playing ? pauseSound(music) : playSound(music); break;
+                case Key::s: stopSound(music); break;
+                case Key::l: setSoundLoop(music, !isSoundLooping(music)); break;
+                case Key::f: fadeInSound(music, 1500.0f); break;
+                case Key::g: fadeOutSound(music, 1500.0f); break;
                 case Key::m: playSoundMulti(blip); break;
-                case Key::left: music.seek(std::max(0.0f, music.currentTime() - 2.0f)); break;
-                case Key::right: music.seek(std::min(music.duration(), music.currentTime() + 2.0f)); break;
+                case Key::left: seekSound(music, std::max(0.0f, getSoundCurrentTime(music) - 2.0f)); break;
+                case Key::right: seekSound(music, std::min(getSoundDuration(music), getSoundCurrentTime(music) + 2.0f)); break;
                 case Key::t: synthState->targetGain.store(1.0f, std::memory_order_relaxed); break;
                 default: break;
             }
@@ -216,11 +216,11 @@ struct AudioPlaygroundSketch : Sketch
         const auto my = static_cast<float>(getMouseY());
         const bool hovering = mx >= seekBarX && mx <= seekBarX + seekBarW && my >= seekBarY && my <= seekBarY + seekBarH;
 
-        if (isMouseDown && hovering && music.duration() > 0.0f) {
-            music.seek((mx - seekBarX) / seekBarW * music.duration());
+        if (isMouseDown && hovering && getSoundDuration(music) > 0.0f) {
+            seekSound(music, (mx - seekBarX) / seekBarW * getSoundDuration(music));
         }
 
-        const float progress = music.duration() > 0.0f ? music.currentTime() / music.duration() : 0.0f;
+        const float progress = getSoundDuration(music) > 0.0f ? getSoundCurrentTime(music) / getSoundDuration(music) : 0.0f;
 
         noStroke();
         fill(80, 200, 255, 180);
@@ -252,14 +252,14 @@ struct AudioPlaygroundSketch : Sketch
         text("m: overlapping blips (playSoundMulti)   hold t: synth stream (pitch = mouse Y)   click bar: seek", 20.0f, 74.0f);
 
         const char* statusName = "stopped";
-        if (music.status() == SoundStatus::playing) statusName = "playing";
-        if (music.status() == SoundStatus::paused) statusName = "paused";
+        if (getSoundStatus(music) == SoundStatus::playing) statusName = "playing";
+        if (getSoundStatus(music) == SoundStatus::paused) statusName = "paused";
 
         char line[160];
-        std::snprintf(line, sizeof(line), "music: %s%s   %.1fs / %.1fs   ended %d time(s)", statusName, music.isLooping() ? " (loop)" : "", music.currentTime(), music.duration(), endedCount);
+        std::snprintf(line, sizeof(line), "music: %s%s   %.1fs / %.1fs   ended %d time(s)", statusName, isSoundLooping(music) ? " (loop)" : "", getSoundCurrentTime(music), getSoundDuration(music), endedCount);
         text(line, 20.0f, 110.0f);
 
-        std::snprintf(line, sizeof(line), "%u Hz, %u channel(s), %llu frames", music.sampleRate(), music.channels(), static_cast<unsigned long long>(music.frameCount()));
+        std::snprintf(line, sizeof(line), "%u Hz, %u channel(s), %llu frames", music.sampleRate, music.channels, static_cast<unsigned long long>(getSoundFrameCount(music)));
         text(line, 20.0f, 130.0f);
 
         drawSeekBar();

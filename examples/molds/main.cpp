@@ -92,7 +92,7 @@ struct PixelGrid
     void show()
     {
         const color_t* data = reinterpret_cast<const color_t*>(pixels.data());
-        texture.upload(std::span {data, pixels.size() / 4});
+        upload(texture, std::span {data, pixels.size() / 4});
         image(texture, 0, 0, getLogicalWidth(), getLogicalHeight());
     }
 };

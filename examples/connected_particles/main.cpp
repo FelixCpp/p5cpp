@@ -531,14 +531,14 @@ namespace
 
             shader(vignetteShader);
             setUniform(vignetteShader, "u_Strength", uniform(2.5f));
-            image(*scene.getColorTexture(), 0, 0, W, H);
+            image(scene.colorTexture, 0, 0, W, H);
             noShader();
 
             // Pixelate instead, as an alternative:
             // shader(pixelateShader);
             // setUniform(pixelateShader, "u_BlockSize", uniform(3.5f));
             // setUniform(pixelateShader, "u_TexelSize", uniform(1.0f / W, 1.0f / H));
-            // image(*scene.getColorTexture(), 0, 0, W, H);
+            // image(scene.colorTexture, 0, 0, W, H);
             // noShader();
 
             blendMode(BlendMode::alpha);

@@ -44,7 +44,7 @@ namespace
         {
             for (const std::filesystem::path& path : getDroppedFiles()) {
                 Texture loaded = loadTexture(path);
-                if (!loaded.isValid()) {
+                if (!isTextureValid(loaded)) {
                     continue; // not an image loadTexture() understands; it already logged why
                 }
                 images.push_back(DroppedImage {loaded, path.filename().string()});

@@ -120,7 +120,10 @@ namespace p5cpp
 
         if (const auto it = s_shaderCache.find(key); it != s_shaderCache.end()) {
             if (std::shared_ptr<detail::ShaderResource> cached = it->second.lock()) {
-                return Shader(std::move(cached));
+                Shader shader;
+                shader.id = ShaderId {.value = cached->programId};
+                shader.resource = std::move(cached);
+                return shader;
             }
         }
 
@@ -130,7 +133,11 @@ namespace p5cpp
         }
 
         s_shaderCache[key] = fresh;
-        return Shader(std::move(fresh));
+
+        Shader shader;
+        shader.id = ShaderId {.value = fresh->programId};
+        shader.resource = std::move(fresh);
+        return shader;
     }
 } // namespace p5cpp
 
@@ -188,47 +195,28 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    Shader::Shader()
-        : m_resource(nullptr)
+    bool isShaderValid(const Shader& shader)
     {
+        return shader.resource != nullptr;
     }
 
-    Shader::Shader(std::shared_ptr<detail::ShaderResource> resource)
-        : m_resource(std::move(resource))
+    std::optional<UniformLocation> getUniformLocation(const Shader& shader, const std::string& name)
     {
-    }
-
-    bool Shader::isValid() const
-    {
-        return m_resource != nullptr;
-    }
-
-    std::optional<UniformLocation> Shader::getUniformLocation(const std::string& name) const
-    {
-        if (!m_resource) {
+        if (!shader.resource) {
             return std::nullopt;
         }
 
-        const auto itr = m_resource->uniformLocations.find(name);
-        if (itr != m_resource->uniformLocations.end()) {
+        const auto itr = shader.resource->uniformLocations.find(name);
+        if (itr != shader.resource->uniformLocations.end()) {
             return itr->second;
         }
 
-        const GLint location = glGetUniformLocation(m_resource->programId, name.c_str());
+        const GLint location = glGetUniformLocation(shader.resource->programId, name.c_str());
         if (location == -1) {
             return std::nullopt;
         }
 
-        const auto insertion = m_resource->uniformLocations.emplace(name, UniformLocation {.value = location});
+        const auto insertion = shader.resource->uniformLocations.emplace(name, UniformLocation {.value = location});
         return insertion.first->second;
-    }
-
-    ShaderId Shader::getShaderId() const
-    {
-        if (!m_resource) {
-            return ShaderId {.value = 0};
-        }
-
-        return ShaderId {.value = m_resource->programId};
     }
 } // namespace p5cpp

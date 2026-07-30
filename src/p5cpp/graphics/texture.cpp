@@ -44,7 +44,12 @@ namespace p5cpp
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        return Texture(std::make_shared<detail::TextureResource>(textureId), uint2 {width, height}, TextureFormat::rgba8);
+        Texture texture;
+        texture.id = TextureId {.value = textureId};
+        texture.size = uint2 {width, height};
+        texture.format = TextureFormat::rgba8;
+        texture.resource = std::make_shared<detail::TextureResource>(textureId);
+        return texture;
     }
 
     namespace detail
@@ -73,97 +78,69 @@ namespace p5cpp
 
             glBindTexture(GL_TEXTURE_2D, 0);
 
-            return Texture(std::make_shared<TextureResource>(textureId), uint2 {width, height}, TextureFormat::r8);
+            Texture texture;
+            texture.id = TextureId {.value = textureId};
+            texture.size = uint2 {width, height};
+            texture.format = TextureFormat::r8;
+            texture.resource = std::make_shared<TextureResource>(textureId);
+            return texture;
         }
     } // namespace detail
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    Texture::Texture()
-        : m_resource(nullptr),
-          m_size {0, 0},
-          m_format(TextureFormat::rgba8)
+    bool isTextureValid(const Texture& texture)
     {
+        return texture.resource != nullptr;
     }
 
-    Texture::Texture(std::shared_ptr<detail::TextureResource> resource, uint2 size, TextureFormat format)
-        : m_resource(std::move(resource)),
-          m_size(size),
-          m_format(format)
+    void upload(Texture& texture, std::span<const color_t> data)
     {
+        updateRegion(texture, 0, 0, texture.size.x, texture.size.y, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(data.data()), data.size() * sizeof(color_t)));
     }
 
-    bool Texture::isValid() const
+    void updateRegion(Texture& texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> rawBytes)
     {
-        return m_resource != nullptr;
-    }
-
-    TextureId Texture::getTextureId() const
-    {
-        if (!m_resource) {
-            return TextureId {.value = 0};
-        }
-
-        return TextureId {.value = m_resource->id};
-    }
-
-    uint2 Texture::getSize() const
-    {
-        return m_size;
-    }
-
-    TextureFormat Texture::getFormat() const
-    {
-        return m_format;
-    }
-
-    void Texture::upload(std::span<const color_t> data)
-    {
-        updateRegion(0, 0, m_size.x, m_size.y, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(data.data()), data.size() * sizeof(color_t)));
-    }
-
-    void Texture::updateRegion(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> rawBytes)
-    {
-        if (!m_resource) {
+        if (!texture.resource) {
             return;
         }
 
-        const GLenum glFormat = (m_format == TextureFormat::r8) ? GL_RED : GL_RGBA;
+        const GLenum glFormat = (texture.format == TextureFormat::r8) ? GL_RED : GL_RGBA;
 
-        glBindTexture(GL_TEXTURE_2D, m_resource->id);
+        glBindTexture(GL_TEXTURE_2D, texture.resource->id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat, GL_UNSIGNED_BYTE, rawBytes.data());
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    Pixels Texture::loadPixels() const
+    Pixels loadPixels(const Texture& texture)
     {
-        if (!m_resource || m_format != TextureFormat::rgba8) {
+        if (!texture.resource || texture.format != TextureFormat::rgba8) {
             return Pixels();
         }
 
-        std::vector<color_t> raw(static_cast<size_t>(m_size.x) * static_cast<size_t>(m_size.y));
+        std::vector<color_t> raw(static_cast<size_t>(texture.size.x) * static_cast<size_t>(texture.size.y));
 
-        glBindTexture(GL_TEXTURE_2D, m_resource->id);
+        glBindTexture(GL_TEXTURE_2D, texture.resource->id);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, raw.data());
         glBindTexture(GL_TEXTURE_2D, 0);
 
         // GL row order is bottom-to-top; Pixels is top-left-origin.
-        return Pixels(m_size.x, m_size.y, detail::flipRows(raw, m_size.x, m_size.y));
+        return Pixels {texture.size.x, texture.size.y, detail::flipRows(raw, texture.size.x, texture.size.y)};
     }
 
-    void Texture::updatePixels(const Pixels& pixels)
+    void updatePixels(Texture& texture, const Pixels& pixels)
     {
-        if (!m_resource || m_format != TextureFormat::rgba8) {
+        if (!texture.resource || texture.format != TextureFormat::rgba8) {
             return;
         }
 
-        assert(pixels.getSize() == m_size);
+        assert(getSize(pixels) == texture.size);
 
         // Pixels is top-left-origin; GL row order is bottom-to-top (matches upload()).
-        upload(detail::flipRows(std::span<const color_t>(pixels.data(), pixels.size()), m_size.x, m_size.y));
+        upload(texture, detail::flipRows(pixels.data, texture.size.x, texture.size.y));
     }
 } // namespace p5cpp
 
@@ -177,8 +154,7 @@ namespace p5cpp
         stbi_set_flip_vertically_on_load(true);
 
         // Force 4 channels (STBI_rgb_alpha) so the decoded buffer is directly usable as
-        // raw R,G,B,A bytes — the same memory layout loadTexture()/Texture::upload()
-        // already expect.
+        // raw R,G,B,A bytes — the same memory layout loadTexture()/upload() already expect.
         stbi_uc* data = stbi_load(imageFilePath.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
         if (data == nullptr) {
             error("Failed to load image: " + imageFilePath.string());
@@ -212,11 +188,11 @@ namespace p5cpp
 
     bool saveTexture(const std::filesystem::path& imageFilePath, const Framebuffer& framebuffer)
     {
-        const uint2 size = framebuffer.getSize();
+        const uint2 size = framebuffer.size;
 
         // readPixels() returns rows bottom-to-top (raw GL order); PNG rows are
         // top-to-bottom, so flip before encoding.
-        std::vector<color_t> flipped = detail::flipRows(framebuffer.readPixels(), size.x, size.y);
+        std::vector<color_t> flipped = detail::flipRows(readPixels(framebuffer), size.x, size.y);
 
         return saveTexture(imageFilePath, size.x, size.y, flipped);
     }

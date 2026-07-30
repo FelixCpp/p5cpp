@@ -2,7 +2,6 @@
 #include <p5cpp/graphics/glyph_atlas_texture_factory.hpp>
 #include <p5cpp/application/logging.hpp>
 
-#include <glad/glad.h>
 #include <freetype/freetype.h>
 #include <freetype/ftoutln.h>
 #include <hb.h>
@@ -13,7 +12,6 @@
 #include <vector>
 #include <string>
 #include <string_view>
-#include <cassert>
 #include <cmath>
 
 namespace p5cpp
@@ -198,7 +196,7 @@ namespace p5cpp
                 return std::nullopt;
             }
 
-            m_texture.updateRegion(static_cast<uint32_t>(placed->left), static_cast<uint32_t>(placed->top), static_cast<uint32_t>(bitmapWidth), static_cast<uint32_t>(bitmapHeight), bitmapData);
+            updateRegion(m_texture, static_cast<uint32_t>(placed->left), static_cast<uint32_t>(placed->top), static_cast<uint32_t>(bitmapWidth), static_cast<uint32_t>(bitmapHeight), bitmapData);
 
             const float uvLeft = static_cast<float>(placed->left) / static_cast<float>(m_width);
             const float uvTop = static_cast<float>(placed->top) / static_cast<float>(m_height);
@@ -616,12 +614,11 @@ namespace p5cpp
     }
 } // namespace p5cpp
 
-namespace p5cpp
+namespace p5cpp::detail
 {
-    class FreetypeFont : public FontImpl
+    struct FontResource
     {
-    public:
-        static std::unique_ptr<FreetypeFont> loadFromFile(const std::filesystem::path& fontFilePath)
+        static std::unique_ptr<FontResource> loadFromFile(const std::filesystem::path& fontFilePath)
         {
             FT_Face rawFace;
             FT_Error error = FT_New_Face(freetype.library, fontFilePath.string().c_str(), 0, &rawFace);
@@ -630,10 +627,10 @@ namespace p5cpp
             }
 
             FreetypeFace face(rawFace);
-            return std::unique_ptr<FreetypeFont>(new FreetypeFont(std::move(face)));
+            return std::unique_ptr<FontResource>(new FontResource(std::move(face)));
         }
 
-        static std::unique_ptr<FreetypeFont> loadFromMemory(std::span<const uint8_t> fontData)
+        static std::unique_ptr<FontResource> loadFromMemory(std::span<const uint8_t> fontData)
         {
             FT_Face rawFace;
             FT_Error error = FT_New_Memory_Face(freetype.library, fontData.data(), static_cast<FT_Long>(fontData.size()), 0, &rawFace);
@@ -642,10 +639,10 @@ namespace p5cpp
             }
 
             FreetypeFace face(rawFace);
-            return std::unique_ptr<FreetypeFont>(new FreetypeFont(std::move(face)));
+            return std::unique_ptr<FontResource>(new FontResource(std::move(face)));
         }
 
-        const Glyph* getGlyph(char32_t codepoint, int textSize) override
+        const Glyph* getGlyph(char32_t codepoint, int textSize)
         {
             if (const Glyph* cachedGlyph = m_glyphCache.get(codepoint, textSize)) {
                 return cachedGlyph;
@@ -691,7 +688,7 @@ namespace p5cpp
             return m_glyphCache.put(codepoint, textSize, glyph);
         }
 
-        const FontMetrics* getMetrics(int textSize) override
+        const FontMetrics* getMetrics(int textSize)
         {
             if (const FontMetrics* cachedMetrics = m_glyphMetricsCache.get(textSize)) {
                 return cachedMetrics;
@@ -714,7 +711,7 @@ namespace p5cpp
             return m_glyphMetricsCache.put(textSize, metrics);
         }
 
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override
+        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize)
         {
             const std::optional<float> cachedKerning = m_kerningCache.get(leftCodepoint, rightCodepoint, textSize);
             if (cachedKerning.has_value()) {
@@ -738,16 +735,16 @@ namespace p5cpp
             return kerningValue;
         }
 
-        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override
+        const Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex)
         {
             if (glyphAtlasIndex >= m_glyphAtlasPages.size()) {
-                return 0; // Invalid atlas index.
+                return nullptr; // Invalid atlas index.
             }
 
             return m_glyphAtlasPages[glyphAtlasIndex]->getTexture();
         }
 
-        std::vector<ShapedGlyph> shape(std::string_view text, int textSize) override
+        std::vector<ShapedGlyph> shape(std::string_view text, int textSize)
         {
             if (const std::vector<ShapedGlyph>* cached = m_shapedTextCache.get(text, textSize)) {
                 return *cached;
@@ -827,7 +824,7 @@ namespace p5cpp
             return *m_shapedTextCache.put(text, textSize, std::move(result));
         }
 
-        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap) override
+        std::vector<TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, TextWrap wrap)
         {
             std::vector<TextContour> result;
 
@@ -975,7 +972,7 @@ namespace p5cpp
         }
 
     private:
-        explicit FreetypeFont(FreetypeFace face)
+        explicit FontResource(FreetypeFace face)
             : m_face(std::move(face))
         {
         }
@@ -1083,7 +1080,7 @@ namespace p5cpp
         FreetypeFace m_face;
         HbFont m_hbFont;
     };
-} // namespace p5cpp
+} // namespace p5cpp::detail
 
 namespace p5cpp
 {
@@ -1140,108 +1137,110 @@ namespace p5cpp
 
 namespace
 {
-    // Forwards every call to a shared, already-loaded FontImpl so that repeated
-    // loadFont(path) calls for the same file can return a lightweight handle
-    // instead of re-running FT_New_Face, while still handing back a genuinely
-    // unique_ptr-owned object at each call site (loadFont()'s return type can't
-    // change). FontImpl is read-only after construction, so aliasing is safe.
-    class SharedFontImpl : public p5cpp::FontImpl
-    {
-    public:
-        explicit SharedFontImpl(std::shared_ptr<p5cpp::FontImpl> shared) : m_shared(std::move(shared)) {}
-
-        const p5cpp::Glyph* getGlyph(char32_t codepoint, int textSize) override { return m_shared->getGlyph(codepoint, textSize); }
-        const p5cpp::FontMetrics* getMetrics(int textSize) override { return m_shared->getMetrics(textSize); }
-        float getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) override { return m_shared->getKerning(leftCodepoint, rightCodepoint, textSize); }
-        const p5cpp::Texture* getGlyphAtlasTexture(size_t glyphAtlasIndex) override { return m_shared->getGlyphAtlasTexture(glyphAtlasIndex); }
-        std::vector<p5cpp::ShapedGlyph> shape(std::string_view text, int textSize) override { return m_shared->shape(text, textSize); }
-        std::vector<p5cpp::TextContour> textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float maxWidth, p5cpp::TextWrap wrap) override { return m_shared->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap); }
-
-    private:
-        std::shared_ptr<p5cpp::FontImpl> m_shared;
-    };
-
-    std::unordered_map<std::string, std::weak_ptr<p5cpp::FontImpl>> s_fontCache;
+    std::unordered_map<std::string, std::weak_ptr<p5cpp::detail::FontResource>> s_fontCache;
 } // namespace
 
 namespace p5cpp
 {
-    std::unique_ptr<FontImpl> loadFont(const std::filesystem::path& fontFilePath)
+    // loadFont(path) caches by path: a repeated call for the same path returns a Font
+    // that aliases the already-parsed FreeType/HarfBuzz state (via the shared_ptr this
+    // Font already carries for RAII) instead of re-running FT_New_Face.
+    Font loadFont(const std::filesystem::path& fontFilePath)
     {
         const std::string key = fontFilePath.string();
 
         if (const auto it = s_fontCache.find(key); it != s_fontCache.end()) {
-            if (std::shared_ptr<FontImpl> cached = it->second.lock()) {
-                return std::make_unique<SharedFontImpl>(std::move(cached));
+            if (std::shared_ptr<detail::FontResource> cached = it->second.lock()) {
+                Font font;
+                font.resource = std::move(cached);
+                return font;
             }
         }
 
-        std::shared_ptr<FontImpl> fresh = FreetypeFont::loadFromFile(fontFilePath);
+        std::shared_ptr<detail::FontResource> fresh = detail::FontResource::loadFromFile(fontFilePath);
         if (!fresh) {
-            return nullptr;
+            return Font();
         }
 
         s_fontCache[key] = fresh;
-        return std::make_unique<SharedFontImpl>(std::move(fresh));
+
+        Font font;
+        font.resource = std::move(fresh);
+        return font;
     }
 
-    std::unique_ptr<FontImpl> loadFont(std::span<const uint8_t> fontData)
+    Font loadFont(std::span<const uint8_t> fontData)
     {
-        return FreetypeFont::loadFromMemory(fontData);
+        std::shared_ptr<detail::FontResource> resource = detail::FontResource::loadFromMemory(fontData);
+        if (!resource) {
+            return Font();
+        }
+
+        Font font;
+        font.resource = std::move(resource);
+        return font;
     }
 } // namespace p5cpp
 
 namespace p5cpp
 {
-    Font::Font()
-        : impl(nullptr)
+    bool isFontValid(const Font& font)
     {
+        return font.resource != nullptr;
     }
 
-    Font::Font(std::unique_ptr<FontImpl> impl)
-        : impl(std::move(impl))
+    const Glyph* getGlyph(const Font& font, char32_t codepoint, int textSize)
     {
+        if (!font.resource) {
+            return nullptr;
+        }
+
+        return font.resource->getGlyph(codepoint, textSize);
     }
 
-    Font::Font(std::shared_ptr<FontImpl> impl)
-        : impl(std::move(impl))
+    const FontMetrics* getMetrics(const Font& font, int textSize)
     {
+        if (!font.resource) {
+            return nullptr;
+        }
+
+        return font.resource->getMetrics(textSize);
     }
 
-    const Glyph* Font::getGlyph(char32_t codepoint, int textSize) const
+    float getKerning(const Font& font, char32_t leftCodepoint, char32_t rightCodepoint, int textSize)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getGlyph(codepoint, textSize);
+        if (!font.resource) {
+            return 0.0f;
+        }
+
+        return font.resource->getKerning(leftCodepoint, rightCodepoint, textSize);
     }
 
-    const FontMetrics* Font::getMetrics(int textSize) const
+    const Texture* getGlyphAtlasTexture(const Font& font, size_t glyphAtlasIndex)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getMetrics(textSize);
+        if (!font.resource) {
+            return nullptr;
+        }
+
+        return font.resource->getGlyphAtlasTexture(glyphAtlasIndex);
     }
 
-    float Font::getKerning(char32_t leftCodepoint, char32_t rightCodepoint, int textSize) const
+    std::vector<ShapedGlyph> shape(const Font& font, std::string_view text, int textSize)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getKerning(leftCodepoint, rightCodepoint, textSize);
+        if (!font.resource) {
+            return {};
+        }
+
+        return font.resource->shape(text, textSize);
     }
 
-    const Texture* Font::getGlyphAtlasTexture(size_t glyphAtlasIndex) const
+    std::vector<TextContour> textToPoints(const Font& font, std::string_view text, float x, float y, int textSize, int curveDetail, float spacing, float maxWidth, TextWrap wrap)
     {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->getGlyphAtlasTexture(glyphAtlasIndex);
-    }
+        if (!font.resource) {
+            return {};
+        }
 
-    std::vector<ShapedGlyph> Font::shape(std::string_view text, int textSize) const
-    {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        return impl->shape(text, textSize);
-    }
-
-    std::vector<TextContour> Font::textToPoints(std::string_view text, float x, float y, int textSize, int curveDetail, float spacing, float maxWidth, TextWrap wrap) const
-    {
-        assert(impl != nullptr && "Font implementation is not initialized.");
-        std::vector<TextContour> contours = impl->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap);
+        std::vector<TextContour> contours = font.resource->textToPoints(text, x, y, textSize, curveDetail, maxWidth, wrap);
 
         if (spacing > 0.0f) {
             for (TextContour& contour : contours) {

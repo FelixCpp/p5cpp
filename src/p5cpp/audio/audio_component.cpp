@@ -34,7 +34,7 @@ namespace p5cpp
             m_waveformSnapshot[i] = m_waveformRing[idx].load(std::memory_order_relaxed);
         }
 
-        std::erase_if(m_transientSounds, [](const Sound& sound) { return sound.status() != SoundStatus::playing; });
+        std::erase_if(m_transientSounds, [](const Sound& sound) { return getSoundStatus(sound) != SoundStatus::playing; });
         std::erase_if(m_endedStates, [](const std::weak_ptr<SoundEndedState>& state) { return state.expired(); });
 
         // Iterate over a copy: a callback may load sounds or register new
@@ -55,10 +55,10 @@ namespace p5cpp
 
     void AudioComponent::playMulti(const Sound& sound)
     {
-        Sound transient = sound.clone();
-        if (!transient.isValid()) return;
+        Sound transient = cloneSound(sound);
+        if (!isSoundValid(transient)) return;
 
-        transient.play();
+        playSound(transient);
         m_transientSounds.push_back(std::move(transient));
     }
 

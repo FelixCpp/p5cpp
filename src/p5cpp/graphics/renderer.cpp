@@ -136,9 +136,9 @@ namespace p5cpp
 
         void begin(const Framebuffer& framebuffer) override
         {
-            m_viewportSize = framebuffer.getSize();
+            m_viewportSize = framebuffer.size;
 
-            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.getFramebufferId().value);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.id.value);
             glViewport(0, 0, static_cast<GLsizei>(m_viewportSize.x), static_cast<GLsizei>(m_viewportSize.y));
 
             m_writer.reset();
@@ -170,12 +170,12 @@ namespace p5cpp
             if (indexCount == 0)
                 return;
 
-            const GLuint textureId = texture.getTextureId().value;
-            const GLuint programId = static_cast<GLuint>(shader.getShaderId().value);
+            const GLuint textureId = texture.id.value;
+            const GLuint programId = static_cast<GLuint>(shader.id.value);
 
             if (!m_batches.empty()) {
                 BatchEntry& last = m_batches.back();
-                const GLuint lastProgramId = static_cast<GLuint>(last.shader.getShaderId().value);
+                const GLuint lastProgramId = static_cast<GLuint>(last.shader.id.value);
 
                 if (lastProgramId == programId && last.blendMode == blendMode) {
                     uint8_t slot = 0;
@@ -288,19 +288,19 @@ namespace p5cpp
             bool firstBatch = true;
 
             for (const BatchEntry& batch : m_batches) {
-                const GLuint programId = static_cast<GLuint>(batch.shader.getShaderId().value);
+                const GLuint programId = static_cast<GLuint>(batch.shader.id.value);
                 if (programId == 0) continue;
 
                 if (firstBatch || programId != lastProgramId) {
                     glUseProgram(programId);
                     lastProgramId = programId;
 
-                    const auto projLoc = batch.shader.getUniformLocation("u_ProjectionMatrix");
+                    const auto projLoc = getUniformLocation(batch.shader, "u_ProjectionMatrix");
                     if (projLoc.has_value()) {
                         applyUniformCached(programId, *projLoc, uniform(projection));
                     }
 
-                    const auto texLoc = batch.shader.getUniformLocation("u_Textures");
+                    const auto texLoc = getUniformLocation(batch.shader, "u_Textures");
                     if (texLoc.has_value() && !m_samplerArrayApplied.contains(programId)) {
                         const GLint samplers[8] = {0, 1, 2, 3, 4, 5, 6, 7};
                         glUniform1iv(texLoc->value, 8, samplers);

@@ -158,7 +158,7 @@ public:
     void update()
     {
         if (isDrawing) {
-            const auto [width, height] = scratchpad->framebuffer.getSize();
+            const auto [width, height] = scratchpad->framebuffer.size;
             const int left = static_cast<float>(getLogicalWidth() - width) / 2;
             const int top = static_cast<float>(getLogicalHeight() - height) / 2;
             const int mouseX = getMouseX() - left;
@@ -176,11 +176,11 @@ public:
         if (isScratchpadOpen) {
             scratchpad->show();
 
-            const auto [width, height] = scratchpad->framebuffer.getSize();
+            const auto [width, height] = scratchpad->framebuffer.size;
             const float left = (static_cast<float>(getLogicalWidth()) - static_cast<float>(width)) * 0.5f;
             const float top = (static_cast<float>(getLogicalHeight()) - static_cast<float>(height)) * 0.5f;
 
-            image(*scratchpad->framebuffer.getColorTexture(), left, top, static_cast<float>(width), static_cast<float>(height));
+            image(scratchpad->framebuffer.colorTexture, left, top, static_cast<float>(width), static_cast<float>(height));
 
             noFill();
             stroke(255);

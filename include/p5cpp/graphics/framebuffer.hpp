@@ -27,7 +27,7 @@ namespace p5cpp
         struct FramebufferBackend;
     }
 
-    class Framebuffer;
+    struct Framebuffer;
 
     // Regular, sampleable/readable render target.
     Framebuffer createFramebuffer(uint32_t width, uint32_t height);
@@ -43,30 +43,30 @@ namespace p5cpp
     // A GL framebuffer object handle. Copies are cheap and alias the same underlying FBO
     // (shared_ptr-backed); the FBO (and any renderbuffers/textures it owns) is deleted
     // automatically once the last copy is destroyed. Default-constructed instances are
-    // "invalid" (getFramebufferId().value == 0) - see isValid().
-    class Framebuffer
+    // "invalid" (id.value == 0) - see isFramebufferValid().
+    struct Framebuffer
     {
-    public:
-        Framebuffer();
+        FramebufferId id;
+        uint2 size;
 
-        bool isValid() const;
-        uint2 getSize() const;
-        FramebufferId getFramebufferId() const;
-        const Texture* getColorTexture() const;
+        // Default/invalid for the multisample variant (see createMultisampleFramebuffer())
+        // - resolve into a regular Framebuffer first if you need to sample/read its content.
+        Texture colorTexture;
+        bool multisample = false;
 
-        // Raw GL row order (bottom-to-top) — callers that need top-left-origin
-        // image data (e.g. PNG encoding) are responsible for flipping rows.
-        std::vector<color_t> readPixels() const;
-
-        // Expects the same raw GL row order (bottom-to-top) that readPixels() returns.
-        void writePixels(std::span<const color_t> data);
-
-    private:
-        explicit Framebuffer(std::shared_ptr<detail::FramebufferBackend> backend);
-
-        friend Framebuffer createFramebuffer(uint32_t width, uint32_t height);
-        friend Framebuffer createMultisampleFramebuffer(uint32_t width, uint32_t height, uint32_t samples);
-
-        std::shared_ptr<detail::FramebufferBackend> m_backend;
+        // Internal handle driving automatic cleanup - not meant to be read or written
+        // directly. Public (rather than private+friend) because detail::FramebufferBackend
+        // is opaque outside framebuffer.cpp: exposing the pointer can't be used to
+        // fabricate a working Framebuffer, only to alias or null out this one.
+        std::shared_ptr<detail::FramebufferBackend> backend;
     };
+
+    bool isFramebufferValid(const Framebuffer& framebuffer);
+
+    // Raw GL row order (bottom-to-top) — callers that need top-left-origin
+    // image data (e.g. PNG encoding) are responsible for flipping rows.
+    std::vector<color_t> readPixels(const Framebuffer& framebuffer);
+
+    // Expects the same raw GL row order (bottom-to-top) that readPixels() returns.
+    void writePixels(Framebuffer& framebuffer, std::span<const color_t> data);
 } // namespace p5cpp

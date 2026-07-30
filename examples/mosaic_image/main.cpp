@@ -5,7 +5,6 @@ struct MosaicImage : Sketch
 {
     Texture frog;
     Pixels frogPixels;
-    Framebuffer offscreenFrog;
 
     void setup() override
     {
@@ -13,15 +12,7 @@ struct MosaicImage : Sketch
         setWindowResizable(false);
 
         frog = loadTexture("example_assets/beach.png");
-        offscreenFrog = createFramebuffer(frog.getSize().x, frog.getSize().y);
-
-        pushCanvas(offscreenFrog);
-        {
-            background(0, 0);
-            image(frog, 0.0f, 0.0f, frog.getSize().x, frog.getSize().y);
-            frogPixels = loadPixels();
-        }
-        popCanvas();
+        frogPixels = loadPixels(frog);
     }
 
     void draw() override
@@ -30,7 +21,7 @@ struct MosaicImage : Sketch
 
         background(30);
 
-        const auto [frogWidth, frogHeight] = frog.getSize();
+        const auto [frogWidth, frogHeight] = frog.size;
 
         static constexpr float dotSize = 6.0f;
         static constexpr float spacing = dotSize + 2.0f;
@@ -52,7 +43,7 @@ struct MosaicImage : Sketch
                 const int frogX = static_cast<int>(x / canvasWidth * frogWidth);
                 const int frogY = static_cast<int>(y / canvasHeight * frogHeight);
 
-                const color_t pixelColor = frogPixels.get(frogX, frogY);
+                const color_t pixelColor = get(frogPixels, frogX, frogY);
                 fill(pixelColor);
                 noStroke();
                 ellipse(x + randomOffsetX, y + randomOffsetY, dotSize * 0.5f * scaleFactor, dotSize * 0.5f * scaleFactor);

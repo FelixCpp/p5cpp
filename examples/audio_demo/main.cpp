@@ -191,8 +191,8 @@ struct AudioDemoSketch : Sketch
     void draw() override
     {
 
-        // tone.setPan((getMouseX() / (float)getCanvasSize().x) * 2.0f - 1.0f);
-        tone.setRate(getMouseX() / (float)getCanvasSize().x * 2.0f);
+        // setSoundPan(tone, (getMouseX() / (float)getCanvasSize().x) * 2.0f - 1.0f);
+        setSoundRate(tone, getMouseX() / (float)getCanvasSize().x * 2.0f);
         background(15, 15, 20, 255);
 
         const float w = static_cast<float>(getLogicalWidth());

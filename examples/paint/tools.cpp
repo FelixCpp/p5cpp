@@ -219,7 +219,7 @@ namespace
             Pixels pixels = loadPixels();
         popCanvas();
 
-        const color_t sampled = pixels.get(static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+        const color_t sampled = get(pixels, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
         if (leftClick) {
             ctx.primaryColor = sampled;
         } else {
@@ -282,8 +282,8 @@ namespace
 
         pushCanvas(canvas.activeLayer().framebuffer);
             Pixels layerPixels = loadPixels();
-            const uint32_t layerWidth = layerPixels.getWidth();
-            const uint32_t layerHeight = layerPixels.getHeight();
+            const uint32_t layerWidth = layerPixels.width;
+            const uint32_t layerHeight = layerPixels.height;
 
             for (int sy = 0; sy < scratchHeight; ++sy) {
                 const int ty = static_cast<int>(originY) + sy;
@@ -296,17 +296,17 @@ namespace
                         continue;
                     }
 
-                    const float srcA = (static_cast<float>(red(coverage.get(static_cast<uint32_t>(sx), static_cast<uint32_t>(sy)))) / 255.0f) * fillAlpha01;
+                    const float srcA = (static_cast<float>(red(get(coverage, static_cast<uint32_t>(sx), static_cast<uint32_t>(sy)))) / 255.0f) * fillAlpha01;
                     if (srcA <= 0.0f) {
                         continue;
                     }
 
-                    const color_t dst = layerPixels.get(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
+                    const color_t dst = get(layerPixels, static_cast<uint32_t>(tx), static_cast<uint32_t>(ty));
                     const float dstA = static_cast<float>(alpha(dst)) / 255.0f;
                     const float outA = srcA + dstA * (1.0f - srcA);
 
                     if (outA <= 0.0001f) {
-                        layerPixels.set(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty), rgba(0, 0, 0, 0));
+                        set(layerPixels, static_cast<uint32_t>(tx), static_cast<uint32_t>(ty), rgba(0, 0, 0, 0));
                         continue;
                     }
 
@@ -314,7 +314,7 @@ namespace
                     const float outG = (static_cast<float>(fillG) * srcA + static_cast<float>(green(dst)) * dstA * (1.0f - srcA)) / outA;
                     const float outB = (static_cast<float>(fillB) * srcA + static_cast<float>(blue(dst)) * dstA * (1.0f - srcA)) / outA;
 
-                    layerPixels.set(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty),
+                    set(layerPixels, static_cast<uint32_t>(tx), static_cast<uint32_t>(ty),
                                      rgba(static_cast<int>(std::clamp(outR, 0.0f, 255.0f)),
                                           static_cast<int>(std::clamp(outG, 0.0f, 255.0f)),
                                           static_cast<int>(std::clamp(outB, 0.0f, 255.0f)),
@@ -410,8 +410,8 @@ namespace
 
         pushCanvas(ctx.canvas.activeLayer().framebuffer);
             Pixels layerPixels = loadPixels();
-            const uint32_t layerWidth = layerPixels.getWidth();
-            const uint32_t layerHeight = layerPixels.getHeight();
+            const uint32_t layerWidth = layerPixels.width;
+            const uint32_t layerHeight = layerPixels.height;
 
             for (int sy = 0; sy < state.selectionRect.height; ++sy) {
                 const int ty = destY + sy;
@@ -423,8 +423,8 @@ namespace
                     if (tx < 0 or static_cast<uint32_t>(tx) >= layerWidth) {
                         continue;
                     }
-                    layerPixels.set(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty),
-                                     state.selectionPixels.get(static_cast<uint32_t>(sx), static_cast<uint32_t>(sy)));
+                    set(layerPixels, static_cast<uint32_t>(tx), static_cast<uint32_t>(ty),
+                        get(state.selectionPixels, static_cast<uint32_t>(sx), static_cast<uint32_t>(sy)));
                 }
             }
 
@@ -454,15 +454,15 @@ namespace
 
         ctx.history.push(ctx.canvas.captureState());
 
-        Pixels cut(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+        Pixels cut = makePixels(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 
         pushCanvas(ctx.canvas.activeLayer().framebuffer);
             Pixels layerPixels = loadPixels();
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
-                    const color_t c = layerPixels.get(static_cast<uint32_t>(left + x), static_cast<uint32_t>(top + y));
-                    cut.set(static_cast<uint32_t>(x), static_cast<uint32_t>(y), c);
-                    layerPixels.set(static_cast<uint32_t>(left + x), static_cast<uint32_t>(top + y), rgba(0, 0, 0, 0));
+                    const color_t c = get(layerPixels, static_cast<uint32_t>(left + x), static_cast<uint32_t>(top + y));
+                    set(cut, static_cast<uint32_t>(x), static_cast<uint32_t>(y), c);
+                    set(layerPixels, static_cast<uint32_t>(left + x), static_cast<uint32_t>(top + y), rgba(0, 0, 0, 0));
                 }
             }
             updatePixels(layerPixels);

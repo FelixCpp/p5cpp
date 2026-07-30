@@ -42,10 +42,10 @@ namespace
     void rebuildHueStrip(UiState& ui)
     {
         constexpr uint32_t width = 256;
-        Pixels pixels(width, 1);
+        Pixels pixels = makePixels(width, 1);
         for (uint32_t x = 0; x < width; ++x) {
             const float hue = static_cast<float>(x) / static_cast<float>(width - 1) * 360.0f;
-            pixels.set(x, 0, hsv(hue, 1.0f, 1.0f));
+            set(pixels, x, 0, hsv(hue, 1.0f, 1.0f));
         }
         ui.hueStripTexture = loadTexture(width, 1, flippedRows(pixels).data());
     }
@@ -53,12 +53,12 @@ namespace
     void rebuildSvSquare(UiState& ui)
     {
         constexpr uint32_t size = 48;
-        Pixels pixels(size, size);
+        Pixels pixels = makePixels(size, size);
         for (uint32_t y = 0; y < size; ++y) {
             const float value = 1.0f - static_cast<float>(y) / static_cast<float>(size - 1);
             for (uint32_t x = 0; x < size; ++x) {
                 const float saturation = static_cast<float>(x) / static_cast<float>(size - 1);
-                pixels.set(x, y, hsv(ui.hue, saturation, value));
+                set(pixels, x, y, hsv(ui.hue, saturation, value));
             }
         }
         ui.svSquareTexture = loadTexture(size, size, flippedRows(pixels).data());

@@ -73,4 +73,9 @@ namespace p5cpp
         std::vector<std::weak_ptr<SoundEndedState>> m_endedStates;
         std::vector<Sound> m_transientSounds;
     };
+
+    // Resolves the AudioComponent registered on the current engine's AppContext -
+    // shared by every audio loader (sound.cpp, audio_stream.cpp) and the
+    // Component-forwarding functions in audio_api.cpp. Defined once in audio_api.cpp.
+    AudioComponent& getAudioComponent();
 } // namespace p5cpp

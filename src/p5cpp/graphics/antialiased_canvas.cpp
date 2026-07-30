@@ -34,7 +34,7 @@ namespace p5cpp
 
     bool AntialiasedCanvas::isMsaaFramebuffer(const Framebuffer& framebuffer) const
     {
-        return m_samples > 0 && framebuffer.getFramebufferId() == m_msaa.getFramebufferId();
+        return m_samples > 0 && framebuffer.id == m_msaa.id;
     }
 
     void AntialiasedCanvas::rebuildMsaaFramebuffer()
@@ -43,7 +43,7 @@ namespace p5cpp
         glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
         const uint32_t samples = std::min(m_samples, static_cast<uint32_t>(std::max(maxSamples, 1)));
 
-        const uint2 size = m_default.getSize();
+        const uint2 size = m_default.size;
         m_msaa = createMultisampleFramebuffer(size.x, size.y, samples);
     }
 
@@ -51,9 +51,9 @@ namespace p5cpp
     {
         if (m_samples == 0) return;
 
-        const uint2 size = m_default.getSize();
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_msaa.getFramebufferId().value);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_default.getFramebufferId().value);
+        const uint2 size = m_default.size;
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_msaa.id.value);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_default.id.value);
         glBlitFramebuffer(0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), 0, 0, static_cast<GLint>(size.x), static_cast<GLint>(size.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

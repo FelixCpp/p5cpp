@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <span>
@@ -20,54 +21,56 @@ namespace p5cpp
         float duration() const { return sampleRate == 0 ? 0.0f : static_cast<float>(frameCount()) / static_cast<float>(sampleRate); }
     };
 
+    // Fully decodes an audio file into raw PCM samples for analysis/processing.
+    // Returns an invalid AudioSamples (see AudioSamples::isValid()) on failure.
+    AudioSamples loadAudioSamples(const std::filesystem::path& soundFilePath);
+    AudioSamples loadAudioSamples(std::span<const uint8_t> soundData);
+
     // Invoked on the AUDIO THREAD whenever the engine needs more samples:
     // fill `frames` (interleaved, pre-zeroed, frames.size() = frameCount * channels).
     // Do not call any p5cpp functions or allocate inside the callback.
     using AudioStreamCallback = std::function<void(std::span<float> frames, uint32_t channels)>;
 
-    // Same shallow-const-handle idiom as SoundImpl (see sound.hpp).
-    struct AudioStreamImpl
+    namespace detail
     {
-        virtual ~AudioStreamImpl() = default;
+        struct AudioStreamResource;
+    }
 
-        virtual void play() const = 0;
-        virtual void stop() const = 0;
-        virtual void pause() const = 0;
-        virtual bool isPlaying() const = 0;
+    struct AudioStream;
 
-        virtual void setVolume(float volume) const = 0;
-        virtual float getVolume() const = 0;
-        virtual void setPan(float pan) const = 0;
-        virtual float getPan() const = 0;
-        virtual void setRate(float rate) const = 0;
-        virtual float getRate() const = 0;
+    // Procedural audio: the callback fills sample buffers on demand (on the audio
+    // thread - see AudioStreamCallback above). Returns an invalid AudioStream (see
+    // isAudioStreamValid()) on failure.
+    AudioStream createAudioStream(uint32_t sampleRate, uint32_t channels, AudioStreamCallback callback);
+
+    // A procedural audio stream handle. Copies are cheap and alias the same
+    // underlying miniaudio sound (shared_ptr-backed); everything is torn down
+    // automatically once the last copy is destroyed. Default-constructed instances
+    // are "invalid" - every free function below is a safe no-op on one (getters
+    // return zero/default values) - see isAudioStreamValid().
+    struct AudioStream
+    {
+        uint32_t sampleRate = 0;
+        uint32_t channels = 0;
+
+        // Internal handle driving automatic cleanup - not meant to be read or written
+        // directly. Public (rather than private+friend) because detail::AudioStreamResource
+        // is opaque outside audio_stream.cpp: exposing the pointer can't be used to
+        // fabricate a working AudioStream, only to alias or null out this one.
+        std::shared_ptr<detail::AudioStreamResource> resource;
     };
 
-    class AudioStream
-    {
-    public:
-        AudioStream();
-        AudioStream(std::unique_ptr<AudioStreamImpl> impl);
-        AudioStream(std::shared_ptr<AudioStreamImpl> impl);
+    bool isAudioStreamValid(const AudioStream& stream);
 
-        // An AudioStream is invalid when creation failed; all methods on an
-        // invalid handle are safe no-ops (getters return zero/default values).
-        bool isValid() const;
-        explicit operator bool() const;
+    void playAudioStream(const AudioStream& stream);
+    void stopAudioStream(const AudioStream& stream);
+    void pauseAudioStream(const AudioStream& stream);
+    bool isPlaying(const AudioStream& stream);
 
-        void play() const;
-        void stop() const;
-        void pause() const;
-        bool isPlaying() const;
-
-        void setVolume(float volume) const;
-        float getVolume() const;
-        void setPan(float pan) const;
-        float getPan() const;
-        void setRate(float rate) const;
-        float getRate() const;
-
-    private:
-        std::shared_ptr<AudioStreamImpl> impl;
-    };
+    void setAudioStreamVolume(const AudioStream& stream, float volume);
+    float getAudioStreamVolume(const AudioStream& stream);
+    void setAudioStreamPan(const AudioStream& stream, float pan);
+    float getAudioStreamPan(const AudioStream& stream);
+    void setAudioStreamRate(const AudioStream& stream, float rate);
+    float getAudioStreamRate(const AudioStream& stream);
 } // namespace p5cpp

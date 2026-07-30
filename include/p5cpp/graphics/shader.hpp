@@ -88,12 +88,12 @@ namespace p5cpp
         struct ShaderResource;
     }
 
-    class Shader;
+    struct Shader;
 
     // Compiles and links a shader program, caching by (vertexShaderSource,
     // fragmentShaderSource) pair — a repeated call with the same source pair returns a
     // Shader that aliases the same underlying compiled program instead of recompiling.
-    // Returns an invalid Shader (see Shader::isValid()) on a compile/link error.
+    // Returns an invalid Shader (see isShaderValid()) on a compile/link error.
     Shader loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
 
     // Compiles a custom full-screen post-processing shader from a small GLSL snippet, for
@@ -115,25 +115,21 @@ namespace p5cpp
 {
     // A compiled+linked shader program handle. Copies are cheap and alias the same GL
     // program (shared_ptr-backed); the program is deleted automatically once the last
-    // copy is destroyed. Default-constructed instances are "invalid" (getShaderId().value
-    // == 0) - see isValid().
-    class Shader
+    // copy is destroyed. Default-constructed instances are "invalid" (id.value == 0) -
+    // see isShaderValid().
+    struct Shader
     {
-    public:
-        Shader();
+        ShaderId id;
 
-        bool isValid() const;
-        std::optional<UniformLocation> getUniformLocation(const std::string& name) const;
-        ShaderId getShaderId() const;
-
-    private:
-        explicit Shader(std::shared_ptr<detail::ShaderResource> resource);
-
-        friend Shader loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
-
-        std::shared_ptr<detail::ShaderResource> m_resource;
+        // Internal handle driving automatic cleanup - not meant to be read or written
+        // directly. Public (rather than private+friend) because detail::ShaderResource
+        // is opaque outside shader.cpp: exposing the pointer can't be used to fabricate
+        // a working Shader, only to alias or null out this one.
+        std::shared_ptr<detail::ShaderResource> resource;
     };
 
+    bool isShaderValid(const Shader& shader);
+    std::optional<UniformLocation> getUniformLocation(const Shader& shader, const std::string& name);
 } // namespace p5cpp
 
 namespace p5cpp
@@ -158,9 +154,9 @@ namespace p5cpp
     //     setUniform(blurShader, "u_TexelSize", uniform(1.0f / w, 1.0f / h));
     //     setUniform(blurShader, "u_Radius", uniform(radius));
     //     setUniform(blurShader, "u_Direction", uniform(1.0f, 0.0f));
-    //     image(*source.getColorTexture(), 0, 0, w, h);   // -> horizontal pass target
+    //     image(source.colorTexture, 0, 0, w, h);   // -> horizontal pass target
     //     setUniform(blurShader, "u_Direction", uniform(0.0f, 1.0f));
-    //     image(*horizontalPass.getColorTexture(), 0, 0, w, h); // -> final target
+    //     image(horizontalPass.colorTexture, 0, 0, w, h); // -> final target
     //     noShader();
     //
     // Uniforms: u_TexelSize (vec2, 1/width 1/height), u_Direction (vec2, (1,0) or (0,1)),
@@ -183,5 +179,5 @@ namespace p5cpp
     inline constexpr UniformVariable uniform(float x, float y, float z) { return UniformVariable {.type = UniformVariable::Type::float3, .float3Value = float3 {x, y, z}}; }
     inline constexpr UniformVariable uniform(float x, float y, float z, float w) { return UniformVariable {.type = UniformVariable::Type::float4, .float4Value = float4 {x, y, z, w}}; }
     inline constexpr UniformVariable uniform(const matrix4x4& value) { return UniformVariable {.type = UniformVariable::Type::matrix4x4, .matrix4x4Value = value}; }
-    inline UniformVariable uniform(const Texture& texture, int32_t unit) { return UniformVariable {.type = UniformVariable::Type::texture, .textureValue = {texture.getTextureId(), unit}}; }
+    inline UniformVariable uniform(const Texture& texture, int32_t unit) { return UniformVariable {.type = UniformVariable::Type::texture, .textureValue = {texture.id, unit}}; }
 } // namespace p5cpp
