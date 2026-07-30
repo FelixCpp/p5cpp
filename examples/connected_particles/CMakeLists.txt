@@ -1,2 +1,0 @@
-add_executable(connected_particles main.cpp)
-target_link_libraries(connected_particles PRIVATE p5cpp)
