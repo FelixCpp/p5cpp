@@ -58,16 +58,11 @@ namespace p5cpp
             });
         }
 
-        // Builds the fixed draw dispatch chain once (the module list never changes
-        // after setup), instead of reconstructing a std::function closure per module
-        // on every single frame. Folding from the last module backward means each
-        // closure captures the already-built Next for the rest of the chain by
-        // value, producing the exact same onion call structure as the recursive
-        // version — modules can still act before *and* after calling next().
         void buildDrawChain()
         {
-            Next chain = []() {};
-            for (size_t i = modules.size(); i-- > 0; ) {
+            Next chain = []() {
+            };
+            for (size_t i = modules.size(); i-- > 0;) {
                 Module* module = modules[i].get();
                 Next inner = std::move(chain);
                 chain = [this, module, inner]() {

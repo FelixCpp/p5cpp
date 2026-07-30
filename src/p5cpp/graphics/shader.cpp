@@ -111,9 +111,6 @@ namespace
 
 namespace p5cpp
 {
-    // loadShader(vertexSrc, fragmentSrc) caches by source pair: a repeated call for the
-    // same source returns a Shader that aliases the already-compiled program (via the
-    // shared_ptr this Shader already carries for RAII) instead of recompiling/relinking.
     Shader loadShader(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
         const std::string key = makeShaderCacheKey(vertexShaderSource, fragmentShaderSource);
@@ -143,8 +140,6 @@ namespace p5cpp
 
 namespace p5cpp
 {
-    // Every effect pass draws the same plain fullscreen quad, so custom effect shaders
-    // can all share this vertex shader instead of every caller redefining it.
     inline static constexpr const char* effectVSource = R"(
         #version 410 core
 
@@ -177,9 +172,6 @@ namespace p5cpp
         uniform vec2 u_TexelSize;
     )";
 
-    // effect() always binds the source canvas to texture slot 0, so `u_Textures[0]` is
-    // a constant index here (no need for the v_TexIndex switch the default/text/blur
-    // shaders use to pick between up to 8 dynamically-bound textures).
     inline static constexpr const char* effectFFooter = R"(
         void main() {
             o_Color = v_Color * effect(v_TexCoord, u_TexelSize, u_Textures[0]);

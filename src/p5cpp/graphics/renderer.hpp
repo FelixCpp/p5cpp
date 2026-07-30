@@ -21,10 +21,6 @@ namespace p5cpp
         virtual void end() = 0;
         virtual void flush() = 0;
 
-        // `uniforms` is applied verbatim for this draw call — callers pass either the
-        // live UniformCache's current snapshot for `shader`, or a snapshot frozen at an
-        // earlier time (e.g. a recorded RenderGroup op), decoupled from whatever the
-        // live cache holds now.
         virtual void submit(DrawBufferWriter& scope, std::span<const UniformSnapshot> uniforms, const Shader& shader, const BlendMode& blendMode, const Texture& texture) = 0;
 
         virtual DrawBufferWriter& getDrawScope() = 0;

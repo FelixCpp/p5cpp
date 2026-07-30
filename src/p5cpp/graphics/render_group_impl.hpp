@@ -16,22 +16,19 @@ namespace p5cpp
 {
     struct RecordedVertex
     {
-        float2 position; // local-space: relative to the buildRenderGroup() call's own identity-based matrix stack
+        float2 position;
         float2 texcoord;
         float4 color;
     };
 
-    // One fill or stroke submission recorded during buildRenderGroup(), already
-    // tessellated/stroked into triangles — replaying it costs a per-vertex transform
-    // and a submit() call, not another pass through libtess2/the stroker.
     struct RecordedOp
     {
         std::vector<RecordedVertex> vertices;
-        std::vector<uint32_t> indices; // triples, 0-based relative to this op's own vertices
+        std::vector<uint32_t> indices;
         Shader shader;
         BlendMode blendMode;
         Texture texture;
-        std::vector<UniformSnapshot> uniforms; // frozen at build time, independent of the live UniformCache
+        std::vector<UniformSnapshot> uniforms;
     };
 
     struct RenderGroupImpl
@@ -39,10 +36,6 @@ namespace p5cpp
         std::vector<RecordedOp> ops;
     };
 
-    // DrawBufferWriter that appends into an in-progress op's scratch buffers instead of
-    // the live renderer's GPU-bound staging buffer. Indices are recorded relative to this
-    // op alone (0-based), matching what tess.cpp/stroker.cpp already produce by calling
-    // getRelativeCursor() fresh at the start of each shape.
     class RecordingDrawBufferWriter final : public DrawBufferWriter
     {
     public:
@@ -67,8 +60,6 @@ namespace p5cpp
         std::vector<uint32_t> indices;
     };
 
-    // One buildRenderGroup() call's in-progress state: a scratch writer for whichever op
-    // is currently being generated, plus every op committed so far, in call order.
     struct RecordingSink
     {
         RecordingDrawBufferWriter writer;

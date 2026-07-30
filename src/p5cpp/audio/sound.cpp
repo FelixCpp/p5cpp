@@ -10,8 +10,6 @@ namespace p5cpp::detail
 {
     struct SoundResource
     {
-        // File-backed: the resource manager owns the underlying data source's lifetime
-        // (ma_sound_uninit() frees it), so no decoder/backing-buffer ownership needed here.
         SoundResource(ma_engine* engine, AudioComponent* audio, std::unique_ptr<ma_sound> sound, bool streamed)
             : m_engine(engine),
               m_audio(audio),
@@ -20,11 +18,6 @@ namespace p5cpp::detail
         {
         }
 
-        // Memory-backed: ma_sound_init_from_data_source() only stores a pointer to the
-        // decoder we hand it — it does not take ownership or copy the decoder's backing
-        // bytes. Both must outlive the sound (it streams/decodes from them on demand for
-        // as long as it plays), so this resource owns and outlives them. The bytes are
-        // shared so clone() can decode from the same buffer.
         SoundResource(ma_engine* engine, AudioComponent* audio, std::unique_ptr<ma_sound> sound, std::unique_ptr<ma_decoder> decoder, std::shared_ptr<const std::vector<uint8_t>> encodedData)
             : m_engine(engine),
               m_audio(audio),
@@ -34,8 +27,6 @@ namespace p5cpp::detail
         {
         }
 
-        // Sample-backed (createSound): the ma_audio_buffer reads directly from the shared
-        // PCM vector, so both must outlive the sound; clones share the same PCM data.
         SoundResource(ma_engine* engine, AudioComponent* audio, std::unique_ptr<ma_sound> sound, std::unique_ptr<ma_audio_buffer> audioBuffer, std::shared_ptr<const std::vector<float>> pcmData, uint32_t pcmSampleRate, uint32_t pcmChannels)
             : m_engine(engine),
               m_audio(audio),
@@ -49,10 +40,8 @@ namespace p5cpp::detail
 
         ~SoundResource()
         {
-            // Uninit the sound first: after ma_sound_uninit() returns, the audio thread
-            // no longer touches the data source or fires the end callback, so the
-            // decoder/audio buffer/ended state destroyed afterwards are safe to free.
             ma_sound_uninit(m_sound.get());
+
             if (m_decoder) {
                 ma_decoder_uninit(m_decoder.get());
             }
@@ -63,11 +52,10 @@ namespace p5cpp::detail
 
         void play()
         {
-            // Restarting a sound that ran to its natural end would otherwise start at
-            // the end cursor and finish immediately.
             if (ma_sound_at_end(m_sound.get()) == MA_TRUE) {
                 ma_sound_seek_to_pcm_frame(m_sound.get(), 0);
             }
+
             ma_sound_start(m_sound.get());
             m_status = SoundStatus::playing;
         }
@@ -92,8 +80,6 @@ namespace p5cpp::detail
 
         SoundStatus status()
         {
-            // miniaudio has no pause/stop distinction, so m_status tracks what the user
-            // requested; a natural end is only observable through is_playing going false.
             if (m_status == SoundStatus::playing && ma_sound_is_playing(m_sound.get()) == MA_FALSE) {
                 m_status = SoundStatus::stopped;
             }
@@ -149,7 +135,8 @@ namespace p5cpp::detail
             ma_data_source_set_loop_point_in_pcm_frames(
                 dataSource,
                 static_cast<ma_uint64>(startSeconds * static_cast<float>(rate)),
-                static_cast<ma_uint64>(endSeconds * static_cast<float>(rate)));
+                static_cast<ma_uint64>(endSeconds * static_cast<float>(rate))
+            );
         }
 
         void seek(float seconds)
@@ -224,8 +211,6 @@ namespace p5cpp::detail
         std::shared_ptr<SoundEndedState> m_endedState;
 
     private:
-        // Audio-thread side of onEnded(): only flips a flag, AudioComponent::update()
-        // invokes the user callback on the main thread.
         static void onSoundEnd(void* userData, ma_sound*)
         {
             static_cast<SoundEndedState*>(userData)->pending.store(true, std::memory_order_relaxed);
@@ -335,9 +320,6 @@ namespace p5cpp
     {
         AudioComponent& audio = getAudioComponent();
 
-        // ma_decoder_init_memory() does not copy the bytes — it reads from them on
-        // demand as the sound plays, so we keep our own copy alive for the sound's
-        // lifetime rather than relying on the caller's buffer to outlive playback.
         auto data = std::make_shared<const std::vector<uint8_t>>(soundData.begin(), soundData.end());
         std::shared_ptr<detail::SoundResource> resource = detail::makeMemorySound(audio.getEngine(), &audio, std::move(data));
         if (!resource) {
@@ -392,27 +374,57 @@ namespace p5cpp
 {
     bool isSoundValid(const Sound& sound) { return sound.resource != nullptr; }
 
-    void playSound(const Sound& sound) { if (sound.resource) sound.resource->play(); }
-    void stopSound(const Sound& sound) { if (sound.resource) sound.resource->stop(); }
-    void pauseSound(const Sound& sound) { if (sound.resource) sound.resource->pause(); }
+    void playSound(const Sound& sound)
+    {
+        if (sound.resource) sound.resource->play();
+    }
+    void stopSound(const Sound& sound)
+    {
+        if (sound.resource) sound.resource->stop();
+    }
+    void pauseSound(const Sound& sound)
+    {
+        if (sound.resource) sound.resource->pause();
+    }
     bool isPlaying(const Sound& sound) { return sound.resource ? sound.resource->isPlaying() : false; }
     SoundStatus getSoundStatus(const Sound& sound) { return sound.resource ? sound.resource->status() : SoundStatus::stopped; }
 
-    void setSoundVolume(const Sound& sound, float volume) { if (sound.resource) sound.resource->setVolume(volume); }
+    void setSoundVolume(const Sound& sound, float volume)
+    {
+        if (sound.resource) sound.resource->setVolume(volume);
+    }
     float getSoundVolume(const Sound& sound) { return sound.resource ? sound.resource->getVolume() : 0.0f; }
-    void setSoundPan(const Sound& sound, float pan) { if (sound.resource) sound.resource->setPan(pan); }
+    void setSoundPan(const Sound& sound, float pan)
+    {
+        if (sound.resource) sound.resource->setPan(pan);
+    }
     float getSoundPan(const Sound& sound) { return sound.resource ? sound.resource->getPan() : 0.0f; }
-    void setSoundRate(const Sound& sound, float rate) { if (sound.resource) sound.resource->setRate(rate); }
+    void setSoundRate(const Sound& sound, float rate)
+    {
+        if (sound.resource) sound.resource->setRate(rate);
+    }
     float getSoundRate(const Sound& sound) { return sound.resource ? sound.resource->getRate() : 0.0f; }
-    void setSoundLoop(const Sound& sound, bool loop) { if (sound.resource) sound.resource->setLoop(loop); }
+    void setSoundLoop(const Sound& sound, bool loop)
+    {
+        if (sound.resource) sound.resource->setLoop(loop);
+    }
     bool isSoundLooping(const Sound& sound) { return sound.resource ? sound.resource->isLooping() : false; }
-    void setSoundLoopPoints(const Sound& sound, float startSeconds, float endSeconds) { if (sound.resource) sound.resource->setLoopPoints(startSeconds, endSeconds); }
+    void setSoundLoopPoints(const Sound& sound, float startSeconds, float endSeconds)
+    {
+        if (sound.resource) sound.resource->setLoopPoints(startSeconds, endSeconds);
+    }
 
-    void seekSound(const Sound& sound, float seconds) { if (sound.resource) sound.resource->seek(seconds); }
+    void seekSound(const Sound& sound, float seconds)
+    {
+        if (sound.resource) sound.resource->seek(seconds);
+    }
     float getSoundCurrentTime(const Sound& sound) { return sound.resource ? sound.resource->currentTime() : 0.0f; }
     float getSoundDuration(const Sound& sound) { return sound.resource ? sound.resource->duration() : 0.0f; }
 
-    void setSoundFade(const Sound& sound, float fromVolume, float toVolume, float milliseconds) { if (sound.resource) sound.resource->setFade(fromVolume, toVolume, milliseconds); }
+    void setSoundFade(const Sound& sound, float fromVolume, float toVolume, float milliseconds)
+    {
+        if (sound.resource) sound.resource->setFade(fromVolume, toVolume, milliseconds);
+    }
 
     void fadeInSound(const Sound& sound, float milliseconds)
     {
@@ -428,7 +440,10 @@ namespace p5cpp
 
     uint64_t getSoundFrameCount(const Sound& sound) { return sound.resource ? sound.resource->frameCount() : 0; }
 
-    void onSoundEnded(const Sound& sound, std::function<void()> callback) { if (sound.resource) sound.resource->onEnded(std::move(callback)); }
+    void onSoundEnded(const Sound& sound, std::function<void()> callback)
+    {
+        if (sound.resource) sound.resource->onEnded(std::move(callback));
+    }
 
     Sound cloneSound(const Sound& sound)
     {
