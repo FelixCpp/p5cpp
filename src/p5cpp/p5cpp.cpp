@@ -1,5 +1,9 @@
-#include <p5cpp/p5cpp.hpp>
+#include <p5cpp/application/application.hpp>
+
+using namespace p5;
 
 int main()
 {
+    Application application;
+    application.run();
 }

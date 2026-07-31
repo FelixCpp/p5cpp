@@ -38,3 +38,4 @@ BraceWrapping:
   AfterClass: true
   AfterFunction: true
   AfterUnion: true
+  AfterEnum: true
