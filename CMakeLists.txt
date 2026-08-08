@@ -42,6 +42,9 @@ add_library(
   ./src/p5cpp/application/sketch_plugin.cpp
   ./src/p5cpp/window/window.cpp
   ./src/p5cpp/window/window_plugin.cpp
+  ./src/p5cpp/input/input.cpp
+  ./src/p5cpp/input/input_plugin.cpp
+  ./src/p5cpp/input/input_api.cpp
   ./src/p5cpp/p5cpp.cpp
 )
 

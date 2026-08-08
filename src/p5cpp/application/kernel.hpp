@@ -19,6 +19,8 @@ namespace p5
         void process(const WindowEvent& event);
         RunResult run();
 
+        Context& getContext();
+
     private:
         void dispatchSetup();
         void dispatchEvent(const WindowEvent& event);

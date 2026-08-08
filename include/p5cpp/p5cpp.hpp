@@ -7,9 +7,49 @@
 #include <typeindex>
 #include <unordered_map>
 #include <span>
+#include <string>
+#include <vector>
 
 namespace p5
 {
+    // clang-format off
+    enum class Key
+    {
+        Unknown, Space, Apostrophe, Comma, Minus, Period, Slash,
+        Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9,
+        Semicolon, Equal,
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+        LeftBracket, Backslash, RightBracket, GraveAccent, World1, World2, Escape, Enter, Tab, Backspace, Insert, Delete,
+        Right, Left, Down, Up,
+        PageUp, PageDown,
+        Home, End, CapsLock, ScrollLock, NumLock, PrintScreen, Pause,
+        F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15, F16, F17, F18, F19, F20, F21, F22, F23, F24, F25,
+        Keypad0, Keypad1, Keypad2, Keypad3, Keypad4, Keypad5, Keypad6, Keypad7, Keypad8, Keypad9,
+        KeypadDecimal, KeypadDivide, KeypadMultiply, KeypadSubtract, KeypadAdd, KeypadEnter, KeypadEqual,
+        LeftShift, LeftControl, LeftAlt, LeftSuper, RightShift,
+        RightControl, RightAlt, RightSuper, Menu,
+        Count,
+    };
+    // clang-format on
+
+    // clang-format off
+    enum class MouseButton
+    {
+        Left, Right, Middle, Button4, Button5, Button6, Button7, Button8,
+        Count,
+    };
+    // clang-format on
+
+    struct KeyMods
+    {
+        bool shift;
+        bool control;
+        bool alt;
+        bool super;
+        bool capsLock;
+        bool numLock;
+    };
+
     class WindowEvent
     {
     public:
@@ -41,11 +81,106 @@ namespace p5
         {
         };
 
-        using EventType = std::variant<Close, WindowResize, FramebufferResize, FocusGained, FocusLost>;
+        struct WindowMove : EventTypeTag
+        {
+            int32_t x;
+            int32_t y;
+        };
+
+        struct WindowMinimize : EventTypeTag
+        {
+        };
+
+        struct WindowRestore : EventTypeTag
+        {
+        };
+
+        struct WindowMaximize : EventTypeTag
+        {
+        };
+
+        struct WindowUnmaximize : EventTypeTag
+        {
+        };
+
+        struct WindowContentScaleChange : EventTypeTag
+        {
+            float xScale;
+            float yScale;
+        };
+
+        struct KeyPress : EventTypeTag
+        {
+            Key key;
+            int scancode;
+            KeyMods mods;
+            bool repeat;
+        };
+
+        struct KeyRelease : EventTypeTag
+        {
+            Key key;
+            int scancode;
+            KeyMods mods;
+        };
+
+        struct CharInput : EventTypeTag
+        {
+            uint32_t codepoint;
+        };
+
+        struct MouseButtonPress : EventTypeTag
+        {
+            MouseButton button;
+            KeyMods mods;
+            double x;
+            double y;
+        };
+
+        struct MouseButtonRelease : EventTypeTag
+        {
+            MouseButton button;
+            KeyMods mods;
+            double x;
+            double y;
+        };
+
+        struct MouseMove : EventTypeTag
+        {
+            double x;
+            double y;
+        };
+
+        struct MouseScroll : EventTypeTag
+        {
+            double xOffset;
+            double yOffset;
+        };
+
+        struct MouseEnter : EventTypeTag
+        {
+        };
+
+        struct MouseLeave : EventTypeTag
+        {
+        };
+
+        struct FileDrop : EventTypeTag
+        {
+            std::vector<std::string> paths;
+        };
+
+        using EventType = std::variant<
+            Close, WindowResize, FramebufferResize, FocusGained, FocusLost,
+            WindowMove, WindowMinimize, WindowRestore, WindowMaximize, WindowUnmaximize, WindowContentScaleChange,
+            KeyPress, KeyRelease, CharInput,
+            MouseButtonPress, MouseButtonRelease, MouseMove, MouseScroll, MouseEnter, MouseLeave,
+            FileDrop>;
 
         constexpr WindowEvent(const EventType& eventType);
 
         template <std::derived_from<EventTypeTag> T> constexpr bool is() const;
+        template <std::derived_from<EventTypeTag> T> constexpr const T& as() const;
 
     private:
         EventType m_eventType;
@@ -64,6 +199,31 @@ namespace p5
     };
 
     extern std::unique_ptr<Sketch> createSketch();
+} // namespace p5
+
+namespace p5
+{
+    bool isKeyDown(Key key);
+    bool isKeyPressed(Key key);
+    bool isKeyReleased(Key key);
+
+    bool isMouseButtonDown(MouseButton button);
+    bool isMouseButtonPressed(MouseButton button);
+    bool isMouseButtonReleased(MouseButton button);
+
+    double getMouseX();
+    double getMouseY();
+    double getPreviousMouseX();
+    double getPreviousMouseY();
+    double getMouseDeltaX();
+    double getMouseDeltaY();
+
+    double getScrollX();
+    double getScrollY();
+
+    bool isCursorInWindow();
+
+    std::span<const std::string> getDroppedFiles();
 } // namespace p5
 
 namespace p5
@@ -127,6 +287,12 @@ namespace p5
     {
         return std::holds_alternative<T>(m_eventType);
     }
+
+    template <std::derived_from<WindowEvent::EventTypeTag> T>
+    constexpr const T& WindowEvent::as() const
+    {
+        return std::get<T>(m_eventType);
+    }
 } // namespace p5
 
 namespace p5
@@ -160,5 +326,4 @@ namespace p5
     {
         return m_instances.contains(typeid(T));
     }
-
 } // namespace p5

@@ -13,6 +13,11 @@ namespace p5
         dispatchEvent(event);
     }
 
+    Context& Kernel::getContext()
+    {
+        return m_context;
+    }
+
     Kernel::RunResult Kernel::run()
     {
         dispatchSetup();
