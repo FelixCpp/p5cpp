@@ -16,4 +16,9 @@ namespace p5
         const Next following {m_chain, m_index + 1, context, m_step, payload};
         m_step(*m_chain[m_index], *context, following);
     }
+
+    const void* Next::getPayload() const
+    {
+        return payload;
+    }
 } // namespace p5

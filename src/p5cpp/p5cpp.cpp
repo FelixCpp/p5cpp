@@ -1,128 +1,32 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/application/lifecycle.hpp>
 #include <p5cpp/application/lifecycle_plugin.hpp>
-
-#include <vector>
+#include <p5cpp/application/sketch_plugin.hpp>
+#include <p5cpp/window/window_plugin.hpp>
+#include <p5cpp/application/kernel.hpp>
 
 namespace p5
 {
-    struct RunResult
+    inline static std::unique_ptr<Kernel> s_kernel;
+    Kernel& getKernel()
     {
-        bool shouldRestart;
-        int exitCode;
-    };
-
-    class Kernel
-    {
-    public:
-        Kernel()
-        {
-        }
-
-        void addPlugin(std::unique_ptr<Plugin> plugin)
-        {
-            m_plugins.push_back(std::move(plugin));
-        }
-
-        RunResult run()
-        {
-            dispatchSetup();
-
-            Lifecycle& lifecycle = m_context.require<Lifecycle>();
-
-            while (not lifecycle.shouldClose()) {
-                dispatchDraw();
-            }
-
-            RunResult result {
-                .shouldRestart = lifecycle.shouldRestart(),
-                .exitCode = lifecycle.getExitCode(),
-            };
-
-            dispatchDestroy();
-
-            return result;
-        }
-
-    private:
-        void dispatchSetup()
-        {
-            const auto next = Next {
-                m_plugins,
-                0,
-                &m_context,
-                [](Plugin& plugin, Context& context, const Next& next) {
-                    plugin.setup(context, next);
-                },
-                nullptr,
-            };
-
-            next();
-        }
-
-        void dispatchEvent(const WindowEvent& event)
-        {
-            const auto next = Next {
-                m_plugins,
-                0,
-                &m_context,
-                [](Plugin& plugin, Context& context, const Next& next) {
-                    const WindowEvent& event = *static_cast<const WindowEvent*>(next.getPayload());
-                    plugin.event(context, next, event);
-                },
-                &event,
-            };
-
-            next();
-        }
-
-        void dispatchDraw()
-        {
-            const auto next = Next {
-                m_plugins,
-                0,
-                &m_context,
-                [](Plugin& plugin, Context& context, const Next& next) {
-                    plugin.draw(context, next);
-                },
-                nullptr,
-            };
-
-            next();
-        }
-
-        void dispatchDestroy()
-        {
-            const auto next = Next {
-                m_plugins,
-                0,
-                &m_context,
-                [](Plugin& plugin, Context& context, const Next& next) {
-                    plugin.destroy(context, next);
-                },
-                nullptr,
-            };
-
-            next();
-        }
-
-    private:
-        std::vector<std::unique_ptr<Plugin>> m_plugins;
-        Context m_context;
-    };
+        return *s_kernel;
+    }
 } // namespace p5
 
 int main()
 {
     using namespace p5;
 
-    RunResult result;
+    Kernel::RunResult result;
 
     do {
-        const auto kernel = std::make_unique<Kernel>();
+        s_kernel = std::make_unique<Kernel>();
 
-        kernel->addPlugin(std::make_unique<LifecyclePlugin>());
-        result = kernel->run();
+        s_kernel->addPlugin(std::make_unique<LifecyclePlugin>());
+        s_kernel->addPlugin(std::make_unique<WindowPlugin>());
+        s_kernel->addPlugin(std::make_unique<SketchPlugin>());
+        result = s_kernel->run();
     } while (result.shouldRestart);
 
     return result.exitCode;

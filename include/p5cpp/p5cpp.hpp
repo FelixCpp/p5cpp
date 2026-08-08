@@ -21,13 +21,27 @@ namespace p5
         {
         };
 
-        struct Resize : EventTypeTag
+        struct WindowResize : EventTypeTag
         {
             uint32_t width;
             uint32_t height;
         };
 
-        using EventType = std::variant<Close, Resize>;
+        struct FramebufferResize : EventTypeTag
+        {
+            uint32_t width;
+            uint32_t height;
+        };
+
+        struct FocusGained : EventTypeTag
+        {
+        };
+
+        struct FocusLost : EventTypeTag
+        {
+        };
+
+        using EventType = std::variant<Close, WindowResize, FramebufferResize, FocusGained, FocusLost>;
 
         constexpr WindowEvent(const EventType& eventType);
 

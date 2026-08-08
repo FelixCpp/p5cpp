@@ -34,8 +34,14 @@ target_include_directories(stb INTERFACE ./external/stb)
 
 add_library(
   p5cpp STATIC
+  ./src/p5cpp/application/kernel.cpp
+  ./src/p5cpp/application/lifecycle.cpp
+  ./src/p5cpp/application/lifecycle_plugin.cpp
   ./src/p5cpp/application/plugin.cpp
   ./src/p5cpp/application/next.cpp
+  ./src/p5cpp/application/sketch_plugin.cpp
+  ./src/p5cpp/window/window.cpp
+  ./src/p5cpp/window/window_plugin.cpp
   ./src/p5cpp/p5cpp.cpp
 )
 
