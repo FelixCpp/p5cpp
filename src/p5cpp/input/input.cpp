@@ -1,49 +1,67 @@
 #include <p5cpp/input/input.hpp>
 
+namespace
+{
+    template <typename... Ts> struct Overloaded : Ts...
+    {
+        using Ts::operator()...;
+    };
+
+    template <typename... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
+} // namespace
+
 namespace p5
 {
-    void Input::onEvent(const WindowEvent& event)
+    void Input::process(const WindowEvent& event)
     {
-        if (event.is<WindowEvent::KeyPress>()) {
-            const auto& keyPress = event.as<WindowEvent::KeyPress>();
-            m_keyDown[static_cast<size_t>(keyPress.key)] = true;
-            if (not keyPress.repeat) {
-                m_keyPressed[static_cast<size_t>(keyPress.key)] = true;
-            }
-        } else if (event.is<WindowEvent::KeyRelease>()) {
-            const auto& keyRelease = event.as<WindowEvent::KeyRelease>();
-            m_keyDown[static_cast<size_t>(keyRelease.key)] = false;
-            m_keyReleased[static_cast<size_t>(keyRelease.key)] = true;
-        } else if (event.is<WindowEvent::MouseButtonPress>()) {
-            const auto& buttonPress = event.as<WindowEvent::MouseButtonPress>();
-            m_buttonDown[static_cast<size_t>(buttonPress.button)] = true;
-            m_buttonPressed[static_cast<size_t>(buttonPress.button)] = true;
-            m_mouseX = buttonPress.x;
-            m_mouseY = buttonPress.y;
-        } else if (event.is<WindowEvent::MouseButtonRelease>()) {
-            const auto& buttonRelease = event.as<WindowEvent::MouseButtonRelease>();
-            m_buttonDown[static_cast<size_t>(buttonRelease.button)] = false;
-            m_buttonReleased[static_cast<size_t>(buttonRelease.button)] = true;
-            m_mouseX = buttonRelease.x;
-            m_mouseY = buttonRelease.y;
-        } else if (event.is<WindowEvent::MouseMove>()) {
-            const auto& mouseMove = event.as<WindowEvent::MouseMove>();
-            m_mouseX = mouseMove.x;
-            m_mouseY = mouseMove.y;
-        } else if (event.is<WindowEvent::MouseScroll>()) {
-            const auto& mouseScroll = event.as<WindowEvent::MouseScroll>();
-            m_scrollX += mouseScroll.xOffset;
-            m_scrollY += mouseScroll.yOffset;
-        } else if (event.is<WindowEvent::MouseEnter>()) {
-            m_cursorInWindow = true;
-        } else if (event.is<WindowEvent::MouseLeave>()) {
-            m_cursorInWindow = false;
-        } else if (event.is<WindowEvent::FileDrop>()) {
-            m_droppedFiles = event.as<WindowEvent::FileDrop>().paths;
-        }
+        event.visit(Overloaded {
+            [this](const WindowEvent::KeyPress& keyPress) {
+                m_keyDown[static_cast<size_t>(keyPress.key)] = true;
+                if (not keyPress.repeat) {
+                    m_keyPressed[static_cast<size_t>(keyPress.key)] = true;
+                }
+            },
+            [this](const WindowEvent::KeyRelease& keyRelease) {
+                m_keyDown[static_cast<size_t>(keyRelease.key)] = false;
+                m_keyReleased[static_cast<size_t>(keyRelease.key)] = true;
+            },
+            [this](const WindowEvent::MouseButtonPress& buttonPress) {
+                const auto buttonIndex = static_cast<size_t>(buttonPress.button);
+                m_buttonDown[buttonIndex] = true;
+                m_buttonPressed[buttonIndex] = true;
+                m_mouseX = buttonPress.x;
+                m_mouseY = buttonPress.y;
+            },
+            [this](const WindowEvent::MouseButtonRelease& buttonRelease) {
+                const auto buttonIndex = static_cast<size_t>(buttonRelease.button);
+                m_buttonDown[buttonIndex] = false;
+                m_buttonReleased[buttonIndex] = true;
+                m_mouseX = buttonRelease.x;
+                m_mouseY = buttonRelease.y;
+            },
+            [this](const WindowEvent::MouseMove& mouseMove) {
+                m_mouseX = mouseMove.x;
+                m_mouseY = mouseMove.y;
+            },
+            [this](const WindowEvent::MouseScroll& mouseScroll) {
+                m_scrollX += mouseScroll.xOffset;
+                m_scrollY += mouseScroll.yOffset;
+            },
+            [this](const WindowEvent::MouseEnter&) {
+                m_cursorInWindow = true;
+            },
+            [this](const WindowEvent::MouseLeave&) {
+                m_cursorInWindow = false;
+            },
+            [this](const WindowEvent::FileDrop& fileDrop) {
+                m_droppedFiles = fileDrop.paths;
+            },
+            [](const auto&) {
+            },
+        });
     }
 
-    void Input::endFrame()
+    void Input::reset()
     {
         m_keyPressed.fill(false);
         m_keyReleased.fill(false);

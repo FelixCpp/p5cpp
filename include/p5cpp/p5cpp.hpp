@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace p5
 {
@@ -181,6 +182,7 @@ namespace p5
 
         template <std::derived_from<EventTypeTag> T> constexpr bool is() const;
         template <std::derived_from<EventTypeTag> T> constexpr const T& as() const;
+        template <typename Visitor> constexpr decltype(auto) visit(Visitor&& visitor) const;
 
     private:
         EventType m_eventType;
@@ -292,6 +294,12 @@ namespace p5
     constexpr const T& WindowEvent::as() const
     {
         return std::get<T>(m_eventType);
+    }
+
+    template <typename Visitor>
+    constexpr decltype(auto) WindowEvent::visit(Visitor&& visitor) const
+    {
+        return std::visit(std::forward<Visitor>(visitor), m_eventType);
     }
 } // namespace p5
 

@@ -11,7 +11,7 @@ namespace p5
 
     void InputPlugin::event(Context& context, const Next& next, const WindowEvent& event)
     {
-        m_input.onEvent(event);
+        m_input.process(event);
 
         next();
     }
@@ -20,7 +20,7 @@ namespace p5
     {
         next();
 
-        m_input.endFrame();
+        m_input.reset();
     }
 
     void InputPlugin::destroy(Context& context, const Next& next)

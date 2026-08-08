@@ -12,8 +12,8 @@ namespace p5
     class Input
     {
     public:
-        void onEvent(const WindowEvent& event);
-        void endFrame();
+        void process(const WindowEvent& event);
+        void reset();
 
         bool isKeyDown(Key key) const;
         bool isKeyPressed(Key key) const;
