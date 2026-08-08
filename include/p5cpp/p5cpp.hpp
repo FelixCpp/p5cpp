@@ -1,140 +1,52 @@
-#ifndef P5CPP_HPP
-#define P5CPP_HPP
+#pragma once
 
+#include <cstdint>
+#include <variant>
+#include <concepts>
 #include <memory>
-#include <string_view>
 #include <typeindex>
-#include <format>
-#include <vector>
-#include <span>
 #include <unordered_map>
-#include <any>
+#include <span>
 
 namespace p5
 {
-    template <typename T> struct value2
-    {
-        T x, y;
-    };
-} // namespace p5
-
-namespace p5
-{
-    template <typename T> struct value3
-    {
-        T x, y, z;
-    };
-} // namespace p5
-
-namespace p5
-{
-    template <typename T> struct value4
-    {
-        T x, y, z, w;
-    };
-} // namespace p5
-
-namespace p5
-{
-    enum WindowEventType
-    {
-        closed,
-    };
-
-    struct WindowEvent
-    {
-        WindowEventType type;
-    };
-} // namespace p5
-
-namespace p5
-{
-    class PluginPipeline
+    class WindowEvent
     {
     public:
-        virtual ~PluginPipeline() = default;
-        virtual void next() = 0;
-    };
-
-    struct Plugin
-    {
-        virtual ~Plugin() = default;
-        virtual void setup() = 0;
-        virtual void event(const WindowEvent& event) = 0;
-        virtual void draw() = 0;
-        virtual void destroy() = 0;
-    };
-} // namespace p5
-
-namespace p5
-{
-    struct Service
-    {
-        virtual ~Service() = default;
-        virtual std::type_index getTypeIndex() const = 0;
-    };
-
-    template <typename T> struct BaseService : public T
-    {
-        inline std::type_index getTypeIndex() const override
+        struct EventTypeTag
         {
-            return typeid(T);
-        }
-    };
+        };
 
-    struct ServiceLocator
-    {
-    public:
-        template <std::derived_from<Service> T> void registerService(std::shared_ptr<Service> service)
+        struct Close : EventTypeTag
         {
-            const auto type = service->getTypeIndex();
-            if (services.contains(type)) {
-                throw std::runtime_error(std::format("Type {} has already been registered", type.name()));
-            }
+        };
 
-            services.emplace(std::make_pair(type, std::move(service)));
-        }
+        struct Resize : EventTypeTag
+        {
+            uint32_t width;
+            uint32_t height;
+        };
+
+        using EventType = std::variant<Close, Resize>;
+
+        constexpr WindowEvent(const EventType& eventType);
+
+        template <std::derived_from<EventTypeTag> T> constexpr bool is() const;
 
     private:
-        std::unordered_map<std::type_index, std::shared_ptr<Service>> services;
+        EventType m_eventType;
     };
 } // namespace p5
-
-namespace p5
-{
-    struct PluginResolution
-    {
-        virtual ~PluginResolution() = default;
-        virtual void add(std::unique_ptr<Plugin> plugin) = 0;
-    };
-
-    struct Environment
-    {
-        void addPlugin(std::unique_ptr<Plugin> plugin);
-    };
-} // namespace p5
-
-namespace p5
-{
-    void logInfo(std::string message);
-    void logWarn(std::string message);
-    void logError(std::string message);
-} // namespace p5
-
-#define info(...) p5::logInfo(std::format(__VA_ARGS__))
-#define warn(...) p5::logWarn(std::format(__VA_ARGS__))
-#define error(...) p5::logError(std::format(__VA_ARGS__))
 
 namespace p5
 {
     struct Sketch
     {
         virtual ~Sketch() = default;
-
-        virtual void setup();
-        virtual void event(const WindowEvent& event);
-        virtual void draw();
-        virtual void destroy();
+        virtual void setup() {}
+        virtual void event(const WindowEvent& event) {}
+        virtual void draw() {}
+        virtual void destroy() {}
     };
 
     extern std::unique_ptr<Sketch> createSketch();
@@ -142,16 +54,97 @@ namespace p5
 
 namespace p5
 {
-    void setExitCode(int exitCode);
-    void close(int exitCode);
-    void close();
+    class Context
+    {
+    public:
+        template <typename T> void provide(T* instance);
+        template <typename T> void remove();
+        template <typename T> T& require();
+        template <typename T> T* get() const;
+        template <typename T> bool has() const;
+
+    private:
+        std::unordered_map<std::type_index, void*> m_instances;
+    };
+
 } // namespace p5
 
 namespace p5
 {
-    void setWindowSize(int width, int height);
-    void setWindowPosition(int x, int y);
-    void setWindowTitle(std::string_view title);
+    struct Plugin;
+
+    class Next
+    {
+    public:
+        explicit Next(std::span<const std::unique_ptr<Plugin>> chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload);
+        void operator()() const;
+
+        const void* getPayload() const;
+
+    private:
+        using Step = void (*)(Plugin&, Context&, const Next&);
+
+        std::span<const std::unique_ptr<Plugin>> m_chain;
+        size_t m_index;
+        Context* context;
+        Step m_step;
+        const void* payload;
+    };
+
+    struct Plugin
+    {
+        virtual ~Plugin() = default;
+        virtual void setup(Context& context, const Next& next);
+        virtual void event(Context& context, const Next& next, const WindowEvent& event);
+        virtual void draw(Context& context, const Next& next);
+        virtual void destroy(Context& context, const Next& next);
+    };
 } // namespace p5
 
-#endif // P5CPP_HPP
+namespace p5
+{
+    constexpr WindowEvent::WindowEvent(const EventType& eventType)
+        : m_eventType(std::move(eventType))
+    {
+    }
+
+    template <std::derived_from<WindowEvent::EventTypeTag> T>
+    constexpr bool WindowEvent::is() const
+    {
+        return std::holds_alternative<T>(m_eventType);
+    }
+} // namespace p5
+
+namespace p5
+{
+    template <typename T>
+    void Context::provide(T* instance)
+    {
+        m_instances.try_emplace(typeid(T), instance);
+    }
+
+    template <typename T>
+    void Context::remove()
+    {
+        m_instances.erase(typeid(T));
+    }
+
+    template <typename T>
+    T& Context::require()
+    {
+        return *get<T>();
+    }
+
+    template <typename T>
+    T* Context::get() const
+    {
+        return static_cast<T*>(m_instances.at(typeid(T)));
+    }
+
+    template <typename T>
+    bool Context::has() const
+    {
+        return m_instances.contains(typeid(T));
+    }
+
+} // namespace p5
