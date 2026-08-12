@@ -21,6 +21,14 @@ namespace p5
             m_lifecycle.close();
         }
 
+        if (event.is<WindowEvent::KeyPress>()) {
+            const auto& keyPress = event.as<WindowEvent::KeyPress>();
+
+            if (keyPress.key == Key::Escape) {
+                m_lifecycle.close();
+            }
+        }
+
         next();
     }
 

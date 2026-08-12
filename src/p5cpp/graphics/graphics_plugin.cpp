@@ -14,7 +14,11 @@ namespace p5
 
         m_defaultFramebuffer = createFramebuffer(size.x, size.y);
 
+        // Push the default framebuffer around the rest of the setup chain too (not just draw(), see
+        // below) so Sketch::setup() can call background()/draw calls just like Sketch::draw() can.
+        m_graphics->pushFramebuffer(m_defaultFramebuffer);
         next();
+        m_graphics->popFramebuffer();
     }
 
     void GraphicsPlugin::event(Context& context, const Next& next, const WindowEvent& event)

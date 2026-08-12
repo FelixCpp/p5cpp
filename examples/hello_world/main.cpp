@@ -5,49 +5,31 @@
 
 using namespace p5;
 
-
-
 struct HelloWorldSketch : public Sketch
 {
-    std::shared_ptr<Framebuffer> offscreen = createFramebuffer(800, 600);
-    std::vector<float2> positions;
-    std::vector<color_t> colors;
-
+    float currentStrokeWeight = 0.0f;
     void setup() override
     {
-        srand(time(nullptr));
         setWindowSize(800, 600);
+        background(rgba(255));
     }
 
     void draw() override
     {
-        withFramebuffer(offscreen, [&]() {
-            background(rgba(51, 255));
+        if (isKeyPressed(Key::C)) {
+            background(rgba(255));
+        }
 
-            if (isMouseButtonPressed(MouseButton::Left)) {
-                positions.push_back(float2 {(float)getMouseX(), (float)getMouseY()});
-
-                int r = rand() % 255;
-                int g = rand() % 255;
-                int b = rand() % 255;
-
-                colors.push_back(rgba(r, g, b));
-            }
-
-            fill(255);
-            strokeWeight(15.0f);
-            strokeJoin(StrokeJoin::round);
-            strokeCap(StrokeCap::triangle);
-            beginShape(ShapeMode::path);
-            for (size_t i = 0; i < positions.size(); ++i) {
-                stroke(colors[i]);
-                vertex(positions[i].x, positions[i].y);
-            }
-            endShape(false);
-        });
-
-        background(rgba(255));
-        image(offscreen->getColorTexture(), 0.0f, 0.0f, 800.0f, 600.0f);
+        if (isMouseButtonDown(MouseButton::Left)) {
+            const float mouseDeltaX = static_cast<float>(getMouseDeltaX());
+            const float mouseDeltaY = static_cast<float>(getMouseDeltaY());
+            const float strokeThickness = std::sqrt(mouseDeltaX * mouseDeltaX + mouseDeltaY * mouseDeltaY);
+            currentStrokeWeight = lerp(currentStrokeWeight, strokeThickness, 0.1f);
+            strokeWeight(currentStrokeWeight);
+            stroke(rgba(0, 0, 0, 255));
+            strokeCap(StrokeCap::round);
+            line(getMouseX(), getMouseY(), getPreviousMouseX(), getPreviousMouseY());
+        }
     }
 };
 

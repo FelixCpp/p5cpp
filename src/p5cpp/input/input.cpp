@@ -6,8 +6,6 @@ namespace
     {
         using Ts::operator()...;
     };
-
-    template <typename... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
 } // namespace
 
 namespace p5
