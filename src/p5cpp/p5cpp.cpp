@@ -2,6 +2,7 @@
 #include <p5cpp/application/lifecycle.hpp>
 #include <p5cpp/application/lifecycle_plugin.hpp>
 #include <p5cpp/application/sketch_plugin.hpp>
+#include <p5cpp/graphics/graphics_plugin.hpp>
 #include <p5cpp/window/window_plugin.hpp>
 #include <p5cpp/input/input_plugin.hpp>
 #include <p5cpp/application/kernel.hpp>
@@ -27,6 +28,7 @@ int main()
         s_kernel->addPlugin(std::make_unique<LifecyclePlugin>());
         s_kernel->addPlugin(std::make_unique<WindowPlugin>());
         s_kernel->addPlugin(std::make_unique<InputPlugin>());
+        s_kernel->addPlugin(std::make_unique<GraphicsPlugin>());
         s_kernel->addPlugin(std::make_unique<SketchPlugin>());
         result = s_kernel->run();
     } while (result.shouldRestart);

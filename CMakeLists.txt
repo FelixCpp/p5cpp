@@ -45,6 +45,16 @@ add_library(
   ./src/p5cpp/input/input.cpp
   ./src/p5cpp/input/input_plugin.cpp
   ./src/p5cpp/input/input_api.cpp
+  ./src/p5cpp/graphics/renderer.cpp
+  ./src/p5cpp/graphics/tessellators.cpp
+  ./src/p5cpp/graphics/framebuffer.cpp
+  ./src/p5cpp/graphics/framebuffer_stack.cpp
+  ./src/p5cpp/graphics/draw_state_stack.cpp
+  ./src/p5cpp/graphics/matrix_stack.cpp
+  ./src/p5cpp/graphics/shader.cpp
+  ./src/p5cpp/graphics/graphics.cpp
+  ./src/p5cpp/graphics/graphics_api.cpp
+  ./src/p5cpp/graphics/graphics_plugin.cpp
   ./src/p5cpp/p5cpp.cpp
 )
 

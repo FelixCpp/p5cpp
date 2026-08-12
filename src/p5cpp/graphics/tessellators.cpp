@@ -1,0 +1,545 @@
+#include <p5cpp/graphics/tessellators.hpp>
+
+#include <tesselator.h>
+
+#include <algorithm>
+#include <cmath>
+#include <memory>
+#include <numbers>
+
+namespace p5
+{
+    namespace
+    {
+        void addTriangle(VertexSink& sink, uint32_t a, uint32_t b, uint32_t c)
+        {
+            sink.addIndex(a);
+            sink.addIndex(b);
+            sink.addIndex(c);
+        }
+
+        void addVertices(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+        {
+            for (size_t i = 0; i < positions.size(); ++i)
+                sink.addVertex(positions[i], texCoords[i], colors[i]);
+        }
+
+        struct TessDeleter
+        {
+            void operator()(TESStesselator* tess) const
+            {
+                tessDeleteTess(tess);
+            }
+        };
+
+        // Tesselates `positions` with a single scalar attribute packed into the z-coordinate.
+        // libtess2 linearly interpolates that z-coordinate along the two edges of any vertex it
+        // synthesizes at a self-intersection (see sweep.c: VertexWeights), so this lets it derive
+        // correct per-vertex attribute values instead of us having to approximate them ourselves.
+        // The interpolation weights only depend on x/y (geom.h: VertL1dist, VertLeq), so running this
+        // once per attribute channel with the same positions always yields the same vertex count,
+        // order and triangulation.
+        struct AttributeTessellation
+        {
+            std::vector<float> vertices;     // stride 3: x, y, attribute
+            std::vector<TESSindex> elements; // triangles, 3 indices each; only filled if requested
+        };
+
+        AttributeTessellation tesselateAttribute(const std::span<const float2>& positions, const std::span<const float>& attribute, bool wantElements)
+        {
+            std::vector<float> contour(positions.size() * 3);
+            for (size_t i = 0; i < positions.size(); ++i) {
+                contour[i * 3 + 0] = positions[i].x;
+                contour[i * 3 + 1] = positions[i].y;
+                contour[i * 3 + 2] = attribute[i];
+            }
+
+            std::unique_ptr<TESStesselator, TessDeleter> tess(tessNewTess(nullptr));
+            tessAddContour(tess.get(), 3, contour.data(), 3 * sizeof(float), static_cast<int>(positions.size()));
+
+            AttributeTessellation result;
+            if (not tessTesselate(tess.get(), TESS_WINDING_NONZERO, TESS_POLYGONS, 3, 3, nullptr))
+                return result;
+
+            const int vertexCount = tessGetVertexCount(tess.get());
+            const float* vertices = tessGetVertices(tess.get());
+            result.vertices.assign(vertices, vertices + vertexCount * 3);
+
+            if (wantElements) {
+                const int elementCount = tessGetElementCount(tess.get());
+                const TESSindex* elements = tessGetElements(tess.get());
+                result.elements.assign(elements, elements + elementCount * 3);
+            }
+
+            return result;
+        }
+    } // namespace
+
+    void tesselate_triangle(VertexSink& sink, const std::span<const float2, 3>& positions, const std::span<const float2, 3>& texCoords, const std::span<const float4, 3>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+        addTriangle(sink, 0, 1, 2);
+    }
+
+    void tesselate_triangles(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+
+        const size_t count = positions.size();
+        for (size_t i = 0; i + 3 <= count; i += 3)
+            addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 2));
+    }
+
+    void tesselate_triangle_strip(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+
+        const size_t count = positions.size();
+        for (size_t i = 0; i + 2 < count; ++i) {
+            if (i % 2 == 0)
+                addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 2));
+            else
+                addTriangle(sink, static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i), static_cast<uint32_t>(i + 2));
+        }
+    }
+
+    void tesselate_triangle_fan(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+
+        const size_t count = positions.size();
+        for (size_t i = 1; i + 1 < count; ++i)
+            addTriangle(sink, 0, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1));
+    }
+
+    void tesselate_quad(VertexSink& sink, const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, const std::span<const float4, 4>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+        addTriangle(sink, 0, 1, 2);
+        addTriangle(sink, 0, 2, 3);
+    }
+
+    void tesselate_quads(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+
+        const size_t count = positions.size();
+        for (size_t i = 0; i + 4 <= count; i += 4) {
+            addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 2));
+            addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 2), static_cast<uint32_t>(i + 3));
+        }
+    }
+
+    void tesselate_quad_strip(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    {
+        addVertices(sink, positions, texCoords, colors);
+
+        const size_t count = positions.size();
+        for (size_t i = 0; i + 4 <= count; i += 2) {
+            addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 3));
+            addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 3), static_cast<uint32_t>(i + 2));
+        }
+    }
+
+    void tesselate_polygon(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    {
+        if (positions.size() < 3)
+            return;
+
+        constexpr size_t channelCount = 6; // texCoord.x, texCoord.y, color.r, color.g, color.b, color.a
+        const auto channelValue = [&](size_t channel, size_t vertexIndex) -> float {
+            switch (channel) {
+                case 0: return texCoords[vertexIndex].x;
+                case 1: return texCoords[vertexIndex].y;
+                case 2: return colors[vertexIndex].x;
+                case 3: return colors[vertexIndex].y;
+                case 4: return colors[vertexIndex].z;
+                default: return colors[vertexIndex].w;
+            }
+        };
+
+        std::vector<float> attribute(positions.size());
+        std::array<AttributeTessellation, channelCount> channels;
+        for (size_t channel = 0; channel < channelCount; ++channel) {
+            for (size_t i = 0; i < positions.size(); ++i)
+                attribute[i] = channelValue(channel, i);
+
+            channels[channel] = tesselateAttribute(positions, attribute, channel == 0);
+        }
+
+        const size_t vertexCount = channels[0].vertices.size() / 3;
+        for (size_t i = 0; i < vertexCount; ++i) {
+            const float2 position {channels[0].vertices[i * 3 + 0], channels[0].vertices[i * 3 + 1]};
+            const float2 texCoord {channels[0].vertices[i * 3 + 2], channels[1].vertices[i * 3 + 2]};
+            const float4 color {channels[2].vertices[i * 3 + 2], channels[3].vertices[i * 3 + 2], channels[4].vertices[i * 3 + 2], channels[5].vertices[i * 3 + 2]};
+
+            sink.addVertex(position, texCoord, color);
+        }
+
+        const std::vector<TESSindex>& elements = channels[0].elements;
+        for (size_t i = 0; i + 2 < elements.size(); i += 3)
+            addTriangle(sink, static_cast<uint32_t>(elements[i]), static_cast<uint32_t>(elements[i + 1]), static_cast<uint32_t>(elements[i + 2]));
+    }
+} // namespace p5
+
+namespace p5
+{
+    namespace
+    {
+        struct PathPoint
+        {
+            float2 position;
+            float2 texCoord;
+            float4 color;
+        };
+
+        float2 subtract(const float2& a, const float2& b)
+        {
+            return {a.x - b.x, a.y - b.y};
+        }
+
+        float2 scale2(const float2& a, float s)
+        {
+            return {a.x * s, a.y * s};
+        }
+
+        float2 offsetBy(const float2& p, const float2& dir, float amount)
+        {
+            return {p.x + dir.x * amount, p.y + dir.y * amount};
+        }
+
+        float dot2(const float2& a, const float2& b)
+        {
+            return a.x * b.x + a.y * b.y;
+        }
+
+        float length2(const float2& a)
+        {
+            return std::sqrt(dot2(a, a));
+        }
+
+        float2 normalize2(const float2& a)
+        {
+            const float len = length2(a);
+            return len > 1e-9f ? scale2(a, 1.0f / len) : float2 {0.0f, 0.0f};
+        }
+
+        // Rotates `a` by +90 degrees.
+        float2 perpendicular(const float2& a)
+        {
+            return {-a.y, a.x};
+        }
+
+        uint32_t emitVertex(VertexSink& sink, uint32_t& vertexCount, const float2& position, const PathPoint& attrib)
+        {
+            sink.addVertex(position, attrib.texCoord, attrib.color);
+            return vertexCount++;
+        }
+
+        // Fans triangles from `center.position` sweeping from `startAngle` by the signed `sweepAngle`, subdividing
+        // so no wedge exceeds `angleStep` radians. `startPoint` is used verbatim for the first rim vertex (rather
+        // than recomputed from `startAngle`) so it lines up exactly with whatever edge the caller already emitted.
+        void emitArcFan(VertexSink& sink, uint32_t& vertexCount, const PathPoint& center, uint32_t centerIndex, const float2& startPoint, float startAngle, float sweepAngle, float radius, float angleStep)
+        {
+            const int segments = std::max(1, static_cast<int>(std::ceil(std::abs(sweepAngle) / angleStep)));
+
+            uint32_t prevIndex = emitVertex(sink, vertexCount, startPoint, center);
+            for (int s = 1; s <= segments; ++s) {
+                const float t = static_cast<float>(s) / static_cast<float>(segments);
+                const float angle = startAngle + sweepAngle * t;
+                const float2 rim = offsetBy(center.position, {std::cos(angle), std::sin(angle)}, radius);
+                const uint32_t nextIndex = emitVertex(sink, vertexCount, rim, center);
+
+                sink.addIndex(centerIndex);
+                sink.addIndex(prevIndex);
+                sink.addIndex(nextIndex);
+                prevIndex = nextIndex;
+            }
+        }
+    } // namespace
+
+    void tesselate_path(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed)
+    {
+        if (strokeWeight <= 0.0f)
+            return;
+
+        std::vector<PathPoint> pts;
+        pts.reserve(positions.size());
+        for (size_t i = 0; i < positions.size(); ++i) {
+            if (not pts.empty() && length2(subtract(positions[i], pts.back().position)) < 1e-9f)
+                continue;
+            pts.push_back({positions[i], texCoords[i], colors[i]});
+        }
+
+        const size_t pointCount = pts.size();
+        if (closed ? pointCount < 3 : pointCount < 2)
+            return;
+
+        const float halfWidth = strokeWeight * 0.5f;
+        const float angleStep = std::max(roundJoinThreshold, 0.01f);
+        const size_t segmentCount = closed ? pointCount : pointCount - 1;
+
+        const auto next = [pointCount](size_t i) { return (i + 1) % pointCount; };
+
+        std::vector<float2> directions(segmentCount);
+        std::vector<float2> normals(segmentCount);
+        for (size_t i = 0; i < segmentCount; ++i) {
+            directions[i] = normalize2(subtract(pts[next(i)].position, pts[i].position));
+            normals[i] = perpendicular(directions[i]);
+        }
+
+        uint32_t vertexCount = 0;
+
+        // Segment quads.
+        for (size_t i = 0; i < segmentCount; ++i) {
+            const PathPoint& p0 = pts[i];
+            const PathPoint& p1 = pts[next(i)];
+
+            const uint32_t left0 = emitVertex(sink, vertexCount, offsetBy(p0.position, normals[i], halfWidth), p0);
+            const uint32_t right0 = emitVertex(sink, vertexCount, offsetBy(p0.position, normals[i], -halfWidth), p0);
+            const uint32_t left1 = emitVertex(sink, vertexCount, offsetBy(p1.position, normals[i], halfWidth), p1);
+            const uint32_t right1 = emitVertex(sink, vertexCount, offsetBy(p1.position, normals[i], -halfWidth), p1);
+
+            sink.addIndex(left0);
+            sink.addIndex(right0);
+            sink.addIndex(left1);
+
+            sink.addIndex(right0);
+            sink.addIndex(right1);
+            sink.addIndex(left1);
+        }
+
+        // Interior joins: a small triangle fills the inner (concave) corner, while the outer (convex) corner is
+        // filled according to `strokeJoin`, since only the outer corner shows a visible gap between segments.
+        // For a closed path every point is an interior join (including the seam between the last and first
+        // segment); for an open path the two endpoints are handled as caps below instead.
+        const size_t jointBegin = closed ? 0 : 1;
+        for (size_t i = jointBegin; i < segmentCount; ++i) {
+            const size_t prevSeg = (i + segmentCount - 1) % segmentCount;
+            const float2& dir0 = directions[prevSeg];
+            const float2& dir1 = directions[i];
+            const float cross = dir0.x * dir1.y - dir0.y * dir1.x;
+            const float outerSign = cross > 0.0f ? -1.0f : 1.0f;
+
+            const float2 outerN0 = scale2(normals[prevSeg], outerSign);
+            const float2 outerN1 = scale2(normals[i], outerSign);
+
+            const PathPoint& joint = pts[i];
+            const float2 outerPrev = offsetBy(joint.position, outerN0, halfWidth);
+            const float2 outerNext = offsetBy(joint.position, outerN1, halfWidth);
+            const float2 innerPrev = offsetBy(joint.position, outerN0, -halfWidth);
+            const float2 innerNext = offsetBy(joint.position, outerN1, -halfWidth);
+
+            const uint32_t jointIndex = emitVertex(sink, vertexCount, joint.position, joint);
+            const uint32_t innerPrevIndex = emitVertex(sink, vertexCount, innerPrev, joint);
+            const uint32_t innerNextIndex = emitVertex(sink, vertexCount, innerNext, joint);
+            sink.addIndex(jointIndex);
+            sink.addIndex(innerPrevIndex);
+            sink.addIndex(innerNextIndex);
+
+            const auto emitOuterBevel = [&] {
+                const uint32_t outerPrevIndex = emitVertex(sink, vertexCount, outerPrev, joint);
+                const uint32_t outerNextIndex = emitVertex(sink, vertexCount, outerNext, joint);
+                sink.addIndex(jointIndex);
+                sink.addIndex(outerPrevIndex);
+                sink.addIndex(outerNextIndex);
+            };
+
+            switch (strokeJoin) {
+                case StrokeJoin::bevel:
+                    emitOuterBevel();
+                    break;
+
+                case StrokeJoin::round: {
+                    const float startAngle = std::atan2(outerN0.y, outerN0.x);
+                    float sweep = std::atan2(outerN1.y, outerN1.x) - startAngle;
+                    while (sweep <= -std::numbers::pi_v<float>) sweep += 2.0f * std::numbers::pi_v<float>;
+                    while (sweep > std::numbers::pi_v<float>) sweep -= 2.0f * std::numbers::pi_v<float>;
+                    emitArcFan(sink, vertexCount, joint, jointIndex, outerPrev, startAngle, sweep, halfWidth, angleStep);
+                    break;
+                }
+
+                case StrokeJoin::miter:
+                default: {
+                    const float2 sum = {outerN0.x + outerN1.x, outerN0.y + outerN1.y};
+                    const float sumLen = length2(sum);
+                    bool didMiter = false;
+                    if (sumLen > 1e-6f) {
+                        const float2 miterDir = scale2(sum, 1.0f / sumLen);
+                        const float cosHalf = dot2(miterDir, outerN0);
+                        if (cosHalf > 1e-4f && halfWidth / cosHalf <= miterLimit * halfWidth) {
+                            const float2 miterTip = offsetBy(joint.position, miterDir, halfWidth / cosHalf);
+                            const uint32_t outerPrevIndex = emitVertex(sink, vertexCount, outerPrev, joint);
+                            const uint32_t miterTipIndex = emitVertex(sink, vertexCount, miterTip, joint);
+                            const uint32_t outerNextIndex = emitVertex(sink, vertexCount, outerNext, joint);
+                            sink.addIndex(jointIndex);
+                            sink.addIndex(outerPrevIndex);
+                            sink.addIndex(miterTipIndex);
+                            sink.addIndex(jointIndex);
+                            sink.addIndex(miterTipIndex);
+                            sink.addIndex(outerNextIndex);
+                            didMiter = true;
+                        }
+                    }
+                    if (not didMiter)
+                        emitOuterBevel();
+                    break;
+                }
+            }
+        }
+
+        // Caps: `dir` always points from the path's interior towards the endpoint, matching the adjacent segment
+        // quad's edge so the cap seams line up exactly; `outward` points away from the path (the direction the
+        // cap extends towards).
+        const auto emitCap = [&](const PathPoint& endpoint, const float2& dir, StrokeCapStyle style, bool isStart) {
+            if (style == StrokeCapStyle::butt)
+                return;
+
+            const float2 normal = perpendicular(dir);
+            const float2 leftPoint = offsetBy(endpoint.position, normal, halfWidth);
+            const float2 rightPoint = offsetBy(endpoint.position, normal, -halfWidth);
+            const float2 outward = isStart ? scale2(dir, -1.0f) : dir;
+
+            switch (style) {
+                case StrokeCapStyle::butt:
+                    break;
+
+                case StrokeCapStyle::square: {
+                    const float2 leftExt = offsetBy(leftPoint, outward, halfWidth);
+                    const float2 rightExt = offsetBy(rightPoint, outward, halfWidth);
+                    const uint32_t leftIndex = emitVertex(sink, vertexCount, leftPoint, endpoint);
+                    const uint32_t rightIndex = emitVertex(sink, vertexCount, rightPoint, endpoint);
+                    const uint32_t leftExtIndex = emitVertex(sink, vertexCount, leftExt, endpoint);
+                    const uint32_t rightExtIndex = emitVertex(sink, vertexCount, rightExt, endpoint);
+                    sink.addIndex(leftIndex);
+                    sink.addIndex(rightIndex);
+                    sink.addIndex(rightExtIndex);
+                    sink.addIndex(leftIndex);
+                    sink.addIndex(rightExtIndex);
+                    sink.addIndex(leftExtIndex);
+                    break;
+                }
+
+                case StrokeCapStyle::triangle: {
+                    const float2 apex = offsetBy(endpoint.position, outward, halfWidth);
+                    const uint32_t leftIndex = emitVertex(sink, vertexCount, leftPoint, endpoint);
+                    const uint32_t rightIndex = emitVertex(sink, vertexCount, rightPoint, endpoint);
+                    const uint32_t apexIndex = emitVertex(sink, vertexCount, apex, endpoint);
+                    sink.addIndex(leftIndex);
+                    sink.addIndex(rightIndex);
+                    sink.addIndex(apexIndex);
+                    break;
+                }
+
+                case StrokeCapStyle::round: {
+                    // Sweeps +pi starting from the flat edge on the "backward"/"forward" side so the arc always
+                    // bulges towards `outward`, never back over the segment it caps.
+                    const float startAngle = isStart ? std::atan2(normal.y, normal.x) : std::atan2(-normal.y, -normal.x);
+                    const float2 startPoint = isStart ? leftPoint : rightPoint;
+                    const uint32_t centerIndex = emitVertex(sink, vertexCount, endpoint.position, endpoint);
+                    emitArcFan(sink, vertexCount, endpoint, centerIndex, startPoint, startAngle, std::numbers::pi_v<float>, halfWidth, angleStep);
+                    break;
+                }
+            }
+        };
+
+        if (not closed) {
+            emitCap(pts.front(), directions.front(), strokeCap.start, true);
+            emitCap(pts.back(), directions.back(), strokeCap.end, false);
+        }
+    }
+
+    namespace
+    {
+        size_t arcSegmentCount(float sweep, float angleStep)
+        {
+            return static_cast<size_t>(std::max(1, static_cast<int>(std::ceil(std::abs(sweep) / angleStep))));
+        }
+
+        // Mirrors the vertex/triangle counts `tesselate_path`'s join switch emits for one interior join, per branch.
+        void joinBounds(StrokeJoin strokeJoin, float angleStep, size_t& vertices, size_t& triangles)
+        {
+            vertices = 3; // joint + innerPrev + innerNext, always emitted.
+            triangles = 1; // inner triangle, always emitted.
+
+            switch (strokeJoin) {
+                case StrokeJoin::bevel:
+                    vertices += 2;
+                    triangles += 1;
+                    break;
+
+                case StrokeJoin::round: {
+                    const size_t segments = arcSegmentCount(std::numbers::pi_v<float>, angleStep);
+                    vertices += segments + 1;
+                    triangles += segments;
+                    break;
+                }
+
+                case StrokeJoin::miter:
+                default:
+                    // Worst case (miter tip drawn): outerPrev + miterTip + outerNext, 2 triangles. The bevel
+                    // fallback used when the miter limit is exceeded is cheaper, so this bounds both.
+                    vertices += 3;
+                    triangles += 2;
+                    break;
+            }
+        }
+
+        // Mirrors the vertex/triangle counts `tesselate_path`'s cap switch emits for one endpoint cap, per style.
+        void capBounds(StrokeCapStyle style, float angleStep, size_t& vertices, size_t& triangles)
+        {
+            switch (style) {
+                case StrokeCapStyle::butt:
+                    vertices = 0;
+                    triangles = 0;
+                    break;
+
+                case StrokeCapStyle::square:
+                    vertices = 4;
+                    triangles = 2;
+                    break;
+
+                case StrokeCapStyle::triangle:
+                    vertices = 3;
+                    triangles = 1;
+                    break;
+
+                case StrokeCapStyle::round: {
+                    const size_t segments = arcSegmentCount(std::numbers::pi_v<float>, angleStep);
+                    vertices = 1 + segments + 1; // center + arc fan rim vertices.
+                    triangles = segments;
+                    break;
+                }
+            }
+        }
+    } // namespace
+
+    PathTessellationBounds tesselate_path_bounds(size_t pointCount, bool closed, StrokeCap strokeCap, StrokeJoin strokeJoin, float roundJoinThreshold)
+    {
+        if (closed ? pointCount < 3 : pointCount < 2)
+            return {0, 0};
+
+        const float angleStep = std::max(roundJoinThreshold, 0.01f);
+        const size_t segmentCount = closed ? pointCount : pointCount - 1;
+        const size_t jointCount = closed ? segmentCount : (segmentCount > 0 ? segmentCount - 1 : 0);
+
+        size_t vertexCount = segmentCount * 4;
+        size_t indexCount = segmentCount * 6;
+
+        size_t jointVertices = 0, jointTriangles = 0;
+        joinBounds(strokeJoin, angleStep, jointVertices, jointTriangles);
+        vertexCount += jointCount * jointVertices;
+        indexCount += jointCount * jointTriangles * 3;
+
+        if (not closed) {
+            size_t startVertices = 0, startTriangles = 0;
+            size_t endVertices = 0, endTriangles = 0;
+            capBounds(strokeCap.start, angleStep, startVertices, startTriangles);
+            capBounds(strokeCap.end, angleStep, endVertices, endTriangles);
+            vertexCount += startVertices + endVertices;
+            indexCount += (startTriangles + endTriangles) * 3;
+        }
+
+        return {vertexCount, indexCount};
+    }
+} // namespace p5

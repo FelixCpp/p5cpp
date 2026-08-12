@@ -2,6 +2,7 @@
 
 #include <p5cpp/p5cpp.hpp>
 
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <memory>
@@ -26,6 +27,9 @@ namespace p5
 
         void pollEvents();
         void swapBuffers();
+
+        uint2 getPhysicalSize() const;
+        uint2 getLogicalSize() const;
 
     private:
         explicit Window(GLFWwindow* window, const EventCallback& eventCallback);

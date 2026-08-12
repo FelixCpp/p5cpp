@@ -38,6 +38,7 @@ namespace p5
     {
         next();
 
+        context.remove<Window>();
         m_window.reset();
     }
 } // namespace p5

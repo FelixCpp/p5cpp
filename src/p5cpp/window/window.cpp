@@ -1,6 +1,8 @@
 #include <p5cpp/window/window.hpp>
 #include <iostream>
 
+#include <glad/glad.h>
+
 namespace p5
 {
     Key mapKey(int glfwKey)
@@ -206,6 +208,12 @@ namespace p5
 
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1); // Enable V-Sync
+
+        if (not gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return nullptr;
+        }
 
         Window* instance = new Window {window, eventCallback};
         glfwSetWindowUserPointer(window, instance);
@@ -453,6 +461,20 @@ namespace p5
     void Window::swapBuffers()
     {
         glfwSwapBuffers(m_window);
+    }
+
+    uint2 Window::getPhysicalSize() const
+    {
+        int width, height;
+        glfwGetWindowSize(m_window, &width, &height);
+        return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }
+
+    uint2 Window::getLogicalSize() const
+    {
+        int width, height;
+        glfwGetFramebufferSize(m_window, &width, &height);
+        return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
     }
 
     Window::Window(GLFWwindow* window, const EventCallback& eventCallback)

@@ -1,19 +1,24 @@
 #include <p5cpp/p5cpp.hpp>
 
-#include <iostream>
-
 using namespace p5;
 
 struct HelloWorldSketch : public Sketch
 {
+    std::shared_ptr<Framebuffer> framebuffer = createFramebuffer(200, 200);
+
     void setup() override
     {
-        std::cout << "Hello, World!" << std::endl;
+        withFramebuffer(framebuffer, []() {
+            fill(rgba(255, 0, 0, 255));
+            stroke(rgba(0, 255, 0, 255));
+            strokeWeight(5.0f);
+            rect(50.0f, 50.0f, 100.0f, 100.0f);
+        });
     }
 
     void draw() override
     {
-        // Drawing code goes here
+        background(rgba(255, 0, 0, 255));
     }
 };
 

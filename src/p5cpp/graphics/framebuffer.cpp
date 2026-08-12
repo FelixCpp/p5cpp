@@ -1,0 +1,84 @@
+#include <p5cpp/p5cpp.hpp>
+
+#include <glad/glad.h>
+
+namespace p5
+{
+    class OpenGLFramebuffer : public Framebuffer
+    {
+    public:
+        static std::unique_ptr<Framebuffer> create(uint32_t width, uint32_t height)
+        {
+            GLuint framebufferId;
+            glGenFramebuffers(1, &framebufferId);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebufferId);
+
+            GLuint colorTextureId;
+            glGenTextures(1, &colorTextureId);
+            glBindTexture(GL_TEXTURE_2D, colorTextureId);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTextureId, 0);
+
+            GLuint renderbufferId;
+            glGenRenderbuffers(1, &renderbufferId);
+            glBindRenderbuffer(GL_RENDERBUFFER, renderbufferId);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferId);
+
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                throw std::runtime_error("Failed to create framebuffer");
+            }
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(framebufferId, renderbufferId, colorTextureId, uint2 {.x = width, .y = height}));
+        }
+
+        GLuint getFramebufferId() const
+        {
+            return m_framebufferId;
+        }
+
+        GLuint getColorTextureId() const
+        {
+            return m_colorTextureId;
+        }
+
+        const uint2& getSize() const
+        {
+            return m_size;
+        }
+
+    private:
+        explicit OpenGLFramebuffer(GLuint framebufferId, GLuint renderbufferId, GLuint colorTextureId, const uint2& size)
+            : m_framebufferId(framebufferId), m_renderbufferId(renderbufferId), m_colorTextureId(colorTextureId), m_size(size)
+        {
+        }
+
+        GLuint m_framebufferId;
+        GLuint m_renderbufferId;
+        GLuint m_colorTextureId;
+        uint2 m_size;
+    };
+} // namespace p5
+
+namespace p5
+{
+    void blitFramebufferToScreen(const std::shared_ptr<Framebuffer>& framebuffer, uint32_t screenWidth, uint32_t screenHeight)
+    {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer->getFramebufferId());
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(0, 0, static_cast<GLint>(framebuffer->getSize().x), static_cast<GLint>(framebuffer->getSize().y), 0, 0, static_cast<GLint>(screenWidth), static_cast<GLint>(screenHeight), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+} // namespace p5
+
+namespace p5
+{
+    std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height)
+    {
+        return OpenGLFramebuffer::create(width, height);
+    }
+} // namespace p5
