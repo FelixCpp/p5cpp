@@ -56,6 +56,9 @@ namespace p5
             [this](const WindowEvent::FileDrop& fileDrop) {
                 m_droppedFiles = fileDrop.paths;
             },
+            [this](const WindowEvent::CharInput& charInput) {
+                m_typedChars.push_back(charInput.codepoint);
+            },
             [](const auto&) {
             },
         });
@@ -70,6 +73,7 @@ namespace p5
         m_scrollX = 0.0;
         m_scrollY = 0.0;
         m_droppedFiles.clear();
+        m_typedChars.clear();
         m_prevMouseX = m_mouseX;
         m_prevMouseY = m_mouseY;
     }
@@ -142,5 +146,10 @@ namespace p5
     std::span<const std::string> Input::droppedFiles() const
     {
         return m_droppedFiles;
+    }
+
+    std::span<const uint32_t> Input::typedChars() const
+    {
+        return m_typedChars;
     }
 } // namespace p5

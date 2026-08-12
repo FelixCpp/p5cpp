@@ -20,22 +20,28 @@ namespace p5
 
     Kernel::RunResult Kernel::run()
     {
-        dispatchSetup();
+        try {
+            dispatchSetup();
 
-        Lifecycle& lifecycle = m_context.require<Lifecycle>();
+            Lifecycle& lifecycle = m_context.require<Lifecycle>();
 
-        while (not lifecycle.shouldClose()) {
-            dispatchDraw();
+            while (not lifecycle.shouldClose()) {
+                lifecycle.nextFrame();
+                dispatchDraw();
+            }
+
+            RunResult result {
+                .shouldRestart = lifecycle.shouldRestart(),
+                .exitCode = lifecycle.getExitCode(),
+            };
+
+            dispatchDestroy();
+
+            return result;
+        } catch (...) {
+            dispatchDestroy();
+            throw;
         }
-
-        RunResult result {
-            .shouldRestart = lifecycle.shouldRestart(),
-            .exitCode = lifecycle.getExitCode(),
-        };
-
-        dispatchDestroy();
-
-        return result;
     }
     void Kernel::dispatchSetup()
     {

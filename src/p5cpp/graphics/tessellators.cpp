@@ -6,6 +6,7 @@
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <stdexcept>
 
 namespace p5
 {
@@ -32,17 +33,10 @@ namespace p5
             }
         };
 
-        // Tesselates `positions` with a single scalar attribute packed into the z-coordinate.
-        // libtess2 linearly interpolates that z-coordinate along the two edges of any vertex it
-        // synthesizes at a self-intersection (see sweep.c: VertexWeights), so this lets it derive
-        // correct per-vertex attribute values instead of us having to approximate them ourselves.
-        // The interpolation weights only depend on x/y (geom.h: VertL1dist, VertLeq), so running this
-        // once per attribute channel with the same positions always yields the same vertex count,
-        // order and triangulation.
         struct AttributeTessellation
         {
-            std::vector<float> vertices;     // stride 3: x, y, attribute
-            std::vector<TESSindex> elements; // triangles, 3 indices each; only filled if requested
+            std::vector<float> vertices;
+            std::vector<TESSindex> elements;
         };
 
         AttributeTessellation tesselateAttribute(const std::span<const float2>& positions, const std::span<const float>& attribute, bool wantElements)
@@ -83,9 +77,12 @@ namespace p5
 
     void tesselate_triangles(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
+        const size_t count = positions.size();
+        if (count % 3 != 0)
+            throw std::runtime_error("tesselate_triangles: vertex count must be a multiple of 3");
+
         addVertices(sink, positions, texCoords, colors);
 
-        const size_t count = positions.size();
         for (size_t i = 0; i + 3 <= count; i += 3)
             addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 2));
     }
@@ -121,9 +118,12 @@ namespace p5
 
     void tesselate_quads(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
+        const size_t count = positions.size();
+        if (count % 4 != 0)
+            throw std::runtime_error("tesselate_quads: vertex count must be a multiple of 4");
+
         addVertices(sink, positions, texCoords, colors);
 
-        const size_t count = positions.size();
         for (size_t i = 0; i + 4 <= count; i += 4) {
             addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 2));
             addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 2), static_cast<uint32_t>(i + 3));
@@ -132,9 +132,12 @@ namespace p5
 
     void tesselate_quad_strip(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
+        const size_t count = positions.size();
+        if (count % 2 != 0)
+            throw std::runtime_error("tesselate_quad_strip: vertex count must be even");
+
         addVertices(sink, positions, texCoords, colors);
 
-        const size_t count = positions.size();
         for (size_t i = 0; i + 4 <= count; i += 2) {
             addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 3));
             addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 3), static_cast<uint32_t>(i + 2));
@@ -236,9 +239,6 @@ namespace p5
             return vertexCount++;
         }
 
-        // Fans triangles from `center.position` sweeping from `startAngle` by the signed `sweepAngle`, subdividing
-        // so no wedge exceeds `angleStep` radians. `startPoint` is used verbatim for the first rim vertex (rather
-        // than recomputed from `startAngle`) so it lines up exactly with whatever edge the caller already emitted.
         void emitArcFan(VertexSink& sink, uint32_t& vertexCount, const PathPoint& center, uint32_t centerIndex, const float2& startPoint, float startAngle, float sweepAngle, float radius, float angleStep)
         {
             const int segments = std::max(1, static_cast<int>(std::ceil(std::abs(sweepAngle) / angleStep)));
@@ -277,14 +277,14 @@ namespace p5
 
         const float halfWidth = strokeWeight * 0.5f;
 
-        // Resolution for round joins/caps, independent of `roundJoinThreshold`: mirrors `ellipseSegmentCount`
-        // in graphics.cpp, sizing the arc's segment count to the radius rather than using a fixed angle step.
         const int fullCircleSegments = std::clamp(static_cast<int>(std::ceil(std::numbers::pi_v<float> * std::sqrt(2.0f * halfWidth))), 16, 256);
         const float arcAngleStep = 2.0f * std::numbers::pi_v<float> / static_cast<float>(fullCircleSegments);
 
         const size_t segmentCount = closed ? pointCount : pointCount - 1;
 
-        const auto next = [pointCount](size_t i) { return (i + 1) % pointCount; };
+        const auto next = [pointCount](size_t i) {
+            return (i + 1) % pointCount;
+        };
 
         std::vector<float2> directions(segmentCount);
         std::vector<float2> normals(segmentCount);
@@ -295,7 +295,6 @@ namespace p5
 
         uint32_t vertexCount = 0;
 
-        // Segment quads.
         for (size_t i = 0; i < segmentCount; ++i) {
             const PathPoint& p0 = pts[i];
             const PathPoint& p1 = pts[next(i)];
@@ -314,10 +313,6 @@ namespace p5
             sink.addIndex(left1);
         }
 
-        // Interior joins: a small triangle fills the inner (concave) corner, while the outer (convex) corner is
-        // filled according to `strokeJoin`, since only the outer corner shows a visible gap between segments.
-        // For a closed path every point is an interior join (including the seam between the last and first
-        // segment); for an open path the two endpoints are handled as caps below instead.
         const size_t jointBegin = closed ? 0 : 1;
         for (size_t i = jointBegin; i < segmentCount; ++i) {
             const size_t prevSeg = (i + segmentCount - 1) % segmentCount;
@@ -360,7 +355,6 @@ namespace p5
                     float sweep = std::atan2(outerN1.y, outerN1.x) - startAngle;
                     while (sweep <= -std::numbers::pi_v<float>) sweep += 2.0f * std::numbers::pi_v<float>;
                     while (sweep > std::numbers::pi_v<float>) sweep -= 2.0f * std::numbers::pi_v<float>;
-                    // Below `roundJoinThreshold` the arc is visually indistinguishable from a bevel, so skip it.
                     if (std::abs(sweep) < roundJoinThreshold)
                         emitOuterBevel();
                     else
@@ -397,9 +391,6 @@ namespace p5
             }
         }
 
-        // Caps: `dir` always points from the path's interior towards the endpoint, matching the adjacent segment
-        // quad's edge so the cap seams line up exactly; `outward` points away from the path (the direction the
-        // cap extends towards).
         const auto emitCap = [&](const PathPoint& endpoint, const float2& dir, StrokeCapStyle style, bool isStart) {
             if (style == StrokeCapStyle::butt)
                 return;
@@ -441,8 +432,6 @@ namespace p5
                 }
 
                 case StrokeCapStyle::round: {
-                    // Sweeps +pi starting from the flat edge on the "backward"/"forward" side so the arc always
-                    // bulges towards `outward`, never back over the segment it caps.
                     const float startAngle = isStart ? std::atan2(normal.y, normal.x) : std::atan2(-normal.y, -normal.x);
                     const float2 startPoint = isStart ? leftPoint : rightPoint;
                     const uint32_t centerIndex = emitVertex(sink, vertexCount, endpoint.position, endpoint);

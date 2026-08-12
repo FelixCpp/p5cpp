@@ -35,6 +35,10 @@ namespace p5
 
         std::span<const std::string> droppedFiles() const;
 
+        // Unicode codepoints (WindowEvent::CharInput) typed since the last reset(); layout-aware text
+        // input, unlike isKeyDown()/isKeyPressed() which report physical, layout-independent keys.
+        std::span<const uint32_t> typedChars() const;
+
     private:
         std::array<bool, static_cast<size_t>(Key::Count)> m_keyDown {};
         std::array<bool, static_cast<size_t>(Key::Count)> m_keyPressed {};
@@ -55,5 +59,6 @@ namespace p5
         bool m_cursorInWindow = false;
 
         std::vector<std::string> m_droppedFiles;
+        std::vector<uint32_t> m_typedChars;
     };
 } // namespace p5

@@ -5,7 +5,8 @@ namespace p5
     Lifecycle::Lifecycle()
         : m_shouldClose {false},
           m_shouldRestart {false},
-          m_exitCode {0}
+          m_exitCode {0},
+          m_frameCount {0}
     {
     }
 
@@ -31,6 +32,11 @@ namespace p5
         m_shouldClose = true;
     }
 
+    void Lifecycle::nextFrame()
+    {
+        ++m_frameCount;
+    }
+
     bool Lifecycle::shouldClose() const
     {
         return m_shouldClose;
@@ -44,5 +50,10 @@ namespace p5
     int Lifecycle::getExitCode() const
     {
         return m_exitCode;
+    }
+
+    int Lifecycle::frameCount() const
+    {
+        return m_frameCount;
     }
 } // namespace p5

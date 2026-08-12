@@ -38,6 +38,34 @@ namespace p5
         T x, y;
     };
 
+    template <typename T> constexpr T lengthSquared(const value2<T>& v);
+    template <typename T> constexpr T dot(const value2<T>& a, const value2<T>& b);
+    template <typename T> T length(const value2<T>& v);
+    template <typename T> value2<T> normalized(const value2<T>& v);
+    template <typename T> value2<T> rotated(const value2<T>& v, float radians);
+    template <typename T> value2<T> limited(const value2<T>& v, T maxLength);
+    template <typename T> value2<T> fixedLength(const value2<T>& v, T length);
+    template <typename T> constexpr value2<T> lerp(const value2<T>& a, const value2<T>& b, float t);
+    template <typename T> constexpr value2<T> perpendicular(const value2<T>& v);
+    template <typename T> constexpr T distanceSquared(const value2<T>& a, const value2<T>& b);
+    template <typename T> T distance(const value2<T>& a, const value2<T>& b);
+
+    template <typename T> constexpr value2<T> operator+(const value2<T>& a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator-(const value2<T>& a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator*(const value2<T>& a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator/(const value2<T>& a, const value2<T>& b);
+
+    template <typename T> constexpr value2<T> operator+(const value2<T>& a, T b);
+    template <typename T> constexpr value2<T> operator-(const value2<T>& a, T b);
+    template <typename T> constexpr value2<T> operator*(const value2<T>& a, T b);
+    template <typename T> constexpr value2<T> operator/(const value2<T>& a, T b);
+
+    template <typename T> constexpr value2<T> operator+(T a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator-(T a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator*(T a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator/(T a, const value2<T>& b);
+    template <typename T> constexpr value2<T> operator-(const value2<T>& v);
+
     typedef value2<float> float2;
     typedef value2<int32_t> int2;
     typedef value2<uint32_t> uint2;
@@ -83,6 +111,15 @@ namespace p5
 {
     constexpr float degrees(float radians);
     constexpr float radians(float degrees);
+
+    constexpr float lerp(float a, float b, float t);
+    constexpr float map(float value, float start1, float stop1, float start2, float stop2);
+    constexpr float constrain(float value, float low, float high);
+
+    void randomSeed(uint32_t seed);
+    float random();
+    float random(float max);
+    float random(float min, float max);
 
     inline static constexpr float PI = 3.14159265358979323846f;
     inline static constexpr float TAU = 2.0f * PI;
@@ -279,6 +316,8 @@ namespace p5
     };
 
     extern std::unique_ptr<Sketch> createSketch();
+
+    int getFrameCount();
 } // namespace p5
 
 namespace p5
@@ -304,6 +343,23 @@ namespace p5
     bool isCursorInWindow();
 
     std::span<const std::string> getDroppedFiles();
+    std::span<const uint32_t> getTypedChars();
+} // namespace p5
+
+namespace p5
+{
+    void setWindowSize(uint32_t width, uint32_t height);
+    void setWindowPosition(int32_t x, int32_t y);
+    void setWindowTitle(std::string_view title);
+    void setWindowResizable(bool resizable);
+    void setWindowVisible(bool visible);
+
+    uint2 getWindowSize();
+    uint2 getWindowPhysicalSize();
+    int2 getWindowPosition();
+    std::string_view getWindowTitle();
+    bool isWindowResizable();
+    bool isWindowVisible();
 } // namespace p5
 
 namespace p5
@@ -388,6 +444,7 @@ namespace p5
         polygon,
         points,
         lines,
+        path,
         triangles,
         triangleStrip,
         triangleFan,
@@ -466,6 +523,10 @@ namespace p5
     {
         virtual ~Shader() = default;
         virtual uint32_t getShaderProgramId() const = 0;
+
+        // Uniform locations are cached by implementations, keyed by name, and tied to this Shader's
+        // own lifetime - safe to call every frame without re-querying the driver each time.
+        virtual int32_t getUniformLocation(std::string_view name) const = 0;
     };
 
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
@@ -510,6 +571,8 @@ namespace p5
     void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer);
     void popFramebuffer();
     const uint2& getFramebufferSize();
+    float getWidth();
+    float getHeight();
 
     void push();
     void pop();
@@ -724,6 +787,67 @@ namespace p5
 
 namespace p5
 {
+    template <typename T> inline constexpr T lengthSquared(const value2<T>& v) { return dot(v, v); }
+    template <typename T> inline constexpr T dot(const value2<T>& a, const value2<T>& b) { return a.x * b.x + a.y * b.y; }
+    template <typename T> inline T length(const value2<T>& v) { return std::sqrt(lengthSquared(v)); }
+    template <typename T> inline value2<T> normalized(const value2<T>& v)
+    {
+        const T len = length(v);
+        if (len == T {}) {
+            return v; // zero vector has no direction; leave it as zero rather than producing NaN
+        }
+        return {v.x / len, v.y / len};
+    }
+
+    template <typename T> inline value2<T> rotated(const value2<T>& v, float radians)
+    {
+        const float cosTheta = std::cos(radians);
+        const float sinTheta = std::sin(radians);
+        return {static_cast<T>(v.x * cosTheta - v.y * sinTheta), static_cast<T>(v.x * sinTheta + v.y * cosTheta)};
+    }
+
+    template <typename T> inline value2<T> limited(const value2<T>& v, T maxLength)
+    {
+        const T len = lengthSquared(v);
+        if (len > (maxLength * maxLength)) {
+            return fixedLength(v, maxLength);
+        }
+
+        return v;
+    }
+
+    template <typename T> inline value2<T> fixedLength(const value2<T>& v, T newLength)
+    {
+        const T len = length(v);
+        if (len == T {}) {
+            return v; // zero vector has no direction; leave it as zero rather than producing NaN
+        }
+        return {v.x * newLength / len, v.y * newLength / len};
+    }
+
+    template <typename T> inline constexpr value2<T> lerp(const value2<T>& a, const value2<T>& b, float t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
+    template <typename T> inline constexpr value2<T> perpendicular(const value2<T>& v) { return {-v.y, v.x}; }
+
+    template <typename T> inline constexpr T distanceSquared(const value2<T>& a, const value2<T>& b) { return lengthSquared(b - a); }
+    template <typename T> inline T distance(const value2<T>& a, const value2<T>& b) { return length(b - a); }
+
+    template <typename T> inline constexpr value2<T> operator+(const value2<T>& a, const value2<T>& b) { return {a.x + b.x, a.y + b.y}; }
+    template <typename T> inline constexpr value2<T> operator-(const value2<T>& a, const value2<T>& b) { return {a.x - b.x, a.y - b.y}; }
+    template <typename T> inline constexpr value2<T> operator*(const value2<T>& a, const value2<T>& b) { return {a.x * b.x, a.y * b.y}; }
+    template <typename T> inline constexpr value2<T> operator/(const value2<T>& a, const value2<T>& b) { return {a.x / b.x, a.y / b.y}; }
+    template <typename T> inline constexpr value2<T> operator+(const value2<T>& a, T b) { return {a.x + b, a.y + b}; }
+    template <typename T> inline constexpr value2<T> operator-(const value2<T>& a, T b) { return {a.x - b, a.y - b}; }
+    template <typename T> inline constexpr value2<T> operator*(const value2<T>& a, T b) { return {a.x * b, a.y * b}; }
+    template <typename T> inline constexpr value2<T> operator/(const value2<T>& a, T b) { return {a.x / b, a.y / b}; }
+    template <typename T> inline constexpr value2<T> operator+(T a, const value2<T>& b) { return {a + b.x, a + b.y}; }
+    template <typename T> inline constexpr value2<T> operator-(T a, const value2<T>& b) { return {a - b.x, a - b.y}; }
+    template <typename T> inline constexpr value2<T> operator*(T a, const value2<T>& b) { return {a * b.x, a * b.y}; }
+    template <typename T> inline constexpr value2<T> operator/(T a, const value2<T>& b) { return {a / b.x, a / b.y}; }
+    template <typename T> inline constexpr value2<T> operator-(const value2<T>& v) { return {-v.x, -v.y}; }
+} // namespace p5
+
+namespace p5
+{
     inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha)
     {
         return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha);
@@ -759,6 +883,20 @@ namespace p5
 {
     constexpr float degrees(float radians) { return radians * (180.0f / PI); }
     constexpr float radians(float degrees) { return degrees * (PI / 180.0f); }
+
+    constexpr float lerp(float a, float b, float t) { return std::lerp(a, b, t); }
+
+    constexpr float map(float value, float start1, float stop1, float start2, float stop2)
+    {
+        return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
+    }
+
+    constexpr float constrain(float value, float low, float high)
+    {
+        if (value < low) return low;
+        if (value > high) return high;
+        return value;
+    }
 } // namespace p5
 
 namespace p5

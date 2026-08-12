@@ -9,6 +9,7 @@ namespace p5
 
     void LifecyclePlugin::setup(Context& context, const Next& next)
     {
+        m_lifecycle = Lifecycle();
         context.provide(&m_lifecycle);
 
         next();

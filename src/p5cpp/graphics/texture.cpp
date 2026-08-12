@@ -9,6 +9,13 @@ namespace p5
     public:
         static std::unique_ptr<Texture> create(uint32_t width, uint32_t height, std::span<const uint8_t> data)
         {
+            // An empty span means "allocate uninitialized storage" (e.g. framebuffer color attachments);
+            // any other size must match the RGBA8 buffer exactly or glTexImage2D would read out of bounds.
+            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+            if (not data.empty() and data.size() != expectedSize) {
+                throw std::runtime_error("loadTextureFromMemory() data size does not match width * height * 4");
+            }
+
             GLuint textureId;
             glGenTextures(1, &textureId);
             glBindTexture(GL_TEXTURE_2D, textureId);
@@ -20,6 +27,14 @@ namespace p5
             glBindTexture(GL_TEXTURE_2D, 0);
 
             return std::unique_ptr<OpenGLTexture>(new OpenGLTexture(textureId, uint2 {.x = width, .y = height}));
+        }
+
+        OpenGLTexture(const OpenGLTexture&) = delete;
+        OpenGLTexture& operator=(const OpenGLTexture&) = delete;
+
+        ~OpenGLTexture() override
+        {
+            glDeleteTextures(1, &m_textureId);
         }
 
         uint32_t getTextureId() const override

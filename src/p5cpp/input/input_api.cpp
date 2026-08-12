@@ -91,4 +91,9 @@ namespace p5
     {
         return input().droppedFiles();
     }
+
+    std::span<const uint32_t> getTypedChars()
+    {
+        return input().typedChars();
+    }
 } // namespace p5

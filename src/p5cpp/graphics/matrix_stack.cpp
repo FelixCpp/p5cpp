@@ -12,6 +12,10 @@ namespace p5
 
     void MatrixStack::push(const matrix4x4& matrix)
     {
+        // Copy first: `matrix` may alias an element of m_stack (e.g. via peek()),
+        // which would otherwise dangle once the buffer below is reallocated.
+        const matrix4x4 value = matrix;
+
         if (m_index + 1 >= m_capacity) {
             m_capacity *= 2;
             auto newStack = std::make_unique<matrix4x4[]>(m_capacity);
@@ -19,15 +23,17 @@ namespace p5
             m_stack = std::move(newStack);
         }
 
-        m_stack[m_index + 1] = matrix;
+        m_stack[m_index + 1] = value;
         ++m_index;
     }
 
     void MatrixStack::pop()
     {
-        if (m_index > 0) {
-            --m_index;
+        if (m_index == 0) {
+            throw std::runtime_error("MatrixStack::pop() called with no matching push()");
         }
+
+        --m_index;
     }
 
     void MatrixStack::set(const matrix4x4& matrix)

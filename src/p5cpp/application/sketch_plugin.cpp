@@ -14,14 +14,18 @@ namespace p5
 
     void SketchPlugin::event(Context& context, const Next& next, const WindowEvent& event)
     {
-        m_sketch->event(event);
+        if (m_sketch != nullptr) {
+            m_sketch->event(event);
+        }
 
         next();
     }
 
     void SketchPlugin::draw(Context& context, const Next& next)
     {
-        m_sketch->draw();
+        if (m_sketch != nullptr) {
+            m_sketch->draw();
+        }
 
         next();
     }
@@ -30,7 +34,9 @@ namespace p5
     {
         next();
 
-        m_sketch->destroy();
-        m_sketch.reset();
+        if (m_sketch != nullptr) {
+            m_sketch->destroy();
+            m_sketch.reset();
+        }
     }
 } // namespace p5

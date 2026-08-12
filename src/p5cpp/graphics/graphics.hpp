@@ -5,6 +5,7 @@
 #include <p5cpp/graphics/matrix_stack.hpp>
 #include <p5cpp/graphics/framebuffer_stack.hpp>
 #include <p5cpp/graphics/renderer.hpp>
+#include <p5cpp/graphics/shape_builder.hpp>
 
 namespace p5
 {
@@ -90,27 +91,11 @@ namespace p5
         std::shared_ptr<Texture> resolveActiveTexture(const std::shared_ptr<Texture>& texture = nullptr);
 
         void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const std::shared_ptr<Texture>& texture = nullptr);
-        void submitFan(const std::span<const float2>& positions, const std::span<const float2>& texCoords, color_t color, const DrawState& state);
         void submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state);
         void submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state);
         void submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state);
         void submitPoint(const float2& position, color_t color, const DrawState& state);
-
-        // Appends a straight-line vertex to the in-progress shape, snapshotting the current fill/stroke
-        // color from `state` so callers can vary color per vertex simply by calling fill()/stroke() in
-        // between vertex() calls.
-        void appendShapeVertex(const float2& position, const float2& texCoord);
-
-        struct ShapeBuilder
-        {
-            bool active = false;
-            ShapeMode mode = ShapeMode::polygon;
-            std::vector<float2> positions;
-            std::vector<float2> texCoords;
-            std::vector<color_t> fillColors;
-            std::vector<color_t> strokeColors;
-            std::vector<float2> curveControlPoints; // raw points passed to curveVertex(), before Catmull-Rom subdivision
-        };
+        void submitBuiltShape(const BuiltShape& shape, bool close);
 
         DrawStateStack m_stateStack;
         MatrixStack m_matrixStack;

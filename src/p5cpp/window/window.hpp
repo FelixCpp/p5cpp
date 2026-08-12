@@ -30,6 +30,10 @@ namespace p5
 
         uint2 getPhysicalSize() const;
         uint2 getLogicalSize() const;
+        int2 getPosition() const;
+        std::string_view getTitle() const;
+        bool isResizable() const;
+        bool isVisible() const;
 
     private:
         explicit Window(GLFWwindow* window, const EventCallback& eventCallback);
@@ -38,5 +42,6 @@ namespace p5
 
         GLFWwindow* m_window;
         EventCallback m_eventCallback;
+        std::string m_title;
     };
 } // namespace p5

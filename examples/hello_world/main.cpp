@@ -1,33 +1,53 @@
 #include <p5cpp/p5cpp.hpp>
 
+#include <cstdlib>
+#include <ctime>
+
 using namespace p5;
+
+
 
 struct HelloWorldSketch : public Sketch
 {
-    std::shared_ptr<Framebuffer> framebuffer = createFramebuffer(200, 200);
+    std::shared_ptr<Framebuffer> offscreen = createFramebuffer(800, 600);
+    std::vector<float2> positions;
+    std::vector<color_t> colors;
 
     void setup() override
     {
-        withFramebuffer(framebuffer, []() {
-            background(rgba(0));
-            fill(rgba(255, 0, 0, 255));
-            stroke(rgba(0, 255, 0, 255));
-            strokeWeight(5.0f);
-            rect(50.0f, 50.0f, 100.0f, 100.0f);
-        });
+        srand(time(nullptr));
+        setWindowSize(800, 600);
     }
 
     void draw() override
     {
-        background(rgba(51, 255));
-        image(framebuffer->getColorTexture(), 100.0f, 100.0f, 200.0f, 200.0f);
+        withFramebuffer(offscreen, [&]() {
+            background(rgba(51, 255));
 
-        // stroke(rgba(0, 255, 0, 255));
-        // strokeWeight(35.0f);
-        // strokeJoin(StrokeJoin::round);
+            if (isMouseButtonPressed(MouseButton::Left)) {
+                positions.push_back(float2 {(float)getMouseX(), (float)getMouseY()});
 
-        // triangle(100.0f, 100.0f, 200.0f, 100.0f, getMouseX(), getMouseY());
-        // beginShape();
+                int r = rand() % 255;
+                int g = rand() % 255;
+                int b = rand() % 255;
+
+                colors.push_back(rgba(r, g, b));
+            }
+
+            fill(255);
+            strokeWeight(15.0f);
+            strokeJoin(StrokeJoin::round);
+            strokeCap(StrokeCap::triangle);
+            beginShape(ShapeMode::path);
+            for (size_t i = 0; i < positions.size(); ++i) {
+                stroke(colors[i]);
+                vertex(positions[i].x, positions[i].y);
+            }
+            endShape(false);
+        });
+
+        background(rgba(255));
+        image(offscreen->getColorTexture(), 0.0f, 0.0f, 800.0f, 600.0f);
     }
 };
 

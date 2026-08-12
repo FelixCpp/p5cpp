@@ -19,6 +19,15 @@ namespace p5
 
     void GraphicsPlugin::event(Context& context, const Next& next, const WindowEvent& event)
     {
+        if (event.is<WindowEvent::WindowResize>()) {
+            const auto& resize = event.as<WindowEvent::WindowResize>();
+            // Ignore 0x0 (e.g. minimize on some platforms): framebuffer/renderbuffer storage of that
+            // size is degenerate and would just be recreated again on the next real resize anyway.
+            if (resize.width > 0 and resize.height > 0) {
+                m_defaultFramebuffer = createFramebuffer(resize.width, resize.height);
+            }
+        }
+
         next();
     }
 

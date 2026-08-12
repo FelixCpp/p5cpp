@@ -7,13 +7,13 @@
 
 namespace p5
 {
-    class Framebuffer;
+    struct Framebuffer;
 
     struct RendererBatch
     {
         BlendMode blendMode;
-        GLuint shaderProgramId;
-        GLuint textureId;
+        std::shared_ptr<Shader> shader;
+        std::shared_ptr<Texture> texture;
         size_t indexOffset;
         size_t indexCount;
     };
@@ -29,11 +29,10 @@ namespace p5
 
         private:
             friend class Renderer;
-            Writer(Renderer& renderer, uint32_t vertexBase, size_t vertexOffset, size_t indexOffset);
+            Writer(Renderer& renderer, uint32_t vertexBase, size_t indexOffset);
 
             Renderer& m_renderer;
             uint32_t m_vertexBase;
-            size_t m_vertexOffset;
             size_t m_indexOffset;
         };
 

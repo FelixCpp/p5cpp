@@ -200,7 +200,8 @@ namespace p5
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
         glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
 
-        GLFWwindow* window = glfwCreateWindow(width, height, title.data(), nullptr, nullptr);
+        const std::string titleStr(title);
+        GLFWwindow* window = glfwCreateWindow(width, height, titleStr.c_str(), nullptr, nullptr);
         if (window == nullptr) {
             glfwTerminate();
             return nullptr;
@@ -216,6 +217,7 @@ namespace p5
         }
 
         Window* instance = new Window {window, eventCallback};
+        instance->m_title = titleStr;
         glfwSetWindowUserPointer(window, instance);
         glfwSetWindowSizeCallback(window, [](GLFWwindow* window, int width, int height) {
             Window* instance = static_cast<Window*>(glfwGetWindowUserPointer(window));
@@ -436,7 +438,8 @@ namespace p5
 
     void Window::setTitle(std::string_view title)
     {
-        glfwSetWindowTitle(m_window, title.data());
+        m_title = title;
+        glfwSetWindowTitle(m_window, m_title.c_str());
     }
 
     void Window::setResizable(bool resizable)
@@ -466,15 +469,37 @@ namespace p5
     uint2 Window::getPhysicalSize() const
     {
         int width, height;
-        glfwGetWindowSize(m_window, &width, &height);
+        glfwGetFramebufferSize(m_window, &width, &height);
         return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
     }
 
     uint2 Window::getLogicalSize() const
     {
         int width, height;
-        glfwGetFramebufferSize(m_window, &width, &height);
+        glfwGetWindowSize(m_window, &width, &height);
         return uint2 {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }
+
+    int2 Window::getPosition() const
+    {
+        int x, y;
+        glfwGetWindowPos(m_window, &x, &y);
+        return int2 {static_cast<int32_t>(x), static_cast<int32_t>(y)};
+    }
+
+    std::string_view Window::getTitle() const
+    {
+        return m_title;
+    }
+
+    bool Window::isResizable() const
+    {
+        return glfwGetWindowAttrib(m_window, GLFW_RESIZABLE) == GLFW_TRUE;
+    }
+
+    bool Window::isVisible() const
+    {
+        return glfwGetWindowAttrib(m_window, GLFW_VISIBLE) == GLFW_TRUE;
     }
 
     Window::Window(GLFWwindow* window, const EventCallback& eventCallback)

@@ -142,16 +142,16 @@ namespace p5
         for (const RendererBatch& batch : m_batches) {
             apply(batch.blendMode);
 
-            glUseProgram(batch.shaderProgramId);
-            const GLint projectionLocation = glGetUniformLocation(batch.shaderProgramId, "u_ProjectionMatrix");
+            glUseProgram(batch.shader->getShaderProgramId());
+            const GLint projectionLocation = batch.shader->getUniformLocation("u_ProjectionMatrix");
             if (projectionLocation >= 0) {
                 glUniformMatrix4fv(projectionLocation, 1, GL_TRUE, m_projectionMatrix.m.data());
             }
 
-            const GLint textureLocation = glGetUniformLocation(batch.shaderProgramId, "u_Texture");
+            const GLint textureLocation = batch.shader->getUniformLocation("u_Texture");
             if (textureLocation >= 0) {
                 glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, batch.textureId);
+                glBindTexture(GL_TEXTURE_2D, batch.texture->getTextureId());
                 glUniform1i(textureLocation, 0);
             }
 
@@ -182,7 +182,7 @@ namespace p5
     Renderer::Writer Renderer::write()
     {
         assert(m_currentVertexOffset <= std::numeric_limits<uint32_t>::max());
-        return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentVertexOffset, m_currentIndexOffset);
+        return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentIndexOffset);
     }
 
     void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader)
@@ -191,12 +191,9 @@ namespace p5
         if (indexCount == 0)
             return;
 
-        const GLuint shaderProgramId = shader->getShaderProgramId();
-        const GLuint textureId = texture->getTextureId();
-
         if (not m_batches.empty()) {
             RendererBatch& lastBatch = m_batches.back();
-            if (lastBatch.blendMode == blendMode and lastBatch.shaderProgramId == shaderProgramId and lastBatch.textureId == textureId) {
+            if (lastBatch.blendMode == blendMode and lastBatch.shader == shader and lastBatch.texture == texture) {
                 lastBatch.indexCount += indexCount;
                 return;
             }
@@ -204,17 +201,16 @@ namespace p5
 
         m_batches.push_back(RendererBatch {
             .blendMode = blendMode,
-            .shaderProgramId = shaderProgramId,
-            .textureId = textureId,
+            .shader = shader,
+            .texture = texture,
             .indexOffset = writer.m_indexOffset,
             .indexCount = indexCount,
         });
     }
 
-    Renderer::Writer::Writer(Renderer& renderer, uint32_t vertexBase, size_t vertexOffset, size_t indexOffset)
+    Renderer::Writer::Writer(Renderer& renderer, uint32_t vertexBase, size_t indexOffset)
         : m_renderer(renderer),
           m_vertexBase(vertexBase),
-          m_vertexOffset(vertexOffset),
           m_indexOffset(indexOffset)
     {
     }

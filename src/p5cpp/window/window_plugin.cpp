@@ -15,6 +15,10 @@ namespace p5
             kernel.process(event);
         });
 
+        if (m_window == nullptr) {
+            throw std::runtime_error("Failed to create window (GLFW/OpenGL initialization failed)");
+        }
+
         context.provide(m_window.get());
 
         next();

@@ -23,6 +23,9 @@ namespace p5
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferId);
 
             if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glDeleteFramebuffers(1, &framebufferId);
+                glDeleteRenderbuffers(1, &renderbufferId);
                 throw std::runtime_error("Failed to create framebuffer");
             }
 
@@ -31,17 +34,26 @@ namespace p5
             return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(framebufferId, renderbufferId, std::move(colorTexture), uint2 {.x = width, .y = height}));
         }
 
-        GLuint getFramebufferId() const
+        OpenGLFramebuffer(const OpenGLFramebuffer&) = delete;
+        OpenGLFramebuffer& operator=(const OpenGLFramebuffer&) = delete;
+
+        ~OpenGLFramebuffer() override
+        {
+            glDeleteFramebuffers(1, &m_framebufferId);
+            glDeleteRenderbuffers(1, &m_renderbufferId);
+        }
+
+        GLuint getFramebufferId() const override
         {
             return m_framebufferId;
         }
 
-        std::shared_ptr<Texture> getColorTexture() const
+        std::shared_ptr<Texture> getColorTexture() const override
         {
             return m_colorTexture;
         }
 
-        const uint2& getSize() const
+        const uint2& getSize() const override
         {
             return m_size;
         }

@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <iostream>
+#include <unordered_map>
 
 namespace p5
 {
@@ -12,9 +13,10 @@ namespace p5
         std::optional<GLuint> createShader(std::string_view source, GLenum type)
         {
             const char* sourceCStr = source.data();
+            const GLint sourceLength = static_cast<GLint>(source.size());
 
             GLuint shader = glCreateShader(type);
-            glShaderSource(shader, 1, &sourceCStr, nullptr);
+            glShaderSource(shader, 1, &sourceCStr, &sourceLength);
             glCompileShader(shader);
 
             GLint success = GL_FALSE;
@@ -90,9 +92,30 @@ namespace p5
             return std::unique_ptr<OpenGLShader>(new OpenGLShader(shaderProgramId.value()));
         }
 
+        OpenGLShader(const OpenGLShader&) = delete;
+        OpenGLShader& operator=(const OpenGLShader&) = delete;
+
+        ~OpenGLShader() override
+        {
+            glDeleteProgram(m_shaderProgramId);
+        }
+
         uint32_t getShaderProgramId() const override
         {
             return m_shaderProgramId;
+        }
+
+        int32_t getUniformLocation(std::string_view name) const override
+        {
+            const std::string key(name);
+            const auto it = m_uniformLocationCache.find(key);
+            if (it != m_uniformLocationCache.end()) {
+                return it->second;
+            }
+
+            const GLint location = glGetUniformLocation(m_shaderProgramId, key.c_str());
+            m_uniformLocationCache.emplace(key, location);
+            return location;
         }
 
     private:
@@ -102,6 +125,7 @@ namespace p5
         }
 
         uint32_t m_shaderProgramId;
+        mutable std::unordered_map<std::string, GLint> m_uniformLocationCache;
     };
 } // namespace p5
 
