@@ -81,6 +81,16 @@ namespace p5
 
 namespace p5
 {
+    constexpr float degrees(float radians);
+    constexpr float radians(float degrees);
+
+    inline static constexpr float PI = 3.14159265358979323846f;
+    inline static constexpr float TAU = 2.0f * PI;
+    inline static constexpr float HALF_PI = 0.5f * PI;
+} // namespace p5
+
+namespace p5
+{
     // clang-format off
     enum class Key
     {
@@ -372,6 +382,18 @@ namespace p5
         bevel,
         round,
     };
+
+    enum class ShapeMode
+    {
+        polygon,
+        points,
+        lines,
+        triangles,
+        triangleStrip,
+        triangleFan,
+        quads,
+        quadStrip,
+    };
 } // namespace p5
 
 namespace p5
@@ -451,11 +473,32 @@ namespace p5
 
 namespace p5
 {
+    enum class TextureUVMode
+    {
+        normalized,
+        pixel,
+    };
+}
+
+namespace p5
+{
+    struct Texture
+    {
+        virtual ~Texture() = default;
+        virtual uint32_t getTextureId() const = 0;
+        virtual const uint2& getSize() const = 0;
+    };
+
+    std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data);
+} // namespace p5
+
+namespace p5
+{
     struct Framebuffer
     {
         virtual ~Framebuffer() = default;
         virtual uint32_t getFramebufferId() const = 0;
-        virtual uint32_t getColorTextureId() const = 0;
+        virtual std::shared_ptr<Texture> getColorTexture() const = 0;
         virtual const uint2& getSize() const = 0;
     };
 
@@ -490,6 +533,7 @@ namespace p5
     void strokeJoin(StrokeJoin join);
     void strokeMiterLimit(float limit);
     void strokeRoundJoinThreshold(float threshold);
+    void curveTightness(float tightness);
 
     void blendMode(const BlendMode& blendMode);
 
@@ -510,6 +554,21 @@ namespace p5
     void line(float x1, float y1, float x2, float y2);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
     void point(float x, float y);
+
+    void beginShape(ShapeMode mode = ShapeMode::polygon);
+    void vertex(float x, float y);
+    void vertex(float x, float y, float u, float v);
+    void bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float x, float y);
+    void quadraticVertex(float controlX, float controlY, float x, float y);
+    void curveVertex(float x, float y);
+    void endShape(bool close = false);
+
+    void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2);
+    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+
+    void imageUVMode(TextureUVMode mode);
+    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
+    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
     template <std::invocable Func> void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func);
     template <std::invocable Func> void withState(Func&& func);
@@ -694,6 +753,12 @@ namespace p5
     {
         return static_cast<uint8_t>(color & 0xFF);
     }
+} // namespace p5
+
+namespace p5
+{
+    constexpr float degrees(float radians) { return radians * (180.0f / PI); }
+    constexpr float radians(float degrees) { return degrees * (PI / 180.0f); }
 } // namespace p5
 
 namespace p5

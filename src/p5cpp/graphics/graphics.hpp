@@ -45,6 +45,10 @@ namespace p5
         void strokeJoin(StrokeJoin join);
         void strokeMiterLimit(float limit);
         void strokeRoundJoinThreshold(float threshold);
+        void curveTightness(float tightness);
+
+        void tint(color_t color);
+        void noTint();
 
         void blendMode(const BlendMode& blendMode);
 
@@ -66,17 +70,54 @@ namespace p5
         void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
         void point(float x, float y);
 
+        void beginShape(ShapeMode mode = ShapeMode::polygon);
+        void vertex(float x, float y);
+        void vertex(float x, float y, float u, float v);
+        void bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float x, float y);
+        void quadraticVertex(float controlX, float controlY, float x, float y);
+        void curveVertex(float x, float y);
+        void endShape(bool close = false);
+
+        void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2);
+        void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+
+        void imageUVMode(TextureUVMode mode);
+        void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
+        void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
+
     private:
         std::shared_ptr<Shader> resolveActiveShader();
+        std::shared_ptr<Texture> resolveActiveTexture(const std::shared_ptr<Texture>& texture = nullptr);
 
-        void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state);
+        void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const std::shared_ptr<Texture>& texture = nullptr);
         void submitFan(const std::span<const float2>& positions, const std::span<const float2>& texCoords, color_t color, const DrawState& state);
         void submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state);
+        void submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state);
+        void submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state);
+        void submitPoint(const float2& position, color_t color, const DrawState& state);
+
+        // Appends a straight-line vertex to the in-progress shape, snapshotting the current fill/stroke
+        // color from `state` so callers can vary color per vertex simply by calling fill()/stroke() in
+        // between vertex() calls.
+        void appendShapeVertex(const float2& position, const float2& texCoord);
+
+        struct ShapeBuilder
+        {
+            bool active = false;
+            ShapeMode mode = ShapeMode::polygon;
+            std::vector<float2> positions;
+            std::vector<float2> texCoords;
+            std::vector<color_t> fillColors;
+            std::vector<color_t> strokeColors;
+            std::vector<float2> curveControlPoints; // raw points passed to curveVertex(), before Catmull-Rom subdivision
+        };
 
         DrawStateStack m_stateStack;
         MatrixStack m_matrixStack;
         FramebufferStack m_framebufferStack;
         std::unique_ptr<Renderer> m_renderer;
         std::shared_ptr<Shader> m_defaultFillShader;
+        std::shared_ptr<Texture> m_defaultTexture;
+        ShapeBuilder m_shape;
     };
 } // namespace p5

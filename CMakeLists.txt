@@ -55,6 +55,7 @@ add_library(
   ./src/p5cpp/graphics/graphics.cpp
   ./src/p5cpp/graphics/graphics_api.cpp
   ./src/p5cpp/graphics/graphics_plugin.cpp
+  ./src/p5cpp/graphics/texture.cpp
   ./src/p5cpp/p5cpp.cpp
 )
 

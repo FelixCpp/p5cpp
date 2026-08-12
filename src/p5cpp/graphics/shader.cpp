@@ -3,6 +3,7 @@
 #include <glad/glad.h>
 
 #include <optional>
+#include <iostream>
 
 namespace p5
 {
@@ -25,6 +26,7 @@ namespace p5
 
                 std::string log(logLength, '\0');
                 glGetShaderInfoLog(shader, logLength, nullptr, log.data());
+                std::cerr << "Shader compilation failed: " << log << std::endl;
 
                 glDeleteShader(shader);
                 return std::nullopt;
@@ -60,6 +62,7 @@ namespace p5
 
                 std::string log(logLength, '\0');
                 glGetProgramInfoLog(program, logLength, nullptr, log.data());
+                std::cerr << "Shader compilation failed: " << log << std::endl;
 
                 glDeleteProgram(program);
                 glDeleteShader(*vertexShader);

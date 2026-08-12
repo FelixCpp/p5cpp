@@ -127,6 +127,11 @@ namespace p5
         graphics().strokeRoundJoinThreshold(threshold);
     }
 
+    void curveTightness(float tightness)
+    {
+        graphics().curveTightness(tightness);
+    }
+
     void blendMode(const BlendMode& blendMode)
     {
         graphics().blendMode(blendMode);
@@ -187,5 +192,65 @@ namespace p5
     void point(float x, float y)
     {
         graphics().point(x, y);
+    }
+
+    void beginShape(ShapeMode mode)
+    {
+        graphics().beginShape(mode);
+    }
+
+    void vertex(float x, float y)
+    {
+        graphics().vertex(x, y);
+    }
+
+    void vertex(float x, float y, float u, float v)
+    {
+        graphics().vertex(x, y, u, v);
+    }
+
+    void bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float x, float y)
+    {
+        graphics().bezierVertex(controlX1, controlY1, controlX2, controlY2, x, y);
+    }
+
+    void quadraticVertex(float controlX, float controlY, float x, float y)
+    {
+        graphics().quadraticVertex(controlX, controlY, x, y);
+    }
+
+    void curveVertex(float x, float y)
+    {
+        graphics().curveVertex(x, y);
+    }
+
+    void endShape(bool close)
+    {
+        graphics().endShape(close);
+    }
+
+    void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2)
+    {
+        graphics().bezier(x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2);
+    }
+
+    void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
+    {
+        graphics().curve(x1, y1, x2, y2, x3, y3, x4, y4);
+    }
+
+    void imageUVMode(TextureUVMode mode)
+    {
+        graphics().imageUVMode(mode);
+    }
+
+    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height)
+    {
+        graphics().image(std::move(texture), left, top, width, height);
+    }
+
+    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2)
+    {
+        graphics().image(std::move(texture), left, top, width, height, u1, v1, u2, v2);
     }
 } // namespace p5

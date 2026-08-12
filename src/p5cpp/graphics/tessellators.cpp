@@ -276,7 +276,12 @@ namespace p5
             return;
 
         const float halfWidth = strokeWeight * 0.5f;
-        const float angleStep = std::max(roundJoinThreshold, 0.01f);
+
+        // Resolution for round joins/caps, independent of `roundJoinThreshold`: mirrors `ellipseSegmentCount`
+        // in graphics.cpp, sizing the arc's segment count to the radius rather than using a fixed angle step.
+        const int fullCircleSegments = std::clamp(static_cast<int>(std::ceil(std::numbers::pi_v<float> * std::sqrt(2.0f * halfWidth))), 16, 256);
+        const float arcAngleStep = 2.0f * std::numbers::pi_v<float> / static_cast<float>(fullCircleSegments);
+
         const size_t segmentCount = closed ? pointCount : pointCount - 1;
 
         const auto next = [pointCount](size_t i) { return (i + 1) % pointCount; };
@@ -355,7 +360,11 @@ namespace p5
                     float sweep = std::atan2(outerN1.y, outerN1.x) - startAngle;
                     while (sweep <= -std::numbers::pi_v<float>) sweep += 2.0f * std::numbers::pi_v<float>;
                     while (sweep > std::numbers::pi_v<float>) sweep -= 2.0f * std::numbers::pi_v<float>;
-                    emitArcFan(sink, vertexCount, joint, jointIndex, outerPrev, startAngle, sweep, halfWidth, angleStep);
+                    // Below `roundJoinThreshold` the arc is visually indistinguishable from a bevel, so skip it.
+                    if (std::abs(sweep) < roundJoinThreshold)
+                        emitOuterBevel();
+                    else
+                        emitArcFan(sink, vertexCount, joint, jointIndex, outerPrev, startAngle, sweep, halfWidth, arcAngleStep);
                     break;
                 }
 
@@ -437,7 +446,7 @@ namespace p5
                     const float startAngle = isStart ? std::atan2(normal.y, normal.x) : std::atan2(-normal.y, -normal.x);
                     const float2 startPoint = isStart ? leftPoint : rightPoint;
                     const uint32_t centerIndex = emitVertex(sink, vertexCount, endpoint.position, endpoint);
-                    emitArcFan(sink, vertexCount, endpoint, centerIndex, startPoint, startAngle, std::numbers::pi_v<float>, halfWidth, angleStep);
+                    emitArcFan(sink, vertexCount, endpoint, centerIndex, startPoint, startAngle, std::numbers::pi_v<float>, halfWidth, arcAngleStep);
                     break;
                 }
             }
@@ -447,99 +456,5 @@ namespace p5
             emitCap(pts.front(), directions.front(), strokeCap.start, true);
             emitCap(pts.back(), directions.back(), strokeCap.end, false);
         }
-    }
-
-    namespace
-    {
-        size_t arcSegmentCount(float sweep, float angleStep)
-        {
-            return static_cast<size_t>(std::max(1, static_cast<int>(std::ceil(std::abs(sweep) / angleStep))));
-        }
-
-        // Mirrors the vertex/triangle counts `tesselate_path`'s join switch emits for one interior join, per branch.
-        void joinBounds(StrokeJoin strokeJoin, float angleStep, size_t& vertices, size_t& triangles)
-        {
-            vertices = 3; // joint + innerPrev + innerNext, always emitted.
-            triangles = 1; // inner triangle, always emitted.
-
-            switch (strokeJoin) {
-                case StrokeJoin::bevel:
-                    vertices += 2;
-                    triangles += 1;
-                    break;
-
-                case StrokeJoin::round: {
-                    const size_t segments = arcSegmentCount(std::numbers::pi_v<float>, angleStep);
-                    vertices += segments + 1;
-                    triangles += segments;
-                    break;
-                }
-
-                case StrokeJoin::miter:
-                default:
-                    // Worst case (miter tip drawn): outerPrev + miterTip + outerNext, 2 triangles. The bevel
-                    // fallback used when the miter limit is exceeded is cheaper, so this bounds both.
-                    vertices += 3;
-                    triangles += 2;
-                    break;
-            }
-        }
-
-        // Mirrors the vertex/triangle counts `tesselate_path`'s cap switch emits for one endpoint cap, per style.
-        void capBounds(StrokeCapStyle style, float angleStep, size_t& vertices, size_t& triangles)
-        {
-            switch (style) {
-                case StrokeCapStyle::butt:
-                    vertices = 0;
-                    triangles = 0;
-                    break;
-
-                case StrokeCapStyle::square:
-                    vertices = 4;
-                    triangles = 2;
-                    break;
-
-                case StrokeCapStyle::triangle:
-                    vertices = 3;
-                    triangles = 1;
-                    break;
-
-                case StrokeCapStyle::round: {
-                    const size_t segments = arcSegmentCount(std::numbers::pi_v<float>, angleStep);
-                    vertices = 1 + segments + 1; // center + arc fan rim vertices.
-                    triangles = segments;
-                    break;
-                }
-            }
-        }
-    } // namespace
-
-    PathTessellationBounds tesselate_path_bounds(size_t pointCount, bool closed, StrokeCap strokeCap, StrokeJoin strokeJoin, float roundJoinThreshold)
-    {
-        if (closed ? pointCount < 3 : pointCount < 2)
-            return {0, 0};
-
-        const float angleStep = std::max(roundJoinThreshold, 0.01f);
-        const size_t segmentCount = closed ? pointCount : pointCount - 1;
-        const size_t jointCount = closed ? segmentCount : (segmentCount > 0 ? segmentCount - 1 : 0);
-
-        size_t vertexCount = segmentCount * 4;
-        size_t indexCount = segmentCount * 6;
-
-        size_t jointVertices = 0, jointTriangles = 0;
-        joinBounds(strokeJoin, angleStep, jointVertices, jointTriangles);
-        vertexCount += jointCount * jointVertices;
-        indexCount += jointCount * jointTriangles * 3;
-
-        if (not closed) {
-            size_t startVertices = 0, startTriangles = 0;
-            size_t endVertices = 0, endTriangles = 0;
-            capBounds(strokeCap.start, angleStep, startVertices, startTriangles);
-            capBounds(strokeCap.end, angleStep, endVertices, endTriangles);
-            vertexCount += startVertices + endVertices;
-            indexCount += (startTriangles + endTriangles) * 3;
-        }
-
-        return {vertexCount, indexCount};
     }
 } // namespace p5

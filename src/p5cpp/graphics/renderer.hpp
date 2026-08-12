@@ -9,19 +9,11 @@ namespace p5
 {
     class Framebuffer;
 
-    struct RendererSubmission
-    {
-        std::span<const Vertex> vertices;
-        std::span<const uint32_t> indices;
-        BlendMode blendMode;
-        std::shared_ptr<Shader> shaderProgramId;
-        // Texture (does not exist yet) ...
-    };
-
     struct RendererBatch
     {
         BlendMode blendMode;
         GLuint shaderProgramId;
+        GLuint textureId;
         size_t indexOffset;
         size_t indexCount;
     };
@@ -37,15 +29,12 @@ namespace p5
 
         private:
             friend class Renderer;
-            Writer(Vertex* vertexCursor, uint32_t* indexCursor, uint32_t vertexBase, size_t vertexOffset, size_t indexOffset);
+            Writer(Renderer& renderer, uint32_t vertexBase, size_t vertexOffset, size_t indexOffset);
 
-            Vertex* m_vertexCursor;
-            uint32_t* m_indexCursor;
+            Renderer& m_renderer;
             uint32_t m_vertexBase;
             size_t m_vertexOffset;
             size_t m_indexOffset;
-            size_t m_vertexCount;
-            size_t m_indexCount;
         };
 
         static std::unique_ptr<Renderer> create(size_t initialMaxVertices, size_t initialMaxIndices);
@@ -55,25 +44,20 @@ namespace p5
         void end();
         void flush();
 
-        void submit(const RendererSubmission& submission);
-
-        // Reserves space for up to maxVertexCount/maxIndexCount vertices/indices and returns a Writer
-        // to fill it directly. Must be followed by exactly one finish() call with the same Writer,
-        // which shrinks the reservation down to however much was actually written.
-        Writer write(size_t maxVertexCount, size_t maxIndexCount, const BlendMode& blendMode, const std::shared_ptr<Shader>& shader);
-        void finish(const Writer& writer);
+        // Returns a Writer that appends vertices/indices directly into this Renderer's fixed-capacity
+        // buffers (sized once at create() and never resized), so callers never need to know a shape's
+        // vertex/index count upfront. appendVertex()/appendIndex() throw std::runtime_error if a frame's
+        // total geometry exceeds that capacity. Must be followed by exactly one finish() call with the
+        // same Writer, which submits whatever was written as a batch (merging into the previous batch if
+        // blendMode/shader match).
+        Writer write();
+        void finish(const Writer& writer, const BlendMode& blendMode, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader);
 
     private:
-        struct ReservedRange
-        {
-            size_t vertexOffset;
-            size_t indexOffset;
-        };
-
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, size_t maxVertexCount, size_t maxIndexCount);
 
-        void grow(size_t requiredVertexCount, size_t requiredIndexCount);
-        ReservedRange reserve(size_t vertexCount, size_t indexCount, const BlendMode& blendMode, GLuint shaderProgramId);
+        void appendVertex(const Vertex& vertex);
+        void appendIndex(uint32_t index);
 
         GLuint m_vao;
         GLuint m_vbo;
@@ -82,8 +66,8 @@ namespace p5
         std::unique_ptr<Vertex[]> m_vertices;
         std::unique_ptr<uint32_t[]> m_indices;
 
-        size_t m_maxVertexCount;
-        size_t m_maxIndexCount;
+        const size_t m_maxVertexCount;
+        const size_t m_maxIndexCount;
 
         size_t m_currentVertexOffset;
         size_t m_currentIndexOffset;

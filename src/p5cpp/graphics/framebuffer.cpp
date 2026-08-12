@@ -9,22 +9,17 @@ namespace p5
     public:
         static std::unique_ptr<Framebuffer> create(uint32_t width, uint32_t height)
         {
-            GLuint framebufferId;
-            glGenFramebuffers(1, &framebufferId);
-            glBindFramebuffer(GL_FRAMEBUFFER, framebufferId);
+            std::unique_ptr<Texture> colorTexture = loadTextureFromMemory(width, height, {});
 
-            GLuint colorTextureId;
-            glGenTextures(1, &colorTextureId);
-            glBindTexture(GL_TEXTURE_2D, colorTextureId);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTextureId, 0);
-
-            GLuint renderbufferId;
+            GLuint renderbufferId = 0;
             glGenRenderbuffers(1, &renderbufferId);
             glBindRenderbuffer(GL_RENDERBUFFER, renderbufferId);
             glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+
+            GLuint framebufferId = 0;
+            glGenFramebuffers(1, &framebufferId);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebufferId);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture->getTextureId(), 0);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderbufferId);
 
             if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -33,7 +28,7 @@ namespace p5
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(framebufferId, renderbufferId, colorTextureId, uint2 {.x = width, .y = height}));
+            return std::unique_ptr<OpenGLFramebuffer>(new OpenGLFramebuffer(framebufferId, renderbufferId, std::move(colorTexture), uint2 {.x = width, .y = height}));
         }
 
         GLuint getFramebufferId() const
@@ -41,9 +36,9 @@ namespace p5
             return m_framebufferId;
         }
 
-        GLuint getColorTextureId() const
+        std::shared_ptr<Texture> getColorTexture() const
         {
-            return m_colorTextureId;
+            return m_colorTexture;
         }
 
         const uint2& getSize() const
@@ -52,14 +47,14 @@ namespace p5
         }
 
     private:
-        explicit OpenGLFramebuffer(GLuint framebufferId, GLuint renderbufferId, GLuint colorTextureId, const uint2& size)
-            : m_framebufferId(framebufferId), m_renderbufferId(renderbufferId), m_colorTextureId(colorTextureId), m_size(size)
+        explicit OpenGLFramebuffer(GLuint framebufferId, GLuint renderbufferId, std::unique_ptr<Texture> colorTexture, const uint2& size)
+            : m_framebufferId(framebufferId), m_renderbufferId(renderbufferId), m_colorTexture(std::move(colorTexture)), m_size(size)
         {
         }
 
         GLuint m_framebufferId;
         GLuint m_renderbufferId;
-        GLuint m_colorTextureId;
+        std::shared_ptr<Texture> m_colorTexture;
         uint2 m_size;
     };
 } // namespace p5

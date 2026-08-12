@@ -2,7 +2,9 @@
 
 #include <cstddef>
 #include <stdexcept>
-#include <algorithm>
+#include <cassert>
+#include <limits>
+#include <string>
 
 namespace p5
 {
@@ -146,6 +148,13 @@ namespace p5
                 glUniformMatrix4fv(projectionLocation, 1, GL_TRUE, m_projectionMatrix.m.data());
             }
 
+            const GLint textureLocation = glGetUniformLocation(batch.shaderProgramId, "u_Texture");
+            if (textureLocation >= 0) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, batch.textureId);
+                glUniform1i(textureLocation, 0);
+            }
+
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<void*>(batch.indexOffset * sizeof(uint32_t)));
         }
 
@@ -154,122 +163,69 @@ namespace p5
         m_batches.clear();
     }
 
-    void Renderer::grow(size_t requiredVertexCount, size_t requiredIndexCount)
+    void Renderer::appendVertex(const Vertex& vertex)
     {
-        size_t newMaxVertexCount = m_maxVertexCount > 0 ? m_maxVertexCount : 1;
-        while (newMaxVertexCount < requiredVertexCount)
-            newMaxVertexCount *= 2;
+        if (m_currentVertexOffset >= m_maxVertexCount)
+            throw std::runtime_error("Renderer: vertex buffer capacity (" + std::to_string(m_maxVertexCount) + ") exceeded; increase initialMaxVertices");
 
-        size_t newMaxIndexCount = m_maxIndexCount > 0 ? m_maxIndexCount : 1;
-        while (newMaxIndexCount < requiredIndexCount)
-            newMaxIndexCount *= 2;
-
-        m_vertices = std::make_unique<Vertex[]>(newMaxVertexCount);
-        m_indices = std::make_unique<uint32_t[]>(newMaxIndexCount);
-
-        m_maxVertexCount = newMaxVertexCount;
-        m_maxIndexCount = newMaxIndexCount;
-
-        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_maxVertexCount * sizeof(Vertex)), nullptr, GL_DYNAMIC_DRAW);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_maxIndexCount * sizeof(uint32_t)), nullptr, GL_DYNAMIC_DRAW);
+        m_vertices[m_currentVertexOffset++] = vertex;
     }
 
-    Renderer::ReservedRange Renderer::reserve(size_t vertexCount, size_t indexCount, const BlendMode& blendMode, GLuint shaderProgramId)
+    void Renderer::appendIndex(uint32_t index)
     {
-        if (m_currentVertexOffset + vertexCount > m_maxVertexCount or m_currentIndexOffset + indexCount > m_maxIndexCount)
-            flush();
+        if (m_currentIndexOffset >= m_maxIndexCount)
+            throw std::runtime_error("Renderer: index buffer capacity (" + std::to_string(m_maxIndexCount) + ") exceeded; increase initialMaxIndices");
 
-        if (vertexCount > m_maxVertexCount or indexCount > m_maxIndexCount)
-            grow(vertexCount, indexCount);
+        m_indices[m_currentIndexOffset++] = index;
+    }
 
-        const auto insertNewBatch = [&]() {
-            m_batches.push_back(RendererBatch {
-                .blendMode = blendMode,
-                .shaderProgramId = shaderProgramId,
-                .indexOffset = m_currentIndexOffset,
-                .indexCount = indexCount,
-            });
-        };
+    Renderer::Writer Renderer::write()
+    {
+        assert(m_currentVertexOffset <= std::numeric_limits<uint32_t>::max());
+        return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentVertexOffset, m_currentIndexOffset);
+    }
 
-        if (m_batches.empty()) {
-            insertNewBatch();
-        } else {
-            const RendererBatch& lastBatch = m_batches.back();
-            const bool isMergable = lastBatch.blendMode == blendMode and lastBatch.shaderProgramId == shaderProgramId;
+    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader)
+    {
+        const size_t indexCount = m_currentIndexOffset - writer.m_indexOffset;
+        if (indexCount == 0)
+            return;
 
-            if (isMergable) {
-                m_batches.back().indexCount += indexCount;
-            } else {
-                insertNewBatch();
+        const GLuint shaderProgramId = shader->getShaderProgramId();
+        const GLuint textureId = texture->getTextureId();
+
+        if (not m_batches.empty()) {
+            RendererBatch& lastBatch = m_batches.back();
+            if (lastBatch.blendMode == blendMode and lastBatch.shaderProgramId == shaderProgramId and lastBatch.textureId == textureId) {
+                lastBatch.indexCount += indexCount;
+                return;
             }
         }
 
-        const ReservedRange range {
-            .vertexOffset = m_currentVertexOffset,
-            .indexOffset = m_currentIndexOffset,
-        };
-
-        m_currentVertexOffset += vertexCount;
-        m_currentIndexOffset += indexCount;
-
-        return range;
+        m_batches.push_back(RendererBatch {
+            .blendMode = blendMode,
+            .shaderProgramId = shaderProgramId,
+            .textureId = textureId,
+            .indexOffset = writer.m_indexOffset,
+            .indexCount = indexCount,
+        });
     }
 
-    void Renderer::submit(const RendererSubmission& submission)
-    {
-        const size_t vertexCount = submission.vertices.size();
-        const size_t indexCount = submission.indices.size();
-        const GLuint shaderProgramId = submission.shaderProgramId->getShaderProgramId();
-
-        const ReservedRange range = reserve(vertexCount, indexCount, submission.blendMode, shaderProgramId);
-
-        std::copy(submission.vertices.begin(), submission.vertices.end(), m_vertices.get() + range.vertexOffset);
-
-        for (size_t i = 0; i < indexCount; ++i)
-            m_indices[range.indexOffset + i] = submission.indices[i] + static_cast<uint32_t>(range.vertexOffset);
-    }
-
-    Renderer::Writer Renderer::write(size_t maxVertexCount, size_t maxIndexCount, const BlendMode& blendMode, const std::shared_ptr<Shader>& shader)
-    {
-        const GLuint shaderProgramId = shader->getShaderProgramId();
-        const ReservedRange range = reserve(maxVertexCount, maxIndexCount, blendMode, shaderProgramId);
-
-        return Writer(m_vertices.get() + range.vertexOffset, m_indices.get() + range.indexOffset, static_cast<uint32_t>(range.vertexOffset), range.vertexOffset, range.indexOffset);
-    }
-
-    void Renderer::finish(const Writer& writer)
-    {
-        const size_t unusedVertexCount = (m_currentVertexOffset - writer.m_vertexOffset) - writer.m_vertexCount;
-        const size_t unusedIndexCount = (m_currentIndexOffset - writer.m_indexOffset) - writer.m_indexCount;
-
-        m_currentVertexOffset -= unusedVertexCount;
-        m_currentIndexOffset -= unusedIndexCount;
-        m_batches.back().indexCount -= unusedIndexCount;
-    }
-
-    Renderer::Writer::Writer(Vertex* vertexCursor, uint32_t* indexCursor, uint32_t vertexBase, size_t vertexOffset, size_t indexOffset)
-        : m_vertexCursor(vertexCursor),
-          m_indexCursor(indexCursor),
+    Renderer::Writer::Writer(Renderer& renderer, uint32_t vertexBase, size_t vertexOffset, size_t indexOffset)
+        : m_renderer(renderer),
           m_vertexBase(vertexBase),
           m_vertexOffset(vertexOffset),
-          m_indexOffset(indexOffset),
-          m_vertexCount(0),
-          m_indexCount(0)
+          m_indexOffset(indexOffset)
     {
     }
 
     void Renderer::Writer::addVertex(const float2& position, const float2& texCoord, const float4& color)
     {
-        *m_vertexCursor++ = Vertex {.position = position, .texCoord = texCoord, .color = color};
-        ++m_vertexCount;
+        m_renderer.appendVertex(Vertex {.position = position, .texCoord = texCoord, .color = color});
     }
 
     void Renderer::Writer::addIndex(uint32_t index)
     {
-        *m_indexCursor++ = m_vertexBase + index;
-        ++m_indexCount;
+        m_renderer.appendIndex(m_vertexBase + index);
     }
 } // namespace p5
