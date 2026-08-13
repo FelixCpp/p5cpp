@@ -8,4 +8,14 @@ namespace p5
     {
         return getKernel().getContext().require<Lifecycle>().frameCount();
     }
+
+    double getDeltaTime()
+    {
+        return getKernel().getContext().require<Lifecycle>().deltaTime();
+    }
+
+    double getGlobalTime()
+    {
+        return getKernel().getContext().require<Lifecycle>().globalTime();
+    }
 } // namespace p5

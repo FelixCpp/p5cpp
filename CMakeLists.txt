@@ -29,6 +29,7 @@ target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE ./external/stb)
+target_compile_definitions(stb INTERFACE STB_IMAGE_IMPLEMENTATION STB_IMAGE_WRITE_IMPLEMENTATION)
 
 add_library(
   p5cpp STATIC

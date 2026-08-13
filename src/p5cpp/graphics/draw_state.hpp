@@ -3,6 +3,7 @@
 #include <p5cpp/p5cpp.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace p5
 {
@@ -10,6 +11,8 @@ namespace p5
     {
         bool isFillEnabled = true;
         bool isStrokeEnabled = true;
+
+        std::optional<rect2f> clipRect = std::nullopt;
 
         color_t fillColor = rgba(255, 255, 255);
         color_t strokeColor = rgba(255, 255, 255);
@@ -24,6 +27,8 @@ namespace p5
 
         BlendMode blendMode = BlendMode::alpha;
         TextureUVMode textureUVMode = TextureUVMode::normalized;
+        TextureFilter textureFilter = TextureFilter::linear;
+        TextureWrap textureWrap = TextureWrap::clampToEdge;
 
         std::shared_ptr<Shader> shader = nullptr;
     };

@@ -1,6 +1,8 @@
 #include <p5cpp/p5cpp.hpp>
 
 #include <glad/glad.h>
+#include <stb_image.h>
+#include <stb_image_write.h>
 
 namespace p5
 {
@@ -9,8 +11,6 @@ namespace p5
     public:
         static std::unique_ptr<Texture> create(uint32_t width, uint32_t height, std::span<const uint8_t> data)
         {
-            // An empty span means "allocate uninitialized storage" (e.g. framebuffer color attachments);
-            // any other size must match the RGBA8 buffer exactly or glTexImage2D would read out of bounds.
             const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
             if (not data.empty() and data.size() != expectedSize) {
                 throw std::runtime_error("loadTextureFromMemory() data size does not match width * height * 4");
@@ -47,6 +47,15 @@ namespace p5
             return m_size;
         }
 
+        std::vector<uint8_t> queryPixelData() const override
+        {
+            std::vector<uint8_t> pixelData(static_cast<size_t>(m_size.x) * static_cast<size_t>(m_size.y) * 4);
+            glBindTexture(GL_TEXTURE_2D, m_textureId);
+            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+            return pixelData;
+        }
+
     private:
         explicit OpenGLTexture(GLuint textureId, const uint2& size)
             : m_textureId(textureId), m_size(size)
@@ -63,5 +72,49 @@ namespace p5
     std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data)
     {
         return OpenGLTexture::create(width, height, data);
+    }
+
+    std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath)
+    {
+        typedef decltype(&stbi_image_free) stbi_deleter;
+
+        stbi_set_flip_vertically_on_load(1);
+
+        const std::string filepathStr = filepath.string();
+        int width, height, channels;
+        std::unique_ptr<stbi_uc, stbi_deleter> pixelData(stbi_load(filepathStr.c_str(), &width, &height, &channels, STBI_rgb_alpha), &stbi_image_free);
+
+        if (pixelData == nullptr) {
+            return nullptr;
+        }
+
+        return loadTextureFromMemory(static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::span<const uint8_t>(pixelData.get(), width * height * 4));
+    }
+
+    bool saveTextureToFileAsPNG(const Texture& texture, const std::filesystem::path& filepath)
+    {
+        const std::string filepathStr = filepath.string();
+        const auto [width, height] = texture.getSize();
+        const auto pixelData = texture.queryPixelData();
+        const int result = stbi_write_png(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), static_cast<int>(width) * 4);
+        return result != 0;
+    }
+
+    bool saveTextureToFileAsJPEG(const Texture& texture, const std::filesystem::path& filepath, int quality)
+    {
+        const std::string filepathStr = filepath.string();
+        const auto [width, height] = texture.getSize();
+        const auto pixelData = texture.queryPixelData();
+        const int result = stbi_write_jpg(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), quality);
+        return result != 0;
+    }
+
+    bool saveTextureToFileAsBMP(const Texture& texture, const std::filesystem::path& filepath)
+    {
+        const std::string filepathStr = filepath.string();
+        const auto [width, height] = texture.getSize();
+        const auto pixelData = texture.queryPixelData();
+        const int result = stbi_write_bmp(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data());
+        return result != 0;
     }
 } // namespace p5

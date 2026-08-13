@@ -6,7 +6,11 @@ namespace p5
         : m_shouldClose {false},
           m_shouldRestart {false},
           m_exitCode {0},
-          m_frameCount {0}
+          m_frameCount {0},
+          m_startTime {std::chrono::steady_clock::now()},
+          m_lastFrameTime {m_startTime},
+          m_deltaTime {0.0},
+          m_globalTime {0.0}
     {
     }
 
@@ -35,6 +39,11 @@ namespace p5
     void Lifecycle::nextFrame()
     {
         ++m_frameCount;
+
+        const auto now = std::chrono::steady_clock::now();
+        m_deltaTime = std::chrono::duration<double>(now - m_lastFrameTime).count();
+        m_globalTime = std::chrono::duration<double>(now - m_startTime).count();
+        m_lastFrameTime = now;
     }
 
     bool Lifecycle::shouldClose() const
@@ -55,5 +64,15 @@ namespace p5
     int Lifecycle::frameCount() const
     {
         return m_frameCount;
+    }
+
+    double Lifecycle::deltaTime() const
+    {
+        return m_deltaTime;
+    }
+
+    double Lifecycle::globalTime() const
+    {
+        return m_globalTime;
     }
 } // namespace p5

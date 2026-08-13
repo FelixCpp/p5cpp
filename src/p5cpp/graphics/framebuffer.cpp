@@ -75,6 +75,7 @@ namespace p5
 {
     void blitFramebufferToScreen(const std::shared_ptr<Framebuffer>& framebuffer, uint32_t screenWidth, uint32_t screenHeight)
     {
+        glDisable(GL_SCISSOR_TEST);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer->getFramebufferId());
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(0, 0, static_cast<GLint>(framebuffer->getSize().x), static_cast<GLint>(framebuffer->getSize().y), 0, 0, static_cast<GLint>(screenWidth), static_cast<GLint>(screenHeight), GL_COLOR_BUFFER_BIT, GL_NEAREST);

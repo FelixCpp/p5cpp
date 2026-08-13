@@ -5,6 +5,10 @@
 
 #include <glad/glad.h>
 
+#include <optional>
+#include <string>
+#include <unordered_map>
+
 namespace p5
 {
     struct Framebuffer;
@@ -12,8 +16,12 @@ namespace p5
     struct RendererBatch
     {
         BlendMode blendMode;
+        std::optional<rect2f> clipRect;
+        TextureFilter textureFilter;
+        TextureWrap textureWrap;
         std::shared_ptr<Shader> shader;
         std::shared_ptr<Texture> texture;
+        std::unordered_map<std::string, UniformValue> uniforms;
         size_t indexOffset;
         size_t indexCount;
     };
@@ -50,7 +58,7 @@ namespace p5
         // same Writer, which submits whatever was written as a batch (merging into the previous batch if
         // blendMode/shader match).
         Writer write();
-        void finish(const Writer& writer, const BlendMode& blendMode, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader);
+        void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader);
 
     private:
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, size_t maxVertexCount, size_t maxIndexCount);
@@ -73,5 +81,6 @@ namespace p5
 
         std::vector<RendererBatch> m_batches;
         matrix4x4 m_projectionMatrix;
+        uint2 m_framebufferSize;
     };
 } // namespace p5

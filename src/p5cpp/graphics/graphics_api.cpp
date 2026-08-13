@@ -39,16 +39,13 @@ namespace p5
     void strokeRoundJoinThreshold(float threshold) { graphics().strokeRoundJoinThreshold(threshold); }
     void curveTightness(float tightness) { graphics().curveTightness(tightness); }
     void blendMode(const BlendMode& blendMode) { graphics().blendMode(blendMode); }
+    void clip(float x, float y, float width, float height) { graphics().clip(x, y, width, height); }
+    void noClip() { graphics().noClip(); }
     void shader(std::shared_ptr<Shader> shader) { graphics().shader(shader); }
     void noShader() { graphics().noShader(); }
-    void setUniform(std::string_view name, float value) { graphics().setUniform(name, value); }
-    void setUniform(std::string_view name, const float2& value) { graphics().setUniform(name, value); }
-    void setUniform(std::string_view name, const float3& value) { graphics().setUniform(name, value); }
-    void setUniform(std::string_view name, const float4& value) { graphics().setUniform(name, value); }
-    void setUniform(std::string_view name, const matrix4x4& value) { graphics().setUniform(name, value); }
-    void setUniform(std::string_view name, color_t value) { graphics().setUniform(name, value); }
     void background(color_t color) { graphics().background(color); }
     void rect(float left, float top, float width, float height) { graphics().rect(left, top, width, height); }
+    void rect(float left, float top, float width, float height, const BorderRadius& borderRadius) { graphics().rect(left, top, width, height, borderRadius); }
     void square(float left, float top, float size) { graphics().square(left, top, size); }
     void ellipse(float centerX, float centerY, float radiusX, float radiusY) { graphics().ellipse(centerX, centerY, radiusX, radiusY); }
     void circle(float centerX, float centerY, float radius) { graphics().circle(centerX, centerY, radius); }
@@ -65,6 +62,8 @@ namespace p5
     void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2) { graphics().bezier(x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2); }
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { graphics().curve(x1, y1, x2, y2, x3, y3, x4, y4); }
     void imageUVMode(TextureUVMode mode) { graphics().imageUVMode(mode); }
+    void textureFilter(TextureFilter filter) { graphics().textureFilter(filter); }
+    void textureWrap(TextureWrap wrap) { graphics().textureWrap(wrap); }
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height) { graphics().image(std::move(texture), left, top, width, height); }
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2) { graphics().image(std::move(texture), left, top, width, height, u1, v1, u2, v2); }
 } // namespace p5

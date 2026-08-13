@@ -13,12 +13,15 @@
 #include <utility>
 #include <array>
 #include <cmath>
+#include <filesystem>
 
 namespace p5
 {
     struct matrix4x4
     {
         std::array<float, 16> m;
+
+        constexpr bool operator==(const matrix4x4&) const = default;
     };
 
     constexpr matrix4x4 identityMatrix();
@@ -36,6 +39,8 @@ namespace p5
     template <typename T> struct value2
     {
         T x, y;
+
+        constexpr bool operator==(const value2&) const = default;
     };
 
     template <typename T> constexpr T lengthSquared(const value2<T>& v);
@@ -73,9 +78,32 @@ namespace p5
 
 namespace p5
 {
+    // Transforms a 2D point as if it were (x, y, 0, 1); ignores the matrix's z/w rows, since callers
+    // only ever pass in affine 2D transforms (translate/scale/rotate) built by this library.
+    constexpr float2 transformPoint(const matrix4x4& matrix, const float2& point);
+} // namespace p5
+
+namespace p5
+{
+    template <typename T> struct rect2
+    {
+        T x, y, width, height;
+
+        constexpr bool operator==(const rect2&) const = default;
+    };
+
+    typedef rect2<float> rect2f;
+    typedef rect2<int32_t> rect2i;
+    typedef rect2<uint32_t> rect2u;
+} // namespace p5
+
+namespace p5
+{
     template <typename T> struct value3
     {
         T x, y, z;
+
+        constexpr bool operator==(const value3&) const = default;
     };
 
     typedef value3<float> float3;
@@ -88,6 +116,8 @@ namespace p5
     template <typename T> struct value4
     {
         T x, y, z, w;
+
+        constexpr bool operator==(const value4&) const = default;
     };
 
     typedef value4<float> float4;
@@ -309,8 +339,9 @@ namespace p5
     struct Sketch
     {
         virtual ~Sketch() = default;
+        virtual void plugins() {}
         virtual void setup() {}
-        virtual void event(const WindowEvent& event) {}
+        virtual void event([[maybe_unused]] const WindowEvent& event) {}
         virtual void draw() {}
         virtual void destroy() {}
     };
@@ -318,6 +349,8 @@ namespace p5
     extern std::unique_ptr<Sketch> createSketch();
 
     int getFrameCount();
+    double getDeltaTime();
+    double getGlobalTime();
 } // namespace p5
 
 namespace p5
@@ -519,17 +552,27 @@ namespace p5
 
 namespace p5
 {
+    using UniformValue = std::variant<float, float2, float3, float4, matrix4x4>;
+} // namespace p5
+
+namespace p5
+{
     struct Shader
     {
         virtual ~Shader() = default;
         virtual uint32_t getShaderProgramId() const = 0;
-
-        // Uniform locations are cached by implementations, keyed by name, and tied to this Shader's
-        // own lifetime - safe to call every frame without re-querying the driver each time.
         virtual int32_t getUniformLocation(std::string_view name) const = 0;
+
+        std::unordered_map<std::string, UniformValue> uniforms;
     };
 
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+
+    void setUniform(Shader& shader, std::string_view name, float value);
+    void setUniform(Shader& shader, std::string_view name, const float2& value);
+    void setUniform(Shader& shader, std::string_view name, const float3& value);
+    void setUniform(Shader& shader, std::string_view name, const float4& value);
+    void setUniform(Shader& shader, std::string_view name, const matrix4x4& value);
 } // namespace p5
 
 namespace p5
@@ -539,7 +582,20 @@ namespace p5
         normalized,
         pixel,
     };
-}
+
+    enum class TextureFilter
+    {
+        nearest,
+        linear,
+    };
+
+    enum class TextureWrap
+    {
+        clampToEdge,
+        repeat,
+        mirroredRepeat,
+    };
+} // namespace p5
 
 namespace p5
 {
@@ -548,9 +604,14 @@ namespace p5
         virtual ~Texture() = default;
         virtual uint32_t getTextureId() const = 0;
         virtual const uint2& getSize() const = 0;
+        virtual std::vector<uint8_t> queryPixelData() const = 0;
     };
 
     std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data);
+    std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath);
+    bool saveTextureToFileAsPNG(const Texture& texture, const std::filesystem::path& filepath);
+    bool saveTextureToFileAsJPEG(const Texture& texture, const std::filesystem::path& filepath, int quality = 90);
+    bool saveTextureToFileAsBMP(const Texture& texture, const std::filesystem::path& filepath);
 } // namespace p5
 
 namespace p5
@@ -564,6 +625,33 @@ namespace p5
     };
 
     std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height);
+} // namespace p5
+
+namespace p5
+{
+    class CornerRadius : public float2
+    {
+    public:
+        static constexpr CornerRadius circular(float radius);
+        static constexpr CornerRadius elliptical(float radiusX, float radiusY);
+
+        float radiusX;
+        float radiusY;
+
+    private:
+        constexpr CornerRadius(float radiusX, float radiusY);
+    };
+
+    struct BorderRadius
+    {
+        CornerRadius topLeft;
+        CornerRadius topRight;
+        CornerRadius bottomRight;
+        CornerRadius bottomLeft;
+
+        static constexpr BorderRadius all(float radius);
+        static constexpr BorderRadius symmetric(float horizontal, float vertical);
+    };
 } // namespace p5
 
 namespace p5
@@ -600,17 +688,15 @@ namespace p5
 
     void blendMode(const BlendMode& blendMode);
 
+    void clip(float x, float y, float width, float height);
+    void noClip();
+
     void shader(std::shared_ptr<Shader> shader);
     void noShader();
 
-    void setUniform(std::string_view name, float value);
-    void setUniform(std::string_view name, const float2& value);
-    void setUniform(std::string_view name, const float3& value);
-    void setUniform(std::string_view name, const float4& value);
-    void setUniform(std::string_view name, const matrix4x4& value);
-
     void background(color_t color);
     void rect(float left, float top, float width, float height);
+    void rect(float left, float top, float width, float height, const BorderRadius& borderRadius);
     void square(float left, float top, float size);
     void ellipse(float centerX, float centerY, float radiusX, float radiusY);
     void circle(float centerX, float centerY, float radius);
@@ -630,6 +716,8 @@ namespace p5
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
 
     void imageUVMode(TextureUVMode mode);
+    void textureFilter(TextureFilter filter);
+    void textureWrap(TextureWrap wrap);
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
@@ -782,6 +870,14 @@ namespace p5
             }
         }
         return result;
+    }
+
+    inline constexpr float2 transformPoint(const matrix4x4& matrix, const float2& point)
+    {
+        return {
+            matrix.m[0] * point.x + matrix.m[1] * point.y + matrix.m[3],
+            matrix.m[4] * point.x + matrix.m[5] * point.y + matrix.m[7],
+        };
     }
 } // namespace p5
 
@@ -998,6 +1094,44 @@ namespace p5
     inline constexpr BlendMode BlendMode::lighten {Factor::one, Factor::one, Equation::max, Factor::one, Factor::one, Equation::max};
     inline constexpr BlendMode BlendMode::difference {Factor::one, Factor::one, Equation::subtract, Factor::one, Factor::one, Equation::subtract};
     inline constexpr BlendMode BlendMode::exclusion {Factor::one, Factor::one, Equation::add, Factor::one, Factor::one, Equation::add};
+} // namespace p5
+
+namespace p5
+{
+    constexpr CornerRadius::CornerRadius(float radiusX, float radiusY)
+        : radiusX(radiusX), radiusY(radiusY)
+    {
+    }
+
+    constexpr CornerRadius CornerRadius::circular(float radius)
+    {
+        return CornerRadius(radius, radius);
+    }
+
+    constexpr CornerRadius CornerRadius::elliptical(float radiusX, float radiusY)
+    {
+        return CornerRadius(radiusX, radiusY);
+    }
+} // namespace p5
+
+namespace p5
+{
+    constexpr BorderRadius BorderRadius::all(float radius)
+    {
+        return BorderRadius {CornerRadius::circular(radius), CornerRadius::circular(radius), CornerRadius::circular(radius), CornerRadius::circular(radius)};
+    }
+
+    constexpr BorderRadius BorderRadius::symmetric(float horizontal, float vertical)
+    {
+        const CornerRadius radius = CornerRadius::elliptical(horizontal, vertical);
+
+        return BorderRadius {
+            .topLeft = radius,
+            .topRight = radius,
+            .bottomRight = radius,
+            .bottomLeft = radius,
+        };
+    }
 } // namespace p5
 
 namespace p5

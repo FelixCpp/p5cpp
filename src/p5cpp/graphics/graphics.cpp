@@ -80,6 +80,48 @@ namespace p5
                 texCoords[i] = {0.5f + 0.5f * c, 0.5f + 0.5f * s};
             }
         }
+
+        void buildRoundedRectPoints(float left, float top, float width, float height, const BorderRadius& borderRadius, color_t fillColor, color_t strokeColor, const matrix4x4& transform, ShapeBuilder& builder)
+        {
+            const float right = left + width;
+            const float bottom = top + height;
+            const float halfWidth = width * 0.5f;
+            const float halfHeight = height * 0.5f;
+
+            const auto clampCorner = [&](const CornerRadius& corner) -> float2 {
+                return {std::clamp(corner.radiusX, 0.0f, halfWidth), std::clamp(corner.radiusY, 0.0f, halfHeight)};
+            };
+
+            const float2 topLeftRadius = clampCorner(borderRadius.topLeft);
+            const float2 topRightRadius = clampCorner(borderRadius.topRight);
+            const float2 bottomRightRadius = clampCorner(borderRadius.bottomRight);
+            const float2 bottomLeftRadius = clampCorner(borderRadius.bottomLeft);
+
+            const auto addCorner = [&](float cornerX, float cornerY, float centerX, float centerY, float radiusX, float radiusY, float startAngle, float endAngle) {
+                const auto addVertex = [&](float x, float y) {
+                    const float2 transformed = transformPoint(transform, {x, y});
+                    builder.vertex(transformed.x, transformed.y, (x - left) / width, (y - top) / height, fillColor, strokeColor);
+                };
+
+                if (radiusX <= 0.0f or radiusY <= 0.0f) {
+                    addVertex(cornerX, cornerY);
+                    return;
+                }
+
+                const int segments = std::max(ellipseSegmentCount(radiusX, radiusY) / 4, 2);
+                for (int i = 0; i <= segments; ++i) {
+                    const float t = std::lerp(startAngle, endAngle, static_cast<float>(i) / static_cast<float>(segments));
+                    addVertex(centerX + std::cos(t) * radiusX, centerY + std::sin(t) * radiusY);
+                }
+            };
+
+            constexpr float pi = std::numbers::pi_v<float>;
+
+            addCorner(left, top, left + topLeftRadius.x, top + topLeftRadius.y, topLeftRadius.x, topLeftRadius.y, pi, 1.5f * pi);
+            addCorner(right, top, right - topRightRadius.x, top + topRightRadius.y, topRightRadius.x, topRightRadius.y, 1.5f * pi, 2.0f * pi);
+            addCorner(right, bottom, right - bottomRightRadius.x, bottom - bottomRightRadius.y, bottomRightRadius.x, bottomRightRadius.y, 0.0f, 0.5f * pi);
+            addCorner(left, bottom, left + bottomLeftRadius.x, bottom - bottomLeftRadius.y, bottomLeftRadius.x, bottomLeftRadius.y, 0.5f * pi, pi);
+        }
     } // namespace detail
 } // namespace p5
 
@@ -274,6 +316,18 @@ namespace p5
         state.blendMode = blendMode;
     }
 
+    void Graphics::clip(float x, float y, float width, float height)
+    {
+        DrawState& state = peekState();
+        state.clipRect = rect2f {x, y, width, height};
+    }
+
+    void Graphics::noClip()
+    {
+        DrawState& state = peekState();
+        state.clipRect = std::nullopt;
+    }
+
     void Graphics::shader(std::shared_ptr<Shader> shader)
     {
         DrawState& state = peekState();
@@ -283,26 +337,6 @@ namespace p5
     void Graphics::noShader()
     {
         shader(nullptr);
-    }
-
-    void Graphics::setUniform(std::string_view name, float value)
-    {
-    }
-
-    void Graphics::setUniform(std::string_view name, const float2& value)
-    {
-    }
-
-    void Graphics::setUniform(std::string_view name, const float3& value)
-    {
-    }
-
-    void Graphics::setUniform(std::string_view name, const float4& value)
-    {
-    }
-
-    void Graphics::setUniform(std::string_view name, const matrix4x4& value)
-    {
     }
 
     std::shared_ptr<Shader> Graphics::resolveActiveShader()
@@ -324,6 +358,11 @@ namespace p5
         return m_defaultTexture;
     }
 
+    float2 Graphics::applyTransform(const float2& point) const
+    {
+        return p5::transformPoint(m_matrixStack.peek(), point);
+    }
+
     void Graphics::submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const std::shared_ptr<Texture>& texture)
     {
         const float4 col = detail::toFloat4(color);
@@ -331,7 +370,7 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_quad(writer, positions, texCoords, colors);
-        m_renderer->finish(writer, state.blendMode, resolveActiveTexture(texture), resolveActiveShader());
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(texture), resolveActiveShader());
     }
 
     void Graphics::submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state)
@@ -348,7 +387,7 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed);
-        m_renderer->finish(writer, state.blendMode, resolveActiveTexture(), resolveActiveShader());
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader());
     }
 
     void Graphics::submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state)
@@ -369,7 +408,7 @@ namespace p5
             case ShapeMode::polygon:
             default: tesselate_polygon(writer, positions, texCoords, convertedColors); break;
         }
-        m_renderer->finish(writer, state.blendMode, resolveActiveTexture(), resolveActiveShader());
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader());
     }
 
     void Graphics::background(color_t color)
@@ -397,10 +436,23 @@ namespace p5
         const DrawState& state = peekState();
         ShapeBuilder builder;
         builder.beginShape(ShapeMode::quads);
-        builder.vertex(x, y, 0.0f, 0.0f, state.fillColor, state.strokeColor);
-        builder.vertex(x + width, y, 1.0f, 0.0f, state.fillColor, state.strokeColor);
-        builder.vertex(x + width, y + height, 1.0f, 1.0f, state.fillColor, state.strokeColor);
-        builder.vertex(x, y + height, 0.0f, 1.0f, state.fillColor, state.strokeColor);
+        const float2 topLeft = applyTransform({x, y});
+        const float2 topRight = applyTransform({x + width, y});
+        const float2 bottomRight = applyTransform({x + width, y + height});
+        const float2 bottomLeft = applyTransform({x, y + height});
+        builder.vertex(topLeft.x, topLeft.y, 0.0f, 0.0f, state.fillColor, state.strokeColor);
+        builder.vertex(topRight.x, topRight.y, 1.0f, 0.0f, state.fillColor, state.strokeColor);
+        builder.vertex(bottomRight.x, bottomRight.y, 1.0f, 1.0f, state.fillColor, state.strokeColor);
+        builder.vertex(bottomLeft.x, bottomLeft.y, 0.0f, 1.0f, state.fillColor, state.strokeColor);
+        submitBuiltShape(builder.endShape(), true);
+    }
+
+    void Graphics::rect(float x, float y, float width, float height, const BorderRadius& borderRadius)
+    {
+        const DrawState& state = peekState();
+        ShapeBuilder builder;
+        builder.beginShape(ShapeMode::polygon);
+        detail::buildRoundedRectPoints(x, y, width, height, borderRadius, state.fillColor, state.strokeColor, m_matrixStack.peek(), builder);
         submitBuiltShape(builder.endShape(), true);
     }
 
@@ -419,7 +471,8 @@ namespace p5
         ShapeBuilder builder;
         builder.beginShape(ShapeMode::triangleFan);
         for (size_t i = 0; i < positions.size(); ++i) {
-            builder.vertex(positions[i].x, positions[i].y, texCoords[i].x, texCoords[i].y, state.fillColor, state.strokeColor);
+            const float2 p = applyTransform(positions[i]);
+            builder.vertex(p.x, p.y, texCoords[i].x, texCoords[i].y, state.fillColor, state.strokeColor);
         }
         submitBuiltShape(builder.endShape(), true);
     }
@@ -435,7 +488,7 @@ namespace p5
         if (not state.isStrokeEnabled)
             return;
 
-        const float2 positions[2] = {{x1, y1}, {x2, y2}};
+        const float2 positions[2] = {applyTransform({x1, y1}), applyTransform({x2, y2})};
         submitStroke(positions, false, state.strokeColor, state);
     }
 
@@ -444,9 +497,12 @@ namespace p5
         const DrawState& state = peekState();
         ShapeBuilder builder;
         builder.beginShape(ShapeMode::triangles);
-        builder.vertex(x1, y1, 0.0f, 0.0f, state.fillColor, state.strokeColor);
-        builder.vertex(x2, y2, 1.0f, 0.0f, state.fillColor, state.strokeColor);
-        builder.vertex(x3, y3, 0.5f, 1.0f, state.fillColor, state.strokeColor);
+        const float2 p1 = applyTransform({x1, y1});
+        const float2 p2 = applyTransform({x2, y2});
+        const float2 p3 = applyTransform({x3, y3});
+        builder.vertex(p1.x, p1.y, 0.0f, 0.0f, state.fillColor, state.strokeColor);
+        builder.vertex(p2.x, p2.y, 1.0f, 0.0f, state.fillColor, state.strokeColor);
+        builder.vertex(p3.x, p3.y, 0.5f, 1.0f, state.fillColor, state.strokeColor);
         submitBuiltShape(builder.endShape(), true);
     }
 
@@ -486,7 +542,7 @@ namespace p5
         if (not state.isStrokeEnabled)
             return;
 
-        submitPoint({x, y}, state.strokeColor, state);
+        submitPoint(applyTransform({x, y}), state.strokeColor, state);
     }
 
     void Graphics::beginShape(ShapeMode mode)
@@ -497,29 +553,37 @@ namespace p5
     void Graphics::vertex(float x, float y)
     {
         const DrawState& state = peekState();
-        m_shape.vertex(x, y, state.fillColor, state.strokeColor);
+        const float2 p = applyTransform({x, y});
+        m_shape.vertex(p.x, p.y, state.fillColor, state.strokeColor);
     }
 
     void Graphics::vertex(float x, float y, float u, float v)
     {
         const DrawState& state = peekState();
-        m_shape.vertex(x, y, u, v, state.fillColor, state.strokeColor);
+        const float2 p = applyTransform({x, y});
+        m_shape.vertex(p.x, p.y, u, v, state.fillColor, state.strokeColor);
     }
 
     void Graphics::bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float x, float y)
     {
-        m_shape.bezierVertex(controlX1, controlY1, controlX2, controlY2, x, y);
+        const float2 c1 = applyTransform({controlX1, controlY1});
+        const float2 c2 = applyTransform({controlX2, controlY2});
+        const float2 p = applyTransform({x, y});
+        m_shape.bezierVertex(c1.x, c1.y, c2.x, c2.y, p.x, p.y);
     }
 
     void Graphics::quadraticVertex(float controlX, float controlY, float x, float y)
     {
-        m_shape.quadraticVertex(controlX, controlY, x, y);
+        const float2 c = applyTransform({controlX, controlY});
+        const float2 p = applyTransform({x, y});
+        m_shape.quadraticVertex(c.x, c.y, p.x, p.y);
     }
 
     void Graphics::curveVertex(float x, float y)
     {
         const DrawState& state = peekState();
-        m_shape.curveVertex(x, y, state.curveTightness, state.fillColor, state.strokeColor);
+        const float2 p = applyTransform({x, y});
+        m_shape.curveVertex(p.x, p.y, state.curveTightness, state.fillColor, state.strokeColor);
     }
 
     void Graphics::endShape(bool close)
@@ -592,6 +656,18 @@ namespace p5
         state.textureUVMode = mode;
     }
 
+    void Graphics::textureFilter(TextureFilter filter)
+    {
+        DrawState& state = peekState();
+        state.textureFilter = filter;
+    }
+
+    void Graphics::textureWrap(TextureWrap wrap)
+    {
+        DrawState& state = peekState();
+        state.textureWrap = wrap;
+    }
+
     void Graphics::image(std::shared_ptr<Texture> texture, float left, float top, float width, float height)
     {
         image(texture, left, top, width, height, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -627,10 +703,10 @@ namespace p5
         }
 
         const float2 positions[4] = {
-            {left, top},
-            {left + width, top},
-            {left + width, top + height},
-            {left, top + height},
+            applyTransform({left, top}),
+            applyTransform({left + width, top}),
+            applyTransform({left + width, top + height}),
+            applyTransform({left, top + height}),
         };
 
         const float2 texCoords[4] = {

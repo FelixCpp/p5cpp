@@ -53,17 +53,15 @@ namespace p5
 
         void blendMode(const BlendMode& blendMode);
 
+        void clip(float x, float y, float width, float height);
+        void noClip();
+
         void shader(std::shared_ptr<Shader> shader);
         void noShader();
 
-        void setUniform(std::string_view name, float value);
-        void setUniform(std::string_view name, const float2& value);
-        void setUniform(std::string_view name, const float3& value);
-        void setUniform(std::string_view name, const float4& value);
-        void setUniform(std::string_view name, const matrix4x4& value);
-
         void background(color_t color);
         void rect(float left, float top, float width, float height);
+        void rect(float left, float top, float width, float height, const BorderRadius& borderRadius);
         void square(float left, float top, float size);
         void ellipse(float centerX, float centerY, float radiusX, float radiusY);
         void circle(float centerX, float centerY, float radius);
@@ -83,12 +81,15 @@ namespace p5
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
 
         void imageUVMode(TextureUVMode mode);
+        void textureFilter(TextureFilter filter);
+        void textureWrap(TextureWrap wrap);
         void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
         void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
     private:
         std::shared_ptr<Shader> resolveActiveShader();
         std::shared_ptr<Texture> resolveActiveTexture(const std::shared_ptr<Texture>& texture = nullptr);
+        float2 applyTransform(const float2& point) const;
 
         void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const std::shared_ptr<Texture>& texture = nullptr);
         void submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state);

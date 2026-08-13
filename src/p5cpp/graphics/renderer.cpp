@@ -1,15 +1,36 @@
 #include <p5cpp/graphics/renderer.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <stdexcept>
 #include <cassert>
 #include <limits>
 #include <string>
+#include <type_traits>
 
 namespace p5
 {
     namespace
     {
+        GLint toGl(TextureFilter filter)
+        {
+            switch (filter) {
+                case TextureFilter::nearest: return GL_NEAREST;
+                case TextureFilter::linear: return GL_LINEAR;
+                default: throw std::invalid_argument("Invalid texture filter");
+            }
+        }
+
+        GLint toGl(TextureWrap wrap)
+        {
+            switch (wrap) {
+                case TextureWrap::clampToEdge: return GL_CLAMP_TO_EDGE;
+                case TextureWrap::repeat: return GL_REPEAT;
+                case TextureWrap::mirroredRepeat: return GL_MIRRORED_REPEAT;
+                default: throw std::invalid_argument("Invalid texture wrap mode");
+            }
+        }
+
         void apply(const BlendMode& blendMode)
         {
             constexpr auto blendFactorToGl = [](const BlendMode::Factor factor) -> GLenum {
@@ -114,6 +135,7 @@ namespace p5
         glEnable(GL_BLEND);
 
         m_projectionMatrix = orthographicProjectionMatrix(0.0f, 0.0f, static_cast<float>(size.x), static_cast<float>(size.y), -1.0f, 1.0f);
+        m_framebufferSize = size;
 
         m_currentVertexOffset = 0;
         m_currentIndexOffset = 0;
@@ -142,6 +164,18 @@ namespace p5
         for (const RendererBatch& batch : m_batches) {
             apply(batch.blendMode);
 
+            if (batch.clipRect.has_value()) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(
+                    static_cast<GLint>(batch.clipRect->x),
+                    static_cast<GLint>(static_cast<float>(m_framebufferSize.y) - (batch.clipRect->y + batch.clipRect->height)),
+                    static_cast<GLsizei>(std::max(batch.clipRect->width, 0.0f)),
+                    static_cast<GLsizei>(std::max(batch.clipRect->height, 0.0f))
+                );
+            } else {
+                glDisable(GL_SCISSOR_TEST);
+            }
+
             glUseProgram(batch.shader->getShaderProgramId());
             const GLint projectionLocation = batch.shader->getUniformLocation("u_ProjectionMatrix");
             if (projectionLocation >= 0) {
@@ -152,7 +186,32 @@ namespace p5
             if (textureLocation >= 0) {
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, batch.texture->getTextureId());
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, toGl(batch.textureFilter));
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, toGl(batch.textureFilter));
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, toGl(batch.textureWrap));
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, toGl(batch.textureWrap));
                 glUniform1i(textureLocation, 0);
+            }
+
+            for (const auto& [name, value] : batch.uniforms) {
+                const GLint location = batch.shader->getUniformLocation(name);
+                if (location < 0)
+                    continue;
+
+                std::visit([location](const auto& v) {
+                    using T = std::decay_t<decltype(v)>;
+                    if constexpr (std::is_same_v<T, float>) {
+                        glUniform1f(location, v);
+                    } else if constexpr (std::is_same_v<T, float2>) {
+                        glUniform2f(location, v.x, v.y);
+                    } else if constexpr (std::is_same_v<T, float3>) {
+                        glUniform3f(location, v.x, v.y, v.z);
+                    } else if constexpr (std::is_same_v<T, float4>) {
+                        glUniform4f(location, v.x, v.y, v.z, v.w);
+                    } else if constexpr (std::is_same_v<T, matrix4x4>) {
+                        glUniformMatrix4fv(location, 1, GL_TRUE, v.m.data());
+                    }
+                }, value);
             }
 
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<void*>(batch.indexOffset * sizeof(uint32_t)));
@@ -185,15 +244,20 @@ namespace p5
         return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentIndexOffset);
     }
 
-    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader)
+    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader)
     {
         const size_t indexCount = m_currentIndexOffset - writer.m_indexOffset;
         if (indexCount == 0)
             return;
 
+        const auto& uniforms = shader->uniforms;
+
+        // Uniforms live on the shader itself and are typically small maps, so comparing them for
+        // equality here is cheap; a batch extends the previous one only if every other GPU-relevant
+        // property also matches.
         if (not m_batches.empty()) {
             RendererBatch& lastBatch = m_batches.back();
-            if (lastBatch.blendMode == blendMode and lastBatch.shader == shader and lastBatch.texture == texture) {
+            if (lastBatch.blendMode == blendMode and lastBatch.clipRect == clipRect and lastBatch.textureFilter == textureFilter and lastBatch.textureWrap == textureWrap and lastBatch.shader == shader and lastBatch.texture == texture and lastBatch.uniforms == uniforms) {
                 lastBatch.indexCount += indexCount;
                 return;
             }
@@ -201,8 +265,12 @@ namespace p5
 
         m_batches.push_back(RendererBatch {
             .blendMode = blendMode,
+            .clipRect = clipRect,
+            .textureFilter = textureFilter,
+            .textureWrap = textureWrap,
             .shader = shader,
             .texture = texture,
+            .uniforms = uniforms,
             .indexOffset = writer.m_indexOffset,
             .indexCount = indexCount,
         });

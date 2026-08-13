@@ -135,4 +135,29 @@ namespace p5
     {
         return OpenGLShader::create(vertexShaderSource, fragmentShaderSource);
     }
+
+    void setUniform(Shader& shader, std::string_view name, float value)
+    {
+        shader.uniforms[std::string(name)] = value;
+    }
+
+    void setUniform(Shader& shader, std::string_view name, const float2& value)
+    {
+        shader.uniforms[std::string(name)] = value;
+    }
+
+    void setUniform(Shader& shader, std::string_view name, const float3& value)
+    {
+        shader.uniforms[std::string(name)] = value;
+    }
+
+    void setUniform(Shader& shader, std::string_view name, const float4& value)
+    {
+        shader.uniforms[std::string(name)] = value;
+    }
+
+    void setUniform(Shader& shader, std::string_view name, const matrix4x4& value)
+    {
+        shader.uniforms[std::string(name)] = value;
+    }
 } // namespace p5
