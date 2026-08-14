@@ -294,10 +294,6 @@ inline static constexpr std::string_view effectFragmentShaderSource = R"(
     }
 )";
 
-float linear(float x) { return x; }
-float easeInOutSine(float x) { return -(cos(3.14159265358979323846 * x) - 1.0f) / 2.0f; }
-float easeOutQuad(float x) { return 1.0f - (1.0f - x) * (1.0f - x); }
-
 struct Animation
 {
     float from;
@@ -334,7 +330,7 @@ float value(const Animation& animation)
 {
     const float safeDuration = animation.duration > 0.0f ? animation.duration : 1.0f;
     const float progress = animation.elapsedTime / safeDuration;
-    const float easedProgress = animation.ease ? animation.ease(progress) : linear(progress);
+    const float easedProgress = animation.ease ? animation.ease(progress) : easeLinear(progress);
     const float value = lerp(animation.from, animation.to, easedProgress);
 
     return value;
@@ -469,9 +465,6 @@ struct EffectsSketch : public Sketch
             stop(wave);
         }
 
-        fprintf(stdout, "Flash: %f, Dissolve: %f, RGB Split: %f, Wave: %f\n", value(flash), value(dissolve), value(rgbSplit), value(wave));
-        fflush(stdout);
-
         setUniform(*effectShader, "u_Flash", value(flash));
         setUniform(*effectShader, "u_Dissolve", value(dissolve));
         setUniform(*effectShader, "u_RGBSplit", value(rgbSplit));
@@ -491,7 +484,104 @@ struct EffectsSketch : public Sketch
     }
 };
 
+struct TextSketch : public Sketch
+{
+    // std::shared_ptr<Font> font = loadFontFromFile("Arial.ttf");
+
+    void setup() override
+    {
+        setWindowSize(900, 700);
+    }
+
+    void draw() override
+    {
+        background(rgba(20));
+        // textFont(font);
+
+        // 1. Animated size on the hot path — proves no re-rasterization/hitch per frame.
+        fill(rgba(255));
+        textAlign(TextAlignment::topLeft);
+        textSize(62.0f + 6.0f * std::sin(static_cast<float>(getGlobalTime())));
+        text("Animated size p5cpp", 20, 20);
+
+        // 2. All 9 alignment anchors against a marker dot.
+        textSize(18.0f);
+        const float2 anchors[9] = {
+            {100, 250},
+            {300, 250},
+            {500, 250},
+            {100, 320},
+            {300, 320},
+            {500, 320},
+            {100, 390},
+            {300, 390},
+            {500, 390},
+        };
+        const TextAlignment aligns[9] = {
+            TextAlignment::topLeft,
+            TextAlignment::topCenter,
+            TextAlignment::topRight,
+            TextAlignment::centerLeft,
+            TextAlignment::center,
+            TextAlignment::centerRight,
+            TextAlignment::bottomLeft,
+            TextAlignment::bottomCenter,
+            TextAlignment::bottomRight,
+        };
+        for (int i = 0; i < 9; ++i) {
+            stroke(rgba(255, 0, 0));
+            strokeWeight(4);
+            point(anchors[i].x, anchors[i].y);
+
+            textAlign(aligns[i]);
+            fill(rgba(255));
+            text("Anchor", anchors[i].x, anchors[i].y);
+        }
+
+        // 3. Word-wrap against a visible maxWidth guide box.
+        textAlign(TextAlignment::topLeft);
+        textWrap(TextWrap::word);
+        noFill();
+        stroke(rgba(80, 80, 80));
+        strokeWeight(1);
+        rect(500, 20, 300, 150);
+        fill(rgba(255));
+        text("The quick brown fox jumps over the lazy dog, wrapping at word boundaries.", 500, 20, 300, 150);
+
+        // 4. Character-wrap against another guide box.
+        textWrap(TextWrap::character);
+        noFill();
+        stroke(rgba(80, 80, 80));
+        rect(500, 200, 300, 150);
+        fill(rgba(255));
+        text("Thisisaveryveryverylongwordthatmustbecharacterwrappedtofitinsidethebox", 500, 200, 300, 150);
+
+        // 5. textBounds() cross-check.
+        textWrap(TextWrap::none);
+        const rect2f bounds = textBounds("Measured!");
+        noFill();
+        stroke(rgba(0, 255, 0));
+        rect(20, 500 + bounds.y, bounds.width, bounds.height);
+        fill(rgba(255));
+        text("Measured!", 20, 500);
+
+        // 6. Adjustable letter spacing, animated to make it obvious.
+        textLetterSpacing(4.0f + 4.0f * std::sin(static_cast<float>(getGlobalTime()) * 0.7f));
+        text("Letter spacing AV To We", 20, 550);
+        textLetterSpacing(0.0f);
+
+        // 7. Adjustable line spacing (textLeading()) — auto (font-metric) leading on the left,
+        // an explicit wide override on the right, same two-line string.
+        textSize(16.0f);
+        noTextLeading();
+        text("Auto leading\nline two", 20, 590);
+        textLeading(40.0f);
+        text("Wide leading\nline two", 200, 590);
+        noTextLeading();
+    }
+};
+
 std::unique_ptr<Sketch> p5::createSketch()
 {
-    return std::make_unique<EffectsSketch>();
+    return std::make_unique<TextSketch>();
 }

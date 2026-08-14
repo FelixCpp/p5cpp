@@ -31,5 +31,12 @@ namespace p5
         TextureWrap textureWrap = TextureWrap::clampToEdge;
 
         std::shared_ptr<Shader> shader = nullptr;
+
+        std::shared_ptr<Font> textFont = nullptr;
+        float textSize = 12.0f;
+        TextAlignment textAlignment = TextAlignment::topLeft;
+        TextWrap textWrap = TextWrap::none;
+        std::optional<float> textLeadingOverride = std::nullopt;
+        float textLetterSpacing = 0.0f;
     };
 } // namespace p5

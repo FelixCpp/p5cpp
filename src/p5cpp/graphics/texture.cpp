@@ -6,14 +6,34 @@
 
 namespace p5
 {
+    namespace
+    {
+        struct GLPixelFormat
+        {
+            GLint internalFormat;
+            GLenum externalFormat;
+            size_t bytesPerPixel;
+        };
+
+        GLPixelFormat toGLPixelFormat(TexturePixelFormat format)
+        {
+            switch (format) {
+                case TexturePixelFormat::rgba8: return {GL_RGBA8, GL_RGBA, 4};
+                case TexturePixelFormat::r8: return {GL_R8, GL_RED, 1};
+                default: throw std::runtime_error("loadTextureFromMemory() called with unknown TexturePixelFormat");
+            }
+        }
+    } // namespace
+
     class OpenGLTexture : public Texture
     {
     public:
-        static std::unique_ptr<Texture> create(uint32_t width, uint32_t height, std::span<const uint8_t> data)
+        static std::unique_ptr<Texture> create(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format)
         {
-            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+            const GLPixelFormat glFormat = toGLPixelFormat(format);
+            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
             if (not data.empty() and data.size() != expectedSize) {
-                throw std::runtime_error("loadTextureFromMemory() data size does not match width * height * 4");
+                throw std::runtime_error("loadTextureFromMemory() data size does not match width * height * bytesPerPixel");
             }
 
             GLuint textureId;
@@ -23,10 +43,11 @@ namespace p5
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexImage2D(GL_TEXTURE_2D, 0, glFormat.internalFormat, width, height, 0, glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
             glBindTexture(GL_TEXTURE_2D, 0);
 
-            return std::unique_ptr<OpenGLTexture>(new OpenGLTexture(textureId, uint2 {.x = width, .y = height}));
+            return std::unique_ptr<OpenGLTexture>(new OpenGLTexture(textureId, uint2 {.x = width, .y = height}, format));
         }
 
         OpenGLTexture(const OpenGLTexture&) = delete;
@@ -47,6 +68,28 @@ namespace p5
             return m_size;
         }
 
+        TexturePixelFormat getPixelFormat() const override
+        {
+            return m_pixelFormat;
+        }
+
+        void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data) override
+        {
+            const GLPixelFormat glFormat = toGLPixelFormat(m_pixelFormat);
+            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
+            if (data.size() != expectedSize) {
+                throw std::runtime_error("Texture::updateSubImage() data size does not match width * height * bytesPerPixel");
+            }
+            if (x + width > m_size.x or y + height > m_size.y) {
+                throw std::runtime_error("Texture::updateSubImage() region is out of bounds");
+            }
+
+            glBindTexture(GL_TEXTURE_2D, m_textureId);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
         std::vector<uint8_t> queryPixelData() const override
         {
             std::vector<uint8_t> pixelData(static_cast<size_t>(m_size.x) * static_cast<size_t>(m_size.y) * 4);
@@ -57,21 +100,22 @@ namespace p5
         }
 
     private:
-        explicit OpenGLTexture(GLuint textureId, const uint2& size)
-            : m_textureId(textureId), m_size(size)
+        explicit OpenGLTexture(GLuint textureId, const uint2& size, TexturePixelFormat pixelFormat)
+            : m_textureId(textureId), m_size(size), m_pixelFormat(pixelFormat)
         {
         }
 
         GLuint m_textureId;
         uint2 m_size;
+        TexturePixelFormat m_pixelFormat;
     };
 } // namespace p5
 
 namespace p5
 {
-    std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data)
+    std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format)
     {
-        return OpenGLTexture::create(width, height, data);
+        return OpenGLTexture::create(width, height, data, format);
     }
 
     std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath)

@@ -65,6 +65,7 @@ namespace p5
         void square(float left, float top, float size);
         void ellipse(float centerX, float centerY, float radiusX, float radiusY);
         void circle(float centerX, float centerY, float radius);
+        void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode = ArcMode::open);
         void line(float x1, float y1, float x2, float y2);
         void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
         void point(float x, float y);
@@ -80,14 +81,27 @@ namespace p5
         void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2);
         void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
 
-        void imageUVMode(TextureUVMode mode);
+        void textureUVMode(TextureUVMode mode);
         void textureFilter(TextureFilter filter);
         void textureWrap(TextureWrap wrap);
         void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
         void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
+        void textFont(std::shared_ptr<Font> font);
+        void noTextFont();
+        void textSize(float pixels);
+        void textAlign(TextAlignment alignment);
+        void textWrap(TextWrap wrap);
+        void textLeading(float pixels);
+        void noTextLeading();
+        void textLetterSpacing(float pixels);
+        void text(std::string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
+
+        float textWidth(std::string_view str);
+        rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
+
     private:
-        std::shared_ptr<Shader> resolveActiveShader();
+        std::shared_ptr<Shader> resolveActiveShader(const std::shared_ptr<Shader>& fallback);
         std::shared_ptr<Texture> resolveActiveTexture(const std::shared_ptr<Texture>& texture = nullptr);
         float2 applyTransform(const float2& point) const;
 
@@ -97,13 +111,16 @@ namespace p5
         void submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state);
         void submitPoint(const float2& position, color_t color, const DrawState& state);
         void submitBuiltShape(const BuiltShape& shape, bool close);
+        void submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const std::shared_ptr<Texture>& atlasTexture, const DrawState& state);
 
         DrawStateStack m_stateStack;
         MatrixStack m_matrixStack;
         FramebufferStack m_framebufferStack;
         std::unique_ptr<Renderer> m_renderer;
         std::shared_ptr<Shader> m_defaultFillShader;
+        std::shared_ptr<Shader> m_defaultTextShader;
         std::shared_ptr<Texture> m_defaultTexture;
+        std::shared_ptr<Font> m_defaultFont;
         ShapeBuilder m_shape;
     };
 } // namespace p5

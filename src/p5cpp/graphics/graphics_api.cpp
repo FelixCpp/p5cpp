@@ -49,6 +49,7 @@ namespace p5
     void square(float left, float top, float size) { graphics().square(left, top, size); }
     void ellipse(float centerX, float centerY, float radiusX, float radiusY) { graphics().ellipse(centerX, centerY, radiusX, radiusY); }
     void circle(float centerX, float centerY, float radius) { graphics().circle(centerX, centerY, radius); }
+    void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode) { graphics().arc(centerX, centerY, radiusX, radiusY, startAngle, stopAngle, mode); }
     void line(float x1, float y1, float x2, float y2) { graphics().line(x1, y1, x2, y2); }
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3) { graphics().triangle(x1, y1, x2, y2, x3, y3); }
     void point(float x, float y) { graphics().point(x, y); }
@@ -61,9 +62,20 @@ namespace p5
     void endShape(bool close) { graphics().endShape(close); }
     void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2) { graphics().bezier(x1, y1, controlX1, controlY1, controlX2, controlY2, x2, y2); }
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) { graphics().curve(x1, y1, x2, y2, x3, y3, x4, y4); }
-    void imageUVMode(TextureUVMode mode) { graphics().imageUVMode(mode); }
+    void textureUVMode(TextureUVMode mode) { graphics().textureUVMode(mode); }
     void textureFilter(TextureFilter filter) { graphics().textureFilter(filter); }
     void textureWrap(TextureWrap wrap) { graphics().textureWrap(wrap); }
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height) { graphics().image(std::move(texture), left, top, width, height); }
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2) { graphics().image(std::move(texture), left, top, width, height, u1, v1, u2, v2); }
+    void textFont(std::shared_ptr<Font> font) { graphics().textFont(std::move(font)); }
+    void noTextFont() { graphics().noTextFont(); }
+    void textSize(float pixels) { graphics().textSize(pixels); }
+    void textAlign(TextAlignment alignment) { graphics().textAlign(alignment); }
+    void textWrap(TextWrap wrap) { graphics().textWrap(wrap); }
+    void textLeading(float pixels) { graphics().textLeading(pixels); }
+    void noTextLeading() { graphics().noTextLeading(); }
+    void textLetterSpacing(float pixels) { graphics().textLetterSpacing(pixels); }
+    void text(std::string_view str, float x, float y, float maxWidth, float maxHeight) { graphics().text(str, x, y, maxWidth, maxHeight); }
+    float textWidth(std::string_view str) { return graphics().textWidth(str); }
+    rect2f textBounds(std::string_view str, float maxWidth) { return graphics().textBounds(str, maxWidth); }
 } // namespace p5

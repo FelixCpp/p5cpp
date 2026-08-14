@@ -1,5 +1,7 @@
 #include <p5cpp/graphics/tessellators.hpp>
 #include <p5cpp/graphics/graphics.hpp>
+#include <p5cpp/graphics/text_layout.hpp>
+#include <p5cpp/graphics/dejavu_sans.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -46,6 +48,25 @@ namespace p5
             }
         )";
 
+        inline static constexpr std::string_view defaultTextFragmentShaderSource = R"(
+            #version 410
+
+            layout (location = 0) out vec4 o_FragColor;
+
+            in vec2 v_TexCoord;
+            in vec4 v_Color;
+
+            uniform sampler2D u_Texture;
+
+            void main()
+            {
+                float distance = texture(u_Texture, v_TexCoord).r;
+                float smoothing = fwidth(distance) * 0.75;
+                float alpha = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance);
+                o_FragColor = vec4(v_Color.rgb, v_Color.a * alpha);
+            }
+        )";
+
         inline static constexpr size_t MAX_VERTICES = 4096;
         inline static constexpr size_t MAX_INDICES = 6144;
 
@@ -74,6 +95,29 @@ namespace p5
 
             for (int i = 0; i < segments; ++i) {
                 const float angle = (2.0f * std::numbers::pi_v<float> * static_cast<float>(i)) / static_cast<float>(segments);
+                const float c = std::cos(angle);
+                const float s = std::sin(angle);
+                positions[i] = {centerX + c * radiusX, centerY + s * radiusY};
+                texCoords[i] = {0.5f + 0.5f * c, 0.5f + 0.5f * s};
+            }
+        }
+
+        int arcSegmentCount(float radiusX, float radiusY, float angleSpan)
+        {
+            constexpr float twoPi = 2.0f * std::numbers::pi_v<float>;
+            const float fraction = std::clamp(std::abs(angleSpan) / twoPi, 0.0f, 1.0f);
+            const int segments = static_cast<int>(std::ceil(static_cast<float>(ellipseSegmentCount(radiusX, radiusY)) * fraction));
+            return std::clamp(segments, 2, 256);
+        }
+
+        void buildArcPoints(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, std::vector<float2>& positions, std::vector<float2>& texCoords)
+        {
+            const int segments = arcSegmentCount(radiusX, radiusY, stopAngle - startAngle);
+            positions.resize(segments + 1);
+            texCoords.resize(segments + 1);
+
+            for (int i = 0; i <= segments; ++i) {
+                const float angle = std::lerp(startAngle, stopAngle, static_cast<float>(i) / static_cast<float>(segments));
                 const float c = std::cos(angle);
                 const float s = std::sin(angle);
                 positions[i] = {centerX + c * radiusX, centerY + s * radiusY};
@@ -132,7 +176,9 @@ namespace p5
           m_matrixStack(),
           m_renderer(Renderer::create(detail::MAX_VERTICES, detail::MAX_INDICES)),
           m_defaultFillShader(loadShaderFromMemory(detail::defaultVertexShaderSource, detail::defaultFragmentShaderSource)),
-          m_defaultTexture(loadTextureFromMemory(1, 1, std::array<uint8_t, 4> {255, 255, 255, 255}))
+          m_defaultTextShader(loadShaderFromMemory(detail::defaultVertexShaderSource, detail::defaultTextFragmentShaderSource)),
+          m_defaultTexture(loadTextureFromMemory(1, 1, std::array<uint8_t, 4> {255, 255, 255, 255})),
+          m_defaultFont(loadFontFromMemory({DejaVuSans_ttf, DejaVuSans_ttf_len}))
     {
     }
 
@@ -339,14 +385,14 @@ namespace p5
         shader(nullptr);
     }
 
-    std::shared_ptr<Shader> Graphics::resolveActiveShader()
+    std::shared_ptr<Shader> Graphics::resolveActiveShader(const std::shared_ptr<Shader>& fallback)
     {
         DrawState& state = peekState();
         if (state.shader != nullptr) {
             return state.shader;
         }
 
-        return m_defaultFillShader;
+        return fallback;
     }
 
     std::shared_ptr<Texture> Graphics::resolveActiveTexture(const std::shared_ptr<Texture>& texture)
@@ -370,7 +416,7 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_quad(writer, positions, texCoords, colors);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(texture), resolveActiveShader());
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(texture), resolveActiveShader(m_defaultFillShader));
     }
 
     void Graphics::submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state)
@@ -387,7 +433,7 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader());
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader));
     }
 
     void Graphics::submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state)
@@ -408,7 +454,19 @@ namespace p5
             case ShapeMode::polygon:
             default: tesselate_polygon(writer, positions, texCoords, convertedColors); break;
         }
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader());
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader));
+    }
+
+    void Graphics::submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const std::shared_ptr<Texture>& atlasTexture, const DrawState& state)
+    {
+        std::vector<float4> convertedColors(colors.size());
+        std::ranges::transform(colors, convertedColors.begin(), detail::toFloat4);
+
+        Renderer::Writer writer = m_renderer->write();
+        tesselate_quads(writer, positions, texCoords, convertedColors);
+        // Filter/wrap are forced (not state.textureFilter/textureWrap): linear sampling is a correctness
+        // requirement of the SDF antialiasing, not a style choice like it is for image()'s user textures.
+        m_renderer->finish(writer, state.blendMode, state.clipRect, TextureFilter::linear, TextureWrap::clampToEdge, atlasTexture, resolveActiveShader(m_defaultTextShader));
     }
 
     void Graphics::background(color_t color)
@@ -480,6 +538,56 @@ namespace p5
     void Graphics::circle(float x, float y, float radius)
     {
         ellipse(x, y, radius, radius);
+    }
+
+    void Graphics::arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode)
+    {
+        constexpr float twoPi = 2.0f * std::numbers::pi_v<float>;
+        if (stopAngle < startAngle) {
+            stopAngle += twoPi * std::ceil((startAngle - stopAngle) / twoPi);
+        }
+        stopAngle = std::min(stopAngle, startAngle + twoPi);
+
+        std::vector<float2> arcPositions;
+        std::vector<float2> arcTexCoords;
+        detail::buildArcPoints(centerX, centerY, radiusX, radiusY, startAngle, stopAngle, arcPositions, arcTexCoords);
+
+        const DrawState& state = peekState();
+
+        // OPEN fills the same pie wedge as PIE, but only strokes the arc itself (no radii/chord).
+        const bool includeCenterInFill = mode == ArcMode::pie or mode == ArcMode::open;
+        const bool closeStroke = mode == ArcMode::pie or mode == ArcMode::chord;
+
+        if (state.isFillEnabled) {
+            std::vector<float2> fillPositions;
+            std::vector<float2> fillTexCoords;
+            if (includeCenterInFill) {
+                fillPositions.reserve(arcPositions.size() + 1);
+                fillTexCoords.reserve(arcTexCoords.size() + 1);
+                fillPositions.push_back(applyTransform({centerX, centerY}));
+                fillTexCoords.push_back({0.5f, 0.5f});
+            }
+            for (size_t i = 0; i < arcPositions.size(); ++i) {
+                fillPositions.push_back(applyTransform(arcPositions[i]));
+                fillTexCoords.push_back(arcTexCoords[i]);
+            }
+
+            const std::vector<color_t> fillColors(fillPositions.size(), state.fillColor);
+            submitFillMesh(ShapeMode::triangleFan, fillPositions, fillTexCoords, fillColors, state);
+        }
+
+        if (state.isStrokeEnabled) {
+            std::vector<float2> strokePositions;
+            strokePositions.reserve(arcPositions.size() + 1);
+            if (mode == ArcMode::pie) {
+                strokePositions.push_back(applyTransform({centerX, centerY}));
+            }
+            for (const float2& p : arcPositions) {
+                strokePositions.push_back(applyTransform(p));
+            }
+
+            submitStroke(strokePositions, closeStroke, state.strokeColor, state);
+        }
     }
 
     void Graphics::line(float x1, float y1, float x2, float y2)
@@ -650,7 +758,7 @@ namespace p5
         popState();
     }
 
-    void Graphics::imageUVMode(TextureUVMode mode)
+    void Graphics::textureUVMode(TextureUVMode mode)
     {
         DrawState& state = peekState();
         state.textureUVMode = mode;
@@ -699,7 +807,7 @@ namespace p5
                 break;
 
             default:
-                throw std::runtime_error("imageUVMode() called with unknown mode");
+                throw std::runtime_error("textureUVMode() called with unknown mode");
         }
 
         const float2 positions[4] = {
@@ -718,4 +826,179 @@ namespace p5
 
         submitQuad(positions, texCoords, tintColor, state, texture);
     }
+
+    void Graphics::textFont(std::shared_ptr<Font> font)
+    {
+        DrawState& state = peekState();
+        state.textFont = std::move(font);
+    }
+
+    void Graphics::noTextFont()
+    {
+        textFont(nullptr);
+    }
+
+    void Graphics::textSize(float pixels)
+    {
+        DrawState& state = peekState();
+        state.textSize = pixels;
+    }
+
+    void Graphics::textAlign(TextAlignment alignment)
+    {
+        DrawState& state = peekState();
+        state.textAlignment = alignment;
+    }
+
+    void Graphics::textWrap(TextWrap wrap)
+    {
+        DrawState& state = peekState();
+        state.textWrap = wrap;
+    }
+
+    void Graphics::textLeading(float pixels)
+    {
+        DrawState& state = peekState();
+        state.textLeadingOverride = pixels;
+    }
+
+    void Graphics::noTextLeading()
+    {
+        DrawState& state = peekState();
+        state.textLeadingOverride = std::nullopt;
+    }
+
+    void Graphics::textLetterSpacing(float pixels)
+    {
+        DrawState& state = peekState();
+        state.textLetterSpacing = pixels;
+    }
+
+    void Graphics::text(std::string_view str, float x, float y, float maxWidth, float maxHeight)
+    {
+        DrawState& state = peekState();
+        Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
+        const float scale = state.textSize / font.getUnitsPerEm();
+        const float leading = state.textLeadingOverride.value_or((font.getAscent() + font.getDescent() + font.getLineGap()) * scale);
+
+        const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing);
+        const size_t numLines = layout.lines.size();
+
+        float blockWidth = 0.0f;
+        for (const detail::ShapedLine& line : layout.lines) {
+            blockWidth = std::max(blockWidth, line.width * scale);
+        }
+
+        const float blockTop = font.getAscent() * scale;
+        const float blockHeight = blockTop + static_cast<float>(numLines - 1) * leading + font.getDescent() * scale;
+
+        size_t visibleLines = numLines;
+        if (maxHeight > 0.0f) {
+            visibleLines = 0;
+            for (size_t i = 0; i < numLines; ++i) {
+                const float baselineOffset = blockTop + static_cast<float>(i) * leading;
+                if (baselineOffset > maxHeight and visibleLines > 0) {
+                    break;
+                }
+                ++visibleLines;
+            }
+        }
+
+        float horizontalBlockOffset = 0.0f;
+        switch (state.textAlignment) {
+            case TextAlignment::topCenter:
+            case TextAlignment::center:
+            case TextAlignment::bottomCenter: horizontalBlockOffset = -blockWidth * 0.5f; break;
+            case TextAlignment::topRight:
+            case TextAlignment::centerRight:
+            case TextAlignment::bottomRight: horizontalBlockOffset = -blockWidth; break;
+            default: break; // *Left stays 0
+        }
+
+        float verticalBlockOffset = 0.0f;
+        switch (state.textAlignment) {
+            case TextAlignment::centerLeft:
+            case TextAlignment::center:
+            case TextAlignment::centerRight: verticalBlockOffset = -blockHeight * 0.5f; break;
+            case TextAlignment::bottomLeft:
+            case TextAlignment::bottomCenter:
+            case TextAlignment::bottomRight: verticalBlockOffset = -blockHeight; break;
+            default: break; // top* stays 0
+        }
+
+        const float2 blockOrigin {x + horizontalBlockOffset, y + verticalBlockOffset};
+
+        const auto lineHorizontalOffset = [&](float lineWidthPixels) -> float {
+            switch (state.textAlignment) {
+                case TextAlignment::topCenter:
+                case TextAlignment::center:
+                case TextAlignment::bottomCenter: return (blockWidth - lineWidthPixels) * 0.5f;
+                case TextAlignment::topRight:
+                case TextAlignment::centerRight:
+                case TextAlignment::bottomRight: return blockWidth - lineWidthPixels;
+                default: return 0.0f; // *Left
+            }
+        };
+
+        std::vector<float2> positions;
+        std::vector<float2> texCoords;
+        std::vector<color_t> colors;
+
+        for (size_t lineIndex = 0; lineIndex < visibleLines; ++lineIndex) {
+            const detail::ShapedLine& line = layout.lines[lineIndex];
+            const float lineWidthPixels = line.width * scale;
+            float penX = blockOrigin.x + lineHorizontalOffset(lineWidthPixels);
+            const float penYBaseline = blockOrigin.y + blockTop + static_cast<float>(lineIndex) * leading;
+            float penY = penYBaseline;
+
+            for (const ShapedGlyph& g : line.glyphs) {
+                const GlyphMetrics& metrics = font.getGlyphMetrics(g.glyphIndex);
+                if (metrics.hasOutline) {
+                    // HarfBuzz offsets/font design units use +y = up; screen space uses +y = down.
+                    const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};
+                    const float2 quadTopLeft {glyphOrigin.x + metrics.bounds.x * scale, glyphOrigin.y - metrics.bounds.y * scale};
+                    const float2 quadSize {metrics.bounds.width * scale, metrics.bounds.height * scale};
+
+                    const float2 corners[4] = {
+                        applyTransform({quadTopLeft.x, quadTopLeft.y}),
+                        applyTransform({quadTopLeft.x + quadSize.x, quadTopLeft.y}),
+                        applyTransform({quadTopLeft.x + quadSize.x, quadTopLeft.y + quadSize.y}),
+                        applyTransform({quadTopLeft.x, quadTopLeft.y + quadSize.y}),
+                    };
+                    const float2 uv[4] = {
+                        {metrics.uvRect.x, metrics.uvRect.y},
+                        {metrics.uvRect.x + metrics.uvRect.width, metrics.uvRect.y},
+                        {metrics.uvRect.x + metrics.uvRect.width, metrics.uvRect.y + metrics.uvRect.height},
+                        {metrics.uvRect.x, metrics.uvRect.y + metrics.uvRect.height},
+                    };
+
+                    positions.insert(positions.end(), std::begin(corners), std::end(corners));
+                    texCoords.insert(texCoords.end(), std::begin(uv), std::end(uv));
+                    colors.insert(colors.end(), 4, state.fillColor);
+                }
+
+                penX += g.xAdvance * scale + state.textLetterSpacing;
+                penY -= g.yAdvance * scale;
+            }
+        }
+
+        if (not positions.empty()) {
+            submitTextMesh(positions, texCoords, colors, font.getAtlasTexture(), state);
+        }
+    }
+
+    float Graphics::textWidth(std::string_view str)
+    {
+        DrawState& state = peekState();
+        Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
+        return p5::textWidth(font, state.textSize, str, state.textLetterSpacing);
+    }
+
+    rect2f Graphics::textBounds(std::string_view str, float maxWidth)
+    {
+        DrawState& state = peekState();
+        Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
+        return p5::textBounds(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing);
+    }
+
 } // namespace p5

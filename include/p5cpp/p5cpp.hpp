@@ -164,6 +164,41 @@ namespace p5
 
 namespace p5
 {
+    float easeLinear(float x);
+    float easeInQuad(float x);
+    float easeOutQuad(float x);
+    float easeInOutQuad(float x);
+    float easeInCubic(float x);
+    float easeOutCubic(float x);
+    float easeInOutCubic(float x);
+    float easeInQuart(float x);
+    float easeOutQuart(float x);
+    float easeInOutQuart(float x);
+    float easeInQuint(float x);
+    float easeOutQuint(float x);
+    float easeInOutQuint(float x);
+    float easeInSine(float x);
+    float easeOutSine(float x);
+    float easeInOutSine(float x);
+    float easeInExpo(float x);
+    float easeOutExpo(float x);
+    float easeInOutExpo(float x);
+    float easeInCirc(float x);
+    float easeOutCirc(float x);
+    float easeInOutCirc(float x);
+    float easeInBack(float x);
+    float easeOutBack(float x);
+    float easeInOutBack(float x);
+    float easeInElastic(float x);
+    float easeOutElastic(float x);
+    float easeInOutElastic(float x);
+    float easeInBounce(float x);
+    float easeOutBounce(float x);
+    float easeInOutBounce(float x);
+} // namespace p5
+
+namespace p5
+{
     // clang-format off
     enum class Key
     {
@@ -497,6 +532,13 @@ namespace p5
         quads,
         quadStrip,
     };
+
+    enum class ArcMode
+    {
+        open,
+        chord,
+        pie,
+    };
 } // namespace p5
 
 namespace p5
@@ -612,15 +654,23 @@ namespace p5
 
 namespace p5
 {
+    enum class TexturePixelFormat
+    {
+        rgba8,
+        r8,
+    };
+
     struct Texture
     {
         virtual ~Texture() = default;
         virtual uint32_t getTextureId() const = 0;
         virtual const uint2& getSize() const = 0;
+        virtual TexturePixelFormat getPixelFormat() const = 0;
+        virtual void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data) = 0;
         virtual std::vector<uint8_t> queryPixelData() const = 0;
     };
 
-    std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data);
+    std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format = TexturePixelFormat::rgba8);
     std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath);
     bool saveTextureToFileAsPNG(const Texture& texture, const std::filesystem::path& filepath);
     bool saveTextureToFileAsJPEG(const Texture& texture, const std::filesystem::path& filepath, int quality = 90);
@@ -638,6 +688,61 @@ namespace p5
     };
 
     std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height);
+} // namespace p5
+
+namespace p5
+{
+    enum class TextAlignment
+    {
+        topLeft,
+        topCenter,
+        topRight,
+        centerLeft,
+        center,
+        centerRight,
+        bottomLeft,
+        bottomCenter,
+        bottomRight,
+    };
+
+    enum class TextWrap
+    {
+        none,
+        character,
+        word,
+    };
+
+    struct GlyphMetrics
+    {
+        rect2f uvRect;
+        rect2f bounds;
+        bool hasOutline;
+    };
+
+    struct ShapedGlyph
+    {
+        uint32_t glyphIndex;
+        uint32_t cluster;
+        float xAdvance;
+        float yAdvance;
+        float xOffset;
+        float yOffset;
+    };
+
+    struct Font
+    {
+        virtual ~Font() = default;
+        virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text) const = 0;
+        virtual const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) = 0;
+        virtual std::shared_ptr<Texture> getAtlasTexture() const = 0;
+        virtual float getUnitsPerEm() const = 0;
+        virtual float getAscent() const = 0;
+        virtual float getDescent() const = 0;
+        virtual float getLineGap() const = 0;
+    };
+
+    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t sdfSourceEmPixels = 128);
+    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t sdfSourceEmPixels = 128);
 } // namespace p5
 
 namespace p5
@@ -713,6 +818,7 @@ namespace p5
     void square(float left, float top, float size);
     void ellipse(float centerX, float centerY, float radiusX, float radiusY);
     void circle(float centerX, float centerY, float radius);
+    void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode = ArcMode::open);
     void line(float x1, float y1, float x2, float y2);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
     void point(float x, float y);
@@ -728,16 +834,34 @@ namespace p5
     void bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2);
     void curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
 
-    void imageUVMode(TextureUVMode mode);
+    void textureUVMode(TextureUVMode mode);
     void textureFilter(TextureFilter filter);
     void textureWrap(TextureWrap wrap);
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
     void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
+    void textFont(std::shared_ptr<Font> font);
+    void noTextFont();
+    void textSize(float pixels);
+    void textAlign(TextAlignment alignment);
+    void textWrap(TextWrap wrap);
+    void textLeading(float pixels);
+    void noTextLeading();
+    void textLetterSpacing(float pixels);
+    void text(std::string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
+
+    float textWidth(const Font& font, float size, std::string_view str, float letterSpacing = 0.0f);
+    rect2f textBounds(const Font& font, float size, std::string_view str, TextWrap wrap = TextWrap::none, float maxWidth = 0.0f, float letterSpacing = 0.0f);
+    float textWidth(std::string_view str);
+    rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
+
     template <std::invocable Func> void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func);
     template <std::invocable Func> void withState(Func&& func);
     template <std::invocable Func> void withMatrix(Func&& func);
     template <std::invocable Func> void with(Func&& func);
+    template <std::invocable Func> void withClip(float x, float y, float width, float height, Func&& func);
+    template <std::invocable Func> void withShader(std::shared_ptr<Shader> shader, Func&& func);
+    template <std::invocable Func> void withFont(std::shared_ptr<Font> font, Func&& func);
 } // namespace p5
 
 namespace p5
@@ -957,55 +1081,60 @@ namespace p5
 
 namespace p5
 {
-    inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha)
-    {
-        return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha);
-    }
-
-    inline constexpr color_t rgba(int32_t grey, int32_t alpha)
-    {
-        return rgba(grey, grey, grey, alpha);
-    }
-
-    inline constexpr uint8_t getRed(color_t color)
-    {
-        return static_cast<uint8_t>((color >> 24) & 0xFF);
-    }
-
-    inline constexpr uint8_t getGreen(color_t color)
-    {
-        return static_cast<uint8_t>((color >> 16) & 0xFF);
-    }
-
-    inline constexpr uint8_t getBlue(color_t color)
-    {
-        return static_cast<uint8_t>((color >> 8) & 0xFF);
-    }
-
-    inline constexpr uint8_t getAlpha(color_t color)
-    {
-        return static_cast<uint8_t>(color & 0xFF);
-    }
+    inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha) { return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha); }
+    inline constexpr color_t rgba(int32_t grey, int32_t alpha) { return rgba(grey, grey, grey, alpha); }
+    inline constexpr uint8_t getRed(color_t color) { return static_cast<uint8_t>((color >> 24) & 0xFF); }
+    inline constexpr uint8_t getGreen(color_t color) { return static_cast<uint8_t>((color >> 16) & 0xFF); }
+    inline constexpr uint8_t getBlue(color_t color) { return static_cast<uint8_t>((color >> 8) & 0xFF); }
+    inline constexpr uint8_t getAlpha(color_t color) { return static_cast<uint8_t>(color & 0xFF); }
 } // namespace p5
 
 namespace p5
 {
+    // clang-format off
     constexpr float degrees(float radians) { return radians * (180.0f / PI); }
     constexpr float radians(float degrees) { return degrees * (PI / 180.0f); }
-
     constexpr float lerp(float a, float b, float t) { return std::lerp(a, b, t); }
+    constexpr float map(float value, float start1, float stop1, float start2, float stop2) { return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1)); }
+    constexpr float constrain(float value, float low, float high) { return (value < low) ? low : (value > high) ? high : value; }
+    // clang-format on
+} // namespace p5
 
-    constexpr float map(float value, float start1, float stop1, float start2, float stop2)
-    {
-        return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
-    }
-
-    constexpr float constrain(float value, float low, float high)
-    {
-        if (value < low) return low;
-        if (value > high) return high;
-        return value;
-    }
+namespace p5
+{
+    // clang-format off
+    inline float easeLinear(float t) { return t; }
+    inline float easeInQuad(float t) { return t * t; }
+    inline float easeOutQuad(float t) { return t * (2.0f - t); }
+    inline float easeInOutQuad(float t) { return (t < 0.5f) ? (2.0f * t * t) : (-1.0f + (4.0f - 2.0f * t) * t); }
+    inline float easeInCubic(float t) { return t * t * t; }
+    inline float easeOutCubic(float t) { return (--t) * t * t + 1.0f; }
+    inline float easeInOutCubic(float t) { return (t < 0.5f) ? (4.0f * t * t * t) : ((t - 1.0f) * (2.0f * t - 2.0f) * (2.0f * t - 2.0f) + 1.0f); }
+    inline float easeInQuart(float t) { return t * t * t * t; }
+    inline float easeOutQuart(float t) { return 1.0f - (--t) * t * t * t; }
+    inline float easeInOutQuart(float t) { return (t < 0.5f) ? (8.0f * t * t * t * t) : (1.0f - 8.0f * (--t) * t * t * t); }
+    inline float easeInQuint(float t) { return t * t * t * t * t; }
+    inline float easeOutQuint(float t) { return 1.0f + (--t) * t * t * t * t; }
+    inline float easeInOutQuint(float t) { return (t < 0.5f) ? (16.0f * t * t * t * t * t) : (1.0f + 16.0f * (--t) * t * t * t * t); }
+    inline float easeInSine(float t) { return 1.0f - std::cos((t * PI) / 2.0f); }
+    inline float easeOutSine(float t) { return std::sin((t * PI) / 2.0f); }
+    inline float easeInOutSine(float t) { return -(std::cos(PI * t) - 1.0f) / 2.0f; }
+    inline float easeInExpo(float t) { return (t == 0.0f) ? 0.0f : std::pow(2.0f, 10.0f * (t - 1.0f)); }
+    inline float easeOutExpo(float t) { return (t == 1.0f) ? 1.0f : 1.0f - std::pow(2.0f, -10.0f * t); }
+    inline float easeInOutExpo(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : (t < 0.5f) ? std::pow(2.0f, 20.0f * t - 10.0f) / 2.0f : (2.0f - std::pow(2.0f, -20.0f * t + 10.0f)) / 2.0f; }
+    inline float easeInCirc(float t) { return 1.0f - std::sqrt(1.0f - t * t); }
+    inline float easeOutCirc(float t) { return std::sqrt(1.0f - (--t) * t); }
+    inline float easeInOutCirc(float t) { return (t < 0.5f) ? (1.0f - std::sqrt(1.0f - 4.0f * t * t)) / 2.0f : (std::sqrt(1.0f - (--t) * (2.0f * t)) + 1.0f) / 2.0f; }
+    inline float easeInBack(float t) { const float s = 1.70158f; return t * t * ((s + 1.0f) * t - s); }
+    inline float easeOutBack(float t) { const float s = 1.70158f; return (--t) * t * ((s + 1.0f) * t + s) + 1.0f; }
+    inline float easeInOutBack(float t) { const float s = 1.70158f * 1.525f; return (t < 0.5f) ? (t * t * ((s + 1.0f) * 2.0f * t - s)) : ((--t) * t * ((s + 1.0f) * 2.0f * t + s) + 1.0f); }
+    inline float easeInElastic(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : -std::pow(2.0f, 10.0f * t - 10.0f) * std::sin((t * 10.0f - 10.75f) * ((2.0f * PI) / 3.0f)); }
+    inline float easeOutElastic(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : std::pow(2.0f, -10.0f * t) * std::sin((t * 10.0f - 0.75f) * ((2.0f * PI) / 3.0f)) + 1.0f; }
+    inline float easeInOutElastic(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : (t < 0.5f) ? -(std::pow(2.0f, 20.0f * t - 10.0f) * std::sin((20.0f * t - 11.125f) * ((2.0f * PI) / 4.5f))) / 2.0f : (std::pow(2.0f, -20.0f * t + 10.0f) * std::sin((20.0f * t - 11.125f) * ((2.0f * PI) / 4.5f))) / 2.0f + 1.0f; }
+    inline float easeInBounce(float t) { return 1.0f - easeOutBounce(1.0f - t); }
+    inline float easeOutBounce(float t) { if (t < 1.0f / 2.75f) { return 7.5625f * t * t; } else if (t < 2.0f / 2.75f) { t -= 1.5f / 2.75f; return 7.5625f * t * t + 0.75f; } else if (t < 2.5f / 2.75f) { t -= 2.25f / 2.75f; return 7.5625f * t * t + 0.9375f; } else { t -= 2.625f / 2.75f; return 7.5625f * t * t + 0.984375f; } }
+    inline float easeInOutBounce(float t) { return (t < 0.5f) ? (1.0f - easeOutBounce(1.0f - 2.0f * t)) / 2.0f : (1.0f + easeOutBounce(2.0f * t - 1.0f)) / 2.0f; }
+    // clang-format on
 } // namespace p5
 
 namespace p5
@@ -1197,6 +1326,45 @@ namespace p5
             pop();
         } catch (...) {
             pop();
+            throw;
+        }
+    }
+
+    template <std::invocable Func>
+    inline void withClip(float x, float y, float width, float height, Func&& func)
+    {
+        try {
+            clip(x, y, width, height);
+            func();
+            noClip();
+        } catch (...) {
+            noClip();
+            throw;
+        }
+    }
+
+    template <std::invocable Func>
+    inline void withShader(std::shared_ptr<Shader> shader, Func&& func)
+    {
+        try {
+            p5::shader(std::move(shader));
+            func();
+            noShader();
+        } catch (...) {
+            noShader();
+            throw;
+        }
+    }
+
+    template <std::invocable Func>
+    inline void withFont(std::shared_ptr<Font> font, Func&& func)
+    {
+        try {
+            textFont(std::move(font));
+            func();
+            noTextFont();
+        } catch (...) {
+            noTextFont();
             throw;
         }
     }
