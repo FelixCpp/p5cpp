@@ -151,6 +151,12 @@ namespace p5
     float random(float max);
     float random(float min, float max);
 
+    void noiseSeed(uint32_t seed);
+    void noiseDetail(int octaves, float falloff = 0.5f);
+    float noise(float x);
+    float noise(float x, float y);
+    float noise(float x, float y, float z);
+
     inline static constexpr float PI = 3.14159265358979323846f;
     inline static constexpr float TAU = 2.0f * PI;
     inline static constexpr float HALF_PI = 0.5f * PI;
@@ -339,7 +345,6 @@ namespace p5
     struct Sketch
     {
         virtual ~Sketch() = default;
-        virtual void plugins() {}
         virtual void setup() {}
         virtual void event([[maybe_unused]] const WindowEvent& event) {}
         virtual void draw() {}
