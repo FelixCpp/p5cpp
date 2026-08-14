@@ -16,6 +16,7 @@ namespace p5
         };
 
         void addPlugin(std::unique_ptr<Plugin> plugin);
+        void addPluginsAndSetup(std::vector<std::unique_ptr<Plugin>> plugins);
         void process(const WindowEvent& event);
         RunResult run();
 

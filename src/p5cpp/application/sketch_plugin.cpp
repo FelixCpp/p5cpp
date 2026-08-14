@@ -1,10 +1,27 @@
 #include <p5cpp/application/sketch_plugin.hpp>
+#include <p5cpp/application/kernel.hpp>
 
 namespace p5
 {
+    void SketchLoaderPlugin::setup(Context& context, const Next& next)
+    {
+        std::unique_ptr<Sketch> sketch = createSketch();
+
+        std::vector<std::unique_ptr<Plugin>> plugins = sketch->plugins();
+        plugins.push_back(std::make_unique<SketchPlugin>(std::move(sketch)));
+
+        getKernel().addPluginsAndSetup(std::move(plugins));
+
+        next();
+    }
+
+    SketchPlugin::SketchPlugin(std::unique_ptr<Sketch> sketch)
+        : m_sketch(std::move(sketch))
+    {
+    }
+
     void SketchPlugin::setup(Context& context, const Next& next)
     {
-        m_sketch = createSketch();
         context.provide(m_sketch.get());
 
         m_sketch->setup();

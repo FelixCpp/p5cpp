@@ -342,6 +342,8 @@ namespace p5
 
 namespace p5
 {
+    struct Plugin;
+
     struct Sketch
     {
         virtual ~Sketch() = default;
@@ -349,6 +351,7 @@ namespace p5
         virtual void event([[maybe_unused]] const WindowEvent& event) {}
         virtual void draw() {}
         virtual void destroy() {}
+        virtual std::vector<std::unique_ptr<Plugin>> plugins();
     };
 
     extern std::unique_ptr<Sketch> createSketch();
@@ -447,6 +450,11 @@ namespace p5
         virtual void draw(Context& context, const Next& next);
         virtual void destroy(Context& context, const Next& next);
     };
+
+    inline std::vector<std::unique_ptr<Plugin>> Sketch::plugins()
+    {
+        return {};
+    }
 } // namespace p5
 
 namespace p5

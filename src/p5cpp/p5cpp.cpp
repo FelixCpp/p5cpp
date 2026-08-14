@@ -29,7 +29,7 @@ int main()
         s_kernel->addPlugin(std::make_unique<WindowPlugin>());
         s_kernel->addPlugin(std::make_unique<InputPlugin>());
         s_kernel->addPlugin(std::make_unique<GraphicsPlugin>());
-        s_kernel->addPlugin(std::make_unique<SketchPlugin>());
+        s_kernel->addPlugin(std::make_unique<SketchLoaderPlugin>());
         result = s_kernel->run();
     } while (result.shouldRestart);
 

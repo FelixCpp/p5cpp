@@ -8,6 +8,27 @@ namespace p5
         m_plugins.push_back(std::move(plugin));
     }
 
+    void Kernel::addPluginsAndSetup(std::vector<std::unique_ptr<Plugin>> plugins)
+    {
+        const size_t startIndex = m_plugins.size();
+
+        for (auto& plugin : plugins) {
+            m_plugins.push_back(std::move(plugin));
+        }
+
+        const auto next = Next {
+            m_plugins,
+            startIndex,
+            &m_context,
+            [](Plugin& plugin, Context& context, const Next& next) {
+                plugin.setup(context, next);
+            },
+            nullptr,
+        };
+
+        next();
+    }
+
     void Kernel::process(const WindowEvent& event)
     {
         dispatchEvent(event);
