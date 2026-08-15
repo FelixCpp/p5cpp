@@ -47,8 +47,15 @@ namespace p5
             }
         )";
 
-        inline static constexpr size_t MAX_VERTICES = 4096;
-        inline static constexpr size_t MAX_INDICES = 6144;
+        // Per-frame batch capacity: every draw call between Renderer::begin() and the next
+        // flush() accumulates into this one fixed buffer (see Renderer::appendVertex/appendIndex),
+        // so it must cover a whole frame's worth of geometry, not just one shape. A handful of
+        // multi-hundred-point polylines/rounded rects in a single dashboard-style frame can run
+        // into the tens of thousands of indices (stroked polylines alone cost roughly 15 indices
+        // per interior point for miter joins), so the previous 4096/6144 ceiling was only really
+        // sized for the simplest sketches and threw std::runtime_error well within normal use.
+        inline static constexpr size_t MAX_VERTICES = 65536;
+        inline static constexpr size_t MAX_INDICES = 98304;
 
         float4 toFloat4(color_t color)
         {

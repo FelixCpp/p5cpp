@@ -1,2 +1,6 @@
 add_subdirectory(hello_world)
 add_subdirectory(custom_plugin)
+add_subdirectory(particle_storm)
+if(APPLE)
+    add_subdirectory(process_monitor)
+endif()
