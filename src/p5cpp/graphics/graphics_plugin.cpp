@@ -14,8 +14,6 @@ namespace p5
 
         m_defaultFramebuffer = createFramebuffer(size.x, size.y);
 
-        // Push the default framebuffer around the rest of the setup chain too (not just draw(), see
-        // below) so Sketch::setup() can call background()/draw calls just like Sketch::draw() can.
         m_graphics->pushFramebuffer(m_defaultFramebuffer);
         next();
         m_graphics->popFramebuffer();
@@ -25,9 +23,8 @@ namespace p5
     {
         if (event.is<WindowEvent::WindowResize>()) {
             const auto& resize = event.as<WindowEvent::WindowResize>();
-            // Ignore 0x0 (e.g. minimize on some platforms): framebuffer/renderbuffer storage of that
-            // size is degenerate and would just be recreated again on the next real resize anyway.
-            if (resize.width > 0 and resize.height > 0) {
+            const auto isWindowMinimized = resize.width == 0 or resize.height == 0;
+            if (not isWindowMinimized) {
                 m_defaultFramebuffer = createFramebuffer(resize.width, resize.height);
             }
         }

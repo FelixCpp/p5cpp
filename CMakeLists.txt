@@ -62,6 +62,7 @@ add_library(
   ./src/p5cpp/random.cpp
   ./src/p5cpp/noise.cpp
   ./src/p5cpp/p5cpp.cpp
+  ./src/p5cpp/log.cpp
 )
 
 target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 miniaudio harfbuzz stb)

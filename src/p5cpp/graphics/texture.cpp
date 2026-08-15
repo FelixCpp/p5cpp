@@ -33,7 +33,8 @@ namespace p5
             const GLPixelFormat glFormat = toGLPixelFormat(format);
             const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
             if (not data.empty() and data.size() != expectedSize) {
-                throw std::runtime_error("loadTextureFromMemory() data size does not match width * height * bytesPerPixel");
+                error("loadTextureFromMemory() data size does not match width * height * bytesPerPixel");
+                return nullptr;
             }
 
             GLuint textureId;
@@ -78,10 +79,12 @@ namespace p5
             const GLPixelFormat glFormat = toGLPixelFormat(m_pixelFormat);
             const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
             if (data.size() != expectedSize) {
-                throw std::runtime_error("Texture::updateSubImage() data size does not match width * height * bytesPerPixel");
+                error("Texture::updateSubImage() data size does not match width * height * bytesPerPixel");
+                return;
             }
             if (x + width > m_size.x or y + height > m_size.y) {
-                throw std::runtime_error("Texture::updateSubImage() region is out of bounds");
+                error("Texture::updateSubImage() region is out of bounds");
+                return;
             }
 
             glBindTexture(GL_TEXTURE_2D, m_textureId);

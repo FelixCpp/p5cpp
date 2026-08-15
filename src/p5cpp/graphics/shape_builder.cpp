@@ -28,7 +28,8 @@ namespace p5
     void ShapeBuilder::beginShape(ShapeMode mode)
     {
         if (m_isBuilding) {
-            throw std::runtime_error("Already building a shape");
+            error("ShapeBuilder::beginShape() called while already building a shape");
+            return;
         }
 
         m_isBuilding = true;
@@ -40,7 +41,16 @@ namespace p5
     BuiltShape ShapeBuilder::endShape()
     {
         if (not m_isBuilding) {
-            throw std::runtime_error("Not building a shape");
+            error("ShapeBuilder::endShape() called while not building a shape");
+
+            return BuiltShape {
+                .mode = {},
+                .vertexCount = 0,
+                .positions = {},
+                .texCoords = {},
+                .fillColors = {},
+                .strokeColors = {}
+            };
         }
 
         m_isBuilding = false;

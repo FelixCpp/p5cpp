@@ -1,9 +1,11 @@
 #include <p5cpp/p5cpp.hpp>
+#include <p5cpp/graphics/default_shaders.hpp>
 
 #include <glad/glad.h>
 
 #include <optional>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 
 namespace p5
@@ -77,6 +79,24 @@ namespace p5
 
             return program;
         }
+
+        inline static constexpr std::string_view effectFragmentHeaderSource = R"(
+            #version 410
+
+            layout (location = 0) out vec4 o_FragColor;
+
+            in vec2 v_TexCoord;
+            in vec4 v_Color;
+
+            uniform sampler2D u_Texture;
+        )";
+
+        inline static constexpr std::string_view effectFragmentFooterSource = R"(
+            void main()
+            {
+                o_FragColor = effect(v_Color, u_Texture, v_TexCoord, gl_FragCoord.xy);
+            }
+        )";
     } // namespace
 
     class OpenGLShader : public Shader
@@ -134,6 +154,17 @@ namespace p5
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
         return OpenGLShader::create(vertexShaderSource, fragmentShaderSource);
+    }
+
+    std::unique_ptr<Shader> loadShaderFromMemory(std::string_view effectSource)
+    {
+        std::string fragmentSource;
+        fragmentSource.reserve(effectFragmentHeaderSource.size() + effectSource.size() + effectFragmentFooterSource.size());
+        fragmentSource += effectFragmentHeaderSource;
+        fragmentSource += effectSource;
+        fragmentSource += effectFragmentFooterSource;
+
+        return OpenGLShader::create(detail::defaultVertexShaderSource, fragmentSource);
     }
 
     void setUniform(Shader& shader, std::string_view name, float value)

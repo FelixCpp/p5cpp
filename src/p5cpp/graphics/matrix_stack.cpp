@@ -12,8 +12,6 @@ namespace p5
 
     void MatrixStack::push(const matrix4x4& matrix)
     {
-        // Copy first: `matrix` may alias an element of m_stack (e.g. via peek()),
-        // which would otherwise dangle once the buffer below is reallocated.
         const matrix4x4 value = matrix;
 
         if (m_index + 1 >= m_capacity) {
@@ -30,7 +28,8 @@ namespace p5
     void MatrixStack::pop()
     {
         if (m_index == 0) {
-            throw std::runtime_error("MatrixStack::pop() called with no matching push()");
+            error("MatrixStack::pop() called with no matching push()");
+            return;
         }
 
         --m_index;

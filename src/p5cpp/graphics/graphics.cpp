@@ -2,6 +2,7 @@
 #include <p5cpp/graphics/graphics.hpp>
 #include <p5cpp/graphics/text_layout.hpp>
 #include <p5cpp/graphics/dejavu_sans.hpp>
+#include <p5cpp/graphics/default_shaders.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -12,26 +13,6 @@ namespace p5
 {
     namespace detail
     {
-        inline static constexpr std::string_view defaultVertexShaderSource = R"(
-            #version 410
-
-            layout (location = 0) in vec2 a_Position;
-            layout (location = 1) in vec2 a_TexCoord;
-            layout (location = 2) in vec4 a_Color;
-
-            uniform mat4 u_ProjectionMatrix;
-
-            out vec2 v_TexCoord;
-            out vec4 v_Color;
-
-            void main()
-            {
-                gl_Position = u_ProjectionMatrix * vec4(a_Position, 0.0, 1.0);
-                v_TexCoord = a_TexCoord;
-                v_Color = a_Color;
-            }
-        )";
-
         inline static constexpr std::string_view defaultFragmentShaderSource = R"(
             #version 410
 
@@ -784,7 +765,8 @@ namespace p5
     void Graphics::image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2)
     {
         if (texture == nullptr) {
-            throw std::runtime_error("image() called with null texture");
+            error("image() called with null texture");
+            return;
         }
 
         const DrawState& state = peekState();

@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <format>
 
 namespace p5
 {
@@ -492,6 +493,19 @@ namespace p5
     }
 } // namespace p5
 
+namespace p5::detail
+{
+    void logTrace(std::string_view message);
+    void logInfo(std::string_view message);
+    void logWarn(std::string_view message);
+    void logError(std::string_view message);
+} // namespace p5::detail
+
+#define trace(...) p5::detail::logTrace(std::format(__VA_ARGS__))
+#define info(...) p5::detail::logInfo(std::format(__VA_ARGS__))
+#define warn(...) p5::detail::logWarn(std::format(__VA_ARGS__))
+#define error(...) p5::detail::logError(std::format(__VA_ARGS__))
+
 namespace p5
 {
     enum class StrokeCapStyle
@@ -622,6 +636,18 @@ namespace p5
     };
 
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+
+    // Compiles a shader from just a fragment "effect" function, LÖVE2D-pixel-shader style — the library
+    // supplies the vertex stage (position/UV/color pass-through) and the fragment stage's boilerplate,
+    // so effectSource only needs to define:
+    //
+    //   vec4 effect(vec4 color, sampler2D image, vec2 texCoord, vec2 screenCoord) { ... }
+    //
+    // called once per fragment; its return value becomes the fragment's output color. Extra uniforms the
+    // effect needs can be declared directly in effectSource (e.g. `uniform float u_Time;`) and set from
+    // C++ via setUniform() as usual. For full control over the vertex stage too, use the two-argument
+    // loadShaderFromMemory(vertexShaderSource, fragmentShaderSource) overload instead.
+    std::unique_ptr<Shader> loadShaderFromMemory(std::string_view effectSource);
 
     void setUniform(Shader& shader, std::string_view name, float value);
     void setUniform(Shader& shader, std::string_view name, const float2& value);
