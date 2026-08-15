@@ -17,7 +17,9 @@ namespace p5
             switch (filter) {
                 case TextureFilter::nearest: return GL_NEAREST;
                 case TextureFilter::linear: return GL_LINEAR;
-                default: throw std::invalid_argument("Invalid texture filter");
+                default:
+                    error("Renderer: invalid TextureFilter, falling back to nearest");
+                    return GL_NEAREST;
             }
         }
 
@@ -27,7 +29,9 @@ namespace p5
                 case TextureWrap::clampToEdge: return GL_CLAMP_TO_EDGE;
                 case TextureWrap::repeat: return GL_REPEAT;
                 case TextureWrap::mirroredRepeat: return GL_MIRRORED_REPEAT;
-                default: throw std::invalid_argument("Invalid texture wrap mode");
+                default:
+                    error("Renderer: invalid TextureWrap, falling back to clampToEdge");
+                    return GL_CLAMP_TO_EDGE;
             }
         }
 
@@ -45,7 +49,9 @@ namespace p5
                     case BlendMode::Factor::oneMinusSrcAlpha: return GL_ONE_MINUS_SRC_ALPHA;
                     case BlendMode::Factor::dstAlpha: return GL_DST_ALPHA;
                     case BlendMode::Factor::oneMinusDstAlpha: return GL_ONE_MINUS_DST_ALPHA;
-                    default: throw std::invalid_argument("Invalid blend factor");
+                    default:
+                        error("Renderer: invalid BlendMode::Factor, falling back to one");
+                        return GL_ONE;
                 }
             };
 
@@ -56,7 +62,9 @@ namespace p5
                     case BlendMode::Equation::reverseSubtract: return GL_FUNC_REVERSE_SUBTRACT;
                     case BlendMode::Equation::min: return GL_MIN;
                     case BlendMode::Equation::max: return GL_MAX;
-                    default: throw std::invalid_argument("Invalid blend equation");
+                    default:
+                        error("Renderer: invalid BlendMode::Equation, falling back to add");
+                        return GL_FUNC_ADD;
                 }
             };
 
@@ -127,6 +135,11 @@ namespace p5
 
     void Renderer::begin(std::shared_ptr<Framebuffer> framebuffer)
     {
+        if (framebuffer == nullptr) {
+            error("Renderer::begin() called with a null framebuffer");
+            return;
+        }
+
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getFramebufferId());
 
         const uint2& size = framebuffer->getSize();

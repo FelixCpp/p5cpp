@@ -78,7 +78,8 @@ namespace p5
     void ShapeBuilder::vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor)
     {
         if (not m_isBuilding) {
-            throw std::runtime_error("Not building a shape");
+            error("ShapeBuilder::vertex() called while not building a shape");
+            return;
         }
 
         if (m_vertexCount >= m_vertexCapacity) {
@@ -110,11 +111,13 @@ namespace p5
     void ShapeBuilder::bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float endX, float endY)
     {
         if (not m_isBuilding) {
-            throw std::runtime_error("Not building a shape");
+            error("ShapeBuilder::bezierVertex() called while not building a shape");
+            return;
         }
 
         if (m_vertexCount == 0) {
-            throw std::runtime_error("No starting vertex for bezierVertex");
+            error("ShapeBuilder::bezierVertex() called with no starting vertex");
+            return;
         }
 
         const float2 startPoint = m_positions[m_vertexCount - 1];
@@ -135,11 +138,13 @@ namespace p5
     void ShapeBuilder::quadraticVertex(float controlX, float controlY, float endX, float endY)
     {
         if (not m_isBuilding) {
-            throw std::runtime_error("Not building a shape");
+            error("ShapeBuilder::quadraticVertex() called while not building a shape");
+            return;
         }
 
         if (m_vertexCount == 0) {
-            throw std::runtime_error("No starting vertex for quadraticVertex");
+            error("ShapeBuilder::quadraticVertex() called with no starting vertex");
+            return;
         }
 
         const float2 startPoint = m_positions[m_vertexCount - 1];
@@ -159,7 +164,8 @@ namespace p5
     void ShapeBuilder::curveVertex(float x, float y, float tightness, color_t fillColor, color_t strokeColor)
     {
         if (not m_isBuilding) {
-            throw std::runtime_error("Not building a shape");
+            error("ShapeBuilder::curveVertex() called while not building a shape");
+            return;
         }
 
         m_curvePoints.push_back({x, y});

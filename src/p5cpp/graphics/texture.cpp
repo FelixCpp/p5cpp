@@ -4,6 +4,8 @@
 #include <stb_image.h>
 #include <stb_image_write.h>
 
+#include <optional>
+
 namespace p5
 {
     namespace
@@ -15,12 +17,14 @@ namespace p5
             size_t bytesPerPixel;
         };
 
-        GLPixelFormat toGLPixelFormat(TexturePixelFormat format)
+        std::optional<GLPixelFormat> toGLPixelFormat(TexturePixelFormat format)
         {
             switch (format) {
-                case TexturePixelFormat::rgba8: return {GL_RGBA8, GL_RGBA, 4};
-                case TexturePixelFormat::r8: return {GL_R8, GL_RED, 1};
-                default: throw std::runtime_error("loadTextureFromMemory() called with unknown TexturePixelFormat");
+                case TexturePixelFormat::rgba8: return GLPixelFormat {GL_RGBA8, GL_RGBA, 4};
+                case TexturePixelFormat::r8: return GLPixelFormat {GL_R8, GL_RED, 1};
+                default:
+                    error("Texture: unknown TexturePixelFormat");
+                    return std::nullopt;
             }
         }
     } // namespace
@@ -30,7 +34,12 @@ namespace p5
     public:
         static std::unique_ptr<Texture> create(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format)
         {
-            const GLPixelFormat glFormat = toGLPixelFormat(format);
+            const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(format);
+            if (not glFormatOpt.has_value()) {
+                return nullptr;
+            }
+            const GLPixelFormat& glFormat = *glFormatOpt;
+
             const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
             if (not data.empty() and data.size() != expectedSize) {
                 error("loadTextureFromMemory() data size does not match width * height * bytesPerPixel");
@@ -76,7 +85,12 @@ namespace p5
 
         void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data) override
         {
-            const GLPixelFormat glFormat = toGLPixelFormat(m_pixelFormat);
+            const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(m_pixelFormat);
+            if (not glFormatOpt.has_value()) {
+                return;
+            }
+            const GLPixelFormat& glFormat = *glFormatOpt;
+
             const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
             if (data.size() != expectedSize) {
                 error("Texture::updateSubImage() data size does not match width * height * bytesPerPixel");

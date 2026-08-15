@@ -9,7 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -20,9 +20,10 @@ namespace p5
         FT_Library& freeTypeLibrary()
         {
             static FT_Library library = [] {
-                FT_Library lib;
+                FT_Library lib = nullptr;
                 if (FT_Init_FreeType(&lib) != 0) {
-                    throw std::runtime_error("Font: FT_Init_FreeType() failed");
+                    error("Font: FT_Init_FreeType() failed");
+                    return static_cast<FT_Library>(nullptr);
                 }
                 return lib;
             }();
@@ -223,7 +224,7 @@ namespace p5
               m_sdfSourceEmPixels(sdfSourceEmPixels)
         {
             // Prepopulate printable ASCII so common Latin text never hits an on-demand rasterize hitch
-            // or an atlas-full throw for the overwhelmingly common case.
+            // or an atlas-full fallback (see packIntoAtlas()) for the overwhelmingly common case.
             for (uint32_t codepoint = 0x20; codepoint <= 0x7E; ++codepoint) {
                 const uint32_t glyphIndex = FT_Get_Char_Index(m_rasterFace, codepoint);
                 if (glyphIndex != 0) {
@@ -298,7 +299,9 @@ namespace p5
         {
             // Pass 1: unscaled ink bounds, directly in font design units.
             if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) {
-                throw std::runtime_error("Font: FT_Load_Glyph() (metrics pass) failed for glyph index " + std::to_string(glyphIndex));
+                error("Font: FT_Load_Glyph() (metrics pass) failed for glyph index {}", glyphIndex);
+                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = {}, .hasOutline = false});
+                return it->second;
             }
             const FT_Glyph_Metrics& unscaledMetrics = m_rasterFace->glyph->metrics;
             const rect2f designBounds {
@@ -317,7 +320,9 @@ namespace p5
             // Pass 2: AA coverage bitmap at a fixed source resolution, used to build the SDF.
             FT_Set_Pixel_Sizes(m_rasterFace, 0, m_sdfSourceEmPixels);
             if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_RENDER | FT_LOAD_NO_HINTING) != 0) {
-                throw std::runtime_error("Font: FT_Load_Glyph() (render pass) failed for glyph index " + std::to_string(glyphIndex));
+                error("Font: FT_Load_Glyph() (render pass) failed for glyph index {}", glyphIndex);
+                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
+                return it->second;
             }
             const FT_Bitmap& bitmap = m_rasterFace->glyph->bitmap;
 
@@ -332,13 +337,19 @@ namespace p5
             int cellHeight = 0;
             const std::vector<uint8_t> cellSDF = downsampleSDF(sourceSDF, static_cast<int>(bitmap.width), static_cast<int>(bitmap.rows), cellWidth, cellHeight);
 
-            const rect2f uvRect = packIntoAtlas(cellSDF, cellWidth, cellHeight);
+            const std::optional<rect2f> uvRect = packIntoAtlas(cellSDF, cellWidth, cellHeight);
+            if (not uvRect.has_value()) {
+                // Atlas is full — keep the glyph's advance-only metrics rather than crashing; it just
+                // won't render until the Font is constructed with a larger atlas.
+                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
+                return it->second;
+            }
 
-            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = uvRect, .bounds = designBounds, .hasOutline = true});
+            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = *uvRect, .bounds = designBounds, .hasOutline = true});
             return it->second;
         }
 
-        rect2f packIntoAtlas(const std::vector<uint8_t>& cellSDF, int cellWidth, int cellHeight)
+        std::optional<rect2f> packIntoAtlas(const std::vector<uint8_t>& cellSDF, int cellWidth, int cellHeight)
         {
             const uint32_t atlasWidth = m_atlasTexture->getSize().x;
             const uint32_t atlasHeight = m_atlasTexture->getSize().y;
@@ -352,10 +363,8 @@ namespace p5
                 m_shelfHeight = 0;
             }
             if (m_shelfY + paddedHeight > atlasHeight) {
-                throw std::runtime_error(
-                    "Font: SDF atlas (" + std::to_string(atlasWidth) + "x" + std::to_string(atlasHeight) +
-                    ") is full; construct the Font with a larger atlasWidth/atlasHeight"
-                );
+                error("Font: SDF atlas ({}x{}) is full; construct the Font with a larger atlasWidth/atlasHeight", atlasWidth, atlasHeight);
+                return std::nullopt;
             }
 
             // Fill the padded cell with the "far outside" byte value, then blit the glyph SDF into its

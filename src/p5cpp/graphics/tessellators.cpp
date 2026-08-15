@@ -6,7 +6,6 @@
 #include <cmath>
 #include <memory>
 #include <numbers>
-#include <stdexcept>
 
 namespace p5
 {
@@ -78,8 +77,10 @@ namespace p5
     void tesselate_triangles(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
-        if (count % 3 != 0)
-            throw std::runtime_error("tesselate_triangles: vertex count must be a multiple of 3");
+        if (count % 3 != 0) {
+            error("tesselate_triangles: vertex count must be a multiple of 3");
+            return;
+        }
 
         addVertices(sink, positions, texCoords, colors);
 
@@ -119,8 +120,10 @@ namespace p5
     void tesselate_quads(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
-        if (count % 4 != 0)
-            throw std::runtime_error("tesselate_quads: vertex count must be a multiple of 4");
+        if (count % 4 != 0) {
+            error("tesselate_quads: vertex count must be a multiple of 4");
+            return;
+        }
 
         addVertices(sink, positions, texCoords, colors);
 
@@ -133,8 +136,10 @@ namespace p5
     void tesselate_quad_strip(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
-        if (count % 2 != 0)
-            throw std::runtime_error("tesselate_quad_strip: vertex count must be even");
+        if (count % 2 != 0) {
+            error("tesselate_quad_strip: vertex count must be even");
+            return;
+        }
 
         addVertices(sink, positions, texCoords, colors);
 

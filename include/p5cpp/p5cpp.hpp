@@ -1212,7 +1212,12 @@ namespace p5
     template <typename T>
     inline T* Context::get() const
     {
-        return static_cast<T*>(m_instances.at(typeid(T)));
+        const auto it = m_instances.find(typeid(T));
+        if (it == m_instances.end()) {
+            error("Context::get() requested a type ({}) that was never provided", typeid(T).name());
+            return nullptr;
+        }
+        return static_cast<T*>(it->second);
     }
 
     template <typename T>

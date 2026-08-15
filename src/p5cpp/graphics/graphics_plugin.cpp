@@ -13,6 +13,9 @@ namespace p5
         const uint2& size = window.getLogicalSize();
 
         m_defaultFramebuffer = createFramebuffer(size.x, size.y);
+        if (m_defaultFramebuffer == nullptr) {
+            error("GraphicsPlugin::setup() failed to create the default framebuffer");
+        }
 
         m_graphics->pushFramebuffer(m_defaultFramebuffer);
         next();
@@ -25,7 +28,11 @@ namespace p5
             const auto& resize = event.as<WindowEvent::WindowResize>();
             const auto isWindowMinimized = resize.width == 0 or resize.height == 0;
             if (not isWindowMinimized) {
-                m_defaultFramebuffer = createFramebuffer(resize.width, resize.height);
+                if (auto resized = createFramebuffer(resize.width, resize.height)) {
+                    m_defaultFramebuffer = std::move(resized);
+                } else {
+                    error("GraphicsPlugin::event() failed to recreate the default framebuffer on resize; keeping the previous one");
+                }
             }
         }
 
@@ -40,7 +47,9 @@ namespace p5
 
         Window& window = context.require<Window>();
         const uint2& size = window.getPhysicalSize();
-        blitFramebufferToScreen(m_defaultFramebuffer, size.x, size.y);
+        if (m_defaultFramebuffer != nullptr) {
+            blitFramebufferToScreen(m_defaultFramebuffer, size.x, size.y);
+        }
     }
 
     void GraphicsPlugin::destroy(Context& context, const Next& next)

@@ -29,7 +29,8 @@ namespace p5
     void DrawStateStack::pop()
     {
         if (m_index == 0) {
-            throw std::runtime_error("DrawStateStack::pop() called with no matching push()");
+            error("DrawStateStack::pop() called with no matching push()");
+            return;
         }
 
         --m_index;

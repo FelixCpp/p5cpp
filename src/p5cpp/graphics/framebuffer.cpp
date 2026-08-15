@@ -26,7 +26,8 @@ namespace p5
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteFramebuffers(1, &framebufferId);
                 glDeleteRenderbuffers(1, &renderbufferId);
-                throw std::runtime_error("Failed to create framebuffer");
+                error("Failed to create framebuffer");
+                return nullptr;
             }
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);

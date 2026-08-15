@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
-#include <stdexcept>
 
 namespace p5
 {
@@ -201,9 +200,12 @@ namespace p5
 
     const uint2& Graphics::getFramebufferSize() const
     {
+        static constexpr uint2 kFallbackSize {0, 0};
+
         const std::shared_ptr<Framebuffer> framebuffer = m_framebufferStack.peek();
         if (framebuffer == nullptr) {
-            throw std::runtime_error("getFramebufferSize() called with no framebuffer pushed");
+            error("getFramebufferSize() called with no framebuffer pushed");
+            return kFallbackSize;
         }
 
         return framebuffer->getSize();
@@ -789,7 +791,8 @@ namespace p5
                 break;
 
             default:
-                throw std::runtime_error("textureUVMode() called with unknown mode");
+                error("image() called with an unknown TextureUVMode");
+                return;
         }
 
         const float2 positions[4] = {
