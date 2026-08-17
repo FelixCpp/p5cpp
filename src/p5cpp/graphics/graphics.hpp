@@ -22,6 +22,10 @@ namespace p5
         std::shared_ptr<Framebuffer> peekFramebuffer() const;
         const uint2& getFramebufferSize() const;
 
+        void flush();
+        Pixels loadPixels();
+        void updatePixels(const Pixels& pixels);
+
         void pushState();
         void popState();
         DrawState& peekState();

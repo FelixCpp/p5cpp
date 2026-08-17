@@ -218,6 +218,34 @@ namespace p5
         return framebuffer->getSize();
     }
 
+    void Graphics::flush()
+    {
+        m_renderer->flush();
+    }
+
+    Pixels Graphics::loadPixels()
+    {
+        const std::shared_ptr<Framebuffer> framebuffer = m_framebufferStack.peek();
+        if (framebuffer == nullptr) {
+            error("loadPixels() called with no framebuffer pushed");
+            return {};
+        }
+
+        flush();
+        return p5::loadPixels(*framebuffer);
+    }
+
+    void Graphics::updatePixels(const Pixels& pixels)
+    {
+        const std::shared_ptr<Framebuffer> framebuffer = m_framebufferStack.peek();
+        if (framebuffer == nullptr) {
+            error("updatePixels() called with no framebuffer pushed");
+            return;
+        }
+
+        p5::updatePixels(*framebuffer, pixels);
+    }
+
     void Graphics::pushState()
     {
         m_stateStack.push(peekState());

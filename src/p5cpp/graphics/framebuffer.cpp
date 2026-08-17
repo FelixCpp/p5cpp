@@ -90,4 +90,14 @@ namespace p5
     {
         return OpenGLFramebuffer::create(width, height);
     }
+
+    Pixels loadPixels(const Framebuffer& framebuffer)
+    {
+        return loadPixels(*framebuffer.getColorTexture());
+    }
+
+    void updatePixels(Framebuffer& framebuffer, const Pixels& pixels)
+    {
+        updatePixels(*framebuffer.getColorTexture(), pixels);
+    }
 } // namespace p5

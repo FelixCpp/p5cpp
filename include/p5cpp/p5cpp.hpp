@@ -718,6 +718,25 @@ namespace p5
 
 namespace p5
 {
+    struct Pixels
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        std::vector<color_t> data;
+    };
+
+    color_t getPixel(const Pixels& pixels, int32_t x, int32_t y);
+    void setPixel(Pixels& pixels, int32_t x, int32_t y, color_t color);
+
+    Pixels loadPixels(const Texture& texture);
+    void updatePixels(Texture& texture, const Pixels& pixels);
+
+    Pixels loadPixels(const Framebuffer& framebuffer);
+    void updatePixels(Framebuffer& framebuffer, const Pixels& pixels);
+} // namespace p5
+
+namespace p5
+{
     enum class TextAlignment
     {
         topLeft,
@@ -805,6 +824,11 @@ namespace p5
     const uint2& getFramebufferSize();
     float getWidth();
     float getHeight();
+
+    void flush();
+
+    Pixels loadPixels();
+    void updatePixels(const Pixels& pixels);
 
     void push();
     void pop();

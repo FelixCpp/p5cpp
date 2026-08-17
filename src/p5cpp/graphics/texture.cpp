@@ -178,4 +178,66 @@ namespace p5
         const int result = stbi_write_bmp(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data());
         return result != 0;
     }
+
+    color_t getPixel(const Pixels& pixels, int32_t x, int32_t y)
+    {
+        if (x < 0 or y < 0 or static_cast<uint32_t>(x) >= pixels.width or static_cast<uint32_t>(y) >= pixels.height) {
+            error("getPixel() coordinates ({}, {}) are out of bounds for {}x{} Pixels", x, y, pixels.width, pixels.height);
+            return rgba(0, 0);
+        }
+
+        return pixels.data[static_cast<size_t>(y) * pixels.width + static_cast<size_t>(x)];
+    }
+
+    void setPixel(Pixels& pixels, int32_t x, int32_t y, color_t color)
+    {
+        if (x < 0 or y < 0 or static_cast<uint32_t>(x) >= pixels.width or static_cast<uint32_t>(y) >= pixels.height) {
+            error("setPixel() coordinates ({}, {}) are out of bounds for {}x{} Pixels", x, y, pixels.width, pixels.height);
+            return;
+        }
+
+        pixels.data[static_cast<size_t>(y) * pixels.width + static_cast<size_t>(x)] = color;
+    }
+
+    Pixels loadPixels(const Texture& texture)
+    {
+        if (texture.getPixelFormat() != TexturePixelFormat::rgba8) {
+            error("loadPixels() only supports TexturePixelFormat::rgba8 textures");
+            return {};
+        }
+
+        const auto [width, height] = texture.getSize();
+        const std::vector<uint8_t> bytes = texture.queryPixelData();
+
+        Pixels pixels {.width = width, .height = height, .data = std::vector<color_t>(static_cast<size_t>(width) * height)};
+        for (size_t i = 0; i < pixels.data.size(); ++i) {
+            pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
+        }
+
+        return pixels;
+    }
+
+    void updatePixels(Texture& texture, const Pixels& pixels)
+    {
+        if (texture.getPixelFormat() != TexturePixelFormat::rgba8) {
+            error("updatePixels() only supports TexturePixelFormat::rgba8 textures");
+            return;
+        }
+
+        const auto [width, height] = texture.getSize();
+        if (pixels.width != width or pixels.height != height) {
+            error("updatePixels() Pixels size ({}x{}) does not match texture size ({}x{})", pixels.width, pixels.height, width, height);
+            return;
+        }
+
+        std::vector<uint8_t> bytes(pixels.data.size() * 4);
+        for (size_t i = 0; i < pixels.data.size(); ++i) {
+            bytes[i * 4 + 0] = getRed(pixels.data[i]);
+            bytes[i * 4 + 1] = getGreen(pixels.data[i]);
+            bytes[i * 4 + 2] = getBlue(pixels.data[i]);
+            bytes[i * 4 + 3] = getAlpha(pixels.data[i]);
+        }
+
+        texture.updateSubImage(0, 0, width, height, bytes);
+    }
 } // namespace p5

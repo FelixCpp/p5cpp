@@ -17,6 +17,9 @@ namespace p5
     const uint2& getFramebufferSize() { return graphics().getFramebufferSize(); }
     float getWidth() { return static_cast<float>(graphics().getFramebufferSize().x); }
     float getHeight() { return static_cast<float>(graphics().getFramebufferSize().y); }
+    void flush() { graphics().flush(); }
+    Pixels loadPixels() { return graphics().loadPixels(); }
+    void updatePixels(const Pixels& pixels) { graphics().updatePixels(pixels); }
     void push() { graphics().push(); }
     void pop() { graphics().pop(); }
     void pushState() { graphics().pushState(); }
