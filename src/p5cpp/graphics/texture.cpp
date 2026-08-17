@@ -29,110 +29,41 @@ namespace p5
         }
     } // namespace
 
-    class OpenGLTexture : public Texture
+    Texture::~Texture()
     {
-    public:
-        static std::unique_ptr<Texture> create(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format)
-        {
-            const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(format);
-            if (not glFormatOpt.has_value()) {
-                return nullptr;
-            }
-            const GLPixelFormat& glFormat = *glFormatOpt;
+        glDeleteTextures(1, &id);
+    }
 
-            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
-            if (not data.empty() and data.size() != expectedSize) {
-                error("loadTextureFromMemory() data size does not match width * height * bytesPerPixel");
-                return nullptr;
-            }
-
-            GLuint textureId;
-            glGenTextures(1, &textureId);
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexImage2D(GL_TEXTURE_2D, 0, glFormat.internalFormat, width, height, 0, glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-            return std::unique_ptr<OpenGLTexture>(new OpenGLTexture(textureId, uint2 {.x = width, .y = height}, format));
-        }
-
-        OpenGLTexture(const OpenGLTexture&) = delete;
-        OpenGLTexture& operator=(const OpenGLTexture&) = delete;
-
-        ~OpenGLTexture() override
-        {
-            glDeleteTextures(1, &m_textureId);
-        }
-
-        uint32_t getTextureId() const override
-        {
-            return m_textureId;
-        }
-
-        const uint2& getSize() const override
-        {
-            return m_size;
-        }
-
-        TexturePixelFormat getPixelFormat() const override
-        {
-            return m_pixelFormat;
-        }
-
-        void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data) override
-        {
-            const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(m_pixelFormat);
-            if (not glFormatOpt.has_value()) {
-                return;
-            }
-            const GLPixelFormat& glFormat = *glFormatOpt;
-
-            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
-            if (data.size() != expectedSize) {
-                error("Texture::updateSubImage() data size does not match width * height * bytesPerPixel");
-                return;
-            }
-            if (x + width > m_size.x or y + height > m_size.y) {
-                error("Texture::updateSubImage() region is out of bounds");
-                return;
-            }
-
-            glBindTexture(GL_TEXTURE_2D, m_textureId);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
-            glBindTexture(GL_TEXTURE_2D, 0);
-        }
-
-        std::vector<uint8_t> queryPixelData() const override
-        {
-            std::vector<uint8_t> pixelData(static_cast<size_t>(m_size.x) * static_cast<size_t>(m_size.y) * 4);
-            glBindTexture(GL_TEXTURE_2D, m_textureId);
-            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
-            glBindTexture(GL_TEXTURE_2D, 0);
-            return pixelData;
-        }
-
-    private:
-        explicit OpenGLTexture(GLuint textureId, const uint2& size, TexturePixelFormat pixelFormat)
-            : m_textureId(textureId), m_size(size), m_pixelFormat(pixelFormat)
-        {
-        }
-
-        GLuint m_textureId;
-        uint2 m_size;
-        TexturePixelFormat m_pixelFormat;
-    };
-} // namespace p5
-
-namespace p5
-{
     std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format)
     {
-        return OpenGLTexture::create(width, height, data, format);
+        const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(format);
+        if (not glFormatOpt.has_value()) {
+            return nullptr;
+        }
+        const GLPixelFormat& glFormat = *glFormatOpt;
+
+        const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
+        if (not data.empty() and data.size() != expectedSize) {
+            error("loadTextureFromMemory() data size does not match width * height * bytesPerPixel");
+            return nullptr;
+        }
+
+        GLuint textureId;
+        glGenTextures(1, &textureId);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, glFormat.internalFormat, width, height, 0, glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        auto texture = std::make_unique<Texture>();
+        texture->id = textureId;
+        texture->size = uint2 {.x = width, .y = height};
+        texture->pixelFormat = format;
+        return texture;
     }
 
     std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath)
@@ -152,11 +83,45 @@ namespace p5
         return loadTextureFromMemory(static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::span<const uint8_t>(pixelData.get(), width * height * 4));
     }
 
+    void updateSubImage(Texture& texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data)
+    {
+        const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(texture.pixelFormat);
+        if (not glFormatOpt.has_value()) {
+            return;
+        }
+
+        const GLPixelFormat& glFormat = glFormatOpt.value();
+
+        const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
+        if (data.size() != expectedSize) {
+            error("updateSubImage() data size does not match width * height * bytesPerPixel");
+            return;
+        }
+        if (x + width > texture.size.x or y + height > texture.size.y) {
+            error("updateSubImage() region is out of bounds");
+            return;
+        }
+
+        glBindTexture(GL_TEXTURE_2D, texture.id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    std::vector<uint8_t> queryPixelData(const Texture& texture)
+    {
+        std::vector<uint8_t> pixelData(static_cast<size_t>(texture.size.x) * static_cast<size_t>(texture.size.y) * 4);
+        glBindTexture(GL_TEXTURE_2D, texture.id);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return pixelData;
+    }
+
     bool saveTextureToFileAsPNG(const Texture& texture, const std::filesystem::path& filepath)
     {
         const std::string filepathStr = filepath.string();
-        const auto [width, height] = texture.getSize();
-        const auto pixelData = texture.queryPixelData();
+        const auto [width, height] = texture.size;
+        const auto pixelData = queryPixelData(texture);
         const int result = stbi_write_png(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), static_cast<int>(width) * 4);
         return result != 0;
     }
@@ -164,8 +129,8 @@ namespace p5
     bool saveTextureToFileAsJPEG(const Texture& texture, const std::filesystem::path& filepath, int quality)
     {
         const std::string filepathStr = filepath.string();
-        const auto [width, height] = texture.getSize();
-        const auto pixelData = texture.queryPixelData();
+        const auto [width, height] = texture.size;
+        const auto pixelData = queryPixelData(texture);
         const int result = stbi_write_jpg(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), quality);
         return result != 0;
     }
@@ -173,8 +138,8 @@ namespace p5
     bool saveTextureToFileAsBMP(const Texture& texture, const std::filesystem::path& filepath)
     {
         const std::string filepathStr = filepath.string();
-        const auto [width, height] = texture.getSize();
-        const auto pixelData = texture.queryPixelData();
+        const auto [width, height] = texture.size;
+        const auto pixelData = queryPixelData(texture);
         const int result = stbi_write_bmp(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data());
         return result != 0;
     }
@@ -201,13 +166,13 @@ namespace p5
 
     Pixels loadPixels(const Texture& texture)
     {
-        if (texture.getPixelFormat() != TexturePixelFormat::rgba8) {
+        if (texture.pixelFormat != TexturePixelFormat::rgba8) {
             error("loadPixels() only supports TexturePixelFormat::rgba8 textures");
             return {};
         }
 
-        const auto [width, height] = texture.getSize();
-        const std::vector<uint8_t> bytes = texture.queryPixelData();
+        const auto [width, height] = texture.size;
+        const std::vector<uint8_t> bytes = queryPixelData(texture);
 
         Pixels pixels {.width = width, .height = height, .data = std::vector<color_t>(static_cast<size_t>(width) * height)};
         for (size_t i = 0; i < pixels.data.size(); ++i) {
@@ -219,12 +184,12 @@ namespace p5
 
     void updatePixels(Texture& texture, const Pixels& pixels)
     {
-        if (texture.getPixelFormat() != TexturePixelFormat::rgba8) {
+        if (texture.pixelFormat != TexturePixelFormat::rgba8) {
             error("updatePixels() only supports TexturePixelFormat::rgba8 textures");
             return;
         }
 
-        const auto [width, height] = texture.getSize();
+        const auto [width, height] = texture.size;
         if (pixels.width != width or pixels.height != height) {
             error("updatePixels() Pixels size ({}x{}) does not match texture size ({}x{})", pixels.width, pixels.height, width, height);
             return;
@@ -238,6 +203,6 @@ namespace p5
             bytes[i * 4 + 3] = getAlpha(pixels.data[i]);
         }
 
-        texture.updateSubImage(0, 0, width, height, bytes);
+        updateSubImage(texture, 0, 0, width, height, bytes);
     }
 } // namespace p5

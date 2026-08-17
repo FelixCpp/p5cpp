@@ -1,5 +1,6 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/graphics.hpp>
+#include <p5cpp/graphics/graphics_plugin.hpp>
 #include <p5cpp/application/kernel.hpp>
 
 namespace p5
@@ -10,6 +11,11 @@ namespace p5
         {
             return getKernel().getContext().require<Graphics>();
         }
+
+        GraphicsPlugin& graphicsPlugin()
+        {
+            return getKernel().getContext().require<GraphicsPlugin>();
+        }
     } // namespace
 
     void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer) { graphics().pushFramebuffer(std::move(framebuffer)); }
@@ -17,6 +23,8 @@ namespace p5
     const uint2& getFramebufferSize() { return graphics().getFramebufferSize(); }
     float getWidth() { return static_cast<float>(graphics().getFramebufferSize().x); }
     float getHeight() { return static_cast<float>(graphics().getFramebufferSize().y); }
+    void smooth(uint32_t samples) { graphicsPlugin().smooth(samples); }
+    void noSmooth() { graphicsPlugin().noSmooth(); }
     void flush() { graphics().flush(); }
     Pixels loadPixels() { return graphics().loadPixels(); }
     void updatePixels(const Pixels& pixels) { graphics().updatePixels(pixels); }

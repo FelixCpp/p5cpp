@@ -8,14 +8,12 @@ namespace p5
     {
         m_graphics = std::make_unique<Graphics>();
         context.provide(m_graphics.get());
+        context.provide(this);
 
         Window& window = context.require<Window>();
-        const uint2& size = window.getLogicalSize();
+        m_size = window.getLogicalSize();
 
-        m_defaultFramebuffer = createFramebuffer(size.x, size.y);
-        if (m_defaultFramebuffer == nullptr) {
-            error("GraphicsPlugin::setup() failed to create the default framebuffer");
-        }
+        recreateDefaultFramebuffer();
 
         m_graphics->pushFramebuffer(m_defaultFramebuffer);
         next();
@@ -28,11 +26,8 @@ namespace p5
             const auto& resize = event.as<WindowEvent::WindowResize>();
             const auto isWindowMinimized = resize.width == 0 or resize.height == 0;
             if (not isWindowMinimized) {
-                if (auto resized = createFramebuffer(resize.width, resize.height)) {
-                    m_defaultFramebuffer = std::move(resized);
-                } else {
-                    error("GraphicsPlugin::event() failed to recreate the default framebuffer on resize; keeping the previous one");
-                }
+                m_size = uint2 {.x = resize.width, .y = resize.height};
+                recreateDefaultFramebuffer();
             }
         }
 
@@ -56,7 +51,28 @@ namespace p5
     {
         next();
 
+        context.remove<GraphicsPlugin>();
         context.remove<Graphics>();
         m_graphics.reset();
+    }
+
+    void GraphicsPlugin::smooth(uint32_t samples)
+    {
+        m_samples = samples;
+        recreateDefaultFramebuffer();
+    }
+
+    void GraphicsPlugin::noSmooth()
+    {
+        smooth(0);
+    }
+
+    void GraphicsPlugin::recreateDefaultFramebuffer()
+    {
+        if (auto recreated = createFramebuffer(m_size.x, m_size.y, m_samples)) {
+            m_defaultFramebuffer = std::move(recreated);
+        } else {
+            error("GraphicsPlugin::recreateDefaultFramebuffer() failed; the default framebuffer is unchanged");
+        }
     }
 } // namespace p5

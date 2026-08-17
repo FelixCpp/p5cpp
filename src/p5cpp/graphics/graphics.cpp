@@ -215,7 +215,7 @@ namespace p5
             return kFallbackSize;
         }
 
-        return framebuffer->getSize();
+        return framebuffer->size;
     }
 
     void Graphics::flush()
@@ -810,7 +810,7 @@ namespace p5
         const TextureUVMode uvMode = state.textureUVMode;
         const color_t tintColor = state.tintColor;
 
-        const auto [texWidth, texHeight] = texture->getSize();
+        const auto [texWidth, texHeight] = texture->size;
         const float invTextureWidth = 1.0f / static_cast<float>(texWidth);
         const float invTextureHeight = 1.0f / static_cast<float>(texHeight);
 

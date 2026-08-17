@@ -351,8 +351,8 @@ namespace p5
 
         std::optional<rect2f> packIntoAtlas(const std::vector<uint8_t>& cellSDF, int cellWidth, int cellHeight)
         {
-            const uint32_t atlasWidth = m_atlasTexture->getSize().x;
-            const uint32_t atlasHeight = m_atlasTexture->getSize().y;
+            const uint32_t atlasWidth = m_atlasTexture->size.x;
+            const uint32_t atlasHeight = m_atlasTexture->size.y;
 
             const uint32_t paddedWidth = static_cast<uint32_t>(cellWidth) + 2 * kAtlasPaddingTexels;
             const uint32_t paddedHeight = static_cast<uint32_t>(cellHeight) + 2 * kAtlasPaddingTexels;
@@ -377,7 +377,7 @@ namespace p5
                 }
             }
 
-            m_atlasTexture->updateSubImage(m_shelfX, m_shelfY, paddedWidth, paddedHeight, padded);
+            updateSubImage(*m_atlasTexture, m_shelfX, m_shelfY, paddedWidth, paddedHeight, padded);
 
             const rect2f uvRect {
                 static_cast<float>(m_shelfX + kAtlasPaddingTexels) / static_cast<float>(atlasWidth),

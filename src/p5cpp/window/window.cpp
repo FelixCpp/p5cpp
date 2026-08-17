@@ -5,7 +5,7 @@
 
 namespace p5
 {
-    Key mapKey(int glfwKey)
+    static Key mapKey(int glfwKey)
     {
         switch (glfwKey) {
             case GLFW_KEY_SPACE: return Key::Space;
@@ -132,7 +132,7 @@ namespace p5
         }
     }
 
-    MouseButton mapMouseButton(int glfwButton)
+    static MouseButton mapMouseButton(int glfwButton)
     {
         switch (glfwButton) {
             case GLFW_MOUSE_BUTTON_LEFT: return MouseButton::Left;
@@ -147,7 +147,7 @@ namespace p5
         }
     }
 
-    KeyMods mapMods(int glfwMods)
+    static KeyMods mapMods(int glfwMods)
     {
         return KeyMods {
             .shift = (glfwMods & GLFW_MOD_SHIFT) != 0,
@@ -456,6 +456,67 @@ namespace p5
         }
     }
 
+    void Window::maximize()
+    {
+        glfwMaximizeWindow(m_window);
+    }
+
+    void Window::minimize()
+    {
+        glfwIconifyWindow(m_window);
+    }
+
+    bool Window::isMaximized() const
+    {
+        return glfwGetWindowAttrib(m_window, GLFW_MAXIMIZED) == GLFW_TRUE;
+    }
+
+    bool Window::isMinimized() const
+    {
+        return glfwGetWindowAttrib(m_window, GLFW_ICONIFIED) == GLFW_TRUE;
+    }
+
+    void Window::enterFullscreen()
+    {
+        if (GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor()) {
+            const GLFWvidmode* videoMode = glfwGetVideoMode(primaryMonitor);
+
+            if (videoMode) {
+                m_preFullscreenWindowRect = rect2i {
+                    .x = static_cast<int>(getPosition().x),
+                    .y = static_cast<int>(getPosition().y),
+                    .width = static_cast<int>(getLogicalSize().x),
+                    .height = static_cast<int>(getLogicalSize().y),
+                };
+
+                glfwSetWindowMonitor(m_window, primaryMonitor, 0, 0, videoMode->width, videoMode->height, videoMode->refreshRate);
+            }
+        }
+    }
+
+    void Window::leaveFullscreen(std::optional<rect2i> restoreRect)
+    {
+        if (m_preFullscreenWindowRect) {
+            const rect2i& rect = restoreRect.value_or(*m_preFullscreenWindowRect);
+            glfwSetWindowMonitor(m_window, nullptr, rect.x, rect.y, rect.width, rect.height, 0);
+            m_preFullscreenWindowRect.reset();
+        }
+    }
+
+    void Window::toggleFullscreen()
+    {
+        if (isFullscreen()) {
+            leaveFullscreen();
+        } else {
+            enterFullscreen();
+        }
+    }
+
+    bool Window::isFullscreen() const
+    {
+        return glfwGetWindowMonitor(m_window) != nullptr;
+    }
+
     void Window::pollEvents()
     {
         glfwPollEvents();
@@ -506,6 +567,7 @@ namespace p5
         : m_window(window), m_eventCallback(eventCallback)
     {
     }
+
     void Window::publish(const WindowEvent& event)
     {
         if (m_eventCallback) {

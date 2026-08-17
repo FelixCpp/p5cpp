@@ -140,9 +140,14 @@ namespace p5
             return;
         }
 
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->getFramebufferId());
+        m_framebuffer = framebuffer;
 
-        const uint2& size = framebuffer->getSize();
+        // Render into the multisampled target if this framebuffer has one — its contents get
+        // resolved into framebuffer->id (the readable/sample-able texture) at the end of flush().
+        const uint32_t drawFramebufferId = framebuffer->msaaFramebufferId != 0 ? framebuffer->msaaFramebufferId : framebuffer->id;
+        glBindFramebuffer(GL_FRAMEBUFFER, drawFramebufferId);
+
+        const uint2& size = framebuffer->size;
         glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
 
         glEnable(GL_BLEND);
@@ -189,16 +194,16 @@ namespace p5
                 glDisable(GL_SCISSOR_TEST);
             }
 
-            glUseProgram(batch.shader->getShaderProgramId());
-            const GLint projectionLocation = batch.shader->getUniformLocation("u_ProjectionMatrix");
+            glUseProgram(batch.shader->programId);
+            const GLint projectionLocation = getUniformLocation(*batch.shader, "u_ProjectionMatrix");
             if (projectionLocation >= 0) {
                 glUniformMatrix4fv(projectionLocation, 1, GL_TRUE, m_projectionMatrix.m.data());
             }
 
-            const GLint textureLocation = batch.shader->getUniformLocation("u_Texture");
+            const GLint textureLocation = getUniformLocation(*batch.shader, "u_Texture");
             if (textureLocation >= 0) {
                 glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, batch.texture->getTextureId());
+                glBindTexture(GL_TEXTURE_2D, batch.texture->id);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, toGl(batch.textureFilter));
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, toGl(batch.textureFilter));
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, toGl(batch.textureWrap));
@@ -207,7 +212,7 @@ namespace p5
             }
 
             for (const auto& [name, value] : batch.uniforms) {
-                const GLint location = batch.shader->getUniformLocation(name);
+                const GLint location = getUniformLocation(*batch.shader, name);
                 if (location < 0)
                     continue;
 
@@ -228,6 +233,16 @@ namespace p5
             }
 
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<void*>(batch.indexOffset * sizeof(uint32_t)));
+        }
+
+        if (m_framebuffer != nullptr and m_framebuffer->msaaFramebufferId != 0) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, m_framebuffer->msaaFramebufferId);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_framebuffer->id);
+            glBlitFramebuffer(0, 0, static_cast<GLint>(m_framebufferSize.x), static_cast<GLint>(m_framebufferSize.y), 0, 0, static_cast<GLint>(m_framebufferSize.x), static_cast<GLint>(m_framebufferSize.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            // Restore the draw target rather than leaving FBO 0 bound — any further draws before
+            // end() (e.g. after a mid-frame flush()/loadPixels() call) must keep landing in the
+            // multisampled target, not the default framebuffer.
+            glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer->msaaFramebufferId);
         }
 
         m_currentVertexOffset = 0;

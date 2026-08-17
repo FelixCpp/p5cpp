@@ -82,5 +82,6 @@ namespace p5
         std::vector<RendererBatch> m_batches;
         matrix4x4 m_projectionMatrix;
         uint2 m_framebufferSize;
+        std::shared_ptr<Framebuffer> m_framebuffer;
     };
 } // namespace p5

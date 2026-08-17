@@ -41,7 +41,8 @@ namespace p5
     {
         T x, y;
 
-        constexpr bool operator==(const value2&) const = default;
+        inline constexpr bool operator==(const value2&) const = default;
+        inline constexpr bool operator!=(const value2&) const = default;
     };
 
     template <typename T> constexpr T lengthSquared(const value2<T>& v);
@@ -90,7 +91,8 @@ namespace p5
     {
         T x, y, width, height;
 
-        constexpr bool operator==(const rect2&) const = default;
+        inline constexpr bool operator==(const rect2&) const = default;
+        inline constexpr bool operator!=(const rect2&) const = default;
     };
 
     typedef rect2<float> rect2f;
@@ -104,7 +106,8 @@ namespace p5
     {
         T x, y, z;
 
-        constexpr bool operator==(const value3&) const = default;
+        inline constexpr bool operator==(const value3&) const = default;
+        inline constexpr bool operator!=(const value3&) const = default;
     };
 
     typedef value3<float> float3;
@@ -118,7 +121,8 @@ namespace p5
     {
         T x, y, z, w;
 
-        constexpr bool operator==(const value4&) const = default;
+        inline constexpr bool operator==(const value4&) const = default;
+        inline constexpr bool operator!=(const value4&) const = default;
     };
 
     typedef value4<float> float4;
@@ -431,6 +435,16 @@ namespace p5
     void setWindowResizable(bool resizable);
     void setWindowVisible(bool visible);
 
+    void maximizeWindow();
+    bool isWindowMaximized();
+    void minimizeWindow();
+    bool isWindowMinimized();
+
+    void enterFullscreen();
+    void leaveFullscreen(std::optional<rect2i> restoreRect = std::nullopt);
+    void toggleFullscreen();
+    bool isWindowFullscreen();
+
     uint2 getWindowSize();
     uint2 getWindowPhysicalSize();
     int2 getWindowPosition();
@@ -626,14 +640,23 @@ namespace p5
 
 namespace p5
 {
+    // Plain struct, not a virtual interface — same rationale as Texture/Framebuffer (see there):
+    // one backend, the GL handle already public, and every accessor already fits cleanly without
+    // forcing internal concepts across an interface boundary. Destructor-based RAII, no move
+    // support (never held by value).
     struct Shader
     {
-        virtual ~Shader() = default;
-        virtual uint32_t getShaderProgramId() const = 0;
-        virtual int32_t getUniformLocation(std::string_view name) const = 0;
-
+        uint32_t programId = 0;
+        std::unordered_map<std::string, int32_t> uniformLocationCache;
         std::unordered_map<std::string, UniformValue> uniforms;
+
+        Shader() = default;
+        Shader(const Shader&) = delete;
+        Shader& operator=(const Shader&) = delete;
+        ~Shader();
     };
+
+    int32_t getUniformLocation(Shader& shader, std::string_view name);
 
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
 
@@ -688,16 +711,20 @@ namespace p5
 
     struct Texture
     {
-        virtual ~Texture() = default;
-        virtual uint32_t getTextureId() const = 0;
-        virtual const uint2& getSize() const = 0;
-        virtual TexturePixelFormat getPixelFormat() const = 0;
-        virtual void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data) = 0;
-        virtual std::vector<uint8_t> queryPixelData() const = 0;
+        uint32_t id = 0;
+        uint2 size {0, 0};
+        TexturePixelFormat pixelFormat = TexturePixelFormat::rgba8;
+
+        Texture() = default;
+        Texture(const Texture&) = delete;
+        Texture& operator=(const Texture&) = delete;
+        ~Texture();
     };
 
     std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format = TexturePixelFormat::rgba8);
     std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath);
+    void updateSubImage(Texture& texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data);
+    std::vector<uint8_t> queryPixelData(const Texture& texture);
     bool saveTextureToFileAsPNG(const Texture& texture, const std::filesystem::path& filepath);
     bool saveTextureToFileAsJPEG(const Texture& texture, const std::filesystem::path& filepath, int quality = 90);
     bool saveTextureToFileAsBMP(const Texture& texture, const std::filesystem::path& filepath);
@@ -707,13 +734,22 @@ namespace p5
 {
     struct Framebuffer
     {
-        virtual ~Framebuffer() = default;
-        virtual uint32_t getFramebufferId() const = 0;
-        virtual std::shared_ptr<Texture> getColorTexture() const = 0;
-        virtual const uint2& getSize() const = 0;
+        uint32_t id = 0;                         // resolve FBO — holds colorTexture, always readable/sample-able
+        uint32_t depthStencilRenderbufferId = 0; // currently unused by the rendering pipeline (clip() uses
+                                                 // glScissor, not the stencil buffer); kept for FBO completeness
+        uint32_t msaaFramebufferId = 0;          // 0 = no antialiasing; else the FBO actually rendered into
+        uint32_t msaaColorRenderbufferId = 0;
+        std::shared_ptr<Texture> colorTexture;
+        uint2 size {0, 0};
+
+        Framebuffer() = default;
+        Framebuffer(const Framebuffer&) = delete;
+        Framebuffer& operator=(const Framebuffer&) = delete;
+        ~Framebuffer();
     };
 
-    std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height);
+    std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height, uint32_t samples = 0);
+    void blitFramebufferToScreen(const std::shared_ptr<Framebuffer>& framebuffer, uint32_t screenWidth, uint32_t screenHeight);
 } // namespace p5
 
 namespace p5
@@ -824,6 +860,9 @@ namespace p5
     const uint2& getFramebufferSize();
     float getWidth();
     float getHeight();
+
+    void smooth(uint32_t samples = 4);
+    void noSmooth();
 
     void flush();
 

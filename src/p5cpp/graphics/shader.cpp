@@ -98,61 +98,38 @@ namespace p5
         )";
     } // namespace
 
-    class OpenGLShader : public Shader
-    {
-    public:
-        static std::unique_ptr<OpenGLShader> create(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
-        {
-            const auto shaderProgramId = createShaderProgram(vertexShaderSource, fragmentShaderSource);
-            if (not shaderProgramId.has_value()) {
-                return nullptr;
-            }
-
-            return std::unique_ptr<OpenGLShader>(new OpenGLShader(shaderProgramId.value()));
-        }
-
-        OpenGLShader(const OpenGLShader&) = delete;
-        OpenGLShader& operator=(const OpenGLShader&) = delete;
-
-        ~OpenGLShader() override
-        {
-            glDeleteProgram(m_shaderProgramId);
-        }
-
-        uint32_t getShaderProgramId() const override
-        {
-            return m_shaderProgramId;
-        }
-
-        int32_t getUniformLocation(std::string_view name) const override
-        {
-            const std::string key(name);
-            const auto it = m_uniformLocationCache.find(key);
-            if (it != m_uniformLocationCache.end()) {
-                return it->second;
-            }
-
-            const GLint location = glGetUniformLocation(m_shaderProgramId, key.c_str());
-            m_uniformLocationCache.emplace(key, location);
-            return location;
-        }
-
-    private:
-        explicit OpenGLShader(uint32_t shaderProgramId)
-            : m_shaderProgramId(shaderProgramId)
-        {
-        }
-
-        uint32_t m_shaderProgramId;
-        mutable std::unordered_map<std::string, GLint> m_uniformLocationCache;
-    };
 } // namespace p5
 
 namespace p5
 {
+    Shader::~Shader()
+    {
+        glDeleteProgram(programId);
+    }
+
+    int32_t getUniformLocation(Shader& shader, std::string_view name)
+    {
+        const std::string key(name);
+        const auto it = shader.uniformLocationCache.find(key);
+        if (it != shader.uniformLocationCache.end()) {
+            return it->second;
+        }
+
+        const GLint location = glGetUniformLocation(shader.programId, key.c_str());
+        shader.uniformLocationCache.emplace(key, location);
+        return location;
+    }
+
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
-        return OpenGLShader::create(vertexShaderSource, fragmentShaderSource);
+        const auto shaderProgramId = createShaderProgram(vertexShaderSource, fragmentShaderSource);
+        if (not shaderProgramId.has_value()) {
+            return nullptr;
+        }
+
+        auto shader = std::make_unique<Shader>();
+        shader->programId = shaderProgramId.value();
+        return shader;
     }
 
     std::unique_ptr<Shader> loadShaderFromMemory(std::string_view effectSource)
@@ -163,7 +140,7 @@ namespace p5
         fragmentSource += effectSource;
         fragmentSource += effectFragmentFooterSource;
 
-        return OpenGLShader::create(detail::defaultVertexShaderSource, fragmentSource);
+        return loadShaderFromMemory(detail::defaultVertexShaderSource, fragmentSource);
     }
 
     void setUniform(Shader& shader, std::string_view name, float value)

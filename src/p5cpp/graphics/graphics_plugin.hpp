@@ -13,8 +13,18 @@ namespace p5
         void draw(Context& context, const Next& next);
         void destroy(Context& context, const Next& next);
 
+        // samples >= 2 requests MSAA antialiasing for the default (screen) canvas; recreates it
+        // immediately at the current size, so calling this from setup()/draw() takes effect right
+        // away rather than waiting for the next resize.
+        void smooth(uint32_t samples = 4);
+        void noSmooth();
+
     private:
+        void recreateDefaultFramebuffer();
+
         std::unique_ptr<Graphics> m_graphics;
         std::shared_ptr<Framebuffer> m_defaultFramebuffer;
+        uint2 m_size {0, 0};
+        uint32_t m_samples = 0;
     };
 } // namespace p5

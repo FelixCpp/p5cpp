@@ -25,6 +25,16 @@ namespace p5
         void setResizable(bool resizable);
         void setVisible(bool visible);
 
+        void maximize();
+        void minimize();
+        bool isMaximized() const;
+        bool isMinimized() const;
+
+        void enterFullscreen();
+        void leaveFullscreen(std::optional<rect2i> restoreRect = std::nullopt);
+        void toggleFullscreen();
+        bool isFullscreen() const;
+
         void pollEvents();
         void swapBuffers();
 
@@ -43,5 +53,7 @@ namespace p5
         GLFWwindow* m_window;
         EventCallback m_eventCallback;
         std::string m_title;
+
+        std::optional<rect2i> m_preFullscreenWindowRect;
     };
 } // namespace p5
