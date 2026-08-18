@@ -169,41 +169,6 @@ namespace p5
 
 namespace p5
 {
-    float easeLinear(float x);
-    float easeInQuad(float x);
-    float easeOutQuad(float x);
-    float easeInOutQuad(float x);
-    float easeInCubic(float x);
-    float easeOutCubic(float x);
-    float easeInOutCubic(float x);
-    float easeInQuart(float x);
-    float easeOutQuart(float x);
-    float easeInOutQuart(float x);
-    float easeInQuint(float x);
-    float easeOutQuint(float x);
-    float easeInOutQuint(float x);
-    float easeInSine(float x);
-    float easeOutSine(float x);
-    float easeInOutSine(float x);
-    float easeInExpo(float x);
-    float easeOutExpo(float x);
-    float easeInOutExpo(float x);
-    float easeInCirc(float x);
-    float easeOutCirc(float x);
-    float easeInOutCirc(float x);
-    float easeInBack(float x);
-    float easeOutBack(float x);
-    float easeInOutBack(float x);
-    float easeInElastic(float x);
-    float easeOutElastic(float x);
-    float easeInOutElastic(float x);
-    float easeInBounce(float x);
-    float easeOutBounce(float x);
-    float easeInOutBounce(float x);
-} // namespace p5
-
-namespace p5
-{
     // clang-format off
     enum class Key
     {
@@ -1186,43 +1151,6 @@ namespace p5
     constexpr float lerp(float a, float b, float t) { return std::lerp(a, b, t); }
     constexpr float map(float value, float start1, float stop1, float start2, float stop2) { return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1)); }
     constexpr float constrain(float value, float low, float high) { return (value < low) ? low : (value > high) ? high : value; }
-    // clang-format on
-} // namespace p5
-
-namespace p5
-{
-    // clang-format off
-    inline float easeLinear(float t) { return t; }
-    inline float easeInQuad(float t) { return t * t; }
-    inline float easeOutQuad(float t) { return t * (2.0f - t); }
-    inline float easeInOutQuad(float t) { return (t < 0.5f) ? (2.0f * t * t) : (-1.0f + (4.0f - 2.0f * t) * t); }
-    inline float easeInCubic(float t) { return t * t * t; }
-    inline float easeOutCubic(float t) { return (--t) * t * t + 1.0f; }
-    inline float easeInOutCubic(float t) { return (t < 0.5f) ? (4.0f * t * t * t) : ((t - 1.0f) * (2.0f * t - 2.0f) * (2.0f * t - 2.0f) + 1.0f); }
-    inline float easeInQuart(float t) { return t * t * t * t; }
-    inline float easeOutQuart(float t) { return 1.0f - (--t) * t * t * t; }
-    inline float easeInOutQuart(float t) { return (t < 0.5f) ? (8.0f * t * t * t * t) : (1.0f - 8.0f * (--t) * t * t * t); }
-    inline float easeInQuint(float t) { return t * t * t * t * t; }
-    inline float easeOutQuint(float t) { return 1.0f + (--t) * t * t * t * t; }
-    inline float easeInOutQuint(float t) { return (t < 0.5f) ? (16.0f * t * t * t * t * t) : (1.0f + 16.0f * (--t) * t * t * t * t); }
-    inline float easeInSine(float t) { return 1.0f - std::cos((t * PI) / 2.0f); }
-    inline float easeOutSine(float t) { return std::sin((t * PI) / 2.0f); }
-    inline float easeInOutSine(float t) { return -(std::cos(PI * t) - 1.0f) / 2.0f; }
-    inline float easeInExpo(float t) { return (t == 0.0f) ? 0.0f : std::pow(2.0f, 10.0f * (t - 1.0f)); }
-    inline float easeOutExpo(float t) { return (t == 1.0f) ? 1.0f : 1.0f - std::pow(2.0f, -10.0f * t); }
-    inline float easeInOutExpo(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : (t < 0.5f) ? std::pow(2.0f, 20.0f * t - 10.0f) / 2.0f : (2.0f - std::pow(2.0f, -20.0f * t + 10.0f)) / 2.0f; }
-    inline float easeInCirc(float t) { return 1.0f - std::sqrt(1.0f - t * t); }
-    inline float easeOutCirc(float t) { return std::sqrt(1.0f - (--t) * t); }
-    inline float easeInOutCirc(float t) { return (t < 0.5f) ? (1.0f - std::sqrt(1.0f - 4.0f * t * t)) / 2.0f : (std::sqrt(1.0f - (--t) * (2.0f * t)) + 1.0f) / 2.0f; }
-    inline float easeInBack(float t) { const float s = 1.70158f; return t * t * ((s + 1.0f) * t - s); }
-    inline float easeOutBack(float t) { const float s = 1.70158f; return (--t) * t * ((s + 1.0f) * t + s) + 1.0f; }
-    inline float easeInOutBack(float t) { const float s = 1.70158f * 1.525f; return (t < 0.5f) ? (t * t * ((s + 1.0f) * 2.0f * t - s)) : ((--t) * t * ((s + 1.0f) * 2.0f * t + s) + 1.0f); }
-    inline float easeInElastic(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : -std::pow(2.0f, 10.0f * t - 10.0f) * std::sin((t * 10.0f - 10.75f) * ((2.0f * PI) / 3.0f)); }
-    inline float easeOutElastic(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : std::pow(2.0f, -10.0f * t) * std::sin((t * 10.0f - 0.75f) * ((2.0f * PI) / 3.0f)) + 1.0f; }
-    inline float easeInOutElastic(float t) { return (t == 0.0f) ? 0.0f : (t == 1.0f) ? 1.0f : (t < 0.5f) ? -(std::pow(2.0f, 20.0f * t - 10.0f) * std::sin((20.0f * t - 11.125f) * ((2.0f * PI) / 4.5f))) / 2.0f : (std::pow(2.0f, -20.0f * t + 10.0f) * std::sin((20.0f * t - 11.125f) * ((2.0f * PI) / 4.5f))) / 2.0f + 1.0f; }
-    inline float easeInBounce(float t) { return 1.0f - easeOutBounce(1.0f - t); }
-    inline float easeOutBounce(float t) { if (t < 1.0f / 2.75f) { return 7.5625f * t * t; } else if (t < 2.0f / 2.75f) { t -= 1.5f / 2.75f; return 7.5625f * t * t + 0.75f; } else if (t < 2.5f / 2.75f) { t -= 2.25f / 2.75f; return 7.5625f * t * t + 0.9375f; } else { t -= 2.625f / 2.75f; return 7.5625f * t * t + 0.984375f; } }
-    inline float easeInOutBounce(float t) { return (t < 0.5f) ? (1.0f - easeOutBounce(1.0f - 2.0f * t)) / 2.0f : (1.0f + easeOutBounce(2.0f * t - 1.0f)) / 2.0f; }
     // clang-format on
 } // namespace p5
 
