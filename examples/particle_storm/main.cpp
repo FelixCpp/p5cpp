@@ -31,12 +31,36 @@ namespace
 
         float r, g, b;
         switch (static_cast<int>(i) % 6) {
-            case 0: r = v; g = t; b = p; break;
-            case 1: r = q; g = v; b = p; break;
-            case 2: r = p; g = v; b = t; break;
-            case 3: r = p; g = q; b = v; break;
-            case 4: r = t; g = p; b = v; break;
-            default: r = v; g = p; b = q; break;
+            case 0:
+                r = v;
+                g = t;
+                b = p;
+                break;
+            case 1:
+                r = q;
+                g = v;
+                b = p;
+                break;
+            case 2:
+                r = p;
+                g = v;
+                b = t;
+                break;
+            case 3:
+                r = p;
+                g = q;
+                b = v;
+                break;
+            case 4:
+                r = t;
+                g = p;
+                b = v;
+                break;
+            default:
+                r = v;
+                g = p;
+                b = q;
+                break;
         }
         return rgba(static_cast<int32_t>(r * 255.0f), static_cast<int32_t>(g * 255.0f), static_cast<int32_t>(b * 255.0f), alpha);
     }
@@ -188,8 +212,7 @@ private:
         fill(rgba(255, 255, 255, 150));
         textSize(12);
         textAlign(TextAlignment::bottomLeft);
-        text(std::format("{} particles · {:.0f} fps", m_particles.size(), 1.0 / std::max(getDeltaTime(), 1e-6)),
-             12.0f, static_cast<float>(getWindowSize().y) - 10.0f);
+        text(std::format("{} particles · {:.0f} fps", m_particles.size(), 1.0 / std::max(getDeltaTime(), 1e-6)), 12.0f, static_cast<float>(getWindowSize().y) - 10.0f);
     }
 
     void writePerfLogIfDue()

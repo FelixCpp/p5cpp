@@ -23,13 +23,14 @@ add_library(
   ./external/libtess2/Source/mesh.c
   ./external/libtess2/Source/priorityq.c
   ./external/libtess2/Source/sweep.c
-  ./external/libtess2/Source/tess.c)
+  ./external/libtess2/Source/tess.c
+)
 
 target_include_directories(libtess2 PUBLIC ./external/libtess2/Include)
 
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE ./external/stb)
-target_compile_definitions(stb INTERFACE STB_IMAGE_IMPLEMENTATION STB_IMAGE_WRITE_IMPLEMENTATION)
+target_compile_definitions(stb INTERFACE STB_IMAGE_IMPLEMENTATION STB_IMAGE_WRITE_IMPLEMENTATION STB_PERLIN_IMPLEMENTATION)
 
 add_library(
   p5cpp STATIC
@@ -60,7 +61,7 @@ add_library(
   ./src/p5cpp/graphics/texture.cpp
   ./src/p5cpp/graphics/font.cpp
   ./src/p5cpp/random.cpp
-  ./src/p5cpp/noise.cpp
+  ./src/p5cpp/perlin_noise.cpp
   ./src/p5cpp/p5cpp.cpp
   ./src/p5cpp/log.cpp
 )

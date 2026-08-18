@@ -156,8 +156,8 @@ namespace p5
     float random(float max);
     float random(float min, float max);
 
-    void noiseSeed(uint32_t seed);
-    void noiseDetail(int octaves, float falloff = 0.5f);
+    void noiseSeed(int32_t seed);
+    void noiseDetail(int32_t octaves, float falloff = 0.5f);
     float noise(float x);
     float noise(float x, float y);
     float noise(float x, float y, float z);
