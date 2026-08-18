@@ -229,7 +229,8 @@ namespace p5
                     } else if constexpr (std::is_same_v<T, matrix4x4>) {
                         glUniformMatrix4fv(location, 1, GL_TRUE, v.m.data());
                     }
-                }, value);
+                },
+                           value);
             }
 
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<void*>(batch.indexOffset * sizeof(uint32_t)));

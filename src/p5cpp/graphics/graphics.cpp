@@ -974,7 +974,6 @@ namespace p5
             for (const ShapedGlyph& g : line.glyphs) {
                 const GlyphMetrics& metrics = font.getGlyphMetrics(g.glyphIndex);
                 if (metrics.hasOutline) {
-                    // HarfBuzz offsets/font design units use +y = up; screen space uses +y = down.
                     const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};
                     const float2 quadTopLeft {glyphOrigin.x + metrics.bounds.x * scale, glyphOrigin.y - metrics.bounds.y * scale};
                     const float2 quadSize {metrics.bounds.width * scale, metrics.bounds.height * scale};
