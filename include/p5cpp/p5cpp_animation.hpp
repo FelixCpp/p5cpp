@@ -109,7 +109,6 @@ namespace p5
         LoopMode loopMode;
         bool isReversing;
         PlayState state;
-        size_t currentEntryIndex;
     };
 
     template <typename T> timeline<T> createTimeline(const T& from, const std::vector<timeline_entry<T>>& entries);
@@ -118,8 +117,14 @@ namespace p5
     template <typename T> void pause(timeline<T>& timeline);
     template <typename T> void resume(timeline<T>& timeline);
     template <typename T> void advance(timeline<T>& timeline, float deltaTime);
+    template <typename T> void loop(timeline<T>& timeline, LoopMode loopMode);
 
     template <typename T> T value(const timeline<T>& timeline);
+    template <typename T> float progress(const timeline<T>& timeline);
+    template <typename T> bool isInitial(const timeline<T>& timeline);
+    template <typename T> bool isPlaying(const timeline<T>& timeline);
+    template <typename T> bool isPaused(const timeline<T>& timeline);
+    template <typename T> bool isFinished(const timeline<T>& timeline);
 } // namespace p5
 
 namespace p5::detail
@@ -265,6 +270,129 @@ namespace p5
 
 namespace p5
 {
+    template <typename T> timeline<T> createTimeline(const T& from, const std::vector<timeline_entry<T>>& entries)
+    {
+        float totalDuration = 0.0f;
+        for (const auto& entry : entries) {
+            totalDuration += entry.duration;
+        }
+
+        return timeline<T> {
+            .from = from,
+            .totalDuration = totalDuration,
+            .entries = entries,
+            .elapsedTime = 0.0f,
+            .loopMode = LoopMode::once,
+            .isReversing = false,
+            .state = PlayState::initial,
+        };
+    }
+
+    template <typename T> void restart(timeline<T>& timeline)
+    {
+        timeline.state = PlayState::playing;
+        timeline.elapsedTime = 0.0f;
+        timeline.isReversing = false;
+    }
+
+    template <typename T> void reset(timeline<T>& timeline)
+    {
+        timeline.state = PlayState::initial;
+        timeline.elapsedTime = 0.0f;
+        timeline.isReversing = false;
+    }
+
+    template <typename T> void pause(timeline<T>& timeline)
+    {
+        timeline.state = PlayState::paused;
+    }
+
+    template <typename T> void resume(timeline<T>& timeline)
+    {
+        timeline.state = PlayState::playing;
+    }
+
+    template <typename T> void advance(timeline<T>& timeline, float deltaTime)
+    {
+        if (timeline.state != PlayState::playing) {
+            return;
+        }
+
+        timeline.elapsedTime += deltaTime;
+
+        if (timeline.elapsedTime < timeline.totalDuration) {
+            return;
+        }
+
+        switch (timeline.loopMode) {
+            case LoopMode::once:
+                timeline.elapsedTime = timeline.totalDuration;
+                timeline.state = PlayState::finished;
+                break;
+            case LoopMode::loop:
+                timeline.elapsedTime = (timeline.totalDuration > 0.0f) ? std::fmod(timeline.elapsedTime, timeline.totalDuration) : 0.0f;
+                break;
+            case LoopMode::pingpong: {
+                const int cycles = (timeline.totalDuration > 0.0f) ? static_cast<int>(timeline.elapsedTime / timeline.totalDuration) : 0;
+                timeline.elapsedTime = (timeline.totalDuration > 0.0f) ? std::fmod(timeline.elapsedTime, timeline.totalDuration) : 0.0f;
+                if (cycles % 2 != 0) {
+                    timeline.isReversing = not timeline.isReversing;
+                }
+                break;
+            }
+        }
+    }
+
+    template <typename T> void loop(timeline<T>& timeline, LoopMode loopMode) { timeline.loopMode = loopMode; }
+
+    template <typename T> T value(const timeline<T>& timeline)
+    {
+        if (timeline.entries.empty()) {
+            return timeline.from;
+        }
+
+        float elapsedTime = timeline.isReversing ? (timeline.totalDuration - timeline.elapsedTime) : timeline.elapsedTime;
+        size_t entryIndex = 0;
+
+        while (entryIndex < timeline.entries.size() && elapsedTime >= timeline.entries[entryIndex].duration) {
+            elapsedTime -= timeline.entries[entryIndex].duration;
+            ++entryIndex;
+        }
+
+        if (entryIndex >= timeline.entries.size()) {
+            return timeline.entries.back().to;
+        }
+
+        const auto& entry = timeline.entries[entryIndex];
+        const float progress = std::clamp(elapsedTime / entry.duration, 0.0f, 1.0f);
+        const float easedProgress = entry.easing(progress);
+
+        if (entryIndex == 0) {
+            return detail::lerpValue(timeline.from, entry.to, easedProgress);
+        }
+
+        const timeline_entry<T>& previousEntry = timeline.entries[entryIndex - 1];
+        return detail::lerpValue(previousEntry.to, entry.to, easedProgress);
+    }
+
+    template <typename T> float progress(const timeline<T>& timeline)
+    {
+        if (timeline.totalDuration <= 0.0f) {
+            return 1.0f;
+        }
+
+        const float progress = std::clamp(timeline.elapsedTime / timeline.totalDuration, 0.0f, 1.0f);
+        return timeline.isReversing ? 1.0f - progress : progress;
+    }
+
+    template <typename T> bool isInitial(const timeline<T>& timeline) { return timeline.state == PlayState::initial; }
+    template <typename T> bool isPlaying(const timeline<T>& timeline) { return timeline.state == PlayState::playing; }
+    template <typename T> bool isPaused(const timeline<T>& timeline) { return timeline.state == PlayState::paused; }
+    template <typename T> bool isFinished(const timeline<T>& timeline) { return timeline.state == PlayState::finished; }
+} // namespace p5
+
+namespace p5
+{
     template <typename T> T detail::lerpValue(const T& from, const T& to, float t) { return from + (to - from) * t; }
     template <> inline float2 detail::lerpValue(const float2& from, const float2& to, float t) { return {lerpValue(from.x, to.x, t), lerpValue(from.y, to.y, t)}; }
     template <> inline float3 detail::lerpValue(const float3& from, const float3& to, float t) { return {lerpValue(from.x, to.x, t), lerpValue(from.y, to.y, t), lerpValue(from.z, to.z, t)}; }
@@ -279,3 +407,8 @@ namespace p5
         return rgba(r, g, b, a);
     }
 } // namespace p5
+
+namespace p5
+{
+
+}
