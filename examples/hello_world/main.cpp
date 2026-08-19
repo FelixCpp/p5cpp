@@ -8,8 +8,8 @@ struct EffectsSketch : public Sketch
     timeline<float> xMovement = createTimeline(
         100.0f,
         {
-            {700.0f, 2.0f, easeInOutQuad},
-            {350.0f, 2.0f, easeInOutQuad},
+            {700.0f, 2.0f, easeLinear},
+            {350.0f, 2.0f, easeInOutBounce},
         }
     );
 
@@ -21,14 +21,18 @@ struct EffectsSketch : public Sketch
         }
     );
 
+    spring<float> yMovement = createSpring(300.0f, 0.0f, 100.0f, 10.0f, 1.0f);
+
     void setup() override
     {
         setWindowSize(800, 600);
 
         loop(xMovement, LoopMode::pingpong);
         loop(ballScale, LoopMode::pingpong);
+        loop(yMovement, LoopMode::pingpong);
 
         restart(xMovement);
+        restart(yMovement);
         restart(ballScale);
     }
 
@@ -36,6 +40,7 @@ struct EffectsSketch : public Sketch
     {
         advance(xMovement, getDeltaTime());
         advance(ballScale, getDeltaTime());
+        advance(yMovement, getDeltaTime());
 
         background(rgba(21));
 
@@ -43,7 +48,7 @@ struct EffectsSketch : public Sketch
         noStroke();
 
         withMatrix([this] {
-            translate(value(xMovement), getHeight() / 2);
+            translate(value(xMovement), value(yMovement));
             scale(value(ballScale), value(ballScale));
             circle(0, 0, 50);
         });

@@ -127,6 +127,90 @@ namespace p5
     template <typename T> bool isFinished(const timeline<T>& timeline);
 } // namespace p5
 
+namespace p5
+{
+    template <typename T> struct spring
+    {
+        T from;            // Starting value of the spring
+        T to;              // Target value of the spring
+        float stiffness;   // Spring constant: higher values react faster to the target
+        float damping;     // Damping coefficient: higher values reduce oscillation/overshoot
+        float mass;        // Simulated mass: higher values react slower to the target
+        LoopMode loopMode; // Looping behavior of the spring, evaluated once it has settled
+
+        T velocity;       // Current velocity of the spring simulation
+        T position;       // Current position of the spring simulation (the animated value)
+        PlayState state;  // Current state of the spring (playing, paused, or stopped)
+        bool isReversing; // Flag indicating whether the spring is currently reversing (for pingpong mode)
+    };
+
+    // Note: spring<T> is only supported for T = float, float2, float3, float4 (types with
+    // well-defined arithmetic/distance semantics for a physical simulation). Types like
+    // color_t are quantized (0-255 per channel) and unsuited for a spring that can
+    // overshoot/oscillate past its target, so they are intentionally not supported here.
+    template <typename T> spring<T> createSpring(const T& from, const T& to, float stiffness = 170.0f, float damping = 26.0f, float mass = 1.0f, LoopMode loopMode = LoopMode::once);
+    template <typename T> void restart(spring<T>& spring);
+    template <typename T> void reset(spring<T>& spring);
+    template <typename T> void pause(spring<T>& spring);
+    template <typename T> void resume(spring<T>& spring);
+    template <typename T> void advance(spring<T>& spring, float deltaTime);
+    template <typename T> void loop(spring<T>& spring, LoopMode loopMode);
+
+    template <typename T> T value(const spring<T>& spring);
+    template <typename T> float progress(const spring<T>& spring);
+    template <typename T> bool isInitial(const spring<T>& spring);
+    template <typename T> bool isPlaying(const spring<T>& spring);
+    template <typename T> bool isPaused(const spring<T>& spring);
+    template <typename T> bool isFinished(const spring<T>& spring);
+} // namespace p5
+
+namespace p5::detail
+{
+    // Advances a single scalar spring simulation step via semi-implicit (symplectic) Euler
+    // integration. Overloaded per vector type below, component-wise.
+    inline void springStep(float& position, float& velocity, float target, float stiffness, float damping, float mass, float deltaTime)
+    {
+        const float acceleration = (stiffness * (target - position) - damping * velocity) / mass;
+        velocity += acceleration * deltaTime;
+        position += velocity * deltaTime;
+    }
+
+    inline void springStep(float2& position, float2& velocity, const float2& target, float stiffness, float damping, float mass, float deltaTime)
+    {
+        springStep(position.x, velocity.x, target.x, stiffness, damping, mass, deltaTime);
+        springStep(position.y, velocity.y, target.y, stiffness, damping, mass, deltaTime);
+    }
+
+    inline void springStep(float3& position, float3& velocity, const float3& target, float stiffness, float damping, float mass, float deltaTime)
+    {
+        springStep(position.x, velocity.x, target.x, stiffness, damping, mass, deltaTime);
+        springStep(position.y, velocity.y, target.y, stiffness, damping, mass, deltaTime);
+        springStep(position.z, velocity.z, target.z, stiffness, damping, mass, deltaTime);
+    }
+
+    inline void springStep(float4& position, float4& velocity, const float4& target, float stiffness, float damping, float mass, float deltaTime)
+    {
+        springStep(position.x, velocity.x, target.x, stiffness, damping, mass, deltaTime);
+        springStep(position.y, velocity.y, target.y, stiffness, damping, mass, deltaTime);
+        springStep(position.z, velocity.z, target.z, stiffness, damping, mass, deltaTime);
+        springStep(position.w, velocity.w, target.w, stiffness, damping, mass, deltaTime);
+    }
+
+    // Euclidean distance between two spring values, used to detect when a spring has settled
+    // and to compute progress(). Overloaded per supported type.
+    inline float springDistance(float a, float b) { return std::abs(b - a); }
+    inline float springDistance(const float2& a, const float2& b) { return length(b - a); }
+    inline float springDistance(const float3& a, const float3& b) { return std::sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y) + (b.z - a.z) * (b.z - a.z)); }
+    inline float springDistance(const float4& a, const float4& b) { return std::sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y) + (b.z - a.z) * (b.z - a.z) + (b.w - a.w) * (b.w - a.w)); }
+
+    template <typename T> bool isSpringSettled(const T& position, const T& velocity, const T& target)
+    {
+        constexpr float positionEpsilon = 0.01f;
+        constexpr float velocityEpsilon = 0.01f;
+        return springDistance(position, target) < positionEpsilon && springDistance(velocity, T {}) < velocityEpsilon;
+    }
+} // namespace p5::detail
+
 namespace p5::detail
 {
     template <typename T> T lerpValue(const T& from, const T& to, float t);
@@ -389,6 +473,102 @@ namespace p5
     template <typename T> bool isPlaying(const timeline<T>& timeline) { return timeline.state == PlayState::playing; }
     template <typename T> bool isPaused(const timeline<T>& timeline) { return timeline.state == PlayState::paused; }
     template <typename T> bool isFinished(const timeline<T>& timeline) { return timeline.state == PlayState::finished; }
+} // namespace p5
+
+namespace p5
+{
+    template <typename T> spring<T> createSpring(const T& from, const T& to, float stiffness, float damping, float mass, LoopMode loopMode)
+    {
+        return spring<T> {
+            .from = from,
+            .to = to,
+            .stiffness = stiffness,
+            .damping = damping,
+            .mass = mass,
+            .loopMode = loopMode,
+            .velocity = T {},
+            .position = from,
+            .state = PlayState::initial,
+            .isReversing = false,
+        };
+    }
+
+    template <typename T> void restart(spring<T>& spring)
+    {
+        spring.state = PlayState::playing;
+        spring.position = spring.from;
+        spring.velocity = T {};
+        spring.isReversing = false;
+    }
+
+    template <typename T> void reset(spring<T>& spring)
+    {
+        spring.state = PlayState::initial;
+        spring.position = spring.from;
+        spring.velocity = T {};
+        spring.isReversing = false;
+    }
+
+    template <typename T> void pause(spring<T>& spring)
+    {
+        spring.state = PlayState::paused;
+    }
+
+    template <typename T> void resume(spring<T>& spring)
+    {
+        spring.state = PlayState::playing;
+    }
+
+    template <typename T> void advance(spring<T>& spring, float deltaTime)
+    {
+        if (spring.state != PlayState::playing) {
+            return;
+        }
+
+        const T& target = spring.isReversing ? spring.from : spring.to;
+
+        detail::springStep(spring.position, spring.velocity, target, spring.stiffness, spring.damping, spring.mass, deltaTime);
+
+        if (not detail::isSpringSettled(spring.position, spring.velocity, target)) {
+            return;
+        }
+
+        spring.position = target;
+        spring.velocity = T {};
+
+        switch (spring.loopMode) {
+            case LoopMode::once:
+                spring.state = PlayState::finished;
+                break;
+            case LoopMode::loop:
+                spring.position = spring.from;
+                break;
+            case LoopMode::pingpong:
+                spring.isReversing = !spring.isReversing;
+                break;
+        }
+    }
+
+    template <typename T> void loop(spring<T>& spring, LoopMode loopMode) { spring.loopMode = loopMode; }
+    template <typename T> T value(const spring<T>& spring) { return spring.position; }
+    template <typename T> float progress(const spring<T>& spring)
+    {
+        const T& target = spring.isReversing ? spring.from : spring.to;
+        const T& origin = spring.isReversing ? spring.to : spring.from;
+
+        const float totalDistance = detail::springDistance(origin, target);
+        if (totalDistance <= 0.0f) {
+            return 1.0f;
+        }
+
+        const float remainingDistance = detail::springDistance(spring.position, target);
+        return std::clamp(1.0f - remainingDistance / totalDistance, 0.0f, 1.0f);
+    }
+
+    template <typename T> bool isInitial(const spring<T>& spring) { return spring.state == PlayState::initial; }
+    template <typename T> bool isPlaying(const spring<T>& spring) { return spring.state == PlayState::playing; }
+    template <typename T> bool isPaused(const spring<T>& spring) { return spring.state == PlayState::paused; }
+    template <typename T> bool isFinished(const spring<T>& spring) { return spring.state == PlayState::finished; }
 } // namespace p5
 
 namespace p5
