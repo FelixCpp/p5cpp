@@ -47,18 +47,27 @@ namespace p5
             }
         )";
 
-        // Per-frame batch capacity: every draw call between Renderer::begin() and the next
-        // flush() accumulates into this one fixed buffer (see Renderer::appendVertex/appendIndex),
-        // so it must cover a whole frame's worth of geometry, not just one shape. A handful of
-        // multi-hundred-point polylines/rounded rects in a single dashboard-style frame can run
-        // into the tens of thousands of indices (stroked polylines alone cost roughly 15 indices
-        // per interior point for miter joins), so the previous 4096/6144 ceiling was only really
-        // sized for the simplest sketches and threw std::runtime_error well within normal use.
-        // inline static constexpr size_t MAX_VERTICES = 65536;
-        // inline static constexpr size_t MAX_INDICES = 98304;
-
+        // Working-set size for the Renderer's fixed vertex/index buffers, not a per-frame ceiling:
+        // Renderer::write() (see flushIfNearCapacity() in renderer.cpp) proactively flushes
+        // already-finished batches whenever headroom drops below a quarter of these buffers, so a
+        // frame with more total geometry than this just costs a few extra draw calls instead of
+        // throwing -- these constants only trade GPU memory for how often that happens. 100k/150k
+        // (2:3 ratio, ~4MB combined) keeps a comfortable multi-hundred-shape batch between flushes
+        // for typical sketches; raise if profiling shows a scene flushing often enough to matter.
         inline static constexpr size_t MAX_VERTICES = 100'000;
         inline static constexpr size_t MAX_INDICES = 150'000;
+
+        // text() is the one call site whose single write()/finish() pair can grow unboundedly with
+        // caller input (a long paragraph has no upper bound on glyph count), unlike every other shape
+        // this library emits, whose vertex count is bounded by its own arguments (a handful of points,
+        // or an ellipse/arc segment count capped at 256). flushIfNearCapacity()'s headroom margin
+        // (a quarter of MAX_VERTICES/MAX_INDICES, see renderer.cpp) can only ever be a heuristic, not a
+        // guarantee, for a shape of unbounded size -- so text() submits in bounded chunks instead of one
+        // shape per call, keeping any single submitTextMesh() comfortably under that margin regardless
+        // of how much text is passed in. Sized in glyphs (4 vertices/6 indices each); 512 keeps a chunk
+        // at 2048 vertices -- under 1/10th of the default margin even before accounting for other
+        // geometry sharing the frame.
+        inline static constexpr size_t TEXT_MESH_CHUNK_GLYPHS = 512;
 
         float4 toFloat4(color_t color)
         {
@@ -966,6 +975,17 @@ namespace p5
         std::vector<float2> positions;
         std::vector<float2> texCoords;
         std::vector<color_t> colors;
+        size_t pendingGlyphs = 0;
+
+        const auto flushGlyphChunk = [&]() {
+            if (not positions.empty()) {
+                submitTextMesh(positions, texCoords, colors, font.getAtlasTexture(), state);
+                positions.clear();
+                texCoords.clear();
+                colors.clear();
+                pendingGlyphs = 0;
+            }
+        };
 
         for (size_t lineIndex = 0; lineIndex < visibleLines; ++lineIndex) {
             const detail::ShapedLine& line = layout.lines[lineIndex];
@@ -997,6 +1017,15 @@ namespace p5
                     positions.insert(positions.end(), std::begin(corners), std::end(corners));
                     texCoords.insert(texCoords.end(), std::begin(uv), std::end(uv));
                     colors.insert(colors.end(), 4, state.fillColor);
+
+                    // Bound how much a single text() call -- however long -- can grow one shape
+                    // submission by, regardless of how many glyphs the caller's string contains; see
+                    // TEXT_MESH_CHUNK_GLYPHS's comment for why this can't rely on Renderer's headroom
+                    // margin alone. Chunking here is safe: each glyph is an independent quad, so a
+                    // split between glyphs (including across a line break) carries no visual seam.
+                    if (++pendingGlyphs >= detail::TEXT_MESH_CHUNK_GLYPHS) {
+                        flushGlyphChunk();
+                    }
                 }
 
                 penX += g.xAdvance * scale + state.textLetterSpacing;
@@ -1004,9 +1033,7 @@ namespace p5
             }
         }
 
-        if (not positions.empty()) {
-            submitTextMesh(positions, texCoords, colors, font.getAtlasTexture(), state);
-        }
+        flushGlyphChunk();
     }
 
     float Graphics::textWidth(std::string_view str)

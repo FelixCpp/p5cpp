@@ -7,6 +7,12 @@ namespace p5
 {
     int curveSegmentCount(float controlPolygonLength)
     {
+        // A non-finite length (e.g. a NaN/Inf control point sneaking in from bezierVertex()/
+        // quadraticVertex()/curveVertex()'s unvalidated float arguments) makes std::ceil() return
+        // NaN/Inf too, and casting that to int is undefined behavior -- fall back to the minimum
+        // segment count instead of casting a non-finite value.
+        if (not std::isfinite(controlPolygonLength))
+            return 8;
         return std::clamp(static_cast<int>(std::ceil(controlPolygonLength / 3.0f)), 8, 128);
     }
 } // namespace p5

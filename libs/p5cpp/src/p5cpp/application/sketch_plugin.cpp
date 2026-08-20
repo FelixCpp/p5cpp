@@ -25,6 +25,7 @@ namespace p5
         context.provide(m_sketch.get());
 
         m_sketch->setup();
+        m_setupCompleted = true;
 
         next();
     }
@@ -51,7 +52,7 @@ namespace p5
     {
         next();
 
-        if (m_sketch != nullptr) {
+        if (m_sketch != nullptr and m_setupCompleted) {
             m_sketch->destroy();
             m_sketch.reset();
         }

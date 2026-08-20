@@ -1,2 +1,3 @@
+add_subdirectory(interactive_display)
 add_subdirectory(interactive_grid)
-add_subdirectory(interactive_particles)
+add_subdirectory(jelly_tentacles)

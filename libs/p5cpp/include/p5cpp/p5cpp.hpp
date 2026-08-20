@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <deque>
 #include <variant>
 #include <concepts>
 #include <memory>
@@ -15,6 +17,7 @@
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <stdexcept>
 
 namespace p5
 {
@@ -442,7 +445,10 @@ namespace p5
     class Next
     {
     public:
-        explicit Next(std::span<const std::unique_ptr<Plugin>> chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload);
+        // Bound to a std::deque, not a std::span over the plugin chain: a plugin's setup() can itself
+        // register more plugins mid-dispatch (see Kernel::m_plugins' comment for why that must not
+        // invalidate this already-captured view of the chain).
+        explicit Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload);
         void operator()() const;
 
         const void* getPayload() const;
@@ -450,7 +456,7 @@ namespace p5
     private:
         using Step = void (*)(Plugin&, Context&, const Next&);
 
-        std::span<const std::unique_ptr<Plugin>> m_chain;
+        const std::deque<std::unique_ptr<Plugin>>& m_chain;
         size_t m_index;
         Context* context;
         Step m_step;
@@ -463,6 +469,12 @@ namespace p5
         virtual void setup(Context& context, const Next& next);
         virtual void event(Context& context, const Next& next, const WindowEvent& event);
         virtual void draw(Context& context, const Next& next);
+        // Kernel::run() calls destroy() on every plugin unconditionally once the run loop ends --
+        // including when it ends because setup() threw partway through the chain. destroy() must
+        // therefore stay safe to call on a plugin whose own setup() never ran, or ran but didn't
+        // finish: guard any member state you only initialize in setup() (a common-enough case that
+        // Sketch::destroy() gets this guarantee for you already -- SketchPlugin only forwards to it if
+        // the sketch's own setup() completed).
         virtual void destroy(Context& context, const Next& next);
     };
 
@@ -1135,7 +1147,14 @@ namespace p5
 
 namespace p5
 {
-    inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha) { return (static_cast<color_t>(red) << 24) | (static_cast<color_t>(green) << 16) | (static_cast<color_t>(blue) << 8) | static_cast<color_t>(alpha); }
+    inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha)
+    {
+        // Clamp rather than let an out-of-[0,255] channel silently wrap through the uint32_t shift
+        // below -- e.g. rgba(256, 0, 0) would otherwise truncate to a red channel of 0, the opposite
+        // of the saturated white a caller almost certainly meant.
+        const auto clampChannel = [](int32_t value) { return std::clamp(value, 0, 255); };
+        return (static_cast<color_t>(clampChannel(red)) << 24) | (static_cast<color_t>(clampChannel(green)) << 16) | (static_cast<color_t>(clampChannel(blue)) << 8) | static_cast<color_t>(clampChannel(alpha));
+    }
     inline constexpr color_t rgba(int32_t grey, int32_t alpha) { return rgba(grey, grey, grey, alpha); }
     inline constexpr uint8_t getRed(color_t color) { return static_cast<uint8_t>((color >> 24) & 0xFF); }
     inline constexpr uint8_t getGreen(color_t color) { return static_cast<uint8_t>((color >> 16) & 0xFF); }
@@ -1197,7 +1216,15 @@ namespace p5
     template <typename T>
     inline T& Context::require()
     {
-        return *get<T>();
+        // Unlike get() (a nullable lookup the caller is expected to check), require() promises a
+        // reference -- if the type was never provided (e.g. a plugin ran before the one that
+        // provide()s it), throw instead of dereferencing get()'s nullptr, which would otherwise crash
+        // with only get()'s error() log line as a clue.
+        T* instance = get<T>();
+        if (instance == nullptr) {
+            throw std::runtime_error(std::format("Context::require() requested a type ({}) that was never provided", typeid(T).name()));
+        }
+        return *instance;
     }
 
     template <typename T>

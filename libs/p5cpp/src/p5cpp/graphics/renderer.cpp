@@ -267,8 +267,27 @@ namespace p5
         m_indices[m_currentIndexOffset++] = index;
     }
 
+    void Renderer::flushIfNearCapacity()
+    {
+        // Reserve the last quarter of each buffer as headroom for the upcoming shape. A quarter of
+        // even a modestly-sized buffer comfortably covers any single shape whose size this library
+        // itself bounds (a full-circle fan or stroked path tops out in the low hundreds of vertices),
+        // and scaling the margin off the actual capacity -- rather than a fixed vertex/index count --
+        // keeps this correct regardless of what size Renderer::create() was called with. It is still
+        // only a heuristic, not a hard guarantee, against a caller-supplied shape whose own vertex
+        // count is unbounded (e.g. Graphics::text() -- see its per-chunk submission, added precisely
+        // because a long paragraph could otherwise overrun this margin) or exceptionally large (an
+        // extremely long user beginShape()/vertex() path); write()'s doc comment covers that case.
+        const bool lowOnVertices = m_currentVertexOffset > 0 and (m_maxVertexCount - m_currentVertexOffset) < m_maxVertexCount / 4;
+        const bool lowOnIndices = m_currentIndexOffset > 0 and (m_maxIndexCount - m_currentIndexOffset) < m_maxIndexCount / 4;
+        if (lowOnVertices or lowOnIndices)
+            flush();
+    }
+
     Renderer::Writer Renderer::write()
     {
+        flushIfNearCapacity();
+
         assert(m_currentVertexOffset <= std::numeric_limits<uint32_t>::max());
         return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentIndexOffset);
     }

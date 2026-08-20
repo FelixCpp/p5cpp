@@ -2,7 +2,7 @@
 
 namespace p5
 {
-    Next::Next(std::span<const std::unique_ptr<Plugin>> chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload)
+    Next::Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload)
         : m_chain(chain), m_index(index), context(context), m_step(step), payload(payload)
     {
     }

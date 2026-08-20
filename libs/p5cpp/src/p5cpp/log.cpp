@@ -19,7 +19,13 @@ namespace p5::detail
 
     void log(FILE* file, std::string_view message, std::string_view color)
     {
-        fprintf(file, "%s%s [p5cpp] %s%s\n", color.data(), getCurrentTimestamp(), message.data(), resetColor.data());
+        // p5::detail::logTrace/logInfo/logWarn/logError are public and callable directly with any
+        // string_view (the error()/info()/... macros always hand them a nullterminated std::string
+        // from std::format(), but a caller going through these functions directly isn't guaranteed
+        // to). string_view::data() has no null-termination guarantee, so a substr() or other
+        // non-owning slice without a trailing '\0' would make %s's data() read past message's end.
+        // "%.*s" bounds the read to message's actual length instead.
+        fprintf(file, "%s%s [p5cpp] %.*s%s\n", color.data(), getCurrentTimestamp(), static_cast<int>(message.size()), message.data(), resetColor.data());
         fflush(file);
     }
 

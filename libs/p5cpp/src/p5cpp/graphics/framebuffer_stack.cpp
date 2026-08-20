@@ -13,9 +13,12 @@ namespace p5
 
     void FramebufferStack::pop()
     {
-        if (not m_framebufferStack.empty()) {
-            m_framebufferStack.pop_back();
+        if (m_framebufferStack.empty()) {
+            error("FramebufferStack::pop() called with no matching push()");
+            return;
         }
+
+        m_framebufferStack.pop_back();
     }
 
     std::shared_ptr<Framebuffer> FramebufferStack::peek() const

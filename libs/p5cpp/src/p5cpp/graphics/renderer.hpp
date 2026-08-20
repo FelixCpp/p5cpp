@@ -53,10 +53,22 @@ namespace p5
 
         // Returns a Writer that appends vertices/indices directly into this Renderer's fixed-capacity
         // buffers (sized once at create() and never resized), so callers never need to know a shape's
-        // vertex/index count upfront. appendVertex()/appendIndex() throw std::runtime_error if a frame's
-        // total geometry exceeds that capacity. Must be followed by exactly one finish() call with the
-        // same Writer, which submits whatever was written as a batch (merging into the previous batch if
-        // blendMode/shader match).
+        // vertex/index count upfront. write() may itself call flush() first if the buffers are getting
+        // low on room (see flushIfNearCapacity()) -- always safe here because write() is only ever
+        // called between shapes, never while a previous Writer is still being filled, so there is
+        // never not-yet-finish()ed geometry for a flush to strand. That headroom margin is a heuristic
+        // sized for shapes whose vertex count this library itself bounds (a handful of points, or an
+        // ellipse/arc/rounded-rect segment count capped at 256) -- it is NOT a hard guarantee against a
+        // single shape overrunning the buffer outright, since a big enough shape can still exceed
+        // whatever fraction of the buffer the margin reserved. Graphics is responsible for keeping any
+        // one write()/finish() pair within that margin for its own unbounded inputs (see text()'s
+        // per-chunk submission in graphics.cpp); a caller that instead feeds one shape with more points
+        // than the margin allows (e.g. an extremely long beginShape()/vertex() path) will still hit the
+        // appendVertex()/appendIndex() std::runtime_error below -- at that point it genuinely is a
+        // misconfiguration to fix by raising initialMaxVertices/initialMaxIndices, not something
+        // ordinary multi-shape drawing triggers. Must be followed by exactly one finish() call with the
+        // same Writer, which submits whatever was written as a batch (merging into the previous batch
+        // if blendMode/shader match).
         Writer write();
         void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader);
 
@@ -65,6 +77,10 @@ namespace p5
 
         void appendVertex(const Vertex& vertex);
         void appendIndex(uint32_t index);
+        // Flushes already-finish()ed batches early if headroom in either buffer has dropped below a
+        // reserved margin, so the next shape starts with most of the buffer free again. Only called
+        // from write(), between shapes -- see write()'s comment for why that's always safe.
+        void flushIfNearCapacity();
 
         GLuint m_vao;
         GLuint m_vbo;

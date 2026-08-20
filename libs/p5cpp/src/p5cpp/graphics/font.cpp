@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -28,6 +29,18 @@ namespace p5
                 return lib;
             }();
             return library;
+        }
+
+        // FreeType documents that its own memory-management bookkeeping inside a single FT_Library is
+        // not thread-safe: concurrent FT_New_*_Face()/FT_Done_Face() calls against the shared library
+        // above (every Font in the process uses the same one) race on that internal state. Serializing
+        // just the face-lifetime calls -- not glyph rasterization on an already-created FT_Face, which
+        // per-Font state already keeps single-threaded via each Font's own call pattern -- is enough to
+        // make concurrent loadFontFromMemory()/loadFontFromFile()/~FreeTypeHarfBuzzFont() calls safe.
+        std::mutex& freeTypeMutex()
+        {
+            static std::mutex mutex;
+            return mutex;
         }
 
         // Glyphs are rasterized once at a fixed source resolution (independent of any requested
@@ -239,6 +252,7 @@ namespace p5
         ~FreeTypeHarfBuzzFont() override
         {
             hb_font_destroy(m_hbFont);
+            std::lock_guard<std::mutex> lock(freeTypeMutex());
             FT_Done_Face(m_hbFace);
             FT_Done_Face(m_rasterFace);
         }
@@ -247,7 +261,10 @@ namespace p5
         {
             hb_buffer_t* buffer = hb_buffer_create();
             hb_buffer_add_utf8(buffer, utf8Text.data(), static_cast<int>(utf8Text.size()), 0, -1);
-            hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
+            // Let HarfBuzz infer direction (along with script/language) from the buffer's actual
+            // Unicode content instead of hardcoding LTR -- guess_segment_properties() only fills in
+            // fields that aren't already set, so a prior explicit set_direction(LTR) here silently
+            // forced every RTL script (Arabic, Hebrew, ...) to shape left-to-right instead.
             hb_buffer_guess_segment_properties(buffer);
             hb_shape(m_hbFont, buffer, nullptr, 0);
 
@@ -284,7 +301,17 @@ namespace p5
             return m_atlasTexture;
         }
 
-        float getUnitsPerEm() const override { return static_cast<float>(m_rasterFace->units_per_EM); }
+        float getUnitsPerEm() const override
+        {
+            // units_per_EM is only meaningful for scalable outline formats; FreeType leaves it 0 for
+            // bitmap-only formats (.pcf/.bdf/.fon, all valid loadFontFromFile() inputs). Every caller
+            // of this (Graphics::text()/textWidth()/textBounds(), layoutLines()) divides textSize by
+            // it, so returning 0 here would propagate Inf/NaN into vertex positions instead of just
+            // rendering bitmap glyphs at an imprecise-but-finite scale. 1000 is the common TrueType/
+            // OpenType em square, and a reasonable finite fallback for the formats that lack one.
+            const FT_UShort unitsPerEm = m_rasterFace->units_per_EM;
+            return unitsPerEm != 0 ? static_cast<float>(unitsPerEm) : 1000.0f;
+        }
         float getAscent() const override { return static_cast<float>(m_rasterFace->ascender); }
         float getDescent() const override { return static_cast<float>(-m_rasterFace->descender); }
 
@@ -357,6 +384,16 @@ namespace p5
             const uint32_t paddedWidth = static_cast<uint32_t>(cellWidth) + 2 * kAtlasPaddingTexels;
             const uint32_t paddedHeight = static_cast<uint32_t>(cellHeight) + 2 * kAtlasPaddingTexels;
 
+            // A glyph that doesn't fit even on an empty shelf never will, regardless of how many times
+            // the wrap-to-new-line logic below retries it -- without this check it would wrap to
+            // m_shelfX=0, still not fit (paddedWidth > atlasWidth), then fall through to
+            // updateSubImage() silently no-op'ing on its own out-of-bounds check while this function
+            // still cached a uvRect claiming success and permanently burned that shelf row.
+            if (paddedWidth > atlasWidth or paddedHeight > atlasHeight) {
+                error("Font: glyph cell ({}x{} padded) does not fit in the SDF atlas ({}x{}); construct the Font with a larger atlasWidth/atlasHeight or a smaller sdfSourceEmPixels", paddedWidth, paddedHeight, atlasWidth, atlasHeight);
+                return std::nullopt;
+            }
+
             if (m_shelfX + paddedWidth > atlasWidth) {
                 m_shelfX = 0;
                 m_shelfY += m_shelfHeight;
@@ -404,23 +441,48 @@ namespace p5
         uint32_t m_shelfHeight = 0;
     };
 
+    namespace
+    {
+        // Transfers ownership of already-created rasterFace/hbFace/hbFont into a new
+        // FreeTypeHarfBuzzFont, freeing all three instead of leaking them if construction throws (e.g.
+        // bad_alloc from the ASCII-prepopulation loop in its constructor body) -- at that point
+        // ownership never successfully transferred, and FreeTypeHarfBuzzFont's own destructor never
+        // runs for an object whose constructor didn't complete.
+        std::unique_ptr<Font> makeFreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
+        {
+            try {
+                return std::make_unique<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
+            } catch (...) {
+                hb_font_destroy(hbFont);
+                std::lock_guard<std::mutex> lock(freeTypeMutex());
+                FT_Done_Face(hbFace);
+                FT_Done_Face(rasterFace);
+                throw;
+            }
+        }
+    } // namespace
+
     std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
     {
         FT_Face rasterFace = nullptr;
-        if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &rasterFace) != 0) {
-            return nullptr;
-        }
-
-        // A second, independent face for HarfBuzz — see the FreeTypeHarfBuzzFont comment for why this
-        // must not be the same FT_Face our own SDF rasterization mutates via FT_Set_Pixel_Sizes().
         FT_Face hbFace = nullptr;
-        if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &hbFace) != 0) {
-            FT_Done_Face(rasterFace);
-            return nullptr;
+        {
+            std::lock_guard<std::mutex> lock(freeTypeMutex());
+            if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &rasterFace) != 0) {
+                return nullptr;
+            }
+
+            // A second, independent face for HarfBuzz — see the FreeTypeHarfBuzzFont comment for why this
+            // must not be the same FT_Face our own SDF rasterization mutates via FT_Set_Pixel_Sizes().
+            if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &hbFace) != 0) {
+                FT_Done_Face(rasterFace);
+                return nullptr;
+            }
         }
 
         hb_font_t* hbFont = hb_ft_font_create(hbFace, nullptr);
         if (hbFont == nullptr) {
+            std::lock_guard<std::mutex> lock(freeTypeMutex());
             FT_Done_Face(hbFace);
             FT_Done_Face(rasterFace);
             return nullptr;
@@ -432,7 +494,7 @@ namespace p5
         // Graphics::text()'s scale math assumes.
         hb_font_set_scale(hbFont, static_cast<int>(hbFace->units_per_EM), static_cast<int>(hbFace->units_per_EM));
 
-        return std::make_unique<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
+        return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
     }
 
     std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
@@ -440,19 +502,23 @@ namespace p5
         const std::string filepathStr = filepath.string();
 
         FT_Face rasterFace = nullptr;
-        if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &rasterFace) != 0) {
-            return nullptr;
-        }
-
-        // See loadFontFromMemory() for why HarfBuzz needs its own independent face here.
         FT_Face hbFace = nullptr;
-        if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &hbFace) != 0) {
-            FT_Done_Face(rasterFace);
-            return nullptr;
+        {
+            std::lock_guard<std::mutex> lock(freeTypeMutex());
+            if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &rasterFace) != 0) {
+                return nullptr;
+            }
+
+            // See loadFontFromMemory() for why HarfBuzz needs its own independent face here.
+            if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &hbFace) != 0) {
+                FT_Done_Face(rasterFace);
+                return nullptr;
+            }
         }
 
         hb_font_t* hbFont = hb_ft_font_create(hbFace, nullptr);
         if (hbFont == nullptr) {
+            std::lock_guard<std::mutex> lock(freeTypeMutex());
             FT_Done_Face(hbFace);
             FT_Done_Face(rasterFace);
             return nullptr;
@@ -460,7 +526,7 @@ namespace p5
 
         hb_font_set_scale(hbFont, static_cast<int>(hbFace->units_per_EM), static_cast<int>(hbFace->units_per_EM));
 
-        return std::make_unique<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
+        return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
     }
 } // namespace p5
 
@@ -521,43 +587,78 @@ namespace p5
 
             void appendCharacterWrappedLines(const Font& font, std::string_view segment, float maxWidthDesignUnits, float letterSpacingDesignUnits, std::vector<ShapedLine>& outLines)
             {
+                // Character wrap exists specifically for runs with no natural (space/newline) break --
+                // e.g. a long URL or identifier -- so `segment` can be arbitrarily long here. Re-shaping
+                // the entire remaining tail from scratch for every line found (as a naive version of
+                // this does) costs O(remaining length) per line, i.e. O(segment.size()^2) overall for a
+                // single unbroken long line. Shape only a bounded prefix window instead, doubling it
+                // only when the whole window's glyphs still fit under maxWidthDesignUnits (meaning the
+                // real cut point lies further out than shaped so far, not that there isn't one) --
+                // total bytes shaped across one line's doubling attempts stays a small constant factor
+                // over that line's own length, keeping the function close to O(segment.size()) overall.
+                // Trade-off: a cut landing exactly where a window ends could shape marginally differently
+                // than shaping the full remainder would have (HarfBuzz losing context past the window
+                // edge for ligatures/kerning at the boundary) -- the same kind of approximation this
+                // function already makes by re-shaping fresh at every line break rather than shaping the
+                // full segment once and slicing it.
+                constexpr size_t kInitialWindowBytes = 64;
+
                 size_t start = 0;
                 for (;;) {
                     const std::string_view remaining = segment.substr(start);
-                    const std::vector<ShapedGlyph> glyphs = font.shape(remaining);
-                    if (glyphs.empty()) {
-                        outLines.push_back({{}, 0.0f});
-                        return;
-                    }
 
-                    float width = 0.0f;
-                    size_t cutGlyphCount = glyphs.size();
-                    size_t cutByteOffset = remaining.size();
-                    size_t lastClusterBoundary = 0;
+                    size_t windowBytes = kInitialWindowBytes;
+                    std::vector<ShapedGlyph> glyphs;
+                    std::string_view window;
+                    bool windowCoversRemainder;
+                    size_t cutGlyphCount;
+                    size_t cutByteOffset;
 
-                    for (size_t i = 0; i < glyphs.size(); ++i) {
-                        if (i > 0 and glyphs[i].cluster != glyphs[i - 1].cluster) {
-                            lastClusterBoundary = i;
+                    for (;;) {
+                        windowCoversRemainder = windowBytes >= remaining.size();
+                        window = windowCoversRemainder ? remaining : remaining.substr(0, windowBytes);
+                        glyphs = font.shape(window);
+
+                        if (glyphs.empty()) {
+                            outLines.push_back({{}, 0.0f});
+                            return;
                         }
 
-                        const float nextWidth = width + glyphs[i].xAdvance + letterSpacingDesignUnits;
-                        if (nextWidth > maxWidthDesignUnits and i > 0) {
-                            if (lastClusterBoundary > 0) {
-                                cutGlyphCount = lastClusterBoundary;
-                                cutByteOffset = glyphs[lastClusterBoundary].cluster;
-                            } else {
-                                // The overflowing content is all one cluster (e.g. a ligature) — keep it
-                                // whole on this line rather than cutting a zero-length line forever.
-                                cutGlyphCount = i;
-                                cutByteOffset = glyphs[i].cluster;
+                        float width = 0.0f;
+                        cutGlyphCount = glyphs.size();
+                        cutByteOffset = window.size();
+                        size_t lastClusterBoundary = 0;
+
+                        for (size_t i = 0; i < glyphs.size(); ++i) {
+                            if (i > 0 and glyphs[i].cluster != glyphs[i - 1].cluster) {
+                                lastClusterBoundary = i;
                             }
-                            break;
+
+                            const float nextWidth = width + glyphs[i].xAdvance + letterSpacingDesignUnits;
+                            if (nextWidth > maxWidthDesignUnits and i > 0) {
+                                if (lastClusterBoundary > 0) {
+                                    cutGlyphCount = lastClusterBoundary;
+                                    cutByteOffset = glyphs[lastClusterBoundary].cluster;
+                                } else {
+                                    // The overflowing content is all one cluster (e.g. a ligature) — keep it
+                                    // whole on this line rather than cutting a zero-length line forever.
+                                    cutGlyphCount = i;
+                                    cutByteOffset = glyphs[i].cluster;
+                                }
+                                break;
+                            }
+                            width = nextWidth;
                         }
-                        width = nextWidth;
+
+                        if (cutGlyphCount != glyphs.size() or windowCoversRemainder) {
+                            break; // found a genuine cut inside this window, or shaped everything there is
+                        }
+                        windowBytes *= 2; // whole window still fits; the real cut point lies further out
                     }
 
                     if (cutGlyphCount == glyphs.size()) {
-                        outLines.push_back({glyphs, width});
+                        const float width = shapedWidth(glyphs, letterSpacingDesignUnits);
+                        outLines.push_back({std::move(glyphs), width});
                         return;
                     }
 
