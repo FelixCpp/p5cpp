@@ -1,4 +1,5 @@
 #include <p5cpp/p5cpp.hpp>
+#include <p5cpp_animation/p5cpp_animation.hpp>
 
 #include <algorithm>
 #include <cmath>
