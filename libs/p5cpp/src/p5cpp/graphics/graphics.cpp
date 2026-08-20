@@ -54,8 +54,11 @@ namespace p5
         // into the tens of thousands of indices (stroked polylines alone cost roughly 15 indices
         // per interior point for miter joins), so the previous 4096/6144 ceiling was only really
         // sized for the simplest sketches and threw std::runtime_error well within normal use.
-        inline static constexpr size_t MAX_VERTICES = 65536;
-        inline static constexpr size_t MAX_INDICES = 98304;
+        // inline static constexpr size_t MAX_VERTICES = 65536;
+        // inline static constexpr size_t MAX_INDICES = 98304;
+
+        inline static constexpr size_t MAX_VERTICES = 100'000;
+        inline static constexpr size_t MAX_INDICES = 150'000;
 
         float4 toFloat4(color_t color)
         {

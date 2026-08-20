@@ -1,0 +1,2 @@
+add_executable(interactive_grid main.cpp)
+target_link_libraries(interactive_grid PRIVATE p5cpp p5cpp_animation)

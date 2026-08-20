@@ -1,0 +1,2 @@
+add_executable(interactive_particles main.cpp)
+target_link_libraries(interactive_particles PRIVATE p5cpp p5cpp_animation)

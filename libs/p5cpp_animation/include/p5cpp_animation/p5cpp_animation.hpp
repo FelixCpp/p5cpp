@@ -144,10 +144,6 @@ namespace p5
         bool isReversing; // Flag indicating whether the spring is currently reversing (for pingpong mode)
     };
 
-    // Note: spring<T> is only supported for T = float, float2, float3, float4 (types with
-    // well-defined arithmetic/distance semantics for a physical simulation). Types like
-    // color_t are quantized (0-255 per channel) and unsuited for a spring that can
-    // overshoot/oscillate past its target, so they are intentionally not supported here.
     template <typename T> spring<T> createSpring(const T& from, const T& to, float stiffness = 170.0f, float damping = 26.0f, float mass = 1.0f, LoopMode loopMode = LoopMode::once);
     template <typename T> void restart(spring<T>& spring);
     template <typename T> void reset(spring<T>& spring);
