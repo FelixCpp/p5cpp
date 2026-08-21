@@ -137,6 +137,8 @@ namespace p5
     constexpr uint8_t getGreen(color_t color);
     constexpr uint8_t getBlue(color_t color);
     constexpr uint8_t getAlpha(color_t color);
+    constexpr uint8_t getBrightness(color_t color);
+    constexpr uint8_t getLuminance(color_t color);
 } // namespace p5
 
 namespace p5
@@ -1145,6 +1147,8 @@ namespace p5
     inline constexpr uint8_t getGreen(color_t color) { return static_cast<uint8_t>((color >> 16) & 0xFF); }
     inline constexpr uint8_t getBlue(color_t color) { return static_cast<uint8_t>((color >> 8) & 0xFF); }
     inline constexpr uint8_t getAlpha(color_t color) { return static_cast<uint8_t>(color & 0xFF); }
+    inline constexpr uint8_t getBrightness(color_t color) { return static_cast<uint8_t>((getRed(color) + getGreen(color) + getBlue(color)) / 3); }
+    inline constexpr uint8_t getLuminance(color_t color) { return static_cast<uint8_t>(0.2126f * getRed(color) + 0.7152f * getGreen(color) + 0.0722f * getBlue(color)); }
 } // namespace p5
 
 namespace p5

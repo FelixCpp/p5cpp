@@ -10,9 +10,16 @@ namespace p5
         std::vector<std::unique_ptr<Plugin>> plugins = sketch->plugins();
         plugins.push_back(std::make_unique<SketchPlugin>(std::move(sketch)));
 
+        // addPluginsAndSetup() appends these plugins right after this one (the deque, per
+        // kernel.hpp's Next-stability comment, never invalidates the outer chain's view) and
+        // dispatches setup() over that whole newly-appended range itself -- which already *is* the
+        // rest of the chain, since SketchLoaderPlugin is always the last plugin p5cpp.cpp registers.
+        // Calling `next` afterwards would re-walk that same index range a second time: Next::operator()
+        // re-checks m_index against the *current* (now-grown) deque size each call, so the index that
+        // meant "past the end" before this append points squarely at what was just added. That doubled
+        // every newly-added plugin's setup() -- including the user's Sketch::setup() via
+        // SketchPlugin::setup() -- so this intentionally does not call next().
         getKernel().addPluginsAndSetup(std::move(plugins));
-
-        next();
     }
 
     SketchPlugin::SketchPlugin(std::unique_ptr<Sketch> sketch)

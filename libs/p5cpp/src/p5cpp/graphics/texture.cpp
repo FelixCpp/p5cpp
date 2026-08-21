@@ -4,6 +4,7 @@
 #include <stb_image.h>
 #include <stb_image_write.h>
 
+#include <algorithm>
 #include <optional>
 
 namespace p5
@@ -25,6 +26,22 @@ namespace p5
                 default:
                     error("Texture: unknown TexturePixelFormat");
                     return std::nullopt;
+            }
+        }
+
+        // glGetTexImage() (queryPixelData()) returns rows in OpenGL's bottom-up memory order (row 0 =
+        // the texture's bottom edge) -- the same convention loadTextureFromFile() corrects for on the
+        // way in via stbi_set_flip_vertically_on_load(). Every other y coordinate in this library
+        // increases downward (mouse/draw coordinates, textAlign, ...) and every image file format
+        // stores row 0 as the top of the image, so both Pixels and saved files need that same top-down
+        // convention -- flip queryPixelData()'s raw bytes at each of those boundaries to match it.
+        void flipRowsVertically(std::vector<uint8_t>& pixelData, uint32_t width, uint32_t height)
+        {
+            const size_t rowBytes = static_cast<size_t>(width) * 4;
+            for (uint32_t y = 0; y < height / 2; ++y) {
+                uint8_t* top = pixelData.data() + static_cast<size_t>(y) * rowBytes;
+                uint8_t* bottom = pixelData.data() + static_cast<size_t>(height - 1 - y) * rowBytes;
+                std::swap_ranges(top, top + rowBytes, bottom);
             }
         }
     } // namespace
@@ -121,7 +138,8 @@ namespace p5
     {
         const std::string filepathStr = filepath.string();
         const auto [width, height] = texture.size;
-        const auto pixelData = queryPixelData(texture);
+        auto pixelData = queryPixelData(texture);
+        flipRowsVertically(pixelData, width, height);
         const int result = stbi_write_png(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), static_cast<int>(width) * 4);
         return result != 0;
     }
@@ -130,7 +148,8 @@ namespace p5
     {
         const std::string filepathStr = filepath.string();
         const auto [width, height] = texture.size;
-        const auto pixelData = queryPixelData(texture);
+        auto pixelData = queryPixelData(texture);
+        flipRowsVertically(pixelData, width, height);
         const int result = stbi_write_jpg(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), quality);
         return result != 0;
     }
@@ -139,7 +158,8 @@ namespace p5
     {
         const std::string filepathStr = filepath.string();
         const auto [width, height] = texture.size;
-        const auto pixelData = queryPixelData(texture);
+        auto pixelData = queryPixelData(texture);
+        flipRowsVertically(pixelData, width, height);
         const int result = stbi_write_bmp(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data());
         return result != 0;
     }
@@ -172,7 +192,8 @@ namespace p5
         }
 
         const auto [width, height] = texture.size;
-        const std::vector<uint8_t> bytes = queryPixelData(texture);
+        auto bytes = queryPixelData(texture);
+        flipRowsVertically(bytes, width, height);
 
         Pixels pixels {.width = width, .height = height, .data = std::vector<color_t>(static_cast<size_t>(width) * height)};
         for (size_t i = 0; i < pixels.data.size(); ++i) {
@@ -203,6 +224,9 @@ namespace p5
             bytes[i * 4 + 3] = getAlpha(pixels.data[i]);
         }
 
+        // Pixels is top-down (see loadPixels()'s flip above); glTexSubImage2D expects the same
+        // bottom-up row order queryPixelData() returns, so flip back before uploading.
+        flipRowsVertically(bytes, width, height);
         updateSubImage(texture, 0, 0, width, height, bytes);
     }
 } // namespace p5
