@@ -39,7 +39,7 @@ struct InteractiveText : Sketch
     size_t cellHeight;
 
     std::vector<Cell> cells;
-    std::shared_ptr<Texture> texture = createTexture("BIGGER");
+    std::shared_ptr<Texture> texture = createTexture("Felix");
 
     inline static constexpr color_t colorPalette[] = {
         0xabcd5eFF,
@@ -99,7 +99,6 @@ struct InteractiveText : Sketch
 
             if (isVisible) {
                 cell.alpha = std::min(255, static_cast<int>(cell.alpha) + 10);
-
             } else {
                 cell.alpha = std::max(0, static_cast<int>(cell.alpha) - 10);
             }
