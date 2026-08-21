@@ -12,6 +12,25 @@ typedef struct
     uint8_t alpha;
 } Cell;
 
+static std::shared_ptr<Texture> createTexture(std::string_view text)
+{
+    const std::shared_ptr<Font> font = loadFontFromFile("fonts/Arial Rounded Bold.ttf", 1024 * 3, 1024 * 3, 128 * 3);
+    const rect2f bounds = textBounds(*font, 320.0f, text);
+    const std::shared_ptr<Framebuffer> framebuffer = createFramebuffer(bounds.width, bounds.height);
+
+    withFramebuffer(framebuffer, [&]() {
+        background(rgba(255));
+        fill(rgba(0));
+        noStroke();
+        textFont(font);
+        textSize(320.0f);
+        textAlign(TextAlignment::center);
+        p5::text(text, bounds.width * 0.5f, bounds.height * 0.5f, bounds.width, bounds.height);
+    });
+
+    return framebuffer->colorTexture;
+}
+
 struct InteractiveText : Sketch
 {
     size_t columns;
@@ -20,7 +39,7 @@ struct InteractiveText : Sketch
     size_t cellHeight;
 
     std::vector<Cell> cells;
-    std::shared_ptr<Texture> texture = loadTextureFromFile("interactive_text.png");
+    std::shared_ptr<Texture> texture = createTexture("BIGGER");
 
     inline static constexpr color_t colorPalette[] = {
         0xabcd5eFF,
@@ -35,7 +54,7 @@ struct InteractiveText : Sketch
 
     void setup() override
     {
-        cellWidth = 4;
+        cellWidth = 5;
         cellHeight = 5;
         columns = texture->size.x / cellWidth;
         rows = texture->size.y / cellHeight;
@@ -77,8 +96,8 @@ struct InteractiveText : Sketch
             const float dist = distanceSquared(mousePosition, cellCenter);
             const float viewRadius = 100.0f;
             const bool isVisible = dist < (viewRadius * viewRadius);
+
             if (isVisible) {
-                // cell.alpha = 255;
                 cell.alpha = std::min(255, static_cast<int>(cell.alpha) + 10);
 
             } else {
@@ -94,36 +113,6 @@ struct InteractiveText : Sketch
         }
     }
 };
-
-// struct InteractiveText : Sketch
-// {
-//     std::shared_ptr<Font> font = loadFontFromFile("Arial Rounded Bold.ttf", 1024 * 3, 1024 * 3, 128 * 3);
-//
-//     void setup() override
-//     {
-//         rect2f bounds = textBounds(*font, 320.0f, "BIGGER");
-//         setWindowSize(bounds.width, bounds.height);
-//     }
-//
-//     void draw() override
-//     {
-//         background(rgba(255));
-//
-//         fill(rgba(0));
-//         noStroke();
-//         textFont(font);
-//         textSize(320.0f);
-//         textAlign(TextAlignment::center);
-//         text("BIGGER", getWidth() * 0.5f, getHeight() * 0.5f, getWidth(), getHeight());
-//
-//         if (isKeyPressed(Key::Space)) {
-//             Pixels pixels = loadPixels();
-//             std::unique_ptr<Texture> texture = loadTextureFromMemory(pixels.width, pixels.height, {}, TexturePixelFormat::rgba8);
-//             updatePixels(*texture, pixels);
-//             saveTextureToFileAsPNG(*texture, "interactive_text.png");
-//         }
-//     }
-// };
 
 std::unique_ptr<Sketch> p5::createSketch()
 {
