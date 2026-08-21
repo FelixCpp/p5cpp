@@ -21,25 +21,6 @@
 
 namespace p5
 {
-    struct matrix4x4
-    {
-        std::array<float, 16> m;
-
-        constexpr bool operator==(const matrix4x4&) const = default;
-    };
-
-    constexpr matrix4x4 identityMatrix();
-    constexpr matrix4x4 translationMatrix(float x, float y);
-    constexpr matrix4x4 scalingMatrix(float x, float y);
-    matrix4x4 rotationMatrix(float radians);
-    constexpr matrix4x4 orthographicProjectionMatrix(float left, float top, float right, float bottom, float near, float far);
-    constexpr matrix4x4 perspectiveProjectionMatrix(float fovY, float aspect, float near, float far);
-    matrix4x4 lookAtMatrix(float eyeX, float eyeY, float eyeZ, float centerX, float centerY, float centerZ, float upX, float upY, float upZ);
-    constexpr matrix4x4 operator*(const matrix4x4& a, const matrix4x4& b);
-} // namespace p5
-
-namespace p5
-{
     template <typename T> struct value2
     {
         T x, y;
@@ -83,8 +64,21 @@ namespace p5
 
 namespace p5
 {
-    // Transforms a 2D point as if it were (x, y, 0, 1); ignores the matrix's z/w rows, since callers
-    // only ever pass in affine 2D transforms (translate/scale/rotate) built by this library.
+    struct matrix4x4
+    {
+        std::array<float, 16> m;
+
+        constexpr bool operator==(const matrix4x4&) const = default;
+    };
+
+    constexpr matrix4x4 identityMatrix();
+    constexpr matrix4x4 translationMatrix(float x, float y);
+    constexpr matrix4x4 scalingMatrix(float x, float y);
+    matrix4x4 rotationMatrix(float radians);
+    constexpr matrix4x4 orthographicProjectionMatrix(float left, float top, float right, float bottom, float near, float far);
+    constexpr matrix4x4 perspectiveProjectionMatrix(float fovY, float aspect, float near, float far);
+    matrix4x4 lookAtMatrix(float eyeX, float eyeY, float eyeZ, float centerX, float centerY, float centerZ, float upX, float upY, float upZ);
+    constexpr matrix4x4 operator*(const matrix4x4& a, const matrix4x4& b);
     constexpr float2 transformPoint(const matrix4x4& matrix, const float2& point);
 } // namespace p5
 
@@ -346,6 +340,8 @@ namespace p5
     private:
         EventType m_eventType;
     };
+
+    void send(const WindowEvent& event);
 } // namespace p5
 
 namespace p5
@@ -445,9 +441,6 @@ namespace p5
     class Next
     {
     public:
-        // Bound to a std::deque, not a std::span over the plugin chain: a plugin's setup() can itself
-        // register more plugins mid-dispatch (see Kernel::m_plugins' comment for why that must not
-        // invalidate this already-captured view of the chain).
         explicit Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload);
         void operator()() const;
 
@@ -469,12 +462,6 @@ namespace p5
         virtual void setup(Context& context, const Next& next);
         virtual void event(Context& context, const Next& next, const WindowEvent& event);
         virtual void draw(Context& context, const Next& next);
-        // Kernel::run() calls destroy() on every plugin unconditionally once the run loop ends --
-        // including when it ends because setup() threw partway through the chain. destroy() must
-        // therefore stay safe to call on a plugin whose own setup() never ran, or ran but didn't
-        // finish: guard any member state you only initialize in setup() (a common-enough case that
-        // Sketch::destroy() gets this guarantee for you already -- SketchPlugin only forwards to it if
-        // the sketch's own setup() completed).
         virtual void destroy(Context& context, const Next& next);
     };
 
@@ -617,10 +604,6 @@ namespace p5
 
 namespace p5
 {
-    // Plain struct, not a virtual interface — same rationale as Texture/Framebuffer (see there):
-    // one backend, the GL handle already public, and every accessor already fits cleanly without
-    // forcing internal concepts across an interface boundary. Destructor-based RAII, no move
-    // support (never held by value).
     struct Shader
     {
         uint32_t programId = 0;
@@ -932,6 +915,67 @@ namespace p5
 
 namespace p5
 {
+    template <typename T> inline constexpr T lengthSquared(const value2<T>& v) { return dot(v, v); }
+    template <typename T> inline constexpr T dot(const value2<T>& a, const value2<T>& b) { return a.x * b.x + a.y * b.y; }
+    template <typename T> inline T length(const value2<T>& v) { return std::sqrt(lengthSquared(v)); }
+    template <typename T> inline value2<T> normalized(const value2<T>& v)
+    {
+        const T len = length(v);
+        if (len == T {}) {
+            return v; // zero vector has no direction; leave it as zero rather than producing NaN
+        }
+        return {v.x / len, v.y / len};
+    }
+
+    template <typename T> inline value2<T> rotated(const value2<T>& v, float radians)
+    {
+        const float cosTheta = std::cos(radians);
+        const float sinTheta = std::sin(radians);
+        return {static_cast<T>(v.x * cosTheta - v.y * sinTheta), static_cast<T>(v.x * sinTheta + v.y * cosTheta)};
+    }
+
+    template <typename T> inline value2<T> limited(const value2<T>& v, T maxLength)
+    {
+        const T len = lengthSquared(v);
+        if (len > (maxLength * maxLength)) {
+            return fixedLength(v, maxLength);
+        }
+
+        return v;
+    }
+
+    template <typename T> inline value2<T> fixedLength(const value2<T>& v, T newLength)
+    {
+        const T len = length(v);
+        if (len == T {}) {
+            return v; // zero vector has no direction; leave it as zero rather than producing NaN
+        }
+        return {v.x * newLength / len, v.y * newLength / len};
+    }
+
+    template <typename T> inline constexpr value2<T> lerp(const value2<T>& a, const value2<T>& b, float t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
+    template <typename T> inline constexpr value2<T> perpendicular(const value2<T>& v) { return {-v.y, v.x}; }
+
+    template <typename T> inline constexpr T distanceSquared(const value2<T>& a, const value2<T>& b) { return lengthSquared(b - a); }
+    template <typename T> inline T distance(const value2<T>& a, const value2<T>& b) { return length(b - a); }
+
+    template <typename T> inline constexpr value2<T> operator+(const value2<T>& a, const value2<T>& b) { return {a.x + b.x, a.y + b.y}; }
+    template <typename T> inline constexpr value2<T> operator-(const value2<T>& a, const value2<T>& b) { return {a.x - b.x, a.y - b.y}; }
+    template <typename T> inline constexpr value2<T> operator*(const value2<T>& a, const value2<T>& b) { return {a.x * b.x, a.y * b.y}; }
+    template <typename T> inline constexpr value2<T> operator/(const value2<T>& a, const value2<T>& b) { return {a.x / b.x, a.y / b.y}; }
+    template <typename T> inline constexpr value2<T> operator+(const value2<T>& a, T b) { return {a.x + b, a.y + b}; }
+    template <typename T> inline constexpr value2<T> operator-(const value2<T>& a, T b) { return {a.x - b, a.y - b}; }
+    template <typename T> inline constexpr value2<T> operator*(const value2<T>& a, T b) { return {a.x * b, a.y * b}; }
+    template <typename T> inline constexpr value2<T> operator/(const value2<T>& a, T b) { return {a.x / b, a.y / b}; }
+    template <typename T> inline constexpr value2<T> operator+(T a, const value2<T>& b) { return {a + b.x, a + b.y}; }
+    template <typename T> inline constexpr value2<T> operator-(T a, const value2<T>& b) { return {a - b.x, a - b.y}; }
+    template <typename T> inline constexpr value2<T> operator*(T a, const value2<T>& b) { return {a * b.x, a * b.y}; }
+    template <typename T> inline constexpr value2<T> operator/(T a, const value2<T>& b) { return {a / b.x, a / b.y}; }
+    template <typename T> inline constexpr value2<T> operator-(const value2<T>& v) { return {-v.x, -v.y}; }
+} // namespace p5
+
+namespace p5
+{
     inline constexpr matrix4x4 identityMatrix()
     {
         // clang-format off
@@ -1086,75 +1130,16 @@ namespace p5
 
 namespace p5
 {
-    template <typename T> inline constexpr T lengthSquared(const value2<T>& v) { return dot(v, v); }
-    template <typename T> inline constexpr T dot(const value2<T>& a, const value2<T>& b) { return a.x * b.x + a.y * b.y; }
-    template <typename T> inline T length(const value2<T>& v) { return std::sqrt(lengthSquared(v)); }
-    template <typename T> inline value2<T> normalized(const value2<T>& v)
-    {
-        const T len = length(v);
-        if (len == T {}) {
-            return v; // zero vector has no direction; leave it as zero rather than producing NaN
-        }
-        return {v.x / len, v.y / len};
-    }
-
-    template <typename T> inline value2<T> rotated(const value2<T>& v, float radians)
-    {
-        const float cosTheta = std::cos(radians);
-        const float sinTheta = std::sin(radians);
-        return {static_cast<T>(v.x * cosTheta - v.y * sinTheta), static_cast<T>(v.x * sinTheta + v.y * cosTheta)};
-    }
-
-    template <typename T> inline value2<T> limited(const value2<T>& v, T maxLength)
-    {
-        const T len = lengthSquared(v);
-        if (len > (maxLength * maxLength)) {
-            return fixedLength(v, maxLength);
-        }
-
-        return v;
-    }
-
-    template <typename T> inline value2<T> fixedLength(const value2<T>& v, T newLength)
-    {
-        const T len = length(v);
-        if (len == T {}) {
-            return v; // zero vector has no direction; leave it as zero rather than producing NaN
-        }
-        return {v.x * newLength / len, v.y * newLength / len};
-    }
-
-    template <typename T> inline constexpr value2<T> lerp(const value2<T>& a, const value2<T>& b, float t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
-    template <typename T> inline constexpr value2<T> perpendicular(const value2<T>& v) { return {-v.y, v.x}; }
-
-    template <typename T> inline constexpr T distanceSquared(const value2<T>& a, const value2<T>& b) { return lengthSquared(b - a); }
-    template <typename T> inline T distance(const value2<T>& a, const value2<T>& b) { return length(b - a); }
-
-    template <typename T> inline constexpr value2<T> operator+(const value2<T>& a, const value2<T>& b) { return {a.x + b.x, a.y + b.y}; }
-    template <typename T> inline constexpr value2<T> operator-(const value2<T>& a, const value2<T>& b) { return {a.x - b.x, a.y - b.y}; }
-    template <typename T> inline constexpr value2<T> operator*(const value2<T>& a, const value2<T>& b) { return {a.x * b.x, a.y * b.y}; }
-    template <typename T> inline constexpr value2<T> operator/(const value2<T>& a, const value2<T>& b) { return {a.x / b.x, a.y / b.y}; }
-    template <typename T> inline constexpr value2<T> operator+(const value2<T>& a, T b) { return {a.x + b, a.y + b}; }
-    template <typename T> inline constexpr value2<T> operator-(const value2<T>& a, T b) { return {a.x - b, a.y - b}; }
-    template <typename T> inline constexpr value2<T> operator*(const value2<T>& a, T b) { return {a.x * b, a.y * b}; }
-    template <typename T> inline constexpr value2<T> operator/(const value2<T>& a, T b) { return {a.x / b, a.y / b}; }
-    template <typename T> inline constexpr value2<T> operator+(T a, const value2<T>& b) { return {a + b.x, a + b.y}; }
-    template <typename T> inline constexpr value2<T> operator-(T a, const value2<T>& b) { return {a - b.x, a - b.y}; }
-    template <typename T> inline constexpr value2<T> operator*(T a, const value2<T>& b) { return {a * b.x, a * b.y}; }
-    template <typename T> inline constexpr value2<T> operator/(T a, const value2<T>& b) { return {a / b.x, a / b.y}; }
-    template <typename T> inline constexpr value2<T> operator-(const value2<T>& v) { return {-v.x, -v.y}; }
-} // namespace p5
-
-namespace p5
-{
     inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha)
     {
-        // Clamp rather than let an out-of-[0,255] channel silently wrap through the uint32_t shift
-        // below -- e.g. rgba(256, 0, 0) would otherwise truncate to a red channel of 0, the opposite
-        // of the saturated white a caller almost certainly meant.
-        const auto clampChannel = [](int32_t value) { return std::clamp(value, 0, 255); };
-        return (static_cast<color_t>(clampChannel(red)) << 24) | (static_cast<color_t>(clampChannel(green)) << 16) | (static_cast<color_t>(clampChannel(blue)) << 8) | static_cast<color_t>(clampChannel(alpha));
+        const uint8_t r = static_cast<uint8_t>(std::clamp(red, 0, 255));
+        const uint8_t g = static_cast<uint8_t>(std::clamp(green, 0, 255));
+        const uint8_t b = static_cast<uint8_t>(std::clamp(blue, 0, 255));
+        const uint8_t a = static_cast<uint8_t>(std::clamp(alpha, 0, 255));
+
+        return (r << 24) | (g << 16) | (b << 8) | a;
     }
+
     inline constexpr color_t rgba(int32_t grey, int32_t alpha) { return rgba(grey, grey, grey, alpha); }
     inline constexpr uint8_t getRed(color_t color) { return static_cast<uint8_t>((color >> 24) & 0xFF); }
     inline constexpr uint8_t getGreen(color_t color) { return static_cast<uint8_t>((color >> 16) & 0xFF); }

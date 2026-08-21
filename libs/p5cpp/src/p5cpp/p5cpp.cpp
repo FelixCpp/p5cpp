@@ -16,6 +16,14 @@ namespace p5
     }
 } // namespace p5
 
+namespace p5
+{
+    void send(const WindowEvent& event)
+    {
+        getKernel().process(event);
+    }
+} // namespace p5
+
 int main()
 {
     using namespace p5;

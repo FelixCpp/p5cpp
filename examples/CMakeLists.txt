@@ -1,3 +1,5 @@
+add_subdirectory(disco_grid)
 add_subdirectory(interactive_display)
 add_subdirectory(interactive_grid)
+add_subdirectory(interactive_text)
 add_subdirectory(jelly_tentacles)

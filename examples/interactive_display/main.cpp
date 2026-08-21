@@ -2,7 +2,7 @@
 #include <p5cpp_animation/p5cpp_animation.hpp>
 using namespace p5;
 
-inline static constexpr float BLOCK_SIZE = 10.0f;
+inline static constexpr float BLOCK_SIZE = 15.0f;
 inline static constexpr float BLOCK_SPACING = 4.0f;
 
 struct Block
@@ -23,16 +23,16 @@ struct Block
         if (hasTargetMoved) {
             const float dist = distance(position, target);
             if (dist < reactionRadius) {
-                angle += 1.0f;
+                angle += 4.0f;
                 color = rgba(255);
             }
         }
 
         if (angle > 0.0f and angle < 90.0f) {
-            angle += 1.0f;
+            angle += 4.0f;
 
             if (color > rgba(70)) {
-                color -= rgba(3, 0);
+                color -= rgba(10, 0);
             }
         } else {
             angle = 0.0f;
@@ -74,8 +74,6 @@ struct InteractiveDisplay : Sketch
     void setup() override
     {
         setWindowSize(400, 400);
-        strokeCap(StrokeCap::butt);
-        strokeJoin(StrokeJoin::bevel);
 
         columns = getWidth() / BLOCK_SIZE;
         rows = getHeight() / BLOCK_SIZE;

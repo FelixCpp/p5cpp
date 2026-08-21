@@ -2,7 +2,7 @@
 #include <p5cpp_animation/p5cpp_animation.hpp>
 using namespace p5;
 
-struct InteractiveDisplay : Sketch
+struct DiscoGrid : Sketch
 {
     float r = 15.0f;
     // float angle = 0.0f;
@@ -12,7 +12,7 @@ struct InteractiveDisplay : Sketch
 
     int cols = 10;
     int rows = 10;
-    float size = 25;
+    float cellSize = 25;
 
     float inc = 1.7f;
 
@@ -46,8 +46,8 @@ struct InteractiveDisplay : Sketch
                     fill(rgba(255, 255 * (i / ((float)num - 1))));
 
                     const float angle = angles[y * cols + x];
-                    const float offsetX = x * size - size * cols / 2 + size * 0.5f;
-                    const float offsetY = y * size - size * rows / 2 + size * 0.5f;
+                    const float offsetX = x * cellSize - cellSize * cols / 2 + cellSize * 0.5f;
+                    const float offsetY = y * cellSize - cellSize * rows / 2 + cellSize * 0.5f;
 
                     float px = r * ((float)i / (num - 1)) * cos(radians(angle + t * i));
                     float py = r * ((float)i / (num - 1)) * sin(radians(angle + t * i));
@@ -67,5 +67,5 @@ struct InteractiveDisplay : Sketch
 
 std::unique_ptr<Sketch> p5::createSketch()
 {
-    return std::make_unique<InteractiveDisplay>();
+    return std::make_unique<DiscoGrid>();
 }
