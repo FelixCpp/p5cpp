@@ -17,6 +17,7 @@ add_subdirectory(external/harfbuzz)
 
 add_subdirectory(libs/p5cpp)
 add_subdirectory(libs/p5cpp_animation)
+add_subdirectory(libs/p5cpp_audio)
 
 option(P5CPP_BUILD_EXAMPLES "Build the p5cpp example sketches" ON)
 if (P5CPP_BUILD_EXAMPLES)

@@ -357,7 +357,7 @@ namespace p5
         virtual void event([[maybe_unused]] const WindowEvent& event) {}
         virtual void draw() {}
         virtual void destroy() {}
-        virtual std::vector<std::unique_ptr<Plugin>> plugins();
+        virtual std::vector<std::unique_ptr<Plugin>> plugins() { return {}; };
     };
 
     extern std::unique_ptr<Sketch> createSketch();
@@ -467,10 +467,6 @@ namespace p5
         virtual void destroy(Context& context, const Next& next);
     };
 
-    inline std::vector<std::unique_ptr<Plugin>> Sketch::plugins()
-    {
-        return {};
-    }
 } // namespace p5
 
 namespace p5::detail
