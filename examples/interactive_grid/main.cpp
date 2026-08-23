@@ -79,7 +79,11 @@ struct InteractiveGrid : Sketch
     }
 };
 
-std::unique_ptr<Sketch> p5::createSketch()
+SketchSpec p5::createSpec()
 {
-    return std::make_unique<InteractiveGrid>();
+    return {
+        .sketch = [] {
+            return std::make_unique<InteractiveGrid>();
+        }
+    };
 }

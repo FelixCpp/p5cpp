@@ -1,46 +1,52 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp_audio/p5cpp_audio.hpp>
 
+#include <vector>
+
 using namespace p5;
 using namespace p5::audio;
 
 struct AudioVisualizer : Sketch
 {
-    Sound sound;
-    Bus bus;
-    Reverb reverb;
-    Delay delay;
+    Sound sound = loadSoundFromFile("sound.mp3");
+    Sound alias = createSoundAlias(sound);
 
     void setup() override
     {
         setWindowSize(800, 600);
 
-        bus = createBus();
-        delay = createDelay(100, 0.5f);
-        reverb = createReverb();
-        addEffect(bus, delay);
-        addEffect(bus, reverb);
-        connect(reverb, getMasterBus());
-        connect(delay, getMasterBus());
+        setSoundVolume(sound, 1.0f);
+        setSoundVolume(alias, 0.4f);
+    }
 
-        sound = loadSound("sound.mp3", bus);
-        playSound(sound);
+    void event(const WindowEvent& event) override
+    {
     }
 
     void draw() override
     {
         background(rgba(255));
-    }
 
-    std::vector<std::unique_ptr<Plugin>> plugins() override
-    {
-        std::vector<std::unique_ptr<Plugin>> plugins;
-        plugins.push_back(createAudioPlugin());
-        return plugins;
+        if (isKeyPressed(Key::A)) {
+            playSound(sound);
+        }
+
+        if (isKeyPressed(Key::B)) {
+            playSound(alias);
+        }
     }
 };
 
-std::unique_ptr<Sketch> p5::createSketch()
+SketchSpec p5::createSpec()
 {
-    return std::make_unique<AudioVisualizer>();
+    return {
+        .plugins = [] {
+            std::vector<std::unique_ptr<Plugin>> plugins;
+            plugins.push_back(createAudioPlugin());
+            return plugins;
+        },
+        .sketch = [] {
+            return std::make_unique<AudioVisualizer>();
+        },
+    };
 }

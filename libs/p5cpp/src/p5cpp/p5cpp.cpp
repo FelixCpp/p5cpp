@@ -37,7 +37,16 @@ int main()
         s_kernel->addPlugin(std::make_unique<WindowPlugin>());
         s_kernel->addPlugin(std::make_unique<InputPlugin>());
         s_kernel->addPlugin(std::make_unique<GraphicsPlugin>());
-        s_kernel->addPlugin(std::make_unique<SketchLoaderPlugin>());
+
+        SketchSpec spec = createSpec();
+
+        if (spec.plugins) {
+            for (auto& plugin : spec.plugins()) {
+                s_kernel->addPlugin(std::move(plugin));
+            }
+        }
+
+        s_kernel->addPlugin(std::make_unique<SketchLoaderPlugin>(std::move(spec.sketch)));
         result = s_kernel->run();
     } while (result.shouldRestart);
 

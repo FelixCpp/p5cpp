@@ -1,22 +1,21 @@
 #include <p5cpp_audio/p5cpp_audio.hpp>
 #include <p5cpp_audio/audio_engine.hpp>
 
+#include <miniaudio.h>
+
 namespace p5::audio
 {
     namespace
     {
-        inline static std::unique_ptr<AudioEngine> s_audioEngine;
+        std::unique_ptr<AudioEngine> s_audioEngine;
     }
 
     class AudioPlugin : public Plugin
     {
+    public:
         void setup(Context& context, const Next& next) override
         {
             s_audioEngine = AudioEngine::create();
-            if (s_audioEngine == nullptr) {
-                throw std::runtime_error("Failed to create audio engine (miniaudio initialization failed)");
-            }
-
             context.provide(s_audioEngine.get());
 
             next();
@@ -29,6 +28,8 @@ namespace p5::audio
 
         void draw([[maybe_unused]] Context& context, const Next& next) override
         {
+            s_audioEngine->pruneFinishedOverlaps();
+
             next();
         }
 
@@ -39,6 +40,8 @@ namespace p5::audio
             context.remove<AudioEngine>();
             s_audioEngine.reset();
         }
+
+    private:
     };
 } // namespace p5::audio
 

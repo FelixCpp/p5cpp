@@ -5,6 +5,7 @@
 #include <deque>
 #include <variant>
 #include <concepts>
+#include <functional>
 #include <memory>
 #include <typeindex>
 #include <unordered_map>
@@ -357,10 +358,18 @@ namespace p5
         virtual void event([[maybe_unused]] const WindowEvent& event) {}
         virtual void draw() {}
         virtual void destroy() {}
-        virtual std::vector<std::unique_ptr<Plugin>> plugins() { return {}; };
     };
 
-    extern std::unique_ptr<Sketch> createSketch();
+    using PluginFactory = std::function<std::vector<std::unique_ptr<Plugin>>()>;
+    using SketchFactory = std::function<std::unique_ptr<Sketch>()>;
+
+    struct SketchSpec
+    {
+        PluginFactory plugins;
+        SketchFactory sketch;
+    };
+
+    extern SketchSpec createSpec();
 
     int getFrameCount();
     double getDeltaTime();
@@ -433,7 +442,6 @@ namespace p5
     private:
         std::unordered_map<std::type_index, void*> m_instances;
     };
-
 } // namespace p5
 
 namespace p5

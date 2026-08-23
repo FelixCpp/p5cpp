@@ -16,21 +16,16 @@ namespace p5
 
     private:
         std::unique_ptr<Sketch> m_sketch;
-        // Set once m_sketch->setup() itself has returned without throwing. destroy() checks this
-        // before calling m_sketch->destroy() -- Kernel::run() calls dispatchDestroy() unconditionally
-        // even when dispatchSetup() threw partway through (see its catch-and-rethrow), and a sketch
-        // whose own setup() never completed (e.g. it threw loading a resource) has no business having
-        // destroy() called against whatever half-initialized state its members are in.
-        bool m_setupCompleted = false;
     };
 
-    // Statically registered as the last built-in plugin. Defers creating the user's
-    // Sketch (and collecting its custom plugins) until its own setup() runs, i.e. after
-    // every other built-in plugin (Window, Graphics, ...) has already completed setup,
-    // since sketches commonly create GPU resources as member initializers.
     class SketchLoaderPlugin : public Plugin
     {
     public:
+        explicit SketchLoaderPlugin(SketchFactory sketchFactory);
+
         void setup(Context& context, const Next& next);
+
+    private:
+        SketchFactory m_sketchFactory;
     };
 } // namespace p5
