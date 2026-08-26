@@ -17,6 +17,25 @@ namespace p5::audio
     void setSoundVolume(const Sound& sound, const float volume) { getAudioEngine().setSoundVolume(sound, volume); }
     void setSoundPitch(const Sound& sound, const float pitch) { getAudioEngine().setSoundPitch(sound, pitch); }
     void setSoundPan(const Sound& sound, const float pan) { getAudioEngine().setSoundPan(sound, pan); }
+    void setSoundLoop(const Sound& sound, const bool loop) { getAudioEngine().setSoundLoop(sound, loop); }
+    bool isSoundLooping(const Sound& sound) { return getAudioEngine().isSoundLooping(sound); }
+    void seekSound(const Sound& sound, const float seconds) { getAudioEngine().seekSound(sound, seconds); }
+    float getSoundTimePlayed(const Sound& sound) { return getAudioEngine().getSoundTimePlayed(sound); }
+    float getSoundTimeLength(const Sound& sound) { return getAudioEngine().getSoundTimeLength(sound); }
+    MixedAudioProcessorHandle attachMixedAudioProcessor(MixedAudioProcessor processor)
+    {
+        return getAudioEngine().attachMixedAudioProcessor(std::move(processor));
+    }
+
+    void detachMixedAudioProcessor(const MixedAudioProcessorHandle handle) { getAudioEngine().detachMixedAudioProcessor(handle); }
+
+    SoundProcessorHandle attachSoundProcessor(const Sound& sound, SoundProcessor processor)
+    {
+        return getAudioEngine().attachSoundProcessor(sound, std::move(processor));
+    }
+
+    void detachSoundProcessor(const Sound& sound, const SoundProcessorHandle handle) { getAudioEngine().detachSoundProcessor(sound, handle); }
+
     void setMasterVolume(const float volume) { getAudioEngine().setMasterVolume(volume); }
     float getMasterVolume() { return getAudioEngine().getMasterVolume(); }
 } // namespace p5::audio

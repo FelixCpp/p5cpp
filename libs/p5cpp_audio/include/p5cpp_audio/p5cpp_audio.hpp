@@ -32,11 +32,36 @@ namespace p5::audio
     void setSoundPitch(const Sound& sound, float pitch);
     void setSoundPan(const Sound& sound, float pan);
 
+    void setSoundLoop(const Sound& sound, bool loop);
+    bool isSoundLooping(const Sound& sound);
+
+    void seekSound(const Sound& sound, float seconds);
+    float getSoundTimePlayed(const Sound& sound);
+    float getSoundTimeLength(const Sound& sound);
+
     void setMasterVolume(float volume);
     float getMasterVolume();
 
     void playSoundOverlapped(const Sound& sound);
     Sound createSoundAlias(const Sound& sound);
+
+    using MixedAudioProcessor = std::function<void(std::span<float> frames, uint32_t channels)>;
+    struct MixedAudioProcessorHandle
+    {
+        uint64_t id = 0;
+    };
+
+    MixedAudioProcessorHandle attachMixedAudioProcessor(MixedAudioProcessor processor);
+    void detachMixedAudioProcessor(MixedAudioProcessorHandle handle);
+
+    using SoundProcessor = std::function<void(std::span<float> frames, uint32_t channels)>;
+    struct SoundProcessorHandle
+    {
+        uint64_t id = 0;
+    };
+
+    SoundProcessorHandle attachSoundProcessor(const Sound& sound, SoundProcessor processor);
+    void detachSoundProcessor(const Sound& sound, SoundProcessorHandle handle);
 } // namespace p5::audio
 
 namespace p5::audio

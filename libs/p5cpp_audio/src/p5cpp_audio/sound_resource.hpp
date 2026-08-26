@@ -1,5 +1,7 @@
 #pragma once
 
+#include <p5cpp_audio/p5cpp_audio.hpp>
+
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -9,6 +11,8 @@
 
 namespace p5::audio
 {
+    struct SoundProcessorNode; // defined in sound_resource.cpp -- wraps the spliced-in ma_node
+
     class SoundResource
     {
     public:
@@ -35,10 +39,22 @@ namespace p5::audio
         void setPitch(float pitch);
         void setPan(float pan);
 
+        void setLooping(bool loop);
+        bool isLooping() const;
+
+        void seek(float seconds);
+        float getTimePlayed() const;
+        float getTimeLength() const;
+
+        SoundProcessorHandle attachProcessor(SoundProcessor processor);
+        void detachProcessor(SoundProcessorHandle handle);
+
     private:
         explicit SoundResource();
 
         ma_sound m_sound;
         std::unique_ptr<ma_decoder> m_decoder;
+        ma_engine* m_engine = nullptr;
+        std::unique_ptr<SoundProcessorNode> m_processorNode; // lazily created on first attachProcessor
     };
 } // namespace p5::audio
