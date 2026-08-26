@@ -246,7 +246,9 @@ namespace p5::audio
         }
 
         std::lock_guard lock {m_processorNode->mutex};
-        std::erase_if(m_processorNode->processors, [handle](const auto& entry) { return entry.first == handle.id; });
+        std::erase_if(m_processorNode->processors, [handle](const auto& entry) {
+            return entry.first == handle.id;
+        });
     }
 
     SoundResource::SoundResource() = default;
