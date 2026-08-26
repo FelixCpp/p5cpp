@@ -1,5 +1,5 @@
 #include <p5cpp/p5cpp.hpp>
-#include <p5cpp_animation/p5cpp_animation.hpp>
+
 using namespace p5;
 
 struct DiscoGrid : Sketch

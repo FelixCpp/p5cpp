@@ -1,6 +1,8 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp_animation/p5cpp_animation.hpp>
+
 using namespace p5;
+using namespace p5::animation;
 
 struct InteractiveGrid : Sketch
 {

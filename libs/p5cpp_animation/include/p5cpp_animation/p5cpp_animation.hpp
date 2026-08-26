@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace p5
+namespace p5::animation
 {
     enum class LoopMode
     {
@@ -20,9 +20,9 @@ namespace p5
         paused,
         finished,
     };
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     float easeLinear(float x);
     float easeInQuad(float x);
@@ -57,9 +57,9 @@ namespace p5
     float easeInOutBounce(float x);
 
     typedef float (*EasingFunction)(float);
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> struct tween
     {
@@ -88,9 +88,9 @@ namespace p5
     template <typename T> bool isPlaying(const tween<T>& tween);
     template <typename T> bool isPaused(const tween<T>& tween);
     template <typename T> bool isFinished(const tween<T>& tween);
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> struct timeline_entry
     {
@@ -125,9 +125,9 @@ namespace p5
     template <typename T> bool isPlaying(const timeline<T>& timeline);
     template <typename T> bool isPaused(const timeline<T>& timeline);
     template <typename T> bool isFinished(const timeline<T>& timeline);
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> struct spring
     {
@@ -158,9 +158,9 @@ namespace p5
     template <typename T> bool isPlaying(const spring<T>& spring);
     template <typename T> bool isPaused(const spring<T>& spring);
     template <typename T> bool isFinished(const spring<T>& spring);
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5::detail
+namespace p5::animation::detail
 {
     // Advances a single scalar spring simulation step via semi-implicit (symplectic) Euler
     // integration. Overloaded per vector type below, component-wise.
@@ -205,18 +205,18 @@ namespace p5::detail
         constexpr float velocityEpsilon = 0.01f;
         return springDistance(position, target) < positionEpsilon && springDistance(velocity, T {}) < velocityEpsilon;
     }
-} // namespace p5::detail
+} // namespace p5::animation::detail
 
-namespace p5::detail
+namespace p5::animation::detail
 {
     template <typename T> T lerpValue(const T& from, const T& to, float t);
     template <> float2 lerpValue(const float2& from, const float2& to, float t);
     template <> float3 lerpValue(const float3& from, const float3& to, float t);
     template <> float4 lerpValue(const float4& from, const float4& to, float t);
     template <> color_t lerpValue(const color_t& from, const color_t& to, float t);
-} // namespace p5::detail
+} // namespace p5::animation::detail
 
-namespace p5
+namespace p5::animation
 {
     // clang-format off
     inline float easeLinear(float t) { return t; }
@@ -251,9 +251,9 @@ namespace p5
     inline float easeOutBounce(float t) { if (t < 1.0f / 2.75f) { return 7.5625f * t * t; } else if (t < 2.0f / 2.75f) { t -= 1.5f / 2.75f; return 7.5625f * t * t + 0.75f; } else if (t < 2.5f / 2.75f) { t -= 2.25f / 2.75f; return 7.5625f * t * t + 0.9375f; } else { t -= 2.625f / 2.75f; return 7.5625f * t * t + 0.984375f; } }
     inline float easeInOutBounce(float t) { return (t < 0.5f) ? (1.0f - easeOutBounce(1.0f - 2.0f * t)) / 2.0f : (1.0f + easeOutBounce(2.0f * t - 1.0f)) / 2.0f; }
     // clang-format on
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> tween<T> createTween(const T& from, const T& to, float duration, EasingFunction easing, LoopMode loopMode)
     {
@@ -346,9 +346,9 @@ namespace p5
     template <typename T> bool isPlaying(const tween<T>& tween) { return tween.state == PlayState::playing; }
     template <typename T> bool isPaused(const tween<T>& tween) { return tween.state == PlayState::paused; }
     template <typename T> bool isFinished(const tween<T>& tween) { return tween.state == PlayState::finished; }
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> timeline<T> createTimeline(const T& from, const std::vector<timeline_entry<T>>& entries)
     {
@@ -469,9 +469,9 @@ namespace p5
     template <typename T> bool isPlaying(const timeline<T>& timeline) { return timeline.state == PlayState::playing; }
     template <typename T> bool isPaused(const timeline<T>& timeline) { return timeline.state == PlayState::paused; }
     template <typename T> bool isFinished(const timeline<T>& timeline) { return timeline.state == PlayState::finished; }
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> spring<T> createSpring(const T& from, const T& to, float stiffness, float damping, float mass, LoopMode loopMode)
     {
@@ -565,9 +565,9 @@ namespace p5
     template <typename T> bool isPlaying(const spring<T>& spring) { return spring.state == PlayState::playing; }
     template <typename T> bool isPaused(const spring<T>& spring) { return spring.state == PlayState::paused; }
     template <typename T> bool isFinished(const spring<T>& spring) { return spring.state == PlayState::finished; }
-} // namespace p5
+} // namespace p5::animation
 
-namespace p5
+namespace p5::animation
 {
     template <typename T> T detail::lerpValue(const T& from, const T& to, float t) { return from + (to - from) * t; }
     template <> inline float2 detail::lerpValue(const float2& from, const float2& to, float t) { return {lerpValue(from.x, to.x, t), lerpValue(from.y, to.y, t)}; }
@@ -582,4 +582,4 @@ namespace p5
 
         return rgba(r, g, b, a);
     }
-} // namespace p5
+} // namespace p5::animation

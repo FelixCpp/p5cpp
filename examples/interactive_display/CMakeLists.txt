@@ -1,2 +1,2 @@
 add_executable(interactive_display main.cpp)
-target_link_libraries(interactive_display PRIVATE p5cpp p5cpp_animation)
+target_link_libraries(interactive_display PRIVATE p5cpp)
