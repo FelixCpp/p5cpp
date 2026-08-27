@@ -788,8 +788,12 @@ namespace p5
         virtual float getLineGap() const = 0;
     };
 
-    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t sdfSourceEmPixels = 128);
-    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t sdfSourceEmPixels = 128);
+    // atlasEmPixels is the size (in pixels per em) each glyph is rasterized at once and cached in the
+    // atlas; every requested textSize() reuses that same bitmap, GPU-bilinear-scaled. Pass a value close
+    // to the largest size this Font will actually be displayed at -- text scaled well above it will
+    // visibly soften, the same trade-off Processing's createFont(name, size) documents.
+    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
+    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
 } // namespace p5
 
 namespace p5

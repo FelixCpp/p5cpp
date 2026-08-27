@@ -1,0 +1,2 @@
+add_executable(rotating_typography main.cpp)
+target_link_libraries(rotating_typography PRIVATE p5cpp p5cpp_animation)

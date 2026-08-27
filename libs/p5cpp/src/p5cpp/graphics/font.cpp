@@ -8,7 +8,6 @@
 #include <hb-ft.h>
 
 #include <algorithm>
-#include <cmath>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
@@ -43,178 +42,29 @@ namespace p5
             return mutex;
         }
 
-        // Glyphs are rasterized once at a fixed source resolution (independent of any requested
-        // textSize()) and converted into a signed distance field; a single atlas cell per glyph is then
-        // reused for every display size via the SDF shader's smoothstep antialiasing.
+        // Glyphs are rasterized once as a plain 8-bit antialiased coverage bitmap (FreeType's
+        // FT_RENDER_MODE_NORMAL grayscale output -- the same kind of AA a software text rasterizer like
+        // Java2D's produces) at a fixed size, and that single cached bitmap is reused for every display
+        // size, exactly like Processing's PFont/FontTexture: one bitmap per glyph, bilinear-scaled by
+        // the GPU for whatever textSize() is requested. No distance field, no spread, no per-size
+        // re-rasterization.
         //
-        // The source resolution (texels/em, since kDownsampleFactor is fixed at 1 below) needs to stay
-        // high enough that small/thin glyph features (e.g. a lowercase 'a' bowl, or the ~2-texel-thick
-        // crossbar of a lowercase 'e') still get several texels of SDF gradient across their width —
-        // too low a density collapses most of a cell's values into a narrow, low-contrast band around
-        // the 128 edge threshold, which then thresholds into visible noise/gaps once bilinear-magnified
-        // on screen. Tried 48/4 = 12 texels/em first (nowhere near enough for small glyphs generally),
-        // then 64/2 = 32 texels/em (fixed whole-glyph corruption but individual thin strokes like the
-        // 'e' crossbar were still only ~2 texels thick and broke up); downsampling is dropped entirely
-        // (factor 1) so the atlas keeps the full source raster's detail instead of averaging thin
-        // features away.
-        //
-        // SDF crispness is not scale-invariant beyond this resolution, though: the encoded spread band
-        // (kSpreadAtlasTexels) is a fixed number of *texels*, so displaying a glyph much larger than
-        // the source resolution stretches that band into a visibly soft transition on screen. The
-        // default here (128 texels/em) keeps text crisp up to a few hundred px before that becomes
-        // noticeable; loadFont()'s sdfSourceEmPixels parameter lets callers raise it further for
-        // sketches that need very large headline-sized text, at the cost of more atlas memory per glyph.
-        constexpr int kDownsampleFactor = 1;
-        constexpr int kSpreadAtlasTexels = 4;
-        constexpr int kSpreadSourcePixels = kSpreadAtlasTexels * kDownsampleFactor;
-        constexpr int kAtlasPaddingTexels = kSpreadAtlasTexels;
+        // The trade-off is the same one Processing accepts: text scaled well above atlasEmPixels will
+        // visibly soften, since there's nothing beyond GPU bilinear filtering to keep edges crisp past
+        // the baked resolution. Callers who need large headline-sized (or animated/scaled-up) text
+        // should pass an atlasEmPixels close to the largest size they'll actually display -- mirroring
+        // Processing's own createFont(name, size) advice to "create the font at the largest size
+        // needed, then scale down."
+        constexpr int kAtlasPaddingTexels = 1; // guards against bilinear bleed between neighboring atlas cells
 
-        // --- 8SSEDT (8-points signed sequential Euclidean distance transform) ---
-        // Two-pass propagation of "offset to nearest seeded pixel" across a grid; used twice (once for
-        // the glyph's "inside" mask, once for "outside") to build an unsigned distance transform of each,
-        // which are then combined into a single signed distance field.
-
-        struct DistanceOffset
+        // Copies an FT_Bitmap's coverage rows (respecting `pitch`, which can exceed `width` for row
+        // alignment) into a tightly packed, row-major buffer the atlas packer can blit directly.
+        std::vector<uint8_t> packCoverageBitmap(const uint8_t* buffer, int width, int height, int pitch)
         {
-            int dx, dy;
-        };
-
-        constexpr DistanceOffset kFarOffset {16384, 16384};
-
-        inline int squaredLength(const DistanceOffset& o)
-        {
-            return o.dx * o.dx + o.dy * o.dy;
-        }
-
-        class EdtGrid
-        {
-        public:
-            EdtGrid(int width, int height)
-                : m_width(width), m_height(height), m_offsets(static_cast<size_t>(width) * static_cast<size_t>(height), kFarOffset)
-            {
-            }
-
-            void seed(int x, int y)
-            {
-                m_offsets[index(x, y)] = {0, 0};
-            }
-
-            void propagate()
-            {
-                for (int y = 0; y < m_height; ++y) {
-                    for (int x = 0; x < m_width; ++x) {
-                        compare(x, y, -1, 0);
-                        compare(x, y, 0, -1);
-                        compare(x, y, -1, -1);
-                        compare(x, y, 1, -1);
-                    }
-                    for (int x = m_width - 1; x >= 0; --x) {
-                        compare(x, y, 1, 0);
-                    }
-                }
-                for (int y = m_height - 1; y >= 0; --y) {
-                    for (int x = m_width - 1; x >= 0; --x) {
-                        compare(x, y, 1, 0);
-                        compare(x, y, 0, 1);
-                        compare(x, y, 1, 1);
-                        compare(x, y, -1, 1);
-                    }
-                    for (int x = 0; x < m_width; ++x) {
-                        compare(x, y, -1, 0);
-                    }
-                }
-            }
-
-            float distanceAt(int x, int y) const
-            {
-                return std::sqrt(static_cast<float>(squaredLength(m_offsets[index(x, y)])));
-            }
-
-        private:
-            size_t index(int x, int y) const
-            {
-                return static_cast<size_t>(y) * static_cast<size_t>(m_width) + static_cast<size_t>(x);
-            }
-
-            void compare(int x, int y, int dx, int dy)
-            {
-                const int nx = x + dx;
-                const int ny = y + dy;
-                if (nx < 0 or nx >= m_width or ny < 0 or ny >= m_height) {
-                    return;
-                }
-
-                DistanceOffset candidate = m_offsets[index(nx, ny)];
-                candidate.dx += dx;
-                candidate.dy += dy;
-                if (squaredLength(candidate) < squaredLength(m_offsets[index(x, y)])) {
-                    m_offsets[index(x, y)] = candidate;
-                }
-            }
-
-            int m_width, m_height;
-            std::vector<DistanceOffset> m_offsets;
-        };
-
-        // Converts an 8-bit AA coverage bitmap (as produced by FT_RENDER_MODE_NORMAL) into a signed
-        // distance field, encoded as bytes where 128 = glyph edge, >128 = inside, <128 = outside.
-        std::vector<uint8_t> generateSDF(const uint8_t* coverage, int width, int height, int pitch)
-        {
-            EdtGrid insideGrid(width, height);  // holds distance to nearest INSIDE pixel
-            EdtGrid outsideGrid(width, height); // holds distance to nearest OUTSIDE pixel
-
+            std::vector<uint8_t> result(static_cast<size_t>(width) * static_cast<size_t>(height));
             for (int y = 0; y < height; ++y) {
-                const uint8_t* row = coverage + static_cast<ptrdiff_t>(y) * pitch;
-                for (int x = 0; x < width; ++x) {
-                    if (row[x] >= 128) {
-                        insideGrid.seed(x, y);
-                    } else {
-                        outsideGrid.seed(x, y);
-                    }
-                }
-            }
-
-            insideGrid.propagate();
-            outsideGrid.propagate();
-
-            std::vector<uint8_t> sdf(static_cast<size_t>(width) * static_cast<size_t>(height));
-            for (int y = 0; y < height; ++y) {
-                const uint8_t* row = coverage + static_cast<ptrdiff_t>(y) * pitch;
-                for (int x = 0; x < width; ++x) {
-                    const bool isInside = row[x] >= 128;
-                    const float signedDistance = isInside ? outsideGrid.distanceAt(x, y) : -insideGrid.distanceAt(x, y);
-                    const float normalized = std::clamp(signedDistance / static_cast<float>(kSpreadSourcePixels), -1.0f, 1.0f);
-                    sdf[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)] =
-                        static_cast<uint8_t>(std::clamp(normalized * 127.0f + 128.0f, 0.0f, 255.0f));
-                }
-            }
-            return sdf;
-        }
-
-        // Box-filter downsamples a source-resolution SDF byte buffer by kDownsampleFactor into the
-        // smaller cell that actually gets uploaded to the atlas.
-        std::vector<uint8_t> downsampleSDF(const std::vector<uint8_t>& source, int srcWidth, int srcHeight, int& outWidth, int& outHeight)
-        {
-            outWidth = std::max(1, (srcWidth + kDownsampleFactor - 1) / kDownsampleFactor);
-            outHeight = std::max(1, (srcHeight + kDownsampleFactor - 1) / kDownsampleFactor);
-
-            std::vector<uint8_t> result(static_cast<size_t>(outWidth) * static_cast<size_t>(outHeight));
-            for (int y = 0; y < outHeight; ++y) {
-                for (int x = 0; x < outWidth; ++x) {
-                    int sum = 0;
-                    int count = 0;
-                    for (int by = 0; by < kDownsampleFactor; ++by) {
-                        for (int bx = 0; bx < kDownsampleFactor; ++bx) {
-                            const int sx = x * kDownsampleFactor + bx;
-                            const int sy = y * kDownsampleFactor + by;
-                            if (sx < srcWidth and sy < srcHeight) {
-                                sum += source[static_cast<size_t>(sy) * static_cast<size_t>(srcWidth) + static_cast<size_t>(sx)];
-                                ++count;
-                            }
-                        }
-                    }
-                    result[static_cast<size_t>(y) * static_cast<size_t>(outWidth) + static_cast<size_t>(x)] = static_cast<uint8_t>(count > 0 ? sum / count : 0);
-                }
+                const uint8_t* row = buffer + static_cast<ptrdiff_t>(y) * pitch;
+                std::copy(row, row + width, result.begin() + static_cast<ptrdiff_t>(y) * width);
             }
             return result;
         }
@@ -226,15 +76,15 @@ namespace p5
         // rasterFace and hbFace are two independent FT_Face handles opened from the same font data.
         // They must stay separate: HarfBuzz caches each glyph's advance the first time it's queried,
         // and if that first query happens after rasterFace's pixel size/glyph slot has been mutated by
-        // our own SDF rasterization (FT_Set_Pixel_Sizes + FT_LOAD_RENDER in rasterizeGlyph()), the
+        // our own glyph rasterization (FT_Set_Pixel_Sizes + FT_LOAD_RENDER in rasterizeGlyph()), the
         // cached advance comes back wrong (seen ~4x inflated on some glyphs, exact value depends on
         // whatever the glyph slot's bitmap-rendered state happened to leave behind) — and stays wrong
         // for the lifetime of the hb_font_t once cached. Giving HarfBuzz its own face that our
         // rasterization code never touches sidesteps the whole class of bug regardless of query order.
-        FreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
+        FreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
             : m_rasterFace(rasterFace), m_hbFace(hbFace), m_hbFont(hbFont),
               m_atlasTexture(loadTextureFromMemory(atlasWidth, atlasHeight, {}, TexturePixelFormat::r8)),
-              m_sdfSourceEmPixels(sdfSourceEmPixels)
+              m_atlasEmPixels(atlasEmPixels)
         {
             // Prepopulate printable ASCII so common Latin text never hits an on-demand rasterize hitch
             // or an atlas-full fallback (see packIntoAtlas()) for the overwhelmingly common case.
@@ -344,8 +194,10 @@ namespace p5
                 return it->second;
             }
 
-            // Pass 2: AA coverage bitmap at a fixed source resolution, used to build the SDF.
-            FT_Set_Pixel_Sizes(m_rasterFace, 0, m_sdfSourceEmPixels);
+            // Pass 2: plain AA coverage bitmap at the fixed atlas bake resolution -- the same bitmap is
+            // reused (GPU-bilinear-scaled) for every requested display size, see the comment on
+            // kAtlasPaddingTexels above.
+            FT_Set_Pixel_Sizes(m_rasterFace, 0, m_atlasEmPixels);
             if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_RENDER | FT_LOAD_NO_HINTING) != 0) {
                 error("Font: FT_Load_Glyph() (render pass) failed for glyph index {}", glyphIndex);
                 const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
@@ -358,13 +210,11 @@ namespace p5
                 return it->second;
             }
 
-            const std::vector<uint8_t> sourceSDF = generateSDF(bitmap.buffer, static_cast<int>(bitmap.width), static_cast<int>(bitmap.rows), bitmap.pitch);
+            const int cellWidth = static_cast<int>(bitmap.width);
+            const int cellHeight = static_cast<int>(bitmap.rows);
+            const std::vector<uint8_t> cellCoverage = packCoverageBitmap(bitmap.buffer, cellWidth, cellHeight, bitmap.pitch);
 
-            int cellWidth = 0;
-            int cellHeight = 0;
-            const std::vector<uint8_t> cellSDF = downsampleSDF(sourceSDF, static_cast<int>(bitmap.width), static_cast<int>(bitmap.rows), cellWidth, cellHeight);
-
-            const std::optional<rect2f> uvRect = packIntoAtlas(cellSDF, cellWidth, cellHeight);
+            const std::optional<rect2f> uvRect = packIntoAtlas(cellCoverage, cellWidth, cellHeight);
             if (not uvRect.has_value()) {
                 // Atlas is full — keep the glyph's advance-only metrics rather than crashing; it just
                 // won't render until the Font is constructed with a larger atlas.
@@ -376,7 +226,7 @@ namespace p5
             return it->second;
         }
 
-        std::optional<rect2f> packIntoAtlas(const std::vector<uint8_t>& cellSDF, int cellWidth, int cellHeight)
+        std::optional<rect2f> packIntoAtlas(const std::vector<uint8_t>& cellCoverage, int cellWidth, int cellHeight)
         {
             const uint32_t atlasWidth = m_atlasTexture->size.x;
             const uint32_t atlasHeight = m_atlasTexture->size.y;
@@ -390,7 +240,7 @@ namespace p5
             // updateSubImage() silently no-op'ing on its own out-of-bounds check while this function
             // still cached a uvRect claiming success and permanently burned that shelf row.
             if (paddedWidth > atlasWidth or paddedHeight > atlasHeight) {
-                error("Font: glyph cell ({}x{} padded) does not fit in the SDF atlas ({}x{}); construct the Font with a larger atlasWidth/atlasHeight or a smaller sdfSourceEmPixels", paddedWidth, paddedHeight, atlasWidth, atlasHeight);
+                error("Font: glyph cell ({}x{} padded) does not fit in the glyph atlas ({}x{}); construct the Font with a larger atlasWidth/atlasHeight or a smaller atlasEmPixels", paddedWidth, paddedHeight, atlasWidth, atlasHeight);
                 return std::nullopt;
             }
 
@@ -400,17 +250,17 @@ namespace p5
                 m_shelfHeight = 0;
             }
             if (m_shelfY + paddedHeight > atlasHeight) {
-                error("Font: SDF atlas ({}x{}) is full; construct the Font with a larger atlasWidth/atlasHeight", atlasWidth, atlasHeight);
+                error("Font: glyph atlas ({}x{}) is full; construct the Font with a larger atlasWidth/atlasHeight", atlasWidth, atlasHeight);
                 return std::nullopt;
             }
 
-            // Fill the padded cell with the "far outside" byte value, then blit the glyph SDF into its
-            // center, so bilinear sampling near the glyph's edges never bleeds into a neighboring glyph.
+            // Fill the padded cell with zero coverage, then blit the glyph bitmap into its center, so
+            // bilinear sampling near the glyph's edges never bleeds into a neighboring glyph.
             std::vector<uint8_t> padded(static_cast<size_t>(paddedWidth) * static_cast<size_t>(paddedHeight), 0);
             for (int y = 0; y < cellHeight; ++y) {
                 for (int x = 0; x < cellWidth; ++x) {
                     const size_t dstIndex = static_cast<size_t>(y + kAtlasPaddingTexels) * paddedWidth + static_cast<size_t>(x + kAtlasPaddingTexels);
-                    padded[dstIndex] = cellSDF[static_cast<size_t>(y) * static_cast<size_t>(cellWidth) + static_cast<size_t>(x)];
+                    padded[dstIndex] = cellCoverage[static_cast<size_t>(y) * static_cast<size_t>(cellWidth) + static_cast<size_t>(x)];
                 }
             }
 
@@ -433,7 +283,7 @@ namespace p5
         FT_Face m_hbFace;
         hb_font_t* m_hbFont;
         std::shared_ptr<Texture> m_atlasTexture;
-        uint32_t m_sdfSourceEmPixels;
+        uint32_t m_atlasEmPixels;
         std::unordered_map<uint32_t, GlyphMetrics> m_glyphCache;
 
         uint32_t m_shelfX = 0;
@@ -448,10 +298,10 @@ namespace p5
         // bad_alloc from the ASCII-prepopulation loop in its constructor body) -- at that point
         // ownership never successfully transferred, and FreeTypeHarfBuzzFont's own destructor never
         // runs for an object whose constructor didn't complete.
-        std::unique_ptr<Font> makeFreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
+        std::unique_ptr<Font> makeFreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
         {
             try {
-                return std::make_unique<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
+                return std::make_unique<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels);
             } catch (...) {
                 hb_font_destroy(hbFont);
                 std::lock_guard<std::mutex> lock(freeTypeMutex());
@@ -462,7 +312,7 @@ namespace p5
         }
     } // namespace
 
-    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
+    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
     {
         FT_Face rasterFace = nullptr;
         FT_Face hbFace = nullptr;
@@ -473,7 +323,7 @@ namespace p5
             }
 
             // A second, independent face for HarfBuzz — see the FreeTypeHarfBuzzFont comment for why this
-            // must not be the same FT_Face our own SDF rasterization mutates via FT_Set_Pixel_Sizes().
+            // must not be the same FT_Face our own glyph rasterization mutates via FT_Set_Pixel_Sizes().
             if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &hbFace) != 0) {
                 FT_Done_Face(rasterFace);
                 return nullptr;
@@ -494,10 +344,10 @@ namespace p5
         // Graphics::text()'s scale math assumes.
         hb_font_set_scale(hbFont, static_cast<int>(hbFace->units_per_EM), static_cast<int>(hbFace->units_per_EM));
 
-        return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
+        return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels);
     }
 
-    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t sdfSourceEmPixels)
+    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
     {
         const std::string filepathStr = filepath.string();
 
@@ -526,7 +376,7 @@ namespace p5
 
         hb_font_set_scale(hbFont, static_cast<int>(hbFace->units_per_EM), static_cast<int>(hbFace->units_per_EM));
 
-        return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, sdfSourceEmPixels);
+        return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels);
     }
 } // namespace p5
 

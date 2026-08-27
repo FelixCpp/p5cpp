@@ -4,6 +4,14 @@
 
 namespace p5
 {
+    GraphicsPlugin::GraphicsPlugin()
+        : m_graphics(nullptr),
+          m_defaultFramebuffer(nullptr),
+          m_size(0, 0),
+          m_samples(4)
+    {
+    }
+
     void GraphicsPlugin::setup(Context& context, const Next& next)
     {
         m_graphics = std::make_unique<Graphics>();

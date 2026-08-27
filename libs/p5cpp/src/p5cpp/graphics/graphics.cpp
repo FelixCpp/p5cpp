@@ -28,6 +28,11 @@ namespace p5
             }
         )";
 
+        // Glyph atlas cells store plain 8-bit AA coverage (see font.cpp), not a signed distance field --
+        // same architecture as Processing's PFont/FontTexture. Coverage is read straight through as
+        // alpha; the GPU's own bilinear filtering on the atlas texture (see loadTextureFromMemory())
+        // is the only antialiasing applied when a glyph is displayed larger or smaller than the size it
+        // was baked at.
         inline static constexpr std::string_view defaultTextFragmentShaderSource = R"(
             #version 410
 
@@ -40,10 +45,8 @@ namespace p5
 
             void main()
             {
-                float distance = texture(u_Texture, v_TexCoord).r;
-                float smoothing = fwidth(distance) * 0.75;
-                float alpha = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance);
-                o_FragColor = vec4(v_Color.rgb, v_Color.a * alpha);
+                float coverage = texture(u_Texture, v_TexCoord).r;
+                o_FragColor = vec4(v_Color.rgb, v_Color.a * coverage);
             }
         )";
 
@@ -477,7 +480,9 @@ namespace p5
         Renderer::Writer writer = m_renderer->write();
         tesselate_quads(writer, positions, texCoords, convertedColors);
         // Filter/wrap are forced (not state.textureFilter/textureWrap): linear sampling is a correctness
-        // requirement of the SDF antialiasing, not a style choice like it is for image()'s user textures.
+        // requirement for glyph scaling (see font.cpp -- each atlas cell is baked once and reused,
+        // bilinear-scaled, for every requested textSize()), not a style choice like it is for
+        // image()'s user textures.
         m_renderer->finish(writer, state.blendMode, state.clipRect, TextureFilter::linear, TextureWrap::clampToEdge, atlasTexture, resolveActiveShader(m_defaultTextShader));
     }
 

@@ -8,6 +8,8 @@ namespace p5
     class GraphicsPlugin : public Plugin
     {
     public:
+        GraphicsPlugin();
+
         void setup(Context& context, const Next& next);
         void event(Context& context, const Next& next, const WindowEvent& event);
         void draw(Context& context, const Next& next);
@@ -21,7 +23,7 @@ namespace p5
 
         std::unique_ptr<Graphics> m_graphics;
         std::shared_ptr<Framebuffer> m_defaultFramebuffer;
-        uint2 m_size {0, 0};
-        uint32_t m_samples = 0;
+        uint2 m_size;
+        uint32_t m_samples;
     };
 } // namespace p5
