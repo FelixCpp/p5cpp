@@ -3,11 +3,13 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_OUTLINE_H
 
 #include <hb.h>
 #include <hb-ft.h>
 
 #include <algorithm>
+#include <cmath>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
@@ -67,6 +69,173 @@ namespace p5
                 std::copy(row, row + width, result.begin() + static_cast<ptrdiff_t>(y) * width);
             }
             return result;
+        }
+
+        // Segment count for flattening one glyph-outline conic/cubic curve, given its control polygon
+        // length in font design units. Deliberately not the pixel-tuned curveSegmentCount() (shape_
+        // builder.cpp, /3.0f) reused verbatim -- at typical 1000-2048 units/em, essentially every glyph
+        // curve would saturate that heuristic's 128-segment ceiling instead of scaling with actual
+        // curve size, since it assumes ~3 *pixels* per segment. Normalizing by unitsPerEm here keeps
+        // segment count responsive to real curve complexity while staying cheap (results are cached per
+        // glyph in m_outlineCache, not recomputed per frame).
+        int curveSegmentCountForDesignUnits(float controlPolygonLength, float unitsPerEm)
+        {
+            if (not std::isfinite(controlPolygonLength) or not std::isfinite(unitsPerEm) or unitsPerEm <= 0.0f) {
+                return 8;
+            }
+            return std::clamp(static_cast<int>(std::ceil(controlPolygonLength / (unitsPerEm * 0.006f))), 8, 64);
+        }
+
+        float2 toFloat2(const FT_Vector& v)
+        {
+            return {static_cast<float>(v.x), static_cast<float>(v.y)};
+        }
+
+        // FT_Outline_Decompose() callback state: accumulates one glyph's contours as flattened
+        // polylines, in the same unscaled font-design-unit space FT_LOAD_NO_SCALE leaves coordinates in
+        // (no /64 shift needed here, unlike the default 26.6 scaled load path rasterizeGlyph()'s
+        // render pass uses).
+        struct OutlineDecomposeContext
+        {
+            std::vector<std::vector<float2>> contours;
+            float2 current;
+            float unitsPerEm;
+        };
+
+        int outlineMoveTo(const FT_Vector* to, void* user)
+        {
+            auto& ctx = *static_cast<OutlineDecomposeContext*>(user);
+            ctx.current = toFloat2(*to);
+            ctx.contours.push_back({ctx.current});
+            return 0;
+        }
+
+        int outlineLineTo(const FT_Vector* to, void* user)
+        {
+            auto& ctx = *static_cast<OutlineDecomposeContext*>(user);
+            ctx.current = toFloat2(*to);
+            ctx.contours.back().push_back(ctx.current);
+            return 0;
+        }
+
+        int outlineConicTo(const FT_Vector* control, const FT_Vector* to, void* user)
+        {
+            auto& ctx = *static_cast<OutlineDecomposeContext*>(user);
+            const float2 p0 = ctx.current;
+            const float2 p1 = toFloat2(*control);
+            const float2 p2 = toFloat2(*to);
+            const float controlPolygonLength = distance(p0, p1) + distance(p1, p2);
+            const int segments = curveSegmentCountForDesignUnits(controlPolygonLength, ctx.unitsPerEm);
+            std::vector<float2>& contour = ctx.contours.back();
+            for (int i = 1; i <= segments; ++i) {
+                const float t = static_cast<float>(i) / static_cast<float>(segments);
+                const float u = 1.0f - t;
+                contour.push_back(u * u * p0 + 2.0f * u * t * p1 + t * t * p2);
+            }
+            ctx.current = p2;
+            return 0;
+        }
+
+        int outlineCubicTo(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* user)
+        {
+            auto& ctx = *static_cast<OutlineDecomposeContext*>(user);
+            const float2 p0 = ctx.current;
+            const float2 p1 = toFloat2(*control1);
+            const float2 p2 = toFloat2(*control2);
+            const float2 p3 = toFloat2(*to);
+            const float controlPolygonLength = distance(p0, p1) + distance(p1, p2) + distance(p2, p3);
+            const int segments = curveSegmentCountForDesignUnits(controlPolygonLength, ctx.unitsPerEm);
+            std::vector<float2>& contour = ctx.contours.back();
+            for (int i = 1; i <= segments; ++i) {
+                const float t = static_cast<float>(i) / static_cast<float>(segments);
+                const float u = 1.0f - t;
+                contour.push_back(u * u * u * p0 + 3.0f * u * u * t * p1 + 3.0f * u * t * t * p2 + t * t * t * p3);
+            }
+            ctx.current = p3;
+            return 0;
+        }
+
+        // Resamples one closed contour polyline (already in world/pixel space) at constant arc-length
+        // spacing 1/sampleFactor, per-point tangent angle included. Walks the already-flattened polyline
+        // rather than re-deriving exact per-Bezier arc length (like p5.js's pointAtLength does) -- the
+        // accuracy loss is bounded by how finely decomposeGlyphOutline() flattened curves, which is fine
+        // grained enough not to be visible at realistic sampleFactor values. Always emits at least the
+        // contour's first point, even when the step exceeds the contour's total length (a tiny contour
+        // like '.' or ',' at a coarse sampleFactor must not silently disappear).
+        std::vector<TextPoint> resampleContour(const std::vector<float2>& contour, float sampleFactor)
+        {
+            std::vector<TextPoint> result;
+            const size_t n = contour.size();
+            if (n == 0) {
+                return result;
+            }
+            if (n == 1) {
+                result.push_back({contour[0], 0.0f});
+                return result;
+            }
+
+            std::vector<float> edgeLengths(n);
+            float totalLength = 0.0f;
+            for (size_t i = 0; i < n; ++i) {
+                edgeLengths[i] = distance(contour[i], contour[(i + 1) % n]);
+                totalLength += edgeLengths[i];
+            }
+            if (totalLength <= 0.0f) {
+                result.push_back({contour[0], 0.0f});
+                return result;
+            }
+
+            const float rawStep = 1.0f / sampleFactor;
+            const float step = std::isfinite(rawStep) and rawStep > 0.0f ? rawStep : totalLength;
+
+            for (float distanceAlong = 0.0f; distanceAlong < totalLength; distanceAlong += step) {
+                size_t edgeIndex = 0;
+                float accumulated = 0.0f;
+                while (edgeIndex + 1 < n and accumulated + edgeLengths[edgeIndex] < distanceAlong) {
+                    accumulated += edgeLengths[edgeIndex];
+                    ++edgeIndex;
+                }
+
+                const float2 edgeStart = contour[edgeIndex];
+                const float2 edgeEnd = contour[(edgeIndex + 1) % n];
+                const float edgeLength = edgeLengths[edgeIndex];
+                const float t = edgeLength > 0.0f ? (distanceAlong - accumulated) / edgeLength : 0.0f;
+
+                result.push_back({
+                    edgeStart + (edgeEnd - edgeStart) * t,
+                    std::atan2(edgeEnd.y - edgeStart.y, edgeEnd.x - edgeStart.x),
+                });
+            }
+
+            return result;
+        }
+
+        // Single backward sweep pruning collinear-ish points, mirroring p5.js's simplify()/collinear():
+        // a point is dropped when the turn angle at its neighbors is below simplifyThresholdRadians.
+        // Runs on the already-resampled points (not the raw flattened polyline), and treats the point
+        // list as a closed loop (FreeType contours are implicitly closed).
+        void simplifyContourPoints(std::vector<TextPoint>& points, float simplifyThresholdRadians)
+        {
+            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(points.size()) - 1; points.size() > 3 and i >= 0; --i) {
+                const size_t count = points.size();
+                const size_t idx = static_cast<size_t>(i) % count;
+                const float2& a = points[(idx + count - 1) % count].position;
+                const float2& b = points[idx].position;
+                const float2& c = points[(idx + 1) % count].position;
+
+                const float2 ab = b - a;
+                const float2 bc = c - b;
+                const float magA = std::sqrt(lengthSquared(ab));
+                const float magB = std::sqrt(lengthSquared(bc));
+                if (magA <= 0.0f or magB <= 0.0f) {
+                    continue;
+                }
+
+                const float cosAngle = std::clamp(dot(ab, bc) / (magA * magB), -1.0f, 1.0f);
+                if (std::acos(cosAngle) < simplifyThresholdRadians) {
+                    points.erase(points.begin() + static_cast<std::ptrdiff_t>(idx));
+                }
+            }
         }
     } // namespace
 
@@ -144,6 +313,14 @@ namespace p5
                 return it->second;
             }
             return rasterizeGlyph(glyphIndex);
+        }
+
+        std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) override
+        {
+            if (const auto it = m_outlineCache.find(glyphIndex); it != m_outlineCache.end()) {
+                return it->second;
+            }
+            return decomposeGlyphOutline(glyphIndex);
         }
 
         std::shared_ptr<Texture> getAtlasTexture() const override
@@ -279,12 +456,55 @@ namespace p5
             return uvRect;
         }
 
+        // Independent of rasterizeGlyph()/getGlyphMetrics() on purpose: rasterizeGlyph()'s render pass
+        // (FT_Set_Pixel_Sizes + FT_LOAD_RENDER + packIntoAtlas()) permanently consumes atlas capacity,
+        // and textToPoints() callers frequently want a glyph's outline without ever drawing it as
+        // bitmap text -- routing through that path would burn atlas space for nothing and risk
+        // starving real text() calls once the atlas fills. This does its own minimal, atlas-free
+        // FT_Load_Glyph()+FT_Outline_Decompose() pass instead.
+        std::vector<std::vector<float2>> decomposeGlyphOutline(uint32_t glyphIndex)
+        {
+            if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) {
+                error("Font: FT_Load_Glyph() (outline pass) failed for glyph index {}", glyphIndex);
+                const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
+                return it->second;
+            }
+
+            const FT_GlyphSlot slot = m_rasterFace->glyph;
+            if (slot->format != FT_GLYPH_FORMAT_OUTLINE or slot->outline.n_contours == 0) {
+                // Bitmap-only face (.pcf/.bdf/.fon, see getUnitsPerEm()'s comment) or a no-ink glyph
+                // (space, ...) -- neither has a vector outline to decompose.
+                const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
+                return it->second;
+            }
+
+            OutlineDecomposeContext context {.contours = {}, .current = {}, .unitsPerEm = getUnitsPerEm()};
+            const FT_Outline_Funcs funcs {
+                .move_to = outlineMoveTo,
+                .line_to = outlineLineTo,
+                .conic_to = outlineConicTo,
+                .cubic_to = outlineCubicTo,
+                .shift = 0,
+                .delta = 0,
+            };
+
+            if (FT_Outline_Decompose(&slot->outline, &funcs, &context) != 0) {
+                error("Font: FT_Outline_Decompose() failed for glyph index {}", glyphIndex);
+                const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
+                return it->second;
+            }
+
+            const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::move(context.contours));
+            return it->second;
+        }
+
         FT_Face m_rasterFace;
         FT_Face m_hbFace;
         hb_font_t* m_hbFont;
         std::shared_ptr<Texture> m_atlasTexture;
         uint32_t m_atlasEmPixels;
         std::unordered_map<uint32_t, GlyphMetrics> m_glyphCache;
+        std::unordered_map<uint32_t, std::vector<std::vector<float2>>> m_outlineCache;
 
         uint32_t m_shelfX = 0;
         uint32_t m_shelfY = 0;
@@ -553,6 +773,84 @@ namespace p5
 
             return layout;
         }
+
+        TextBlockLayout computeTextBlockLayout(const Font& font, const LineLayout& layout, float scale, TextAlignment alignment, float2 origin, std::optional<float> leadingOverride)
+        {
+            float blockWidth = 0.0f;
+            for (const ShapedLine& line : layout.lines) {
+                blockWidth = std::max(blockWidth, line.width * scale);
+            }
+
+            const float leading = leadingOverride.value_or((font.getAscent() + font.getDescent() + font.getLineGap()) * scale);
+            const float blockTop = font.getAscent() * scale;
+            const float blockHeight = blockTop + static_cast<float>(layout.lines.size() - 1) * leading + font.getDescent() * scale;
+
+            float horizontalBlockOffset = 0.0f;
+            switch (alignment) {
+                case TextAlignment::topCenter:
+                case TextAlignment::center:
+                case TextAlignment::bottomCenter: horizontalBlockOffset = -blockWidth * 0.5f; break;
+                case TextAlignment::topRight:
+                case TextAlignment::centerRight:
+                case TextAlignment::bottomRight: horizontalBlockOffset = -blockWidth; break;
+                default: break; // *Left stays 0
+            }
+
+            float verticalBlockOffset = 0.0f;
+            switch (alignment) {
+                case TextAlignment::centerLeft:
+                case TextAlignment::center:
+                case TextAlignment::centerRight: verticalBlockOffset = -blockHeight * 0.5f; break;
+                case TextAlignment::bottomLeft:
+                case TextAlignment::bottomCenter:
+                case TextAlignment::bottomRight: verticalBlockOffset = -blockHeight; break;
+                default: break; // top* stays 0
+            }
+
+            return TextBlockLayout {
+                .blockOrigin = {origin.x + horizontalBlockOffset, origin.y + verticalBlockOffset},
+                .blockTop = blockTop,
+                .leading = leading,
+                .blockWidth = blockWidth,
+            };
+        }
+
+        float lineHorizontalOffset(float blockWidth, float lineWidthPixels, TextAlignment alignment)
+        {
+            switch (alignment) {
+                case TextAlignment::topCenter:
+                case TextAlignment::center:
+                case TextAlignment::bottomCenter: return (blockWidth - lineWidthPixels) * 0.5f;
+                case TextAlignment::topRight:
+                case TextAlignment::centerRight:
+                case TextAlignment::bottomRight: return blockWidth - lineWidthPixels;
+                default: return 0.0f; // *Left
+            }
+        }
+
+        void appendLineToPoints(Font& font, const ShapedLine& line, float scale, float penX, float penY, float letterSpacing, const TextToPointsOptions& options, std::vector<TextPoint>& outPoints)
+        {
+            for (const ShapedGlyph& g : line.glyphs) {
+                const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};
+
+                for (const std::vector<float2>& contour : font.getGlyphContours(g.glyphIndex)) {
+                    std::vector<float2> worldContour;
+                    worldContour.reserve(contour.size());
+                    for (const float2& p : contour) {
+                        worldContour.push_back({glyphOrigin.x + p.x * scale, glyphOrigin.y - p.y * scale});
+                    }
+
+                    std::vector<TextPoint> contourPoints = resampleContour(worldContour, options.sampleFactor);
+                    if (options.simplifyThreshold > 0.0f) {
+                        simplifyContourPoints(contourPoints, options.simplifyThreshold);
+                    }
+                    outPoints.insert(outPoints.end(), contourPoints.begin(), contourPoints.end());
+                }
+
+                penX += g.xAdvance * scale + letterSpacing;
+                penY -= g.yAdvance * scale;
+            }
+        }
     } // namespace detail
 
     float textWidth(const Font& font, float size, std::string_view str, float letterSpacing)
@@ -581,5 +879,21 @@ namespace p5
         const float blockHeight = blockTop + static_cast<float>(layout.lines.size() - 1) * leading + font.getDescent() * scale;
 
         return rect2f {0.0f, 0.0f, blockWidth, blockHeight};
+    }
+
+    std::vector<TextPoint> textToPoints(Font& font, float size, std::string_view str, float x, float y, const TextToPointsOptions& options, float letterSpacing)
+    {
+        const detail::LineLayout layout = detail::layoutLines(font, size, str, TextWrap::none, 0.0f, letterSpacing);
+        const float scale = size / layout.unitsPerEm;
+        const float leading = (font.getAscent() + font.getDescent() + font.getLineGap()) * scale;
+
+        // (x, y) is the literal baseline origin of line 0 -- no ascent offset, no alignment -- so every
+        // line starts at the same penX, unlike Graphics::textToPoints()'s block-aligned layout.
+        std::vector<TextPoint> result;
+        for (size_t lineIndex = 0; lineIndex < layout.lines.size(); ++lineIndex) {
+            const float penY = y + static_cast<float>(lineIndex) * leading;
+            detail::appendLineToPoints(font, layout.lines[lineIndex], scale, x, penY, letterSpacing, options, result);
+        }
+        return result;
     }
 } // namespace p5

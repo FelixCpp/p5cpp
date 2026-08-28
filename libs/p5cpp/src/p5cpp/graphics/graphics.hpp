@@ -103,6 +103,7 @@ namespace p5
 
         float textWidth(std::string_view str);
         rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
+        std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     private:
         std::shared_ptr<Shader> resolveActiveShader(const std::shared_ptr<Shader>& fallback);

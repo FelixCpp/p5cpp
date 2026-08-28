@@ -89,4 +89,5 @@ namespace p5
     void text(std::string_view str, float x, float y, float maxWidth, float maxHeight) { graphics().text(str, x, y, maxWidth, maxHeight); }
     float textWidth(std::string_view str) { return graphics().textWidth(str); }
     rect2f textBounds(std::string_view str, float maxWidth) { return graphics().textBounds(str, maxWidth); }
+    std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options) { return graphics().textToPoints(str, x, y, options); }
 } // namespace p5

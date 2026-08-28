@@ -5,6 +5,9 @@ namespace p5
     Lifecycle::Lifecycle()
         : m_shouldClose {false},
           m_shouldRestart {false},
+          m_looping {true},
+          m_redrawRequested {false},
+          m_drawingThisFrame {true},
           m_exitCode {0},
           m_frameCount {0},
           m_startTime {std::chrono::steady_clock::now()},
@@ -38,12 +41,34 @@ namespace p5
 
     void Lifecycle::nextFrame()
     {
+        m_drawingThisFrame = m_looping or m_redrawRequested;
+        m_redrawRequested = false;
+
+        if (not m_drawingThisFrame) {
+            return;
+        }
+
         ++m_frameCount;
 
         const auto now = std::chrono::steady_clock::now();
         m_deltaTime = std::chrono::duration<double>(now - m_lastFrameTime).count();
         m_globalTime = std::chrono::duration<double>(now - m_startTime).count();
         m_lastFrameTime = now;
+    }
+
+    void Lifecycle::loop()
+    {
+        m_looping = true;
+    }
+
+    void Lifecycle::noLoop()
+    {
+        m_looping = false;
+    }
+
+    void Lifecycle::redraw()
+    {
+        m_redrawRequested = true;
     }
 
     bool Lifecycle::shouldClose() const
@@ -74,5 +99,15 @@ namespace p5
     double Lifecycle::globalTime() const
     {
         return m_globalTime;
+    }
+
+    bool Lifecycle::isLooping() const
+    {
+        return m_looping;
+    }
+
+    bool Lifecycle::shouldDrawThisFrame() const
+    {
+        return m_drawingThisFrame;
     }
 } // namespace p5

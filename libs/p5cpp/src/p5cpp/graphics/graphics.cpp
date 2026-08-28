@@ -898,18 +898,15 @@ namespace p5
         DrawState& state = peekState();
         Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
         const float scale = state.textSize / font.getUnitsPerEm();
-        const float leading = state.textLeadingOverride.value_or((font.getAscent() + font.getDescent() + font.getLineGap()) * scale);
 
         const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing);
         const size_t numLines = layout.lines.size();
 
-        float blockWidth = 0.0f;
-        for (const detail::ShapedLine& line : layout.lines) {
-            blockWidth = std::max(blockWidth, line.width * scale);
-        }
-
-        const float blockTop = font.getAscent() * scale;
-        const float blockHeight = blockTop + static_cast<float>(numLines - 1) * leading + font.getDescent() * scale;
+        const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
+        const float leading = blockLayout.leading;
+        const float blockTop = blockLayout.blockTop;
+        const float2 blockOrigin = blockLayout.blockOrigin;
+        const float blockWidth = blockLayout.blockWidth;
 
         size_t visibleLines = numLines;
         if (maxHeight > 0.0f) {
@@ -922,42 +919,6 @@ namespace p5
                 ++visibleLines;
             }
         }
-
-        float horizontalBlockOffset = 0.0f;
-        switch (state.textAlignment) {
-            case TextAlignment::topCenter:
-            case TextAlignment::center:
-            case TextAlignment::bottomCenter: horizontalBlockOffset = -blockWidth * 0.5f; break;
-            case TextAlignment::topRight:
-            case TextAlignment::centerRight:
-            case TextAlignment::bottomRight: horizontalBlockOffset = -blockWidth; break;
-            default: break; // *Left stays 0
-        }
-
-        float verticalBlockOffset = 0.0f;
-        switch (state.textAlignment) {
-            case TextAlignment::centerLeft:
-            case TextAlignment::center:
-            case TextAlignment::centerRight: verticalBlockOffset = -blockHeight * 0.5f; break;
-            case TextAlignment::bottomLeft:
-            case TextAlignment::bottomCenter:
-            case TextAlignment::bottomRight: verticalBlockOffset = -blockHeight; break;
-            default: break; // top* stays 0
-        }
-
-        const float2 blockOrigin {x + horizontalBlockOffset, y + verticalBlockOffset};
-
-        const auto lineHorizontalOffset = [&](float lineWidthPixels) -> float {
-            switch (state.textAlignment) {
-                case TextAlignment::topCenter:
-                case TextAlignment::center:
-                case TextAlignment::bottomCenter: return (blockWidth - lineWidthPixels) * 0.5f;
-                case TextAlignment::topRight:
-                case TextAlignment::centerRight:
-                case TextAlignment::bottomRight: return blockWidth - lineWidthPixels;
-                default: return 0.0f; // *Left
-            }
-        };
 
         std::vector<float2> positions;
         std::vector<float2> texCoords;
@@ -977,7 +938,7 @@ namespace p5
         for (size_t lineIndex = 0; lineIndex < visibleLines; ++lineIndex) {
             const detail::ShapedLine& line = layout.lines[lineIndex];
             const float lineWidthPixels = line.width * scale;
-            float penX = blockOrigin.x + lineHorizontalOffset(lineWidthPixels);
+            float penX = blockOrigin.x + detail::lineHorizontalOffset(blockWidth, lineWidthPixels, state.textAlignment);
             const float penYBaseline = blockOrigin.y + blockTop + static_cast<float>(lineIndex) * leading;
             float penY = penYBaseline;
 
@@ -1030,6 +991,32 @@ namespace p5
         DrawState& state = peekState();
         Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
         return p5::textBounds(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing);
+    }
+
+    std::vector<TextPoint> Graphics::textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options)
+    {
+        DrawState& state = peekState();
+        Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
+        const float scale = state.textSize / font.getUnitsPerEm();
+
+        // Always TextWrap::none: textToPoints() never auto-wraps, matching p5.js -- only explicit '\n's
+        // split lines. maxWidth is only meaningful for wrapping, so it's passed as 0 here.
+        const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, TextWrap::none, 0.0f, state.textLetterSpacing);
+        const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
+
+        // Note: unlike text(), no applyTransform() here -- returned points are meant to be fed into
+        // subsequent drawing calls that will themselves be subject to whatever transform is active when
+        // *they* run, so pre-baking the current transform here would double-transform in the common
+        // case of computing and drawing points inside the same withMatrix() scope.
+        std::vector<TextPoint> result;
+        for (size_t lineIndex = 0; lineIndex < layout.lines.size(); ++lineIndex) {
+            const detail::ShapedLine& line = layout.lines[lineIndex];
+            const float lineWidthPixels = line.width * scale;
+            const float penX = blockLayout.blockOrigin.x + detail::lineHorizontalOffset(blockLayout.blockWidth, lineWidthPixels, state.textAlignment);
+            const float penY = blockLayout.blockOrigin.y + blockLayout.blockTop + static_cast<float>(lineIndex) * blockLayout.leading;
+            detail::appendLineToPoints(font, line, scale, penX, penY, state.textLetterSpacing, options, result);
+        }
+        return result;
     }
 
 } // namespace p5

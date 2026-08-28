@@ -374,6 +374,25 @@ namespace p5
     int getFrameCount();
     double getDeltaTime();
     double getGlobalTime();
+
+    // Resumes calling the sketch's draw() once per frame (the default). Undoes a prior noLoop().
+    void loop();
+    // Stops the sketch's draw() from being called automatically; the window stays open and responsive
+    // (still processes input/resize/close), but the canvas freezes on its last drawn frame until loop()
+    // resumes it, or redraw() forces one more frame.
+    void noLoop();
+    bool isLooping();
+    // Forces a single extra draw() call on the next frame even while noLoop() is active; frameCount,
+    // deltaTime, and globalTime advance for that one frame. No-op while already looping.
+    void redraw();
+
+    // Closes the window and ends run(), keeping whatever exit code was last set via setExitCode()
+    // (0 by default).
+    void quit();
+    // Closes the window and ends run(), returning exitCode from main().
+    void quit(int exitCode);
+    // Sets the exit code main() will return when the sketch later quits, without closing it now.
+    void setExitCode(int exitCode);
 } // namespace p5
 
 namespace p5
@@ -776,11 +795,29 @@ namespace p5
         float yOffset;
     };
 
+    // A point sampled along a glyph outline by textToPoints(), in the same world/pixel space the text
+    // itself would be drawn in.
+    struct TextPoint
+    {
+        float2 position;
+        float angle; // radians; tangent direction of the outline at this point (unlike p5.js's degrees `alpha`)
+    };
+
+    struct TextToPointsOptions
+    {
+        float sampleFactor = 0.1f;      // matches p5.js default: points sampled every 1/sampleFactor units of path length
+        float simplifyThreshold = 0.0f; // radians; 0 disables collinear-point pruning
+    };
+
     struct Font
     {
         virtual ~Font() = default;
         virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text) const = 0;
         virtual const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) = 0;
+        // Each element is one closed contour of the glyph's vector outline, flattened to a polyline, in
+        // the same unscaled font-design-unit space (FreeType convention, y-up) GlyphMetrics::bounds
+        // uses. Empty for glyphs with no outline (space, bitmap-only fonts).
+        virtual std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) = 0;
         virtual std::shared_ptr<Texture> getAtlasTexture() const = 0;
         virtual float getUnitsPerEm() const = 0;
         virtual float getAscent() const = 0;
@@ -913,6 +950,16 @@ namespace p5
     rect2f textBounds(const Font& font, float size, std::string_view str, TextWrap wrap = TextWrap::none, float maxWidth = 0.0f, float letterSpacing = 0.0f);
     float textWidth(std::string_view str);
     rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
+
+    // (x, y) is the literal baseline origin of line 0 -- no ascent offset, no alignment applied, same
+    // stateless convention as textBounds(const Font&, ...). Multi-line input is split on '\n' only, no
+    // wrapping. Returned points are not transformed by the current matrix stack (see Graphics::textToPoints).
+    // Takes Font& (not const Font&, unlike textWidth/textBounds) because it calls getGlyphContours(),
+    // which -- like getGlyphMetrics() -- lazily caches per-glyph data on the Font.
+    std::vector<TextPoint> textToPoints(Font& font, float size, std::string_view str, float x, float y, const TextToPointsOptions& options = {}, float letterSpacing = 0.0f);
+    // Uses the current textFont()/textSize()/textAlign()/textLetterSpacing() draw state; (x, y) is
+    // block-aligned the same way text() positions its block. Not transformed by the current matrix stack.
+    std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     template <std::invocable Func> void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func);
     template <std::invocable Func> void withState(Func&& func);

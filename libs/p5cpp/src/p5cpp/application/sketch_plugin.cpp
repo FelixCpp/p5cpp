@@ -1,5 +1,6 @@
 #include <p5cpp/application/sketch_plugin.hpp>
 #include <p5cpp/application/kernel.hpp>
+#include <p5cpp/application/lifecycle.hpp>
 
 namespace p5
 {
@@ -38,9 +39,9 @@ namespace p5
         next();
     }
 
-    void SketchPlugin::draw([[maybe_unused]] Context& context, const Next& next)
+    void SketchPlugin::draw(Context& context, const Next& next)
     {
-        if (m_sketch != nullptr) {
+        if (m_sketch != nullptr and context.require<Lifecycle>().shouldDrawThisFrame()) {
             m_sketch->draw();
         }
 

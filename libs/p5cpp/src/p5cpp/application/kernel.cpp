@@ -47,6 +47,11 @@ namespace p5
             Lifecycle& lifecycle = m_context.require<Lifecycle>();
 
             while (not lifecycle.shouldClose()) {
+                // dispatchDraw() always runs (WindowPlugin::draw() still needs to pump events and swap
+                // buffers so the window stays responsive). nextFrame() itself decides whether this frame
+                // is actually drawn -- isLooping(), or a pending redraw() -- and only then advances
+                // frameCount/deltaTime/globalTime; that decision is read back via shouldDrawThisFrame(),
+                // which gates the sketch's draw() call in SketchPlugin::draw().
                 lifecycle.nextFrame();
                 dispatchDraw();
             }
