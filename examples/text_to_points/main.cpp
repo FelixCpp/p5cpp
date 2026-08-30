@@ -22,9 +22,9 @@ struct TextToPoints : Sketch
         const float simplifyThreshold = map(constrain(static_cast<float>(getMouseY()), 0.0f, getHeight()), 0.0f, getHeight(), 0.0f, radians(30.0f));
 
         textFont(font);
-        textSize(220.0f);
         textAlign(TextAlignment::center);
-        const std::vector<TextPoint> points = textToPoints("p5cpp", getWidth() * 0.5f, getHeight() * 0.5f, {.sampleFactor = sampleFactor, .simplifyThreshold = simplifyThreshold});
+        // size (220px here) is passed via options.size rather than a prior textSize() call.
+        const std::vector<TextPoint> points = textToPoints("p5cpp", getWidth() * 0.5f, getHeight() * 0.5f, {.sampleFactor = sampleFactor, .simplifyThreshold = simplifyThreshold, .size = 220.0f});
 
         noStroke();
         for (const TextPoint& point : points) {

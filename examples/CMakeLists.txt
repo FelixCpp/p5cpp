@@ -1,4 +1,5 @@
 add_subdirectory(audio_visualizer)
+add_subdirectory(bubble_words)
 add_subdirectory(disco_grid)
 add_subdirectory(interactive_display)
 add_subdirectory(interactive_grid)

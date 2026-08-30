@@ -880,20 +880,4 @@ namespace p5
 
         return rect2f {0.0f, 0.0f, blockWidth, blockHeight};
     }
-
-    std::vector<TextPoint> textToPoints(Font& font, float size, std::string_view str, float x, float y, const TextToPointsOptions& options, float letterSpacing)
-    {
-        const detail::LineLayout layout = detail::layoutLines(font, size, str, TextWrap::none, 0.0f, letterSpacing);
-        const float scale = size / layout.unitsPerEm;
-        const float leading = (font.getAscent() + font.getDescent() + font.getLineGap()) * scale;
-
-        // (x, y) is the literal baseline origin of line 0 -- no ascent offset, no alignment -- so every
-        // line starts at the same penX, unlike Graphics::textToPoints()'s block-aligned layout.
-        std::vector<TextPoint> result;
-        for (size_t lineIndex = 0; lineIndex < layout.lines.size(); ++lineIndex) {
-            const float penY = y + static_cast<float>(lineIndex) * leading;
-            detail::appendLineToPoints(font, layout.lines[lineIndex], scale, x, penY, letterSpacing, options, result);
-        }
-        return result;
-    }
 } // namespace p5

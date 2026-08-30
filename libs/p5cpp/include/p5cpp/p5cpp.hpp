@@ -7,6 +7,7 @@
 #include <concepts>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <typeindex>
 #include <unordered_map>
 #include <span>
@@ -758,6 +759,8 @@ namespace p5
 
 namespace p5
 {
+    struct Font;
+
     enum class TextAlignment
     {
         topLeft,
@@ -795,8 +798,6 @@ namespace p5
         float yOffset;
     };
 
-    // A point sampled along a glyph outline by textToPoints(), in the same world/pixel space the text
-    // itself would be drawn in.
     struct TextPoint
     {
         float2 position;
@@ -805,8 +806,11 @@ namespace p5
 
     struct TextToPointsOptions
     {
-        float sampleFactor = 0.1f;      // matches p5.js default: points sampled every 1/sampleFactor units of path length
-        float simplifyThreshold = 0.0f; // radians; 0 disables collinear-point pruning
+        float sampleFactor = 0.1f;
+        float simplifyThreshold = 0.0f;
+        Font* font = nullptr;
+        std::optional<float> size = std::nullopt;
+        std::optional<float> letterSpacing = std::nullopt;
     };
 
     struct Font
@@ -814,9 +818,6 @@ namespace p5
         virtual ~Font() = default;
         virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text) const = 0;
         virtual const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) = 0;
-        // Each element is one closed contour of the glyph's vector outline, flattened to a polyline, in
-        // the same unscaled font-design-unit space (FreeType convention, y-up) GlyphMetrics::bounds
-        // uses. Empty for glyphs with no outline (space, bitmap-only fonts).
         virtual std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) = 0;
         virtual std::shared_ptr<Texture> getAtlasTexture() const = 0;
         virtual float getUnitsPerEm() const = 0;
@@ -825,10 +826,6 @@ namespace p5
         virtual float getLineGap() const = 0;
     };
 
-    // atlasEmPixels is the size (in pixels per em) each glyph is rasterized at once and cached in the
-    // atlas; every requested textSize() reuses that same bitmap, GPU-bilinear-scaled. Pass a value close
-    // to the largest size this Font will actually be displayed at -- text scaled well above it will
-    // visibly soften, the same trade-off Processing's createFont(name, size) documents.
     std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
     std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
 } // namespace p5
@@ -951,14 +948,6 @@ namespace p5
     float textWidth(std::string_view str);
     rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
 
-    // (x, y) is the literal baseline origin of line 0 -- no ascent offset, no alignment applied, same
-    // stateless convention as textBounds(const Font&, ...). Multi-line input is split on '\n' only, no
-    // wrapping. Returned points are not transformed by the current matrix stack (see Graphics::textToPoints).
-    // Takes Font& (not const Font&, unlike textWidth/textBounds) because it calls getGlyphContours(),
-    // which -- like getGlyphMetrics() -- lazily caches per-glyph data on the Font.
-    std::vector<TextPoint> textToPoints(Font& font, float size, std::string_view str, float x, float y, const TextToPointsOptions& options = {}, float letterSpacing = 0.0f);
-    // Uses the current textFont()/textSize()/textAlign()/textLetterSpacing() draw state; (x, y) is
-    // block-aligned the same way text() positions its block. Not transformed by the current matrix stack.
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     template <std::invocable Func> void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func);

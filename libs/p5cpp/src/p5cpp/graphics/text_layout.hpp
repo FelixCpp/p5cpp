@@ -45,13 +45,12 @@ namespace p5
         // up aligned within a `blockWidth`-wide block per `alignment`.
         float lineHorizontalOffset(float blockWidth, float lineWidthPixels, TextAlignment alignment);
 
-        // Shared by the stateless and state-aware textToPoints() overloads: walks one already-shaped
-        // line's glyphs starting at pen position (penX, penY) -- glyph 0's baseline -- advancing per
-        // glyph exactly like Graphics::text()'s pen math (xAdvance/yAdvance*scale + letterSpacing), and
-        // appends TextPoints sampled along every glyph's outline contours (per `options`) to
-        // `outPoints`, in glyph/contour order. Callers own line-to-line advancement (leading) and any
-        // per-line horizontal alignment, since those differ between the two overloads. Font& (not
-        // const) because it calls Font::getGlyphContours(), which lazily caches per-glyph data.
+        // Used by Graphics::textToPoints(): walks one already-shaped line's glyphs starting at pen
+        // position (penX, penY) -- glyph 0's baseline -- advancing per glyph exactly like
+        // Graphics::text()'s pen math (xAdvance/yAdvance*scale + letterSpacing), and appends TextPoints
+        // sampled along every glyph's outline contours (per `options`) to `outPoints`, in glyph/contour
+        // order. The caller owns line-to-line advancement (leading) and per-line horizontal alignment.
+        // Font& (not const) because it calls Font::getGlyphContours(), which lazily caches per-glyph data.
         void appendLineToPoints(Font& font, const ShapedLine& line, float scale, float penX, float penY, float letterSpacing, const TextToPointsOptions& options, std::vector<TextPoint>& outPoints);
     } // namespace detail
 } // namespace p5

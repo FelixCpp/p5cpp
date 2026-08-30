@@ -996,26 +996,23 @@ namespace p5
     std::vector<TextPoint> Graphics::textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options)
     {
         DrawState& state = peekState();
-        Font& font = state.textFont != nullptr ? *state.textFont : *m_defaultFont;
-        const float scale = state.textSize / font.getUnitsPerEm();
+        Font& font = options.font != nullptr ? *options.font : (state.textFont != nullptr ? *state.textFont : *m_defaultFont);
+        const float effectiveSize = options.size.value_or(state.textSize);
+        const float effectiveLetterSpacing = options.letterSpacing.value_or(state.textLetterSpacing);
+        const float scale = effectiveSize / font.getUnitsPerEm();
 
-        // Always TextWrap::none: textToPoints() never auto-wraps, matching p5.js -- only explicit '\n's
-        // split lines. maxWidth is only meaningful for wrapping, so it's passed as 0 here.
-        const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, TextWrap::none, 0.0f, state.textLetterSpacing);
+        const detail::LineLayout layout = detail::layoutLines(font, effectiveSize, str, TextWrap::none, 0.0f, effectiveLetterSpacing);
         const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
 
-        // Note: unlike text(), no applyTransform() here -- returned points are meant to be fed into
-        // subsequent drawing calls that will themselves be subject to whatever transform is active when
-        // *they* run, so pre-baking the current transform here would double-transform in the common
-        // case of computing and drawing points inside the same withMatrix() scope.
         std::vector<TextPoint> result;
         for (size_t lineIndex = 0; lineIndex < layout.lines.size(); ++lineIndex) {
             const detail::ShapedLine& line = layout.lines[lineIndex];
             const float lineWidthPixels = line.width * scale;
             const float penX = blockLayout.blockOrigin.x + detail::lineHorizontalOffset(blockLayout.blockWidth, lineWidthPixels, state.textAlignment);
             const float penY = blockLayout.blockOrigin.y + blockLayout.blockTop + static_cast<float>(lineIndex) * blockLayout.leading;
-            detail::appendLineToPoints(font, line, scale, penX, penY, state.textLetterSpacing, options, result);
+            detail::appendLineToPoints(font, line, scale, penX, penY, effectiveLetterSpacing, options, result);
         }
+
         return result;
     }
 

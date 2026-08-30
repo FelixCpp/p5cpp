@@ -68,10 +68,12 @@ namespace p5::animation
         float duration;        // Duration of the tween in seconds
         EasingFunction easing; // Easing function to apply to the tween
         LoopMode loopMode;     // Looping behavior of the tween
+        int repeatCount;       // Number of end-to-end traversals to play while looping, then settle in the finished state; -1 = infinite (default)
 
-        float elapsedTime; // Elapsed time since the start of the tween in seconds
-        bool isReversing;  // Flag indicating whether the tween is currently reversing (for pingpong mode)
-        PlayState state;   // Current state of the tween (playing, paused, or stopped)
+        float elapsedTime;    // Elapsed time since the start of the tween in seconds
+        bool isReversing;     // Flag indicating whether the tween is currently reversing (for pingpong mode)
+        PlayState state;      // Current state of the tween (playing, paused, or stopped)
+        int repeatsCompleted; // Traversals completed so far; reset by restart()/reset()
     };
 
     template <typename T> tween<T> createTween(const T& from, const T& to, float duration, EasingFunction easing = &easeInOutSine, LoopMode loopMode = LoopMode::once);
@@ -80,7 +82,17 @@ namespace p5::animation
     template <typename T> void pause(tween<T>& tween);
     template <typename T> void resume(tween<T>& tween);
     template <typename T> void advance(tween<T>& tween, float deltaTime);
-    template <typename T> void loop(tween<T>& tween, LoopMode loopMode);
+    template <typename T> void loop(tween<T>& tween, LoopMode loopMode, int repeatCount = -1);
+
+    // Redirects a tween towards a new target: `from` becomes its current value, so playback continues
+    // smoothly from wherever it is right now instead of jumping. Unlike spring, this does not carry over
+    // velocity - the eased approach to the new target simply restarts from elapsedTime = 0.
+    template <typename T> void retarget(tween<T>& tween, const T& to);
+
+    // Checks isFinished() and, if true, immediately resets the tween to its initial state before
+    // returning true. Prefer this over isFinished() when you act on completion (e.g. to swap to the
+    // next animation), so a finished tween can never be read again with its stale end value.
+    template <typename T> bool consumeFinished(tween<T>& tween);
 
     template <typename T> T value(const tween<T>& tween);
     template <typename T> float progress(const tween<T>& tween);
@@ -107,8 +119,10 @@ namespace p5::animation
 
         float elapsedTime;
         LoopMode loopMode;
+        int repeatCount; // Number of end-to-end traversals to play while looping, then settle in the finished state; -1 = infinite (default)
         bool isReversing;
         PlayState state;
+        int repeatsCompleted; // Traversals completed so far; reset by restart()/reset()
     };
 
     template <typename T> timeline<T> createTimeline(const T& from, const std::vector<timeline_entry<T>>& entries);
@@ -117,7 +131,10 @@ namespace p5::animation
     template <typename T> void pause(timeline<T>& timeline);
     template <typename T> void resume(timeline<T>& timeline);
     template <typename T> void advance(timeline<T>& timeline, float deltaTime);
-    template <typename T> void loop(timeline<T>& timeline, LoopMode loopMode);
+    template <typename T> void loop(timeline<T>& timeline, LoopMode loopMode, int repeatCount = -1);
+
+    // See tween's consumeFinished() - same contract, applied to a timeline.
+    template <typename T> bool consumeFinished(timeline<T>& timeline);
 
     template <typename T> T value(const timeline<T>& timeline);
     template <typename T> float progress(const timeline<T>& timeline);
@@ -137,11 +154,13 @@ namespace p5::animation
         float damping;     // Damping coefficient: higher values reduce oscillation/overshoot
         float mass;        // Simulated mass: higher values react slower to the target
         LoopMode loopMode; // Looping behavior of the spring, evaluated once it has settled
+        int repeatCount;   // Number of times to settle-and-repeat before finishing; -1 = infinite (default)
 
-        T velocity;       // Current velocity of the spring simulation
-        T position;       // Current position of the spring simulation (the animated value)
-        PlayState state;  // Current state of the spring (playing, paused, or stopped)
-        bool isReversing; // Flag indicating whether the spring is currently reversing (for pingpong mode)
+        T velocity;           // Current velocity of the spring simulation
+        T position;           // Current position of the spring simulation (the animated value)
+        PlayState state;      // Current state of the spring (playing, paused, or stopped)
+        bool isReversing;     // Flag indicating whether the spring is currently reversing (for pingpong mode)
+        int repeatsCompleted; // Settles completed so far; reset by restart()/reset()
     };
 
     template <typename T> spring<T> createSpring(const T& from, const T& to, float stiffness = 170.0f, float damping = 26.0f, float mass = 1.0f, LoopMode loopMode = LoopMode::once);
@@ -150,7 +169,10 @@ namespace p5::animation
     template <typename T> void pause(spring<T>& spring);
     template <typename T> void resume(spring<T>& spring);
     template <typename T> void advance(spring<T>& spring, float deltaTime);
-    template <typename T> void loop(spring<T>& spring, LoopMode loopMode);
+    template <typename T> void loop(spring<T>& spring, LoopMode loopMode, int repeatCount = -1);
+
+    // See tween's consumeFinished() - same contract, applied to a spring.
+    template <typename T> bool consumeFinished(spring<T>& spring);
 
     template <typename T> T value(const spring<T>& spring);
     template <typename T> float progress(const spring<T>& spring);
@@ -263,9 +285,11 @@ namespace p5::animation
             .duration = duration,
             .easing = easing,
             .loopMode = loopMode,
+            .repeatCount = -1,
             .elapsedTime = 0.0f,
             .isReversing = false,
             .state = PlayState::initial,
+            .repeatsCompleted = 0,
         };
     }
 
@@ -274,6 +298,7 @@ namespace p5::animation
         tween.state = PlayState::playing;
         tween.elapsedTime = 0.0f;
         tween.isReversing = false;
+        tween.repeatsCompleted = 0;
     }
 
     template <typename T> void reset(tween<T>& tween)
@@ -281,6 +306,7 @@ namespace p5::animation
         tween.state = PlayState::initial;
         tween.elapsedTime = 0.0f;
         tween.isReversing = false;
+        tween.repeatsCompleted = 0;
     }
 
     template <typename T> void pause(tween<T>& tween)
@@ -310,12 +336,22 @@ namespace p5::animation
                 tween.elapsedTime = tween.duration;
                 tween.state = PlayState::finished;
                 break;
-            case LoopMode::loop:
+            case LoopMode::loop: {
+                const int cycles = (tween.duration > 0.0f) ? static_cast<int>(tween.elapsedTime / tween.duration) : 0;
                 tween.elapsedTime = (tween.duration > 0.0f) ? std::fmod(tween.elapsedTime, tween.duration) : 0.0f;
+                if (tween.repeatCount >= 0 && (tween.repeatsCompleted += cycles) >= tween.repeatCount) {
+                    tween.elapsedTime = tween.duration;
+                    tween.state = PlayState::finished;
+                }
                 break;
+            }
             case LoopMode::pingpong: {
                 const int cycles = (tween.duration > 0.0f) ? static_cast<int>(tween.elapsedTime / tween.duration) : 0;
                 tween.elapsedTime = (tween.duration > 0.0f) ? std::fmod(tween.elapsedTime, tween.duration) : 0.0f;
+                if (tween.repeatCount >= 0 && (tween.repeatsCompleted += cycles) >= tween.repeatCount) {
+                    tween.state = PlayState::finished;
+                    break;
+                }
                 if (cycles % 2 != 0) {
                     tween.isReversing = not tween.isReversing;
                 }
@@ -324,7 +360,29 @@ namespace p5::animation
         }
     }
 
-    template <typename T> void loop(tween<T>& tween, LoopMode loopMode) { tween.loopMode = loopMode; }
+    template <typename T> void loop(tween<T>& tween, LoopMode loopMode, int repeatCount)
+    {
+        tween.loopMode = loopMode;
+        tween.repeatCount = repeatCount;
+    }
+
+    template <typename T> void retarget(tween<T>& tween, const T& to)
+    {
+        tween.from = value(tween);
+        tween.to = to;
+        tween.elapsedTime = 0.0f;
+        tween.isReversing = false;
+        tween.state = PlayState::playing;
+    }
+
+    template <typename T> bool consumeFinished(tween<T>& tween)
+    {
+        if (not isFinished(tween)) {
+            return false;
+        }
+        reset(tween);
+        return true;
+    }
 
     template <typename T> T value(const tween<T>& tween)
     {
@@ -363,8 +421,10 @@ namespace p5::animation
             .entries = entries,
             .elapsedTime = 0.0f,
             .loopMode = LoopMode::once,
+            .repeatCount = -1,
             .isReversing = false,
             .state = PlayState::initial,
+            .repeatsCompleted = 0,
         };
     }
 
@@ -373,6 +433,7 @@ namespace p5::animation
         timeline.state = PlayState::playing;
         timeline.elapsedTime = 0.0f;
         timeline.isReversing = false;
+        timeline.repeatsCompleted = 0;
     }
 
     template <typename T> void reset(timeline<T>& timeline)
@@ -380,6 +441,7 @@ namespace p5::animation
         timeline.state = PlayState::initial;
         timeline.elapsedTime = 0.0f;
         timeline.isReversing = false;
+        timeline.repeatsCompleted = 0;
     }
 
     template <typename T> void pause(timeline<T>& timeline)
@@ -409,12 +471,22 @@ namespace p5::animation
                 timeline.elapsedTime = timeline.totalDuration;
                 timeline.state = PlayState::finished;
                 break;
-            case LoopMode::loop:
+            case LoopMode::loop: {
+                const int cycles = (timeline.totalDuration > 0.0f) ? static_cast<int>(timeline.elapsedTime / timeline.totalDuration) : 0;
                 timeline.elapsedTime = (timeline.totalDuration > 0.0f) ? std::fmod(timeline.elapsedTime, timeline.totalDuration) : 0.0f;
+                if (timeline.repeatCount >= 0 && (timeline.repeatsCompleted += cycles) >= timeline.repeatCount) {
+                    timeline.elapsedTime = timeline.totalDuration;
+                    timeline.state = PlayState::finished;
+                }
                 break;
+            }
             case LoopMode::pingpong: {
                 const int cycles = (timeline.totalDuration > 0.0f) ? static_cast<int>(timeline.elapsedTime / timeline.totalDuration) : 0;
                 timeline.elapsedTime = (timeline.totalDuration > 0.0f) ? std::fmod(timeline.elapsedTime, timeline.totalDuration) : 0.0f;
+                if (timeline.repeatCount >= 0 && (timeline.repeatsCompleted += cycles) >= timeline.repeatCount) {
+                    timeline.state = PlayState::finished;
+                    break;
+                }
                 if (cycles % 2 != 0) {
                     timeline.isReversing = not timeline.isReversing;
                 }
@@ -423,7 +495,20 @@ namespace p5::animation
         }
     }
 
-    template <typename T> void loop(timeline<T>& timeline, LoopMode loopMode) { timeline.loopMode = loopMode; }
+    template <typename T> void loop(timeline<T>& timeline, LoopMode loopMode, int repeatCount)
+    {
+        timeline.loopMode = loopMode;
+        timeline.repeatCount = repeatCount;
+    }
+
+    template <typename T> bool consumeFinished(timeline<T>& timeline)
+    {
+        if (not isFinished(timeline)) {
+            return false;
+        }
+        reset(timeline);
+        return true;
+    }
 
     template <typename T> T value(const timeline<T>& timeline)
     {
@@ -482,10 +567,12 @@ namespace p5::animation
             .damping = damping,
             .mass = mass,
             .loopMode = loopMode,
+            .repeatCount = -1,
             .velocity = T {},
             .position = from,
             .state = PlayState::initial,
             .isReversing = false,
+            .repeatsCompleted = 0,
         };
     }
 
@@ -495,6 +582,7 @@ namespace p5::animation
         spring.position = spring.from;
         spring.velocity = T {};
         spring.isReversing = false;
+        spring.repeatsCompleted = 0;
     }
 
     template <typename T> void reset(spring<T>& spring)
@@ -503,6 +591,7 @@ namespace p5::animation
         spring.position = spring.from;
         spring.velocity = T {};
         spring.isReversing = false;
+        spring.repeatsCompleted = 0;
     }
 
     template <typename T> void pause(spring<T>& spring)
@@ -537,15 +626,37 @@ namespace p5::animation
                 spring.state = PlayState::finished;
                 break;
             case LoopMode::loop:
+                if (spring.repeatCount >= 0 && ++spring.repeatsCompleted >= spring.repeatCount) {
+                    spring.state = PlayState::finished;
+                    break;
+                }
                 spring.position = spring.from;
                 break;
             case LoopMode::pingpong:
+                if (spring.repeatCount >= 0 && ++spring.repeatsCompleted >= spring.repeatCount) {
+                    spring.state = PlayState::finished;
+                    break;
+                }
                 spring.isReversing = !spring.isReversing;
                 break;
         }
     }
 
-    template <typename T> void loop(spring<T>& spring, LoopMode loopMode) { spring.loopMode = loopMode; }
+    template <typename T> void loop(spring<T>& spring, LoopMode loopMode, int repeatCount)
+    {
+        spring.loopMode = loopMode;
+        spring.repeatCount = repeatCount;
+    }
+
+    template <typename T> bool consumeFinished(spring<T>& spring)
+    {
+        if (not isFinished(spring)) {
+            return false;
+        }
+        reset(spring);
+        return true;
+    }
+
     template <typename T> T value(const spring<T>& spring) { return spring.position; }
     template <typename T> float progress(const spring<T>& spring)
     {
