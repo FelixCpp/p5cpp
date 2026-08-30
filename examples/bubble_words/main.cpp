@@ -76,13 +76,21 @@ struct TextToPoints : Sketch
 
     std::vector<BubbleWord> bubbleWords;
 
-    size_t currentIndex = 0; // aktuell (voll) sichtbares Wort
-    size_t nextIndex = 1;    // Wort, das gerade eingeblendet wird
+    size_t currentIndex = 0;
+    size_t nextIndex = 1;
 
     tween<float> crossfade = createTween(0.0f, 1.0f, fadeDuration, easeInOutSine);
 
-    bool isHolding = true;
-    float holdTimer = holdDuration;
+    static constexpr size_t fadeStep = 1;
+
+    sequence cycle = createSequence({
+        wait(holdDuration),
+        play(crossfade),
+        call([this] {
+            currentIndex = nextIndex;
+            nextIndex = (currentIndex + 1) % bubbleWords.size();
+        }),
+    });
 
     void setup() override
     {
@@ -93,6 +101,9 @@ struct TextToPoints : Sketch
             bubbleWords.emplace_back("Second", font.get());
             bubbleWords.emplace_back("Third", font.get());
         });
+
+        loop(cycle, LoopMode::loop);
+        restart(cycle);
     }
 
     void draw() override
@@ -100,27 +111,9 @@ struct TextToPoints : Sketch
         background(rgba(31, 31, 51));
         translate(getWidth() * 0.5f, getHeight() * 0.5f);
 
-        const float deltaTime = static_cast<float>(getDeltaTime());
+        advance(cycle, static_cast<float>(getDeltaTime()));
 
-        if (isHolding) {
-            holdTimer -= deltaTime;
-            if (holdTimer <= 0.0f) {
-                isHolding = false;
-                restart(crossfade); // Ueberblendung starten
-            }
-        } else {
-            advance(crossfade, deltaTime);
-            if (consumeFinished(crossfade)) { // prueft isFinished() und resettet crossfade (t=0) in einem Schritt
-                // --- Swapping: naechstes Wort wird zum aktuellen ---
-                currentIndex = nextIndex;
-                nextIndex = (currentIndex + 1) % bubbleWords.size();
-                // ----------------------------------------------------
-                isHolding = true;
-                holdTimer = holdDuration;
-            }
-        }
-
-        const float t = value(crossfade); // 0 = nur current sichtbar, 1 = nur next
+        const float t = (currentStep(cycle) == fadeStep) ? value(crossfade) : 0.0f; // 0 = nur current sichtbar, 1 = nur next
         bubbleWords[currentIndex].show(1.0f - t);
         if (nextIndex != currentIndex) {
             bubbleWords[nextIndex].show(t);

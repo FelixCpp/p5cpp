@@ -3,6 +3,8 @@
 #include <p5cpp/p5cpp.hpp>
 
 #include <algorithm>
+#include <cassert>
+#include <functional>
 
 namespace p5::animation
 {
@@ -180,6 +182,83 @@ namespace p5::animation
     template <typename T> bool isPlaying(const spring<T>& spring);
     template <typename T> bool isPaused(const spring<T>& spring);
     template <typename T> bool isFinished(const spring<T>& spring);
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    // One link in a sequence: either a fixed `duration` (wait()), or a dynamic `isDone` predicate
+    // that overrides it (play()). `onEnter` fires once when the step becomes active, `onAdvance`
+    // fires every frame while it is active. All three are optional (may be empty/nullptr).
+    struct sequence_step
+    {
+        float duration = 0.0f;
+        std::function<void()> onEnter = nullptr;
+        std::function<void(float)> onAdvance = nullptr;
+        std::function<bool()> isDone = nullptr;
+    };
+
+    // A cursor that plays a list of heterogeneous steps one after another. Unlike tween/timeline/
+    // spring, it does not interpolate any value itself - it only decides *when* each step is done
+    // and hands control to the next one.
+    //
+    // LoopMode::once finishes after a single pass through *this sequence's own step list* - not
+    // after "one full rotation" of whatever content a call()/play() step happens to cycle through
+    // (sequence has no notion of that). To stop after N repeats of the whole step list (e.g. once
+    // per item in a list you are rotating through), use loop(seq, LoopMode::loop, N) instead.
+    //
+    // LoopMode::pingpong has no well-defined meaning for a chain of one-shot side effects (you
+    // cannot "run a callback backwards"), so loop() rejects it via assert rather than silently
+    // reinterpreting it as something else.
+    struct sequence
+    {
+        std::vector<sequence_step> steps;
+
+        size_t stepIndex;
+        float stepElapsedTime;
+        bool stepEntered; // whether onEnter has already fired for the current step
+
+        LoopMode loopMode;
+        int repeatCount; // Number of end-to-end passes through all steps before finishing; -1 = infinite (default)
+        PlayState state;
+        int repeatsCompleted;
+    };
+
+    sequence createSequence(const std::vector<sequence_step>& steps);
+    void restart(sequence& sequence);
+    void reset(sequence& sequence);
+    void pause(sequence& sequence);
+    void resume(sequence& sequence);
+    void advance(sequence& sequence, float deltaTime);
+
+    // Asserts loopMode != LoopMode::pingpong - see the comment on sequence::loopMode for why.
+    void loop(sequence& sequence, LoopMode loopMode, int repeatCount = -1);
+
+    // See tween's consumeFinished() - same contract, applied to a sequence.
+    bool consumeFinished(sequence& sequence);
+
+    // Index of the currently active step. Meant for introspection/debugging - reading the actual
+    // animated value of a play()ed tween/spring/timeline should happen directly on that object.
+    size_t currentStep(const sequence& sequence);
+
+    bool isInitial(const sequence& sequence);
+    bool isPlaying(const sequence& sequence);
+    bool isPaused(const sequence& sequence);
+    bool isFinished(const sequence& sequence);
+
+    // --- DSL for building sequence_steps ---
+
+    // Waits `seconds` without doing anything.
+    sequence_step wait(float seconds);
+
+    // Runs `action` once, instantly, then moves on to the next step in the same advance() call.
+    sequence_step call(std::function<void()> action);
+
+    // Restarts `tween`/`spring`/`timeline` on entering this step, advances it every frame, and
+    // moves on once it reports isFinished(). The wrapped object is captured by reference and must
+    // outlive the sequence.
+    template <typename T> sequence_step play(tween<T>& tween);
+    template <typename T> sequence_step play(spring<T>& spring);
+    template <typename T> sequence_step play(timeline<T>& timeline);
 } // namespace p5::animation
 
 namespace p5::animation::detail
@@ -676,6 +755,173 @@ namespace p5::animation
     template <typename T> bool isPlaying(const spring<T>& spring) { return spring.state == PlayState::playing; }
     template <typename T> bool isPaused(const spring<T>& spring) { return spring.state == PlayState::paused; }
     template <typename T> bool isFinished(const spring<T>& spring) { return spring.state == PlayState::finished; }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    inline sequence createSequence(const std::vector<sequence_step>& steps)
+    {
+        return sequence {
+            .steps = steps,
+            .stepIndex = 0,
+            .stepElapsedTime = 0.0f,
+            .stepEntered = false,
+            .loopMode = LoopMode::once,
+            .repeatCount = -1,
+            .state = PlayState::initial,
+            .repeatsCompleted = 0,
+        };
+    }
+
+    inline void restart(sequence& sequence)
+    {
+        sequence.state = PlayState::playing;
+        sequence.stepIndex = 0;
+        sequence.stepElapsedTime = 0.0f;
+        sequence.stepEntered = false;
+        sequence.repeatsCompleted = 0;
+    }
+
+    inline void reset(sequence& sequence)
+    {
+        sequence.state = PlayState::initial;
+        sequence.stepIndex = 0;
+        sequence.stepElapsedTime = 0.0f;
+        sequence.stepEntered = false;
+        sequence.repeatsCompleted = 0;
+    }
+
+    inline void pause(sequence& sequence)
+    {
+        sequence.state = PlayState::paused;
+    }
+
+    inline void resume(sequence& sequence)
+    {
+        sequence.state = PlayState::playing;
+    }
+
+    inline void advance(sequence& sequence, float deltaTime)
+    {
+        if (sequence.state != PlayState::playing) {
+            return;
+        }
+
+        if (sequence.steps.empty()) {
+            sequence.state = PlayState::finished;
+            return;
+        }
+
+        const size_t stepCount = sequence.steps.size();
+
+        // Bounded to stepCount+1 transitions per call: lets a chain of zero-duration steps (call())
+        // resolve within a single frame without consuming deltaTime, while still guaranteeing this
+        // loop terminates even if every step in the sequence happens to be instantaneous.
+        for (size_t transitions = 0; sequence.state == PlayState::playing && transitions <= stepCount; ++transitions) {
+            sequence_step& step = sequence.steps[sequence.stepIndex];
+
+            if (not sequence.stepEntered) {
+                sequence.stepEntered = true;
+                if (step.onEnter) {
+                    step.onEnter();
+                }
+            }
+
+            const bool done = step.isDone ? step.isDone() : (sequence.stepElapsedTime >= step.duration);
+            if (not done) {
+                if (step.onAdvance) {
+                    step.onAdvance(deltaTime);
+                }
+                sequence.stepElapsedTime += deltaTime;
+                break;
+            }
+
+            ++sequence.stepIndex;
+            sequence.stepElapsedTime = 0.0f;
+            sequence.stepEntered = false;
+
+            if (sequence.stepIndex < stepCount) {
+                continue;
+            }
+
+            sequence.stepIndex = 0;
+            if (sequence.repeatCount >= 0 && ++sequence.repeatsCompleted >= sequence.repeatCount) {
+                sequence.state = PlayState::finished;
+                break;
+            }
+            if (sequence.loopMode == LoopMode::once) {
+                sequence.state = PlayState::finished;
+                break;
+            }
+            // loop: restart from the first step. pingpong cannot reach here - loop() rejects it.
+        }
+    }
+
+    inline void loop(sequence& sequence, LoopMode loopMode, int repeatCount)
+    {
+        assert(loopMode != LoopMode::pingpong && "sequence steps are one-shot side effects and cannot be played backwards - use LoopMode::once or LoopMode::loop (with an optional repeatCount) instead");
+        sequence.loopMode = loopMode;
+        sequence.repeatCount = repeatCount;
+    }
+
+    inline bool isInitial(const sequence& sequence) { return sequence.state == PlayState::initial; }
+    inline bool isPlaying(const sequence& sequence) { return sequence.state == PlayState::playing; }
+    inline bool isPaused(const sequence& sequence) { return sequence.state == PlayState::paused; }
+    inline bool isFinished(const sequence& sequence) { return sequence.state == PlayState::finished; }
+
+    inline bool consumeFinished(sequence& sequence)
+    {
+        if (not isFinished(sequence)) {
+            return false;
+        }
+        reset(sequence);
+        return true;
+    }
+
+    inline size_t currentStep(const sequence& sequence)
+    {
+        return sequence.steps.empty() ? 0 : sequence.stepIndex;
+    }
+
+    inline sequence_step wait(float seconds)
+    {
+        return sequence_step {.duration = seconds};
+    }
+
+    inline sequence_step call(std::function<void()> action)
+    {
+        return sequence_step {
+            .onEnter = std::move(action),
+            .isDone = [] { return true; },
+        };
+    }
+
+    template <typename T> sequence_step play(tween<T>& tween)
+    {
+        return sequence_step {
+            .onEnter = [&tween] { restart(tween); },
+            .onAdvance = [&tween](float dt) { advance(tween, dt); },
+            .isDone = [&tween] { return isFinished(tween); },
+        };
+    }
+
+    template <typename T> sequence_step play(spring<T>& spring)
+    {
+        return sequence_step {
+            .onEnter = [&spring] { restart(spring); },
+            .onAdvance = [&spring](float dt) { advance(spring, dt); },
+            .isDone = [&spring] { return isFinished(spring); },
+        };
+    }
+
+    template <typename T> sequence_step play(timeline<T>& timeline)
+    {
+        return sequence_step {
+            .onEnter = [&timeline] { restart(timeline); },
+            .onAdvance = [&timeline](float dt) { advance(timeline, dt); },
+            .isDone = [&timeline] { return isFinished(timeline); },
+        };
+    }
 } // namespace p5::animation
 
 namespace p5::animation
