@@ -26,8 +26,8 @@ namespace
     constexpr float STARTING_GOLD = 50.0f;
 
     constexpr float PLAYER_MAX_HEALTH = 100.0f;
-    constexpr float PLAYER_FIRE_RANGE = 220.0f;   // auto-fire only engages enemies within this radius
-    constexpr float PLAYER_FIRE_INTERVAL = 0.4f;  // seconds between shots
+    constexpr float PLAYER_FIRE_RANGE = 220.0f;  // auto-fire only engages enemies within this radius
+    constexpr float PLAYER_FIRE_INTERVAL = 0.4f; // seconds between shots
 
     constexpr float ENEMY_SPEED = 80.0f;
     constexpr float ENEMY_RADIUS = 9.0f;
@@ -46,12 +46,12 @@ namespace
 
     constexpr float PROJECTILE_SPEED = 420.0f;
     constexpr float PROJECTILE_RADIUS = 4.0f;
-    constexpr float PROJECTILE_DAMAGE = 1.0f; // base damage; weaponLevel upgrades add on top
+    constexpr float PROJECTILE_DAMAGE = 1.0f;                // base damage; weaponLevel upgrades add on top
     constexpr float PROJECTILE_MAX_TRAVEL_DISTANCE = 700.0f; // despawn a shot that hit nothing
 
     // Wood/food were pure idle counters until now -- these upgrades are their first real sink,
     // and directly counter the escalating waves (more damage, more max HP).
-    constexpr float WEAPON_UPGRADE_BASE_COST = 15.0f;   // in wood; scales as cost * (level + 1)
+    constexpr float WEAPON_UPGRADE_BASE_COST = 15.0f; // in wood; scales as cost * (level + 1)
     constexpr float WEAPON_UPGRADE_DAMAGE_BONUS = 1.0f;
     constexpr float VITALITY_UPGRADE_BASE_COST = 15.0f; // in food; scales as cost * (level + 1)
     constexpr float VITALITY_UPGRADE_HEALTH_BONUS = 20.0f;
@@ -136,7 +136,9 @@ namespace
         const auto writeU16 = [&wav](uint16_t value) {
             for (int i = 0; i < 2; ++i) wav.push_back(static_cast<uint8_t>((value >> (8 * i)) & 0xFF));
         };
-        const auto writeTag = [&wav](const char* tag) { wav.insert(wav.end(), tag, tag + 4); };
+        const auto writeTag = [&wav](const char* tag) {
+            wav.insert(wav.end(), tag, tag + 4);
+        };
 
         writeTag("RIFF");
         writeU32(36 + dataSize);
@@ -301,9 +303,9 @@ struct BuildingInfo
 
 inline const BuildingInfo& getBuildingInfo(BuildingType type)
 {
-    static const BuildingInfo goldMine {"Gold Mine", rgba(218, 165, 32), 20.0f, 1.0f, 0.0f, 0.0f};   // goldenrod
-    static const BuildingInfo sawmill {"Sawmill", rgba(101, 67, 33), 15.0f, 0.0f, 1.0f, 0.0f};       // wood brown
-    static const BuildingInfo farm {"Farm", rgba(150, 195, 74), 25.0f, 0.0f, 0.0f, 1.0f};            // crop green
+    static const BuildingInfo goldMine {"Gold Mine", rgba(218, 165, 32), 20.0f, 1.0f, 0.0f, 0.0f}; // goldenrod
+    static const BuildingInfo sawmill {"Sawmill", rgba(101, 67, 33), 15.0f, 0.0f, 1.0f, 0.0f};     // wood brown
+    static const BuildingInfo farm {"Farm", rgba(150, 195, 74), 25.0f, 0.0f, 0.0f, 1.0f};          // crop green
     static const BuildingInfo none {"", rgba(0, 0), 0.0f, 0.0f, 0.0f, 0.0f};
 
     switch (type) {
@@ -321,7 +323,7 @@ struct World
     std::vector<TileType> tiles;
     std::vector<BuildingType> buildings;
     std::array<int, static_cast<size_t>(BuildingType::Count)> buildingCounts {};
-    std::vector<float2> grassDecorations; // fixed world-space accents, regenerated with the world
+    std::vector<float2> grassDecorations;          // fixed world-space accents, regenerated with the world
     std::vector<tween<float>> buildingScaleTweens; // per-tile "pop in" animation, restarted on placement
 
     void generate()
@@ -807,7 +809,9 @@ struct KingshotClone : public Sketch
             }
         }
 
-        std::erase_if(enemies, [](const Enemy& enemy) { return enemy.dying && isFinished(enemy.deathTween); });
+        std::erase_if(enemies, [](const Enemy& enemy) {
+            return enemy.dying && isFinished(enemy.deathTween);
+        });
     }
 
     // Auto-fire: the mouse stays reserved for building, so the player just needs to be in range --
@@ -1069,8 +1073,7 @@ struct KingshotClone : public Sketch
 
         noStroke();
         fill(rgba(40, 32, 22));
-        rect(-half * 0.22f, half * 0.15f, half * 0.44f, half * 0.55f,
-             BorderRadius {CornerRadius::circular(half * 0.2f), CornerRadius::circular(half * 0.2f), CornerRadius::circular(0.0f), CornerRadius::circular(0.0f)});
+        rect(-half * 0.22f, half * 0.15f, half * 0.44f, half * 0.55f, BorderRadius {CornerRadius::circular(half * 0.2f), CornerRadius::circular(half * 0.2f), CornerRadius::circular(0.0f), CornerRadius::circular(0.0f)});
 
         fill(rgba(255, 223, 90));
         circle(-half * 0.45f, half * 0.1f, 3.0f);
@@ -1321,7 +1324,8 @@ struct KingshotClone : public Sketch
         drawHudPanel(x - 4.0f, y - 4.0f, w + 8.0f, h + 8.0f);
 
         const float ratio = constrain(playerHealth / maxPlayerHealth, 0.0f, 1.0f);
-        const color_t fillColor = ratio > 0.5f ? rgba(90, 170, 70) : ratio > 0.25f ? rgba(210, 165, 50) : rgba(190, 60, 50);
+        const color_t fillColor = ratio > 0.5f ? rgba(90, 170, 70) : ratio > 0.25f ? rgba(210, 165, 50)
+                                                                                   : rgba(190, 60, 50);
         const BorderRadius rounding = BorderRadius::all(6.0f);
 
         noStroke();
@@ -1410,15 +1414,15 @@ struct KingshotClone : public Sketch
 
             noStroke();
             fill(rgba(0, 0, 0, 45));
-            rect(slot.x + 2.0f, slot.y + 3.0f, slot.width, slot.height, rounding);
+            rect(slot.left + 2.0f, slot.top + 3.0f, slot.width, slot.height, rounding);
 
             fill(HUD_PANEL_COLOR);
             stroke(selected ? HUD_SELECTED_COLOR : HUD_PANEL_BORDER_COLOR);
             strokeWeight(selected ? 3.0f : 2.0f);
-            rect(slot.x, slot.y, slot.width, slot.height, rounding);
+            rect(slot.left, slot.top, slot.width, slot.height, rounding);
 
-            const float iconCenterX = slot.x + slot.width * 0.5f;
-            const float iconCenterY = slot.y + slot.height * 0.42f;
+            const float iconCenterX = slot.left + slot.width * 0.5f;
+            const float iconCenterY = slot.top + slot.height * 0.42f;
             withMatrix([&] {
                 translate(iconCenterX, iconCenterY);
                 scale(0.85f, 0.85f);
@@ -1429,7 +1433,7 @@ struct KingshotClone : public Sketch
             fill(HUD_TEXT_COLOR);
             textAlign(TextAlignment::bottomCenter);
             textSize(12.0f);
-            text(std::format("{}  {}g", hotkeys[i], static_cast<int>(info.cost)), slot.x + slot.width * 0.5f, slot.y + slot.height - 4.0f);
+            text(std::format("{}  {}g", hotkeys[i], static_cast<int>(info.cost)), slot.left + slot.width * 0.5f, slot.top + slot.height - 4.0f);
         }
     }
 
@@ -1443,7 +1447,7 @@ struct KingshotClone : public Sketch
 
         for (size_t i = 0; i < slots.size(); ++i) {
             const rect2f& slot = slots[i];
-            if (mouseX >= slot.x && mouseX < slot.x + slot.width && mouseY >= slot.y && mouseY < slot.y + slot.height) {
+            if (mouseX >= slot.left && mouseX < slot.left + slot.width && mouseY >= slot.top && mouseY < slot.top + slot.height) {
                 selectedBuildingType = types[i];
                 return true;
             }
@@ -1477,24 +1481,24 @@ struct KingshotClone : public Sketch
     {
         const float mouseX = static_cast<float>(getMouseX());
         const float mouseY = static_cast<float>(getMouseY());
-        const bool hovered = mouseX >= bounds.x && mouseX < bounds.x + bounds.width && mouseY >= bounds.y && mouseY < bounds.y + bounds.height;
+        const bool hovered = mouseX >= bounds.left && mouseX < bounds.left + bounds.width && mouseY >= bounds.top && mouseY < bounds.top + bounds.height;
         const bool clicked = hovered && isMouseButtonPressed(MouseButton::Left);
         const BorderRadius rounding = BorderRadius::all(8.0f);
 
         noStroke();
         fill(rgba(0, 0, 0, 60));
-        rect(bounds.x + 2.0f, bounds.y + 3.0f, bounds.width, bounds.height, rounding);
+        rect(bounds.left + 2.0f, bounds.top + 3.0f, bounds.width, bounds.height, rounding);
 
         fill(hovered ? HUD_SELECTED_COLOR : HUD_PANEL_COLOR);
         stroke(HUD_PANEL_BORDER_COLOR);
         strokeWeight(2.0f);
-        rect(bounds.x, bounds.y, bounds.width, bounds.height, rounding);
+        rect(bounds.left, bounds.top, bounds.width, bounds.height, rounding);
 
         noStroke();
         fill(HUD_TEXT_COLOR);
         textAlign(TextAlignment::center);
         textSize(20.0f);
-        text(label, bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f);
+        text(label, bounds.left + bounds.width * 0.5f, bounds.top + bounds.height * 0.5f);
 
         return clicked;
     }

@@ -828,7 +828,7 @@ namespace p5
             }
         }
 
-        void appendLineToPoints(Font& font, const ShapedLine& line, float scale, float penX, float penY, float letterSpacing, const TextToPointsOptions& options, std::vector<TextPoint>& outPoints)
+        void appendLineToPoints(Font& font, const ShapedLine& line, float scale, float penX, float penY, float letterSpacing, const TextToPointsOptions& options, std::vector<TextPoint>& outPoints, uint32_t& nextContourIndex)
         {
             for (const ShapedGlyph& g : line.glyphs) {
                 const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};
@@ -844,6 +844,10 @@ namespace p5
                     if (options.simplifyThreshold > 0.0f) {
                         simplifyContourPoints(contourPoints, options.simplifyThreshold);
                     }
+                    for (TextPoint& p : contourPoints) {
+                        p.contourIndex = nextContourIndex;
+                    }
+                    ++nextContourIndex;
                     outPoints.insert(outPoints.end(), contourPoints.begin(), contourPoints.end());
                 }
 

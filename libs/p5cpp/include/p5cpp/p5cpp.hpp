@@ -88,7 +88,7 @@ namespace p5
 {
     template <typename T> struct rect2
     {
-        T x, y, width, height;
+        T left, top, width, height;
 
         inline constexpr bool operator==(const rect2&) const = default;
         inline constexpr bool operator!=(const rect2&) const = default;
@@ -802,6 +802,14 @@ namespace p5
     {
         float2 position;
         float angle; // radians; tangent direction of the outline at this point (unlike p5.js's degrees `alpha`)
+
+        // Index of the glyph outline contour this point was sampled from, counting up across the whole
+        // textToPoints() call (every line, every glyph, every contour within a glyph -- e.g. "i"'s dot
+        // is a separate contour from its stem). Points share a contourIndex iff they belong to the same
+        // closed loop, so grouping by it (they arrive in order, so a single pass suffices) recovers which
+        // points to connect with a line -- p5.js's textToPoints() has no equivalent and returns a flat,
+        // undifferentiated array.
+        uint32_t contourIndex = 0;
     };
 
     struct TextToPointsOptions

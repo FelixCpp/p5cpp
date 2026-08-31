@@ -946,7 +946,7 @@ namespace p5
                 const GlyphMetrics& metrics = font.getGlyphMetrics(g.glyphIndex);
                 if (metrics.hasOutline) {
                     const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};
-                    const float2 quadTopLeft {glyphOrigin.x + metrics.bounds.x * scale, glyphOrigin.y - metrics.bounds.y * scale};
+                    const float2 quadTopLeft {glyphOrigin.x + metrics.bounds.left * scale, glyphOrigin.y - metrics.bounds.top * scale};
                     const float2 quadSize {metrics.bounds.width * scale, metrics.bounds.height * scale};
 
                     const float2 corners[4] = {
@@ -956,10 +956,10 @@ namespace p5
                         applyTransform({quadTopLeft.x, quadTopLeft.y + quadSize.y}),
                     };
                     const float2 uv[4] = {
-                        {metrics.uvRect.x, metrics.uvRect.y},
-                        {metrics.uvRect.x + metrics.uvRect.width, metrics.uvRect.y},
-                        {metrics.uvRect.x + metrics.uvRect.width, metrics.uvRect.y + metrics.uvRect.height},
-                        {metrics.uvRect.x, metrics.uvRect.y + metrics.uvRect.height},
+                        {metrics.uvRect.left, metrics.uvRect.top},
+                        {metrics.uvRect.left + metrics.uvRect.width, metrics.uvRect.top},
+                        {metrics.uvRect.left + metrics.uvRect.width, metrics.uvRect.top + metrics.uvRect.height},
+                        {metrics.uvRect.left, metrics.uvRect.top + metrics.uvRect.height},
                     };
 
                     positions.insert(positions.end(), std::begin(corners), std::end(corners));
@@ -1005,12 +1005,13 @@ namespace p5
         const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
 
         std::vector<TextPoint> result;
+        uint32_t nextContourIndex = 0;
         for (size_t lineIndex = 0; lineIndex < layout.lines.size(); ++lineIndex) {
             const detail::ShapedLine& line = layout.lines[lineIndex];
             const float lineWidthPixels = line.width * scale;
             const float penX = blockLayout.blockOrigin.x + detail::lineHorizontalOffset(blockLayout.blockWidth, lineWidthPixels, state.textAlignment);
             const float penY = blockLayout.blockOrigin.y + blockLayout.blockTop + static_cast<float>(lineIndex) * blockLayout.leading;
-            detail::appendLineToPoints(font, line, scale, penX, penY, effectiveLetterSpacing, options, result);
+            detail::appendLineToPoints(font, line, scale, penX, penY, effectiveLetterSpacing, options, result, nextContourIndex);
         }
 
         return result;

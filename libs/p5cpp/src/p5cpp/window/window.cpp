@@ -483,8 +483,8 @@ namespace p5
 
             if (videoMode) {
                 m_preFullscreenWindowRect = rect2i {
-                    .x = static_cast<int>(getPosition().x),
-                    .y = static_cast<int>(getPosition().y),
+                    .left = static_cast<int>(getPosition().x),
+                    .top = static_cast<int>(getPosition().y),
                     .width = static_cast<int>(getLogicalSize().x),
                     .height = static_cast<int>(getLogicalSize().y),
                 };
@@ -498,7 +498,7 @@ namespace p5
     {
         if (m_preFullscreenWindowRect) {
             const rect2i& rect = restoreRect.value_or(*m_preFullscreenWindowRect);
-            glfwSetWindowMonitor(m_window, nullptr, rect.x, rect.y, rect.width, rect.height, 0);
+            glfwSetWindowMonitor(m_window, nullptr, rect.left, rect.top, rect.width, rect.height, 0);
             m_preFullscreenWindowRect.reset();
         }
     }

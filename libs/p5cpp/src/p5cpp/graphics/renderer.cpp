@@ -185,8 +185,8 @@ namespace p5
             if (batch.clipRect.has_value()) {
                 glEnable(GL_SCISSOR_TEST);
                 glScissor(
-                    static_cast<GLint>(batch.clipRect->x),
-                    static_cast<GLint>(static_cast<float>(m_framebufferSize.y) - (batch.clipRect->y + batch.clipRect->height)),
+                    static_cast<GLint>(batch.clipRect->left),
+                    static_cast<GLint>(static_cast<float>(m_framebufferSize.y) - (batch.clipRect->top + batch.clipRect->height)),
                     static_cast<GLsizei>(std::max(batch.clipRect->width, 0.0f)),
                     static_cast<GLsizei>(std::max(batch.clipRect->height, 0.0f))
                 );

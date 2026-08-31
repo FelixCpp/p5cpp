@@ -59,8 +59,9 @@ namespace p5::animation
 {
     enum class transition_state
     {
-        animating,
-        waiting,
+        animating, // currently producing a visible change this frame
+        waiting,   // running, but passively (counting time / waiting on a condition)
+        completed, // fully done - safe to discard
     };
 }
 
@@ -115,6 +116,7 @@ namespace p5::animation
     private:
         float durationInSeconds;
         float elapsedTimeInSeconds;
+        bool isCompleted;
     };
 
     wait_for_transition wait_for(float duration);
@@ -132,6 +134,7 @@ namespace p5::animation
 
     private:
         condition_function condition;
+        bool isCompleted;
     };
 
     wait_until_transition wait_until(condition_function condition);
@@ -296,6 +299,53 @@ namespace p5::animation
     race_transition_chain race(Transitions... transitions);
 } // namespace p5::animation
 
+namespace p5::animation
+{
+    class staggered_transition_chain
+    {
+    public:
+        template <typename... Transitions>
+            requires(transitions<Transitions...>)
+        explicit staggered_transition_chain(float delay, Transitions... transitions);
+
+        advance_result advance(float deltaTimeInSeconds);
+        transition_state get_transition_state() const;
+
+    private:
+        bool is_every_transition_completed() const;
+
+        std::vector<std::unique_ptr<generic_transition>> transitions;
+        std::vector<float> pendingDelays;
+        std::vector<bool> transitionsCompleted;
+    };
+
+    template <typename... Transitions>
+        requires(transitions<Transitions...>)
+    staggered_transition_chain staggered(float delay, Transitions... transitions);
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    class animation_controller
+    {
+    public:
+        template <transition Transition>
+        void play(Transition transition)
+        {
+            transitions.push_back(std::make_unique<transition_wrapper<Transition>>(std::move(transition)));
+        }
+
+        void advance(float deltaTimeInSeconds)
+        {
+            std::erase_if(transitions, [deltaTimeInSeconds](std::unique_ptr<generic_transition>& transition) {
+                return transition->advance(deltaTimeInSeconds).isCompleted;
+            });
+        }
+
+    private:
+        std::vector<std::unique_ptr<generic_transition>> transitions;
+    };
+} // namespace p5::animation
 
 namespace p5::animation
 {
@@ -326,7 +376,7 @@ namespace p5::animation
 
     inline transition_state tween_transition::get_transition_state() const
     {
-        return isCompleted ? transition_state::waiting : transition_state::animating;
+        return isCompleted ? transition_state::completed : transition_state::animating;
     }
 } // namespace p5::animation
 
@@ -342,7 +392,8 @@ namespace p5::animation
 {
     inline wait_for_transition::wait_for_transition(float duration)
         : durationInSeconds {std::max(duration, 0.0f)},
-          elapsedTimeInSeconds {0.0f}
+          elapsedTimeInSeconds {0.0f},
+          isCompleted {false}
     {
     }
 
@@ -352,7 +403,7 @@ namespace p5::animation
         elapsedTimeInSeconds = std::clamp(elapsedTimeInSeconds + deltaTimeInSeconds, 0.0f, durationInSeconds);
         const float timeConsumed = elapsedTimeInSeconds - previousElapsed;
 
-        const bool isCompleted = (deltaTimeInSeconds >= 0.0f) ? (elapsedTimeInSeconds >= durationInSeconds) : (elapsedTimeInSeconds <= 0.0f);
+        isCompleted = (deltaTimeInSeconds >= 0.0f) ? (elapsedTimeInSeconds >= durationInSeconds) : (elapsedTimeInSeconds <= 0.0f);
 
         return {
             .timeConsumed = timeConsumed,
@@ -362,7 +413,7 @@ namespace p5::animation
 
     inline transition_state wait_for_transition::get_transition_state() const
     {
-        return transition_state::waiting;
+        return isCompleted ? transition_state::completed : transition_state::waiting;
     }
 } // namespace p5::animation
 
@@ -377,13 +428,14 @@ namespace p5::animation
 namespace p5::animation
 {
     inline wait_until_transition::wait_until_transition(condition_function condition)
-        : condition {std::move(condition)}
+        : condition {std::move(condition)},
+          isCompleted {false}
     {
     }
 
     inline advance_result wait_until_transition::advance([[maybe_unused]] float deltaTimeInSeconds)
     {
-        const bool isCompleted = condition();
+        isCompleted = condition();
 
         return {
             .timeConsumed = 0.0f,
@@ -393,7 +445,7 @@ namespace p5::animation
 
     inline transition_state wait_until_transition::get_transition_state() const
     {
-        return transition_state::waiting;
+        return isCompleted ? transition_state::completed : transition_state::waiting;
     }
 } // namespace p5::animation
 
@@ -426,7 +478,7 @@ namespace p5::animation
 
     inline transition_state call_transition::get_transition_state() const
     {
-        return isCompleted ? transition_state::waiting : transition_state::animating;
+        return isCompleted ? transition_state::completed : transition_state::animating;
     }
 } // namespace p5::animation
 
@@ -528,7 +580,7 @@ namespace p5::animation
         requires transition_factory<Factory>
     inline transition_state repeat_transition<Factory>::get_transition_state() const
     {
-        return isCompleted ? transition_state::waiting : currentTransition.get_transition_state();
+        return isCompleted ? transition_state::completed : currentTransition.get_transition_state();
     }
 } // namespace p5::animation
 
@@ -608,7 +660,7 @@ namespace p5::animation
     inline transition_state sequential_transition_chain::get_transition_state() const
     {
         if (isCompleted) {
-            return transition_state::waiting;
+            return transition_state::completed;
         }
 
         return transitions[currentTransitionIndex]->get_transition_state();
@@ -676,7 +728,7 @@ namespace p5::animation
     inline transition_state parallel_transition_chain::get_transition_state() const
     {
         if (is_every_transition_completed()) {
-            return transition_state::waiting;
+            return transition_state::completed;
         }
 
         for (const std::unique_ptr<generic_transition>& transition : transitions) {
@@ -737,7 +789,7 @@ namespace p5::animation
     inline transition_state race_transition_chain::get_transition_state() const
     {
         if (isCompleted) {
-            return transition_state::waiting;
+            return transition_state::completed;
         }
 
         for (const std::unique_ptr<generic_transition>& transition : transitions) {
@@ -757,5 +809,98 @@ namespace p5::animation
     inline race_transition_chain race(Transitions... transitions)
     {
         return race_transition_chain {std::forward<Transitions>(transitions)...};
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename... Transitions>
+        requires(transitions<Transitions...>)
+    inline staggered_transition_chain::staggered_transition_chain(float delay, Transitions... transitions)
+        : transitions {},
+          pendingDelays {},
+          transitionsCompleted(sizeof...(Transitions), false)
+    {
+        this->transitions.reserve(sizeof...(Transitions));
+        pendingDelays.reserve(sizeof...(Transitions));
+
+        (
+            (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))),
+             pendingDelays.push_back(static_cast<float>(pendingDelays.size()) * std::max(delay, 0.0f))),
+            ...);
+    }
+
+    inline advance_result staggered_transition_chain::advance(float deltaTimeInSeconds)
+    {
+        float timeConsumed = 0.0f;
+
+        for (size_t i = 0; i < transitions.size(); ++i) {
+            if (transitionsCompleted[i]) {
+                continue;
+            }
+
+            float remainingDeltaTime = deltaTimeInSeconds;
+            float localTimeConsumed = 0.0f;
+
+            if (pendingDelays[i] > 0.0f) {
+                const float delayConsumed = std::min(remainingDeltaTime, pendingDelays[i]);
+                pendingDelays[i] -= delayConsumed;
+                remainingDeltaTime -= delayConsumed;
+                localTimeConsumed += delayConsumed;
+            }
+
+            if (pendingDelays[i] <= 0.0f and remainingDeltaTime > 0.0f) {
+                const advance_result result = transitions[i]->advance(remainingDeltaTime);
+                localTimeConsumed += result.timeConsumed;
+
+                if (result.isCompleted) {
+                    transitionsCompleted[i] = true;
+                }
+            }
+
+            timeConsumed = std::max(timeConsumed, localTimeConsumed);
+        }
+
+        return {
+            .timeConsumed = timeConsumed,
+            .isCompleted = is_every_transition_completed()
+        };
+    }
+
+    inline bool staggered_transition_chain::is_every_transition_completed() const
+    {
+        for (bool completed : transitionsCompleted) {
+            if (not completed) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline transition_state staggered_transition_chain::get_transition_state() const
+    {
+        if (is_every_transition_completed()) {
+            return transition_state::completed;
+        }
+
+        for (size_t i = 0; i < transitions.size(); ++i) {
+            const bool started = pendingDelays[i] <= 0.0f;
+            if (not transitionsCompleted[i] and started and transitions[i]->get_transition_state() == transition_state::animating) {
+                return transition_state::animating;
+            }
+        }
+
+        return transition_state::waiting;
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename... Transitions>
+        requires(transitions<Transitions...>)
+    inline staggered_transition_chain staggered(float delay, Transitions... transitions)
+    {
+        return staggered_transition_chain {delay, std::forward<Transitions>(transitions)...};
     }
 } // namespace p5::animation
