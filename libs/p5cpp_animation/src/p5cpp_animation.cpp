@@ -38,3 +38,13 @@ namespace p5::animation::curves
     float easeInOutBounce(float t) { return (t < 0.5f) ? (1.0f - easeOutBounce(1.0f - 2.0f * t)) / 2.0f : (1.0f + easeOutBounce(2.0f * t - 1.0f)) / 2.0f; }
     // clang-format on
 } // namespace p5::animation::curves
+
+namespace p5::animation
+{
+    Curve reverse(Curve curve)
+    {
+        return [curve = std::move(curve)](float progress) {
+            return curve(1.0f - progress);
+        };
+    }
+} // namespace p5::animation

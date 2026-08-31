@@ -5,6 +5,18 @@
 using namespace p5;
 using namespace p5::animation;
 
+auto yoyo(float duration, Curve curve, auto f)
+{
+    return sequential(
+        tween(duration, curve, [f](float progress) {
+            f(progress);
+        }),
+        tween(duration, reverse(curve), [f](float progress) {
+            f(progress);
+        })
+    );
+}
+
 struct AnimationTest : Sketch
 {
     float x = 200.0f;
@@ -15,9 +27,14 @@ struct AnimationTest : Sketch
         wait_until([this]() {
             return isMouseButtonPressed(MouseButton::Left);
         }),
-        tween(1.0f, curves::easeInOutBack, [this](float progress) {
-            scl = lerp(1.0f, 2.0f, progress);
-        })
+        repeat(
+            [this] {
+                return yoyo(1.0f, curves::easeInOutBack, [this](float progress) {
+                    scl = lerp(1.0f, 2.0f, progress);
+                });
+            },
+            2
+        )
     );
 
     void setup() override

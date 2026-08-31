@@ -42,7 +42,9 @@ namespace p5::animation::curves
 namespace p5::animation
 {
     typedef std::function<float(float)> Curve;
-}
+
+    Curve reverse(Curve curve);
+} // namespace p5::animation
 
 namespace p5::animation
 {
@@ -94,6 +96,7 @@ namespace p5::animation
         float elapsedTimeInSeconds;
         Curve curve;
         progress_transformer transformer;
+        bool isCompleted;
     };
 
     tween_transition tween(float duration, Curve curve, progress_transformer transformer);
@@ -146,6 +149,7 @@ namespace p5::animation
 
     private:
         callback_function callback;
+        bool isCompleted;
     };
 
     call_transition call(callback_function callback);
@@ -170,6 +174,32 @@ namespace p5::animation
     template <typename Transition>
         requires transition<std::remove_cvref_t<Transition>>
     speed_adjusted_transition<Transition> adjust_speed(Transition transition, float multiplier);
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename Transition>
+    concept transition_factory = std::is_invocable_v<Transition> && transition<std::remove_cvref_t<std::invoke_result_t<Transition>>>;
+
+    template <typename Factory>
+        requires transition_factory<Factory>
+    class repeat_transition
+    {
+    public:
+        explicit repeat_transition(Factory factory, std::optional<size_t> repeatCount);
+        advance_result advance(float deltaTimeInSeconds);
+        transition_state get_transition_state() const;
+
+    private:
+        Factory factory;
+        std::invoke_result_t<Factory> currentTransition;
+        std::optional<size_t> remainingCycles;
+        bool isCompleted;
+    };
+
+    template <typename Factory>
+        requires transition_factory<Factory>
+    repeat_transition<Factory> repeat(Factory factory, std::optional<size_t> repeatCount);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -266,36 +296,37 @@ namespace p5::animation
     race_transition_chain race(Transitions... transitions);
 } // namespace p5::animation
 
+
 namespace p5::animation
 {
     inline tween_transition::tween_transition(float duration, Curve curve, progress_transformer transformer)
-        : durationInSeconds {duration},
+        : durationInSeconds {std::max(duration, 0.0f)},
           elapsedTimeInSeconds {0.0f},
           curve {curve},
-          transformer {std::move(transformer)}
+          transformer {std::move(transformer)},
+          isCompleted {false}
     {
     }
 
     inline advance_result tween_transition::advance(float deltaTimeInSeconds)
     {
-        const float timeRemaining = durationInSeconds - elapsedTimeInSeconds;
-        const float timeToConsume = std::min(deltaTimeInSeconds, timeRemaining);
-        const bool isCompleted = (elapsedTimeInSeconds + deltaTimeInSeconds) >= durationInSeconds;
-
-        elapsedTimeInSeconds = std::min(elapsedTimeInSeconds + deltaTimeInSeconds, durationInSeconds);
+        const float previousElapsed = elapsedTimeInSeconds;
+        elapsedTimeInSeconds = std::clamp(elapsedTimeInSeconds + deltaTimeInSeconds, 0.0f, durationInSeconds);
+        const float timeConsumed = elapsedTimeInSeconds - previousElapsed;
+        isCompleted = (deltaTimeInSeconds >= 0.0f) ? (elapsedTimeInSeconds >= durationInSeconds) : (elapsedTimeInSeconds <= 0.0f);
 
         const float progress = curve(durationInSeconds > 0.0f ? (elapsedTimeInSeconds / durationInSeconds) : 1.0f);
         transformer(progress);
 
         return {
-            .timeConsumed = timeToConsume,
+            .timeConsumed = timeConsumed,
             .isCompleted = isCompleted
         };
     }
 
     inline transition_state tween_transition::get_transition_state() const
     {
-        return transition_state::animating;
+        return isCompleted ? transition_state::waiting : transition_state::animating;
     }
 } // namespace p5::animation
 
@@ -310,21 +341,21 @@ namespace p5::animation
 namespace p5::animation
 {
     inline wait_for_transition::wait_for_transition(float duration)
-        : durationInSeconds {duration},
+        : durationInSeconds {std::max(duration, 0.0f)},
           elapsedTimeInSeconds {0.0f}
     {
     }
 
     inline advance_result wait_for_transition::advance(float deltaTimeInSeconds)
     {
-        const float timeRemaining = durationInSeconds - elapsedTimeInSeconds;
-        const float timeToConsume = std::min(deltaTimeInSeconds, timeRemaining);
-        const bool isCompleted = (elapsedTimeInSeconds + deltaTimeInSeconds) >= durationInSeconds;
+        const float previousElapsed = elapsedTimeInSeconds;
+        elapsedTimeInSeconds = std::clamp(elapsedTimeInSeconds + deltaTimeInSeconds, 0.0f, durationInSeconds);
+        const float timeConsumed = elapsedTimeInSeconds - previousElapsed;
 
-        elapsedTimeInSeconds = std::min(elapsedTimeInSeconds + deltaTimeInSeconds, durationInSeconds);
+        const bool isCompleted = (deltaTimeInSeconds >= 0.0f) ? (elapsedTimeInSeconds >= durationInSeconds) : (elapsedTimeInSeconds <= 0.0f);
 
         return {
-            .timeConsumed = timeToConsume,
+            .timeConsumed = timeConsumed,
             .isCompleted = isCompleted
         };
     }
@@ -377,13 +408,15 @@ namespace p5::animation
 namespace p5::animation
 {
     inline call_transition::call_transition(callback_function callback)
-        : callback {std::move(callback)}
+        : callback {std::move(callback)},
+          isCompleted {false}
     {
     }
 
     inline advance_result call_transition::advance([[maybe_unused]] float deltaTimeInSeconds)
     {
         callback();
+        isCompleted = true;
 
         return {
             .timeConsumed = 0.0f,
@@ -393,7 +426,7 @@ namespace p5::animation
 
     inline transition_state call_transition::get_transition_state() const
     {
-        return transition_state::animating;
+        return isCompleted ? transition_state::waiting : transition_state::animating;
     }
 } // namespace p5::animation
 
@@ -442,6 +475,75 @@ namespace p5::animation
 
 namespace p5::animation
 {
+    template <typename Factory>
+        requires transition_factory<Factory>
+    inline repeat_transition<Factory>::repeat_transition(Factory factory, std::optional<size_t> repeatCount)
+        : factory {std::move(factory)},
+          currentTransition {this->factory()},
+          remainingCycles {repeatCount},
+          isCompleted {false}
+    {
+    }
+
+    template <typename Factory>
+        requires transition_factory<Factory>
+    inline advance_result repeat_transition<Factory>::advance(float deltaTimeInSeconds)
+    {
+        if (isCompleted) {
+            return {
+                .timeConsumed = 0.0f,
+                .isCompleted = true
+            };
+        }
+
+        const float initialDeltaTimeInSeconds = deltaTimeInSeconds;
+
+        while (not isCompleted) {
+            const advance_result result = currentTransition.advance(deltaTimeInSeconds);
+            deltaTimeInSeconds -= result.timeConsumed;
+
+            if (not result.isCompleted) {
+                break;
+            }
+
+            if (remainingCycles.has_value()) {
+                size_t& cycles = remainingCycles.value();
+                if (cycles > 1) {
+                    --cycles;
+                } else {
+                    isCompleted = true;
+                }
+            }
+
+            currentTransition = factory();
+        }
+
+        return {
+            .timeConsumed = std::max(initialDeltaTimeInSeconds - deltaTimeInSeconds, 0.0f),
+            .isCompleted = isCompleted
+        };
+    }
+
+    template <typename Factory>
+        requires transition_factory<Factory>
+    inline transition_state repeat_transition<Factory>::get_transition_state() const
+    {
+        return isCompleted ? transition_state::waiting : currentTransition.get_transition_state();
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename Factory>
+        requires transition_factory<Factory>
+    inline repeat_transition<Factory> repeat(Factory factory, std::optional<size_t> repeatCount)
+    {
+        return repeat_transition<Factory> {std::move(factory), repeatCount};
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
     template <typename Transition>
         requires transition<Transition>
     inline transition_wrapper<Transition>::transition_wrapper(Transition transition)
@@ -469,10 +571,12 @@ namespace p5::animation
     template <typename... Transitions>
         requires(transitions<Transitions...>)
     inline sequential_transition_chain::sequential_transition_chain(Transitions... transitions)
-        : transitions {std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))...},
+        : transitions {},
           currentTransitionIndex {0},
           isCompleted {false}
     {
+        this->transitions.reserve(sizeof...(Transitions));
+        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result sequential_transition_chain::advance(float deltaTimeInSeconds)
@@ -526,9 +630,11 @@ namespace p5::animation
     template <typename... Transitions>
         requires(transitions<Transitions...>)
     inline parallel_transition_chain::parallel_transition_chain(Transitions... transitions)
-        : transitions {std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))...},
+        : transitions {},
           transitionsCompleted(sizeof...(Transitions), false)
     {
+        this->transitions.reserve(sizeof...(Transitions));
+        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result parallel_transition_chain::advance(float deltaTimeInSeconds)
@@ -598,9 +704,11 @@ namespace p5::animation
     template <typename... Transitions>
         requires(transitions<Transitions...>)
     inline race_transition_chain::race_transition_chain(Transitions... transitions)
-        : transitions {std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))...},
+        : transitions {},
           isCompleted {false}
     {
+        this->transitions.reserve(sizeof...(Transitions));
+        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result race_transition_chain::advance(float deltaTimeInSeconds)
