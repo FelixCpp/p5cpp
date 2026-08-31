@@ -1,164 +1,316 @@
+#include <cassert>
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp_animation/p5cpp_animation.hpp>
 
-#include <concepts>
-#include <ranges>
-
 using namespace p5;
+using namespace p5::animation;
 
 using Curve = float (*)(float);
 
-struct Curves
+enum class PlaybackBehavior
 {
-    inline static constexpr Curve linear = p5::animation::easeLinear;
+    waiting,
+    animating,
 };
 
-struct wait_for_sequence_entry
+struct advance_result
 {
-    float durationInSeconds;
+    float timeConsumed;
+    float2 position;
+    bool isCompleted;
 };
 
-inline static constexpr wait_for_sequence_entry waitFor(float durationInSeconds)
+struct sequence_entry
 {
-    return wait_for_sequence_entry {
-        .durationInSeconds = durationInSeconds,
-    };
-}
+    virtual ~sequence_entry() = default;
+    virtual float2 getEndPosition() const = 0;
+    virtual advance_result advance(float deltaTime) = 0;
+    virtual PlaybackBehavior getBehavior() const = 0;
+};
 
-struct snap_to_sequence_entry
+struct sequence_entry_builder_options
+{
+    sequence_entry* previousEntry;
+};
+
+struct sequence_entry_builder
+{
+    virtual ~sequence_entry_builder() = default;
+    virtual std::unique_ptr<sequence_entry> build(const sequence_entry_builder_options& options) = 0;
+};
+
+struct snap_to_sequence_entry : sequence_entry
 {
     float2 position;
+
+    constexpr explicit snap_to_sequence_entry(float2 position)
+        : position(position)
+    {
+    }
+
+    float2 getEndPosition() const override
+    {
+        return position;
+    }
+
+    advance_result advance(float deltaTime) override
+    {
+        return {
+            .timeConsumed = 0.0f,
+            .position = position,
+            .isCompleted = true,
+        };
+    }
+
+    PlaybackBehavior getBehavior() const override
+    {
+        return PlaybackBehavior::animating;
+    }
 };
 
-inline static constexpr snap_to_sequence_entry snapTo(float2 position)
-{
-    return snap_to_sequence_entry {
-        .position = position,
-    };
-}
-
-struct tween_to_sequence_entry
+struct snap_to_sequence_entry_builder : sequence_entry_builder
 {
     float2 position;
+
+    constexpr explicit snap_to_sequence_entry_builder(float2 position) : position(position) {}
+
+    std::unique_ptr<sequence_entry> build(const sequence_entry_builder_options& options) override
+    {
+        return std::make_unique<snap_to_sequence_entry>(position);
+    }
+};
+
+struct tween_to_sequence_entry : sequence_entry
+{
+    float2 start;
+    float2 end;
     float durationInSeconds;
     Curve curve;
+    float elapsedTimeInSeconds;
+
+    constexpr explicit tween_to_sequence_entry(float2 start, float2 end, float durationInSeconds, Curve curve)
+        : start(start),
+          end(end),
+          durationInSeconds(durationInSeconds),
+          curve(curve),
+          elapsedTimeInSeconds(0.0f)
+    {
+    }
+
+    float2 getEndPosition() const override
+    {
+        return end;
+    }
+
+    advance_result advance(float deltaTime) override
+    {
+        const float timeRemaining = durationInSeconds - elapsedTimeInSeconds;
+        const float timeToConsume = std::min(deltaTime, timeRemaining);
+        const bool isCompleted = elapsedTimeInSeconds + deltaTime >= durationInSeconds;
+        elapsedTimeInSeconds = std::min(elapsedTimeInSeconds + timeToConsume, durationInSeconds);
+
+        const float progress = curve(durationInSeconds > 0.0f ? (elapsedTimeInSeconds / durationInSeconds) : 1.0f);
+        const float dx = start.x + (end.x - start.x) * progress;
+        const float dy = start.y + (end.y - start.y) * progress;
+
+        return {
+            .timeConsumed = timeToConsume,
+            .position = {.x = dx, .y = dy},
+            .isCompleted = isCompleted,
+        };
+    }
+
+    PlaybackBehavior getBehavior() const override
+    {
+        return PlaybackBehavior::animating;
+    }
 };
 
-inline static constexpr tween_to_sequence_entry tweenTo(float2 position, float durationInSeconds, Curve curve)
+inline static std::unique_ptr<sequence_entry_builder> snapTo(float2 position)
 {
-    return tween_to_sequence_entry {
-        .position = position,
-        .durationInSeconds = durationInSeconds,
-        .curve = curve,
-    };
+    return std::make_unique<snap_to_sequence_entry_builder>(position);
 }
 
-using sequence_entry = std::variant<wait_for_sequence_entry, snap_to_sequence_entry, tween_to_sequence_entry>;
-
-inline static constexpr float getDurationInSeconds(const snap_to_sequence_entry& entry) { return 0.0f; }
-inline static constexpr float getDurationInSeconds(const tween_to_sequence_entry& entry) { return entry.durationInSeconds; }
-inline static constexpr float getDurationInSeconds(const wait_for_sequence_entry& entry) { return entry.durationInSeconds; }
-inline static constexpr float getDurationInSeconds(const sequence_entry& entry)
+struct tween_to_sequence_entry_builder : sequence_entry_builder
 {
-    return std::visit(
-        [](const auto& e) {
-            return getDurationInSeconds(e);
-        },
-        entry
-    );
+    float2 destination;
+    float durationInSeconds;
+    Curve curve;
+
+    constexpr explicit tween_to_sequence_entry_builder(float2 end, float durationInSeconds, Curve curve)
+        : destination(end),
+          durationInSeconds(durationInSeconds),
+          curve(curve)
+    {
+    }
+
+    std::unique_ptr<sequence_entry> build(const sequence_entry_builder_options& options) override
+    {
+        assert(options.previousEntry != nullptr and "tween_to_sequence_entry_builder requires a previous entry to determine the start position.");
+
+        return std::make_unique<tween_to_sequence_entry>(
+            options.previousEntry->getEndPosition(),
+            destination,
+            durationInSeconds,
+            curve
+        );
+    }
+};
+
+inline static std::unique_ptr<sequence_entry_builder> tweenTo(float2 end, float durationInSeconds, Curve curve)
+{
+    return std::make_unique<tween_to_sequence_entry_builder>(end, durationInSeconds, curve);
+}
+
+struct wait_for_sequence_entry : sequence_entry
+{
+    float durationInSeconds;
+    float elapsedTimeInSeconds;
+
+    sequence_entry* previous;
+
+    constexpr explicit wait_for_sequence_entry(float durationInSeconds, sequence_entry* previous)
+        : durationInSeconds(durationInSeconds),
+          elapsedTimeInSeconds(0.0f),
+          previous(previous)
+    {
+    }
+
+    float2 getEndPosition() const override
+    {
+        return previous->getEndPosition();
+    }
+
+    advance_result advance(float deltaTime) override
+    {
+        const float timeRemaining = durationInSeconds - elapsedTimeInSeconds;
+        const float timeToConsume = std::min(deltaTime, timeRemaining);
+        const bool isCompleted = elapsedTimeInSeconds + deltaTime >= durationInSeconds;
+
+        elapsedTimeInSeconds = std::min(elapsedTimeInSeconds + timeToConsume, durationInSeconds);
+
+        return {
+            .timeConsumed = timeToConsume,
+            .position = previous->getEndPosition(),
+            .isCompleted = isCompleted,
+        };
+    }
+
+    PlaybackBehavior getBehavior() const override
+    {
+        return PlaybackBehavior::waiting;
+    }
+};
+
+struct wait_for_sequence_entry_builder : sequence_entry_builder
+{
+    float durationInSeconds;
+
+    constexpr explicit wait_for_sequence_entry_builder(float durationInSeconds)
+        : durationInSeconds(durationInSeconds)
+    {
+    }
+
+    std::unique_ptr<sequence_entry> build(const sequence_entry_builder_options& options) override
+    {
+        return std::make_unique<wait_for_sequence_entry>(durationInSeconds, options.previousEntry);
+    }
+};
+
+inline static std::unique_ptr<sequence_entry_builder> waitFor(float durationInSeconds)
+{
+    return std::make_unique<wait_for_sequence_entry_builder>(durationInSeconds);
 }
 
 struct sequence
 {
-    std::vector<sequence_entry> entries;
-    float elapsedTimeInSeconds;
-    float2 currentPosition;
+    std::vector<std::unique_ptr<sequence_entry>> entries;
+    size_t currentIndex;
+    float2 position;
+    bool completed;
+
+    explicit sequence(std::vector<std::unique_ptr<sequence_entry>> entries)
+        : entries(std::move(entries)),
+          currentIndex(0),
+          position(),
+          completed(false)
+    {
+    }
+
+    void advance(float deltaTime)
+    {
+        while (deltaTime > 0.0f and not completed) {
+            const std::unique_ptr<sequence_entry>& currentEntry = entries[currentIndex];
+            const advance_result result = currentEntry->advance(deltaTime);
+            position = result.position;
+            deltaTime -= result.timeConsumed;
+
+            if (result.isCompleted) {
+                if (currentIndex + 1 < entries.size()) {
+                    ++currentIndex;
+                } else {
+                    completed = true;
+                }
+            }
+        }
+    }
+
+    float2 getPosition() const
+    {
+        return position;
+    }
+
+    PlaybackBehavior getPlaybackBehavior() const
+    {
+        if (completed) {
+            return PlaybackBehavior::waiting;
+        }
+
+        return entries[currentIndex]->getBehavior();
+    }
 };
 
-inline static constexpr sequence createSequence(std::ranges::range auto&& elements)
-    requires requires {
-        std::is_same_v<std::ranges::range_value_t<decltype(elements)>, sequence_entry>;
-    }
+inline static sequence createSequence(const std::vector<std::unique_ptr<sequence_entry_builder>>& builders)
 {
-    return sequence {
-        .entries = {std::ranges::begin(elements), std::ranges::end(elements)},
-        .elapsedTimeInSeconds = 0.0f,
-        .currentPosition = {0.0f, 0.0f},
-    };
-}
+    assert(not builders.empty() and "createSequence requires at least one sequence_entry_builder.");
 
-inline static void advance_entry(sequence& sequence, snap_to_sequence_entry& entry, float deltaTime) { entry.position = entry.position; }
-inline static void advance_entry(sequence& sequence, tween_to_sequence_entry& entry, float deltaTime)
-{
-    const size_t currentEntryIndex = getCurrentEntryIndex(sequence);
-    const float currentEntryElapsedTimeInSeconds = getCurrentEntryElapsedTimeInSeconds(sequence);
-    const float progress = currentEntryElapsedTimeInSeconds / entry.durationInSeconds;
-    const float easedProgress = entry.curve(progress);
+    std::vector<std::unique_ptr<sequence_entry>> entries;
+    sequence_entry* previousEntry = nullptr;
+    for (size_t i = 0; i < builders.size(); ++i) {
+        const std::unique_ptr<sequence_entry_builder>& builder = builders[i];
 
-    if (currentEntryIndex > 0) {
-        const auto& previousEntry = std::get<sequence_entry>(sequence.entries[currentEntryIndex - 1]);
-        if (std::holds_alternative<snap_to_sequence_entry>(previousEntry)) {
-            const auto& previousSnapToEntry = std::get<snap_to_sequence_entry>(previousEntry);
-            sequence.currentPosition = lerp(previousSnapToEntry.position, entry.position, easedProgress);
-        } else if (std::holds_alternative<tween_to_sequence_entry>(previousEntry)) {
-            const auto& previousTweenToEntry = std::get<tween_to_sequence_entry>(previousEntry);
-            sequence.currentPosition = lerp(previousTweenToEntry.position, entry.position, easedProgress);
-        }
-    } else {
-        sequence.currentPosition = lerp(float2{0.0f, 0.0f}, entry.position, easedProgress);
-    }
-}
+        const sequence_entry_builder_options options = {
+            .previousEntry = previousEntry,
+        };
 
-inline static size_t getCurrentEntryIndex(const sequence& sequence)
-{
-    float elapsedTimeInSeconds = 0.0f;
-    for (size_t i = 0; i < sequence.entries.size(); ++i) {
-        const auto& entry = sequence.entries[i];
-        elapsedTimeInSeconds += getDurationInSeconds(entry);
-        if (sequence.elapsedTimeInSeconds < elapsedTimeInSeconds) {
-            return i;
-        }
+        std::unique_ptr<sequence_entry> entry = builder->build(options);
+        auto& instance = entries.emplace_back(std::move(entry));
+        previousEntry = instance.get();
     }
 
-    return sequence.entries.size();
-}
-
-inline static float getCurrentEntryElapsedTimeInSeconds(const sequence& sequence)
-{
-    float elapsedTimeInSeconds = 0.0f;
-    for (size_t i = 0; i < sequence.entries.size(); ++i) {
-        const auto& entry = sequence.entries[i];
-        const float entryDurationInSeconds = getDurationInSeconds(entry);
-        if (sequence.elapsedTimeInSeconds < elapsedTimeInSeconds + entryDurationInSeconds) {
-            return sequence.elapsedTimeInSeconds - elapsedTimeInSeconds;
-        }
-        elapsedTimeInSeconds += entryDurationInSeconds;
-    }
-
-    return 0.0f;
-}
-
-inline static void advance(sequence& sequence, float deltaTime)
-{
-    const size_t currentEntryIndex = getCurrentEntryIndex(sequence);
-    sequence_entry& currentEntry = sequence.entries[currentEntryIndex];
-
-    advance_entry(currentEntry, deltaTime);
-
-    // const float currentEntryDurationInSeconds = getDurationInSeconds(sequence.entries[currentEntryIndex]);
-    // const float currentEntryElapsedTimeInSeconds = getCurrentEntryElapsedTimeInSeconds(sequence);
-    // const float progress = currentEntryElapsedTimeInSeconds / currentEntryDurationInSeconds;
-    // const bool isCurrentEntryComplete = progress >= 1.0f;
+    return sequence(std::move(entries));
 }
 
 struct AnimationTest : Sketch
 {
-    sequence seq = createSequence(std::vector<sequence_entry> {
-        snapTo({.x = 200.0f, .y = 200.0f}),
-        tweenTo({.x = 400.0f, .y = 200.0f}, 1.25f, Curves::linear),
-        waitFor(0.5f),
-        tweenTo({.x = 400.0f, .y = 400.0f}, 1.25f, Curves::linear),
-    });
+    static std::vector<std::unique_ptr<sequence_entry_builder>> getSequence()
+    {
+        std::vector<std::unique_ptr<sequence_entry_builder>> entries;
+
+        entries.push_back(snapTo({.x = 200.0f, .y = 200.0f}));
+        entries.push_back(tweenTo({.x = 400.0f, .y = 200.0f}, 0.75f, easeInOutSine));
+        entries.push_back(waitFor(0.5f));
+        entries.push_back(tweenTo({.x = 400.0f, .y = 400.0f}, 0.5f, easeInOutBack));
+        entries.push_back(tweenTo({.x = 200.0f, .y = 400.0f}, 3.0f, easeInOutBounce));
+        entries.push_back(waitFor(2.0f));
+        entries.push_back(tweenTo({.x = 300.0f, .y = 300.0f}, 1.8f, easeInOutExpo));
+        entries.push_back(waitFor(0.5f));
+        entries.push_back(snapTo({.x = 200.0f, .y = 200.0f}));
+
+        return entries;
+    }
+
+    sequence seq = createSequence(getSequence());
 
     void setup() override
     {
@@ -167,7 +319,19 @@ struct AnimationTest : Sketch
 
     void draw() override
     {
+        seq.advance(getDeltaTime());
+
         background(rgba(31, 31, 51));
+
+        const float2 ballPosition = seq.getPosition();
+
+        if (seq.getPlaybackBehavior() == PlaybackBehavior::animating) {
+            fill(rgba(255));
+        } else {
+            fill(rgba(255, 0, 0));
+        }
+        noStroke();
+        circle(ballPosition.x, ballPosition.y, 50.0f);
     }
 };
 
