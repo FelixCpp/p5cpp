@@ -4,7 +4,7 @@
 
 // easing.hpp
 
-namespace p5::animation
+namespace p5::animation::curves
 {
     // float easeLinear(float x);
     float easeInQuad(float x);
@@ -37,9 +37,12 @@ namespace p5::animation
     float easeInBounce(float x);
     float easeOutBounce(float x);
     float easeInOutBounce(float x);
+} // namespace p5::animation::curves
 
+namespace p5::animation
+{
     typedef float (*Curve)(float);
-} // namespace p5::animation
+}
 
 namespace p5::animation
 {
@@ -347,7 +350,7 @@ namespace p5::animation
     {
     }
 
-    inline advance_result wait_until_transition::advance(float deltaTimeInSeconds)
+    inline advance_result wait_until_transition::advance([[maybe_unused]] float deltaTimeInSeconds)
     {
         const bool isCompleted = condition();
 
@@ -378,7 +381,7 @@ namespace p5::animation
     {
     }
 
-    inline advance_result call_transition::advance(float deltaTimeInSeconds)
+    inline advance_result call_transition::advance([[maybe_unused]] float deltaTimeInSeconds)
     {
         callback();
 
@@ -528,8 +531,8 @@ namespace p5::animation
         : transitions {},
           transitionsCompleted(sizeof...(Transitions), false)
     {
-        // this->transitions.reserve(sizeof...(Transitions));
-        // (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
+        this->transitions.reserve(sizeof...(Transitions));
+        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result parallel_transition_chain::advance(float deltaTimeInSeconds)
@@ -598,8 +601,8 @@ namespace p5::animation
         : transitions {},
           isCompleted {false}
     {
-        // this->transitions.reserve(sizeof...(Transitions));
-        // (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
+        this->transitions.reserve(sizeof...(Transitions));
+        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result race_transition_chain::advance(float deltaTimeInSeconds)
