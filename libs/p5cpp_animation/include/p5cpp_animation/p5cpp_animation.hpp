@@ -6,7 +6,7 @@
 
 namespace p5::animation::curves
 {
-    // float easeLinear(float x);
+    float easeLinear(float x);
     float easeInQuad(float x);
     float easeOutQuad(float x);
     float easeInOutQuad(float x);
@@ -41,7 +41,7 @@ namespace p5::animation::curves
 
 namespace p5::animation
 {
-    typedef float (*Curve)(float);
+    typedef std::function<float(float)> Curve;
 }
 
 namespace p5::animation
@@ -139,7 +139,7 @@ namespace p5::animation
     class call_transition
     {
     public:
-        explicit call_transition(const callback_function& callback);
+        explicit call_transition(callback_function callback);
 
         advance_result advance(float deltaTimeInSeconds);
         transition_state get_transition_state() const;
@@ -148,7 +148,7 @@ namespace p5::animation
         callback_function callback;
     };
 
-    call_transition call(const callback_function& callback);
+    call_transition call(callback_function callback);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -205,7 +205,7 @@ namespace p5::animation
     public:
         template <typename... Transitions>
             requires(transitions<Transitions...>)
-        explicit sequential_transition_chain(Transitions&&... transitions);
+        explicit sequential_transition_chain(Transitions... transitions);
 
         advance_result advance(float deltaTimeInSeconds);
         transition_state get_transition_state() const;
@@ -218,7 +218,7 @@ namespace p5::animation
 
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    sequential_transition_chain sequence(Transitions&&... transitions);
+    sequential_transition_chain sequential(Transitions... transitions);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -228,7 +228,7 @@ namespace p5::animation
     public:
         template <typename... Transitions>
             requires(transitions<Transitions...>)
-        explicit parallel_transition_chain(Transitions&&... transitions);
+        explicit parallel_transition_chain(Transitions... transitions);
 
         advance_result advance(float deltaTimeInSeconds);
         transition_state get_transition_state() const;
@@ -241,7 +241,7 @@ namespace p5::animation
 
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    constexpr parallel_transition_chain parallel(Transitions&&... transitions);
+    constexpr parallel_transition_chain parallel(Transitions... transitions);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -251,7 +251,7 @@ namespace p5::animation
     public:
         template <typename... Transitions>
             requires(transitions<Transitions...>)
-        explicit race_transition_chain(Transitions&&... transitions);
+        explicit race_transition_chain(Transitions... transitions);
 
         advance_result advance(float deltaTimeInSeconds);
         transition_state get_transition_state() const;
@@ -263,7 +263,7 @@ namespace p5::animation
 
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    race_transition_chain race(Transitions&&... transitions);
+    race_transition_chain race(Transitions... transitions);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -376,8 +376,8 @@ namespace p5::animation
 
 namespace p5::animation
 {
-    inline call_transition::call_transition(const callback_function& callback)
-        : callback {callback}
+    inline call_transition::call_transition(callback_function callback)
+        : callback {std::move(callback)}
     {
     }
 
@@ -399,9 +399,9 @@ namespace p5::animation
 
 namespace p5::animation
 {
-    inline call_transition call(const callback_function& callback)
+    inline call_transition call(callback_function callback)
     {
-        return call_transition {callback};
+        return call_transition {std::move(callback)};
     }
 } // namespace p5::animation
 
@@ -468,13 +468,11 @@ namespace p5::animation
 {
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    inline sequential_transition_chain::sequential_transition_chain(Transitions&&... transitions)
-        : transitions {},
+    inline sequential_transition_chain::sequential_transition_chain(Transitions... transitions)
+        : transitions {std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))...},
           currentTransitionIndex {0},
           isCompleted {false}
     {
-        this->transitions.reserve(sizeof...(Transitions));
-        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result sequential_transition_chain::advance(float deltaTimeInSeconds)
@@ -517,7 +515,7 @@ namespace p5::animation
 {
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    inline sequential_transition_chain sequence(Transitions&&... transitions)
+    inline sequential_transition_chain sequential(Transitions... transitions)
     {
         return sequential_transition_chain {std::forward<Transitions>(transitions)...};
     }
@@ -527,12 +525,10 @@ namespace p5::animation
 {
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    inline parallel_transition_chain::parallel_transition_chain(Transitions&&... transitions)
-        : transitions {},
+    inline parallel_transition_chain::parallel_transition_chain(Transitions... transitions)
+        : transitions {std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))...},
           transitionsCompleted(sizeof...(Transitions), false)
     {
-        this->transitions.reserve(sizeof...(Transitions));
-        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result parallel_transition_chain::advance(float deltaTimeInSeconds)
@@ -540,6 +536,10 @@ namespace p5::animation
         float timeConsumed = 0.0f;
 
         for (size_t i = 0; i < transitions.size(); ++i) {
+            if (transitionsCompleted.at(i)) {
+                continue;
+            }
+
             const std::unique_ptr<generic_transition>& transition = transitions[i];
             const advance_result result = transition->advance(deltaTimeInSeconds);
 
@@ -587,7 +587,7 @@ namespace p5::animation
 {
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    inline constexpr parallel_transition_chain parallel(Transitions&&... transitions)
+    inline constexpr parallel_transition_chain parallel(Transitions... transitions)
     {
         return parallel_transition_chain {std::forward<Transitions>(transitions)...};
     }
@@ -597,12 +597,10 @@ namespace p5::animation
 {
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    inline race_transition_chain::race_transition_chain(Transitions&&... transitions)
-        : transitions {},
+    inline race_transition_chain::race_transition_chain(Transitions... transitions)
+        : transitions {std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))...},
           isCompleted {false}
     {
-        this->transitions.reserve(sizeof...(Transitions));
-        (this->transitions.push_back(std::make_unique<transition_wrapper<Transitions>>(std::forward<Transitions>(transitions))), ...);
     }
 
     inline advance_result race_transition_chain::advance(float deltaTimeInSeconds)
@@ -648,7 +646,7 @@ namespace p5::animation
 {
     template <typename... Transitions>
         requires(transitions<Transitions...>)
-    inline race_transition_chain race(Transitions&&... transitions)
+    inline race_transition_chain race(Transitions... transitions)
     {
         return race_transition_chain {std::forward<Transitions>(transitions)...};
     }

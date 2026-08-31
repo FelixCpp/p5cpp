@@ -11,7 +11,7 @@ struct AnimationTest : Sketch
     float y = 200.0f;
     float scl = 1.0f;
 
-    sequential_transition_chain chain = sequence(
+    sequential_transition_chain chain = sequential(
         wait_until([this]() {
             return isMouseButtonPressed(MouseButton::Left);
         }),
