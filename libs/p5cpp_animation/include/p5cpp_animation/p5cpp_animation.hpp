@@ -285,7 +285,10 @@ namespace p5::animation
     private:
         TransitionType m_type;
     };
+} // namespace p5::animation
 
+namespace p5::animation
+{
     typedef std::vector<TransitionEvent> TransitionEvents;
 
     class SequentialTransitionComposite
@@ -294,14 +297,14 @@ namespace p5::animation
         explicit constexpr SequentialTransitionComposite(TransitionEvents events)
             : m_events {std::move(events)},
               m_currentTransitionIndex {0uz},
-              m_completedEvents(m_events.size(), false)
+              m_isCompleted {false}
         {
         }
 
         AdvanceResult advance(const float deltaTimeInSeconds)
         {
             if (m_isCompleted) {
-                return AdvanceResult {
+                return {
                     .timeConsumed = 0.0f,
                     .isCompleted = true,
                 };
@@ -334,7 +337,6 @@ namespace p5::animation
     private:
         TransitionEvents m_events;
         size_t m_currentTransitionIndex;
-        std::vector<bool> m_completedEvents;
 
         bool m_isCompleted;
     };
@@ -342,6 +344,67 @@ namespace p5::animation
     inline constexpr SequentialTransitionComposite sequential(TransitionEvents events)
     {
         return SequentialTransitionComposite {
+            std::move(events)
+        };
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    class ParallelTransitionComposite
+    {
+    public:
+        explicit constexpr ParallelTransitionComposite(TransitionEvents events)
+            : m_events {std::move(events)},
+              m_completedEvents(m_events.size(), false),
+              m_isCompleted {false}
+        {
+        }
+
+        AdvanceResult advance(const float deltaTimeInSeconds)
+        {
+            if (m_isCompleted) {
+                return {
+                    .timeConsumed = 0.0f,
+                    .isCompleted = true,
+                };
+            }
+
+            float timeConsumed = 0.0f;
+            bool allCompleted = true;
+
+            for (size_t i = 0; i < m_events.size(); ++i) {
+                if (m_completedEvents[i]) {
+                    continue;
+                }
+
+                const AdvanceResult result = m_events[i].advance(deltaTimeInSeconds);
+                timeConsumed = std::max(timeConsumed, result.timeConsumed);
+
+                if (result.isCompleted) {
+                    m_completedEvents[i] = true;
+                } else {
+                    allCompleted = false;
+                }
+            }
+
+            m_isCompleted = allCompleted;
+
+            return {
+                .timeConsumed = timeConsumed,
+                .isCompleted = m_isCompleted,
+            };
+        }
+
+    private:
+        TransitionEvents m_events;
+        std::vector<bool> m_completedEvents;
+        bool m_isCompleted;
+    };
+
+    inline constexpr ParallelTransitionComposite parallel(TransitionEvents events)
+    {
+        return ParallelTransitionComposite {
             std::move(events)
         };
     }

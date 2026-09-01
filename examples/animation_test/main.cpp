@@ -11,19 +11,15 @@ struct AnimationTest : Sketch
     float scl = 1.0f;
 
     SequentialTransitionComposite seq = sequential({
-        waitUntil([](float elapsedTimeInSeconds) {
-            return isMouseButtonPressed(MouseButton::Left);
-        }),
-        intercept([this] {
-            scl = 0.5f;
-        }),
-        tween(2.0f, curves::easeInOutSine, [this](float progress) {
-            x = lerp(200.0f, 400.0f, progress);
-        }),
-        waitFor(1.0f),
-        tween(2.0f, curves::easeInOutSine, [this](float progress) {
-            y = lerp(200.0f, 400.0f, progress);
-        }),
+            waitFor(1.0f),
+            parallel({
+                    tween(2.0f, curves::easeInOutSine, [this](float progress) {
+                            x = lerp(200.0f, 400.0f, progress);
+                            }),
+                    tween(2.0f, curves::easeInOutSine, [this](float progress) {
+                            y = lerp(200.0f, 400.0f, progress);
+                            }),
+                    }),
     });
 
     void setup() override
