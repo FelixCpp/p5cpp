@@ -1,9 +1,12 @@
 #include <p5cpp_animation/p5cpp_animation.hpp>
 
+#include <numbers>
 #include <cmath>
 
 namespace p5::animation::curves
 {
+    inline static constexpr float PI = std::numbers::pi_v<float>;
+
     // clang-format off
     float easeLinear(float t) { return t; }
     float easeInQuad(float t) { return t * t; }
