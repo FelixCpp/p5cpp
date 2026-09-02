@@ -11,15 +11,12 @@ struct AnimationTest : Sketch
     float scl = 1.0f;
 
     SequentialTransitionComposite seq = sequential({
-            waitFor(1.0f),
-            parallel({
-                    tween(2.0f, curves::easeInOutSine, [this](float progress) {
-                            x = lerp(200.0f, 400.0f, progress);
-                            }),
-                    tween(2.0f, curves::easeInOutSine, [this](float progress) {
-                            y = lerp(200.0f, 400.0f, progress);
-                            }),
-                    }),
+        waitFor(1.0f),
+        repeating(
+            spring(140.0f, 10.0f, 200.0f, 400.0f, [this](float position) {
+                x = position;
+            })
+        ),
     });
 
     void setup() override
