@@ -34,7 +34,7 @@ struct Type
 
     void update(float deltaTime)
     {
-        angle = min + easeInQuad(amt) * angleInc;
+        angle = min + curves::easeInQuad(amt) * angleInc;
 
         if (amt > 1.0f) {
             amt = 0.0f;

@@ -70,11 +70,17 @@ namespace p5::animation
         constexpr explicit TweenTransition(float durationInSeconds, Curve curve, ProgressReceiver receiver);
         AdvanceResult advance(float deltaTimeInSeconds);
 
-    private:
-        float computeProgress() const;
+        float progress() const;
+        bool isFinished() const;
 
+        void restart();
+        void reset();
+
+    private:
         float m_durationInSeconds;
         float m_elapsedTimeInSeconds;
+        float m_currentProgress;
+
         Curve m_curve;
         ProgressReceiver m_receiver;
 
@@ -82,6 +88,41 @@ namespace p5::animation
     };
 
     constexpr TweenTransition tween(float durationInSeconds, Curve curve, ProgressReceiver receiver);
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename T>
+    using ValueTweenReceiver = std::function<void(const T&)>;
+
+    template <typename T>
+    concept lerpable = requires(T a, T b, float t) {
+        { a + (b - a) * t } -> std::convertible_to<T>;
+    };
+
+    template <typename T>
+        requires lerpable<T>
+    class ValueTweenTransition
+    {
+    public:
+        constexpr explicit ValueTweenTransition(TweenTransition tween, T from, T to, ValueTweenReceiver<T> receiver = nullptr);
+        AdvanceResult advance(float deltaTimeInSeconds);
+
+        const T& value() const;
+
+    private:
+        TweenTransition m_tween;
+        ValueTweenReceiver<T> m_receiver;
+
+        T m_from;
+        T m_to;
+        T m_current;
+
+        bool m_isCompleted;
+    };
+
+    template <typename T>
+    constexpr ValueTweenTransition<T> valueTween(T from, T to, float durationInSeconds, Curve curve, ValueTweenReceiver<T> receiver = nullptr);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -98,10 +139,17 @@ namespace p5::animation
             float initialPosition,
             float targetPosition,
             float initialVelocity,
-            SpringReceiver receiver
+            SpringReceiver receiver = nullptr
         );
 
         AdvanceResult advance(float deltaTimeInSeconds);
+
+        float value() const;
+        bool isFinished() const;
+
+        void retarget(float targetPosition);
+        void restart();
+        void reset();
 
     private:
         float m_stiffness;
@@ -112,22 +160,22 @@ namespace p5::animation
         float m_targetPosition;
         float m_elapsedTimeInSeconds;
 
+        float m_initialPosition;
+        float m_initialVelocity;
+
         SpringReceiver m_receiver;
 
         bool m_isCompleted;
     };
 
-    // Common case: critically-damped, unit-mass spring starting at rest.
     constexpr SpringTransition spring(
         float stiffness,
         float damping,
         float initialPosition,
         float targetPosition,
-        SpringReceiver receiver
+        SpringReceiver receiver = nullptr
     );
 
-    // Advanced case: full control over mass and initial velocity (e.g. for
-    // "flinging" a value that already carries momentum from a gesture).
     constexpr SpringTransition spring(
         float stiffness,
         float damping,
@@ -135,7 +183,7 @@ namespace p5::animation
         float initialVelocity,
         float initialPosition,
         float targetPosition,
-        SpringReceiver receiver
+        SpringReceiver receiver = nullptr
     );
 } // namespace p5::animation
 
@@ -315,9 +363,18 @@ namespace p5::animation
 
 namespace p5::animation
 {
+    template <typename T>
+        requires lerpable<T>
+    constexpr SequentialTransitionComposite yoyo(T from, T to, float durationInSeconds, Curve curve, ValueTweenReceiver<T> receiver = nullptr);
+    constexpr SequentialTransitionComposite yoyo(float durationInSeconds, Curve curve, ProgressReceiver receiver = nullptr);
+} // namespace p5::animation
+
+namespace p5::animation
+{
     inline constexpr TweenTransition::TweenTransition(float durationInSeconds, Curve curve, ProgressReceiver receiver)
         : m_durationInSeconds {durationInSeconds},
           m_elapsedTimeInSeconds {0.0f},
+          m_currentProgress {0.0f},
           m_curve {curve},
           m_receiver {std::move(receiver)},
           m_isCompleted {false}
@@ -338,10 +395,10 @@ namespace p5::animation
         const bool isCompletedAfterAdvancing = (m_elapsedTimeInSeconds + deltaTimeInSeconds) >= m_durationInSeconds;
 
         m_elapsedTimeInSeconds = std::clamp(m_elapsedTimeInSeconds + advanceTime, 0.0f, m_durationInSeconds); // We dont want the elapsed time to go out of bounds
-
-        const float rawProgress = computeProgress();
-        const float easedProgress = m_curve(rawProgress);
-        m_receiver(easedProgress);
+        m_currentProgress = m_curve(m_durationInSeconds > 0.0f ? (m_elapsedTimeInSeconds / m_durationInSeconds) : 1.0f);
+        if (m_receiver != nullptr) {
+            m_receiver(m_currentProgress);
+        }
 
         m_isCompleted = isCompletedAfterAdvancing;
 
@@ -351,13 +408,26 @@ namespace p5::animation
         };
     }
 
-    inline float TweenTransition::computeProgress() const
+    inline float TweenTransition::progress() const
     {
-        if (m_durationInSeconds <= 0.0f) {
-            return 1.0f;
-        }
+        return m_currentProgress;
+    }
 
-        return m_elapsedTimeInSeconds / m_durationInSeconds;
+    inline bool TweenTransition::isFinished() const
+    {
+        return m_isCompleted;
+    }
+
+    inline void TweenTransition::reset()
+    {
+        m_elapsedTimeInSeconds = 0.0f;
+        m_currentProgress = m_curve(0.0f);
+        m_isCompleted = false;
+    }
+
+    inline void TweenTransition::restart()
+    {
+        reset();
     }
 } // namespace p5::animation
 
@@ -375,6 +445,64 @@ namespace p5::animation
 
 namespace p5::animation
 {
+    template <typename T>
+        requires lerpable<T>
+    inline constexpr ValueTweenTransition<T>::ValueTweenTransition(TweenTransition tween, T from, T to, ValueTweenReceiver<T> receiver)
+        : m_tween {std::move(tween)},
+          m_receiver {std::move(receiver)},
+          m_from {std::move(from)},
+          m_to {std::move(to)},
+          m_current {m_from}
+    {
+    }
+
+    template <typename T>
+        requires lerpable<T>
+    inline AdvanceResult ValueTweenTransition<T>::advance(const float deltaTimeInSeconds)
+    {
+        if (m_isCompleted) {
+            return {
+                .timeConsumed = 0.0f,
+                .isCompleted = true,
+            };
+        }
+
+        const AdvanceResult result = m_tween.advance(deltaTimeInSeconds);
+        const float progress = m_tween.progress();
+        m_current = m_from + (m_to - m_from) * progress;
+        m_isCompleted = result.isCompleted;
+
+        if (m_receiver != nullptr) {
+            m_receiver(m_current);
+        }
+
+        return result;
+    }
+
+    template <typename T>
+        requires lerpable<T>
+    const T& ValueTweenTransition<T>::value() const
+    {
+        return m_current;
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename T>
+    inline constexpr ValueTweenTransition<T> valueTween(T from, T to, float durationInSeconds, Curve curve, ValueTweenReceiver<T> receiver)
+    {
+        return ValueTweenTransition<T> {
+            tween(durationInSeconds, curve, nullptr),
+            std::move(from),
+            std::move(to),
+            std::move(receiver)
+        };
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
     inline constexpr SpringTransition::SpringTransition(float stiffness, float damping, float mass, float initialPosition, float targetPosition, float initialVelocity, SpringReceiver receiver)
         : m_stiffness {stiffness},
           m_damping {damping},
@@ -383,6 +511,8 @@ namespace p5::animation
           m_position {initialPosition},
           m_targetPosition {targetPosition},
           m_elapsedTimeInSeconds {0.0f},
+          m_initialPosition {initialPosition},
+          m_initialVelocity {initialVelocity},
           m_receiver {std::move(receiver)},
           m_isCompleted {false}
     {
@@ -410,7 +540,9 @@ namespace p5::animation
         // Update velocity and position using simple Euler integration
         m_velocity += acceleration * deltaTimeInSeconds;
         m_position += m_velocity * deltaTimeInSeconds;
-        m_receiver(m_position);
+        if (m_receiver != nullptr) {
+            m_receiver(m_position);
+        }
 
         m_elapsedTimeInSeconds += deltaTimeInSeconds;
 
@@ -421,6 +553,35 @@ namespace p5::animation
             .timeConsumed = deltaTimeInSeconds,
             .isCompleted = m_isCompleted,
         };
+    }
+
+    inline float SpringTransition::value() const
+    {
+        return m_position;
+    }
+
+    inline bool SpringTransition::isFinished() const
+    {
+        return m_isCompleted;
+    }
+
+    inline void SpringTransition::retarget(const float targetPosition)
+    {
+        m_targetPosition = targetPosition;
+        m_isCompleted = false;
+    }
+
+    inline void SpringTransition::reset()
+    {
+        m_position = m_initialPosition;
+        m_velocity = m_initialVelocity;
+        m_elapsedTimeInSeconds = 0.0f;
+        m_isCompleted = false;
+    }
+
+    inline void SpringTransition::restart()
+    {
+        reset();
     }
 } // namespace p5::animation
 
@@ -772,12 +933,6 @@ namespace p5::animation
             };
         }
 
-        // Safety net: a transition that is repeated indefinitely and always
-        // completes without consuming any time (e.g. `intercept`/`waitUntil`)
-        // would otherwise spin forever inside a single call. Capping the
-        // number of cycles processed per `advance()` call turns that
-        // degenerate case into "keep repeating across frames" instead of
-        // freezing the draw loop.
         static constexpr size_t maxCyclesPerAdvance = 10'000uz;
 
         float timeLeftThisFrame = deltaTimeInSeconds;
@@ -818,5 +973,26 @@ namespace p5::animation
             },
             repeatCount
         };
+    }
+} // namespace p5::animation
+
+namespace p5::animation
+{
+    template <typename T>
+        requires lerpable<T>
+    constexpr SequentialTransitionComposite yoyo(T from, T to, float durationInSeconds, Curve curve, ValueTweenReceiver<T> receiver)
+    {
+        return sequential({
+            valueTween(from, to, durationInSeconds, curve, receiver),
+            valueTween(to, from, durationInSeconds, curve, receiver),
+        });
+    }
+
+    constexpr SequentialTransitionComposite yoyo(float durationInSeconds, Curve curve, ProgressReceiver receiver)
+    {
+        return sequential({
+            tween(durationInSeconds, curve, receiver),
+            tween(durationInSeconds, reverse(curve), receiver),
+        });
     }
 } // namespace p5::animation

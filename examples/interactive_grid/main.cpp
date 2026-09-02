@@ -51,7 +51,7 @@ struct InteractiveGrid : Sketch
                 const float positionY = spacing * 0.5f + y * spacing;
                 const float2 position = float2 {.x = positionX, .y = positionY};
                 const float dist = distance(position, mousePosition);
-                const float influence = easeInSine(constrain(dist / affectionRadius, 0.0f, 1.0f));
+                const float influence = curves::easeInSine(constrain(dist / affectionRadius, 0.0f, 1.0f));
                 const float sizeFactor = 1.0f - influence;
 
                 sizes[y * (cols + 1) + x] = sizeFactor * spacing;

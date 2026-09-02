@@ -35,14 +35,15 @@ struct BubbleWord
 
     void show(float alpha) const
     {
-        // SOMEWHERE IS A BUG IN HERE
         noFill();
-        stroke(rgba(255, 255, 255));
+        stroke(rgba(255, 255, 255, static_cast<int32_t>(alpha * 255.0f)));
         strokeWeight(2.0f);
         for (const Contour& contour : contours) {
             beginShape();
             for (const float2& point : contour.points) {
-                vertex(point.x, point.y);
+                const float offsetX = random(-1.0f, 1.0f) * 10.0f;
+                const float offsetY = random(-1.0f, 1.0f) * 10.0f;
+                vertex(point.x + offsetX, point.y + offsetY);
             }
             endShape(true);
         }
@@ -52,29 +53,15 @@ private:
     static std::vector<Contour> buildContoursFromTextPoints(const std::vector<TextPoint>& textPoints)
     {
         std::vector<Contour> contours;
-        if (textPoints.empty()) {
-            return contours;
-        }
 
-        Contour currentContour;
-        currentContour.points.push_back(textPoints[0].position);
-
-        for (size_t i = 1; i < textPoints.size(); ++i) {
-            const float2& prevPoint = textPoints[i - 1].position;
-            const float2& currPoint = textPoints[i].position;
-
-            // If the distance between the current point and the previous point is greater than a threshold, start a new contour
-            if (length(currPoint - prevPoint) > 5.0f) {
-                contours.push_back(currentContour);
-                currentContour.points.clear();
+        std::optional<uint32_t> currentContourIndex;
+        for (const TextPoint& textPoint : textPoints) {
+            if (!currentContourIndex.has_value() || textPoint.contourIndex != *currentContourIndex) {
+                contours.emplace_back();
+                currentContourIndex = textPoint.contourIndex;
             }
 
-            currentContour.points.push_back(currPoint);
-        }
-
-        // Add the last contour if it has points
-        if (!currentContour.points.empty()) {
-            contours.push_back(currentContour);
+            contours.back().points.push_back(textPoint.position);
         }
 
         return contours;
@@ -122,29 +109,24 @@ struct TextToPoints : Sketch
     std::vector<float> alphas {0.0f, 0.0f, 0.0f};
 
     // clang-format off
-    sequential_transition_chain fades = sequential(
-        repeat(
-            [this] {
-                return sequential(
-                    sequential(
-                        tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[0] = lerp(0.0f, 1.0f, progress); }),
-                        wait_for(holdDuration),
-                        tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[0] = lerp(1.0f, 0.0f, progress); })
-                    ),
-                    sequential(
-                        tween(fadeDuration, curves::easeInOutSine, [this](float progress) {alphas[1] = lerp(0.0f, 1.0f, progress); }),
-                        wait_for(holdDuration),
-                        tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[1] = lerp(1.0f, 0.0f, progress);})
-                    ),
-                    sequential(
-                        tween(fadeDuration, curves::easeInOutSine, [this](float progress) {alphas[2] = lerp(0.0f, 1.0f, progress); }),
-                        wait_for(holdDuration),
-                        tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[2] = lerp(1.0f, 0.0f, progress);})
-                    )
-                );
-            },
-            std::nullopt
-        )
+    RepeatingTransitionComposite fades = repeating(
+        sequential({
+            sequential({
+                tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[0] = lerp(0.0f, 1.0f, progress); }),
+                waitFor(holdDuration),
+                tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[0] = lerp(1.0f, 0.0f, progress); })
+            }),
+            sequential({
+                tween(fadeDuration, curves::easeInOutSine, [this](float progress) {alphas[1] = lerp(0.0f, 1.0f, progress); }),
+                waitFor(holdDuration),
+                tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[1] = lerp(1.0f, 0.0f, progress);})
+            }),
+            sequential({
+                tween(fadeDuration, curves::easeInOutSine, [this](float progress) {alphas[2] = lerp(0.0f, 1.0f, progress); }),
+                waitFor(holdDuration),
+                tween(fadeDuration, curves::easeInOutSine, [this](float progress) { alphas[2] = lerp(1.0f, 0.0f, progress);})
+            })
+        })
     );
 
     // clang-format on
@@ -162,7 +144,9 @@ struct TextToPoints : Sketch
 
     void draw() override
     {
-        background(rgba(31, 31, 51));
+        background(rgba(31, 31, 51, 25));
+
+        pushMatrix();
         translate(getWidth() * 0.5f, getHeight() * 0.5f);
 
         fades.advance(getDeltaTime());
@@ -170,6 +154,8 @@ struct TextToPoints : Sketch
         for (size_t i = 0; i < bubbleWords.size(); ++i) {
             bubbleWords[i].show(alphas[i]);
         }
+
+        popMatrix();
     }
 };
 

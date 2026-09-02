@@ -7,40 +7,27 @@ using namespace p5::animation;
 struct Button
 {
     float2 position;
-    float2 size;
+    float2 baseSize;
 
-    RepeatingTransitionComposite sizeTransition;
+    SpringTransition sizeBoost = spring(140.0f, 10.0f, 0.0f, 0.0f);
 
     explicit Button(float x, float y, float width, float height)
         : position {x, y},
-          size {width, height},
-          sizeTransition {
-              repeating(
-                  sequential({
-                      waitUntil([this](float) {
-                          return isBeingHovered();
-                      }),
-                      tween(0.3f, curves::easeInOutSine, [this, width, height](float progress) {
-                          size.x = lerp(width, width + 10.0f, progress);
-                          size.y = lerp(height, height + 10.0f, progress);
-                      }),
-                      waitUntil([this](float) {
-                          return not isBeingHovered();
-                      }),
-                      tween(0.3f, curves::easeInOutSine, [this, width, height](float progress) {
-                          size.x = lerp(width + 10.0f, width, progress);
-                          size.y = lerp(height + 10.0f, height, progress);
-                      }),
-                  })
-              )
-          }
+          baseSize {width, height}
     {
     }
 
-    bool isBeingHovered()
+    float2 currentSize() const
+    {
+        const float boost = sizeBoost.value() * 10.0f;
+        return {baseSize.x + boost, baseSize.y + boost};
+    }
+
+    bool isBeingHovered() const
     {
         const float mx = static_cast<float>(getMouseX());
         const float my = static_cast<float>(getMouseY());
+        const float2 size = currentSize();
         const float left = position.x - size.x * 0.5f;
         const float top = position.y - size.y * 0.5f;
         const float right = position.x + size.x * 0.5f;
@@ -51,12 +38,14 @@ struct Button
 
     void update(float deltaTime)
     {
-        sizeTransition.advance(deltaTime);
+        sizeBoost.retarget(isBeingHovered() ? 1.0f : 0.0f);
+        sizeBoost.advance(deltaTime);
     }
 
     void show() const
     {
-        withMatrix([this] {
+        const float2 size = currentSize();
+        withMatrix([this, size] {
             translate(position.x, position.y);
             fill(rgba(255, 255, 255));
             rect(-size.x * 0.5f, -size.y * 0.5f, size.x, size.y);
@@ -66,14 +55,14 @@ struct Button
 
 struct AnimationTest : Sketch
 {
-    std::vector<std::unique_ptr<Button>> buttons;
+    std::vector<Button> buttons;
 
     void setup() override
     {
         setWindowSize(800, 800);
 
         for (size_t y = 0; y < 5; ++y) {
-            buttons.push_back(std::make_unique<Button>(100.0f, 75.0f * (y + 1), 100.0f, 50.0f));
+            buttons.emplace_back(100.0f, 75.0f * (y + 1), 100.0f, 50.0f);
         }
     }
 
@@ -81,9 +70,9 @@ struct AnimationTest : Sketch
     {
         background(rgba(31, 31, 51));
 
-        for (std::unique_ptr<Button>& button : buttons) {
-            button->update(getDeltaTime());
-            button->show();
+        for (Button& button : buttons) {
+            button.update(getDeltaTime());
+            button.show();
         }
     }
 };
