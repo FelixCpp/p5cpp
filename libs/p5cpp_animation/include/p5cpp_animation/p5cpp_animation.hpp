@@ -375,7 +375,7 @@ namespace p5::animation
 
 namespace p5::animation
 {
-    inline constexpr SpringTransition::SpringTransition( float stiffness, float damping, float mass, float initialPosition, float targetPosition, float initialVelocity, SpringReceiver receiver)
+    inline constexpr SpringTransition::SpringTransition(float stiffness, float damping, float mass, float initialPosition, float targetPosition, float initialVelocity, SpringReceiver receiver)
         : m_stiffness {stiffness},
           m_damping {damping},
           m_mass {mass},
