@@ -376,23 +376,13 @@ namespace p5
     double getDeltaTime();
     double getGlobalTime();
 
-    // Resumes calling the sketch's draw() once per frame (the default). Undoes a prior noLoop().
     void loop();
-    // Stops the sketch's draw() from being called automatically; the window stays open and responsive
-    // (still processes input/resize/close), but the canvas freezes on its last drawn frame until loop()
-    // resumes it, or redraw() forces one more frame.
     void noLoop();
     bool isLooping();
-    // Forces a single extra draw() call on the next frame even while noLoop() is active; frameCount,
-    // deltaTime, and globalTime advance for that one frame. No-op while already looping.
     void redraw();
 
-    // Closes the window and ends run(), keeping whatever exit code was last set via setExitCode()
-    // (0 by default).
     void quit();
-    // Closes the window and ends run(), returning exitCode from main().
     void quit(int exitCode);
-    // Sets the exit code main() will return when the sketch later quits, without closing it now.
     void setExitCode(int exitCode);
 } // namespace p5
 
@@ -801,14 +791,7 @@ namespace p5
     struct TextPoint
     {
         float2 position;
-        float angle; // radians; tangent direction of the outline at this point (unlike p5.js's degrees `alpha`)
-
-        // Index of the glyph outline contour this point was sampled from, counting up across the whole
-        // textToPoints() call (every line, every glyph, every contour within a glyph -- e.g. "i"'s dot
-        // is a separate contour from its stem). Points share a contourIndex iff they belong to the same
-        // closed loop, so grouping by it (they arrive in order, so a single pass suffices) recovers which
-        // points to connect with a line -- p5.js's textToPoints() has no equivalent and returns a flat,
-        // undifferentiated array.
+        float angle;
         uint32_t contourIndex = 0;
     };
 
@@ -1257,10 +1240,6 @@ namespace p5
     template <typename T>
     inline T& Context::require()
     {
-        // Unlike get() (a nullable lookup the caller is expected to check), require() promises a
-        // reference -- if the type was never provided (e.g. a plugin ran before the one that
-        // provide()s it), throw instead of dereferencing get()'s nullptr, which would otherwise crash
-        // with only get()'s error() log line as a clue.
         T* instance = get<T>();
         if (instance == nullptr) {
             throw std::runtime_error(std::format("Context::require() requested a type ({}) that was never provided", typeid(T).name()));

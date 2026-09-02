@@ -1,7 +1,7 @@
 # Central place for all third-party dependencies. Submodules under external/*
 # ship their own CMakeLists.txt and are simply added as subdirectories. Vendored
-# dependencies without CMake support (libtess2, stb) get their targets defined
-# here instead, so we never write build files into a git submodule.
+# dependencies without CMake support (libtess2, stb, msf_gif) get their targets
+# defined here instead, so we never write build files into a git submodule.
 
 add_subdirectory(glfw)
 add_subdirectory(freetype)
@@ -30,3 +30,7 @@ target_include_directories(libtess2 PUBLIC libtess2/Include)
 add_library(stb INTERFACE)
 target_include_directories(stb SYSTEM INTERFACE stb)
 target_compile_definitions(stb INTERFACE STB_IMAGE_IMPLEMENTATION STB_IMAGE_WRITE_IMPLEMENTATION STB_PERLIN_IMPLEMENTATION)
+
+add_library(msf_gif INTERFACE)
+target_include_directories(msf_gif SYSTEM INTERFACE msf_gif)
+target_compile_definitions(msf_gif INTERFACE MSF_GIF_IMPL)
