@@ -20,6 +20,7 @@ namespace p5
 
     void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, bool extend) { graphics().pushFramebuffer(std::move(framebuffer), extend); }
     void popFramebuffer() { graphics().popFramebuffer(); }
+    std::shared_ptr<Framebuffer> peekFramebuffer() { return graphics().peekFramebuffer(); }
     const uint2& getFramebufferSize() { return graphics().getFramebufferSize(); }
     float getWidth() { return static_cast<float>(graphics().getFramebufferSize().x); }
     float getHeight() { return static_cast<float>(graphics().getFramebufferSize().y); }

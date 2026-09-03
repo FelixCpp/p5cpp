@@ -5,6 +5,7 @@
 #include <stb_image_write.h>
 
 #include <algorithm>
+#include <cstring>
 #include <optional>
 
 namespace p5
@@ -29,12 +30,6 @@ namespace p5
             }
         }
 
-        // glGetTexImage() (queryPixelData()) returns rows in OpenGL's bottom-up memory order (row 0 =
-        // the texture's bottom edge) -- the same convention loadTextureFromFile() corrects for on the
-        // way in via stbi_set_flip_vertically_on_load(). Every other y coordinate in this library
-        // increases downward (mouse/draw coordinates, textAlign, ...) and every image file format
-        // stores row 0 as the top of the image, so both Pixels and saved files need that same top-down
-        // convention -- flip queryPixelData()'s raw bytes at each of those boundaries to match it.
         void flipRowsVertically(std::vector<uint8_t>& pixelData, uint32_t width, uint32_t height)
         {
             const size_t rowBytes = static_cast<size_t>(width) * 4;
@@ -228,5 +223,113 @@ namespace p5
         // bottom-up row order queryPixelData() returns, so flip back before uploading.
         flipRowsVertically(bytes, width, height);
         updateSubImage(texture, 0, 0, width, height, bytes);
+    }
+
+    PixelReader::~PixelReader()
+    {
+        for (PixelReaderSlot& slot : ring) {
+            if (slot.fence != nullptr) {
+                glDeleteSync(static_cast<GLsync>(slot.fence));
+            }
+            if (slot.pboId != 0) {
+                glDeleteBuffers(1, &slot.pboId);
+            }
+        }
+    }
+
+    std::unique_ptr<PixelReader> createPixelReader(uint32_t width, uint32_t height, uint32_t ringSize)
+    {
+        if (ringSize < 2) {
+            error("createPixelReader() requires a ringSize of at least 2, got {}", ringSize);
+            return nullptr;
+        }
+
+        auto reader = std::make_unique<PixelReader>();
+        reader->width = width;
+        reader->height = height;
+        reader->ring.resize(ringSize);
+
+        const GLsizeiptr byteSize = static_cast<GLsizeiptr>(width) * static_cast<GLsizeiptr>(height) * 4;
+        for (PixelReaderSlot& slot : reader->ring) {
+            glGenBuffers(1, &slot.pboId);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.pboId);
+            glBufferData(GL_PIXEL_PACK_BUFFER, byteSize, nullptr, GL_STREAM_READ);
+        }
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+        return reader;
+    }
+
+    bool requestPixelReadback(PixelReader& reader, const Texture& texture)
+    {
+        if (texture.pixelFormat != TexturePixelFormat::rgba8) {
+            error("requestPixelReadback() only supports TexturePixelFormat::rgba8 textures");
+            return false;
+        }
+        if (texture.size.x != reader.width or texture.size.y != reader.height) {
+            error("requestPixelReadback() texture size ({}x{}) does not match reader size ({}x{})", texture.size.x, texture.size.y, reader.width, reader.height);
+            return false;
+        }
+
+        PixelReaderSlot& slot = reader.ring[reader.writeIndex];
+        const bool droppedUndrained = slot.pending;
+        if (droppedUndrained) {
+            warn("requestPixelReadback(): dropping an undrained frame -- pollPixelReadback() isn't keeping up");
+            glDeleteSync(static_cast<GLsync>(slot.fence));
+            slot.fence = nullptr;
+        }
+
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.pboId);
+        glBindTexture(GL_TEXTURE_2D, texture.id);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        slot.fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        slot.pending = true;
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+        reader.writeIndex = (reader.writeIndex + 1) % reader.ring.size();
+        return not droppedUndrained;
+    }
+
+    std::optional<Pixels> pollPixelReadback(PixelReader& reader)
+    {
+        PixelReaderSlot& slot = reader.ring[reader.readIndex];
+        if (not slot.pending) {
+            return std::nullopt;
+        }
+
+        // Zero timeout: this only ever polls the fence's current status, never waits on it.
+        const GLenum waitResult = glClientWaitSync(static_cast<GLsync>(slot.fence), 0, 0);
+        if (waitResult == GL_TIMEOUT_EXPIRED or waitResult == GL_WAIT_FAILED) {
+            return std::nullopt;
+        }
+
+        glDeleteSync(static_cast<GLsync>(slot.fence));
+        slot.fence = nullptr;
+        slot.pending = false;
+        reader.readIndex = (reader.readIndex + 1) % reader.ring.size();
+
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.pboId);
+        const GLsizeiptr byteSize = static_cast<GLsizeiptr>(reader.width) * static_cast<GLsizeiptr>(reader.height) * 4;
+        const void* mapped = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, byteSize, GL_MAP_READ_BIT);
+        if (mapped == nullptr) {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            error("pollPixelReadback() failed to map its PBO");
+            return std::nullopt;
+        }
+
+        std::vector<uint8_t> bytes(static_cast<size_t>(byteSize));
+        std::memcpy(bytes.data(), mapped, bytes.size());
+        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+        flipRowsVertically(bytes, reader.width, reader.height);
+
+        Pixels pixels {.width = reader.width, .height = reader.height, .data = std::vector<color_t>(static_cast<size_t>(reader.width) * reader.height)};
+        for (size_t i = 0; i < pixels.data.size(); ++i) {
+            pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
+        }
+
+        return pixels;
     }
 } // namespace p5

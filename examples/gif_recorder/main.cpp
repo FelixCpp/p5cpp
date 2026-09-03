@@ -20,9 +20,8 @@ struct GifRecorderExample : Sketch
             return isMouseButtonPressed(MouseButton::Left);
         }),
         intercept([this]() {
-            // Use 15fps instead of 30 for smoother playback.
-            // Higher fps = more glReadPixels calls per second → more GPU stalls.
-            // At 15fps on a 400x400 canvas: ~2 blocking readbacks/sec — much less stutter.
+            // Capture no longer blocks the render thread (see AsyncPixelReader), so fps mainly
+            // trades off file size/encode cost vs. playback smoothness now, not render stutter.
             saveGif("pretty_animation.gif", 4.0f, 15);
         }),
         tween(1.0f, curves::easeInOutSine, [this](float progress) {

@@ -12,10 +12,16 @@ namespace p5::gif
     // following frames' draw() calls, and the GIF is encoded and flushed to path once the duration has
     // elapsed. Returns true once the recording has been armed, not once the file has finished writing.
     //
-    // Performance note: frame capture reads back the framebuffer via glReadPixels which blocks the GPU
-    // pipeline on each capture. To minimize stutter during playback while recording, use a lower frame
-    // rate (e.g. 10–15 fps) for long or large-canvas recordings. A 400×400 canvas at 30fps performs
-    // ~60 readbacks/sec over PCIe — noticeable stutter. At 15fps the stutter drops by half.
+    // Performance note: frame capture reads the framebuffer back asynchronously (via
+    // requestPixelReadback()/pollPixelReadback(), backed by a small ring of fenced Pixel Buffer
+    // Objects), so it does not stall the render thread the way a direct
+    // glGetTexImage()/loadPixels() call would. In exchange, a
+    // captured frame reaches the encoder roughly one to a few frames after it was requested; on a
+    // sufficiently overloaded GPU/large canvas, an undrained readback can be dropped rather than
+    // captured (a frame is lost, but the render thread still never blocks). The recording still
+    // finishes only once every requested frame has actually been drained, so the file's total
+    // length is unaffected -- only the tail end lands slightly after recordingDurationInSeconds
+    // elapses.
     //
     // Returns false (and logs an error) if a recording is already in progress, path/duration/frame rate
     // are invalid, or createGIFRecorderPlugin() was never registered in the sketch's plugin list.

@@ -1,4 +1,4 @@
-#include "p5cpp/p5cpp.hpp"
+#include <p5cpp/p5cpp.hpp>
 #include <p5cpp_gif/p5cpp_gif.hpp>
 
 #include <msf_gif.h>
@@ -157,7 +157,12 @@ namespace p5::gif
                 return nullptr;
             }
 
-            return std::unique_ptr<AsyncGIFFrameSink>(new AsyncGIFFrameSink(std::move(fileStream), durationInSeconds, framesPerSecond));
+            std::unique_ptr<PixelReader> pixelReader = createPixelReader(width, height);
+            if (pixelReader == nullptr) {
+                return nullptr;
+            }
+
+            return std::unique_ptr<AsyncGIFFrameSink>(new AsyncGIFFrameSink(std::move(fileStream), std::move(pixelReader), durationInSeconds, framesPerSecond));
         }
 
         ~AsyncGIFFrameSink()
@@ -172,10 +177,17 @@ namespace p5::gif
         void update(float deltaTimeInSeconds)
         {
             m_frameTimer.tryCapture(deltaTimeInSeconds, [this] {
-                captureFrame();
+                requestFrame();
             });
 
-            if (m_frameTimer.isRecordingComplete()) {
+            drainReadyFrames();
+
+            // Only stop once every requested frame has actually been read back and handed to
+            // the encoder -- otherwise the last one to a few in-flight PBO readbacks (see
+            // requestPixelReadback()/pollPixelReadback()) would still be settling when the
+            // encoder thread finishes and finalizes the file, silently truncating the GIF's last
+            // frames.
+            if (m_frameTimer.isRecordingComplete() and m_outstandingRequests == 0) {
                 requestStop();
             }
         }
@@ -186,26 +198,52 @@ namespace p5::gif
         }
 
     private:
-        explicit AsyncGIFFrameSink(std::unique_ptr<GIFFileStream> fileStream, float durationInSeconds, float framesPerSecond)
+        explicit AsyncGIFFrameSink(std::unique_ptr<GIFFileStream> fileStream, std::unique_ptr<PixelReader> pixelReader, float durationInSeconds, float framesPerSecond)
             : m_queue {},
               m_cv {},
               m_stopping {false},
               m_finished {false},
               m_fileStream {std::move(fileStream)},
+              m_pixelReader {std::move(pixelReader)},
+              m_outstandingRequests {0},
               m_frameTimer {durationInSeconds, framesPerSecond},
               m_mutex {},
               m_thread {&AsyncGIFFrameSink::workerLoop, this}
         {
         }
 
-        void captureFrame()
+        void requestFrame()
         {
-            Pixels pixels = loadPixels();
-            {
-                std::lock_guard lock(m_mutex);
-                m_queue.push(std::move(pixels));
+            // flush() first: the framebuffer's colorTexture only reflects draw calls the
+            // Renderer has actually submitted, not ones still batched -- same precondition
+            // loadPixels() has always relied on (see Graphics::loadPixels()).
+            flush();
+
+            std::shared_ptr<Framebuffer> framebuffer = peekFramebuffer();
+            if (framebuffer == nullptr) {
+                error("GIF recording: requestFrame() called with no framebuffer pushed");
+                return;
             }
-            m_cv.notify_one();
+
+            // requestPixelReadback() never blocks; it may drop an older, not-yet-drained readback
+            // to make room instead of stalling. In that case a slot that was already counted as
+            // outstanding is simply being reused, not added to, so the outstanding count doesn't
+            // change.
+            if (requestPixelReadback(*m_pixelReader, *framebuffer->colorTexture)) {
+                ++m_outstandingRequests;
+            }
+        }
+
+        void drainReadyFrames()
+        {
+            while (std::optional<Pixels> pixels = pollPixelReadback(*m_pixelReader)) {
+                --m_outstandingRequests;
+                {
+                    std::lock_guard lock(m_mutex);
+                    m_queue.push(std::move(*pixels));
+                }
+                m_cv.notify_one();
+            }
         }
 
         void requestStop()
@@ -252,6 +290,8 @@ namespace p5::gif
         std::atomic<bool> m_finished;
 
         std::unique_ptr<GIFFileStream> m_fileStream;
+        std::unique_ptr<PixelReader> m_pixelReader;
+        int m_outstandingRequests;
         GIFFrameTimer m_frameTimer;
 
         std::mutex m_mutex;

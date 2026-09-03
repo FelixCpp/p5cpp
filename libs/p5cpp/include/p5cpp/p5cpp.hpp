@@ -726,6 +726,7 @@ namespace p5
 
     std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height, uint32_t samples = 0);
     void blitFramebufferToScreen(const std::shared_ptr<Framebuffer>& framebuffer, uint32_t screenWidth, uint32_t screenHeight);
+    std::shared_ptr<Framebuffer> peekFramebuffer();
 } // namespace p5
 
 namespace p5
@@ -745,6 +746,31 @@ namespace p5
 
     Pixels loadPixels(const Framebuffer& framebuffer);
     void updatePixels(Framebuffer& framebuffer, const Pixels& pixels);
+
+    struct PixelReaderSlot
+    {
+        uint32_t pboId = 0;
+        void* fence = nullptr; // GLsync; kept opaque so this header stays GL-free
+        bool pending = false;
+    };
+
+    struct PixelReader
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        std::vector<PixelReaderSlot> ring;
+        size_t writeIndex = 0;
+        size_t readIndex = 0;
+
+        PixelReader() = default;
+        PixelReader(const PixelReader&) = delete;
+        PixelReader& operator=(const PixelReader&) = delete;
+        ~PixelReader();
+    };
+
+    std::unique_ptr<PixelReader> createPixelReader(uint32_t width, uint32_t height, uint32_t ringSize = 3);
+    bool requestPixelReadback(PixelReader& reader, const Texture& texture);
+    std::optional<Pixels> pollPixelReadback(PixelReader& reader);
 } // namespace p5
 
 namespace p5
