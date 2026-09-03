@@ -11,7 +11,7 @@
 
 namespace p5
 {
-    struct Framebuffer;
+    struct Graphics;
 
     struct RendererBatch
     {
@@ -19,8 +19,8 @@ namespace p5
         std::optional<rect2f> clipRect;
         TextureFilter textureFilter;
         TextureWrap textureWrap;
-        std::shared_ptr<Shader> shader;
-        std::shared_ptr<Texture> texture;
+        Shader shader;
+        Texture texture;
         std::unordered_map<std::string, UniformValue> uniforms;
         size_t indexOffset;
         size_t indexCount;
@@ -47,7 +47,7 @@ namespace p5
         static std::unique_ptr<Renderer> create(size_t initialMaxVertices, size_t initialMaxIndices);
         ~Renderer();
 
-        void begin(std::shared_ptr<Framebuffer> framebuffer);
+        void begin(Graphics graphics);
         void end();
         void flush();
 
@@ -60,9 +60,9 @@ namespace p5
         // sized for shapes whose vertex count this library itself bounds (a handful of points, or an
         // ellipse/arc/rounded-rect segment count capped at 256) -- it is NOT a hard guarantee against a
         // single shape overrunning the buffer outright, since a big enough shape can still exceed
-        // whatever fraction of the buffer the margin reserved. Graphics is responsible for keeping any
+        // whatever fraction of the buffer the margin reserved. Canvas is responsible for keeping any
         // one write()/finish() pair within that margin for its own unbounded inputs (see text()'s
-        // per-chunk submission in graphics.cpp); a caller that instead feeds one shape with more points
+        // per-chunk submission in canvas.cpp); a caller that instead feeds one shape with more points
         // than the margin allows (e.g. an extremely long beginShape()/vertex() path) will still hit the
         // appendVertex()/appendIndex() std::runtime_error below -- at that point it genuinely is a
         // misconfiguration to fix by raising initialMaxVertices/initialMaxIndices, not something
@@ -70,7 +70,7 @@ namespace p5
         // same Writer, which submits whatever was written as a batch (merging into the previous batch
         // if blendMode/shader match).
         Writer write();
-        void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader);
+        void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader);
 
     private:
         explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, size_t maxVertexCount, size_t maxIndexCount);
@@ -97,7 +97,7 @@ namespace p5
 
         std::vector<RendererBatch> m_batches;
         matrix4x4 m_projectionMatrix;
-        uint2 m_framebufferSize;
-        std::shared_ptr<Framebuffer> m_framebuffer;
+        uint2 m_graphicsSize;
+        Graphics m_graphics;
     };
 } // namespace p5

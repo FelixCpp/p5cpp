@@ -1,9 +1,12 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/default_shaders.hpp>
+#include <p5cpp/graphics/shader_impl.hpp>
 
 #include <glad/glad.h>
 
+#include <fstream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 
@@ -102,37 +105,42 @@ namespace p5
 
 namespace p5
 {
-    Shader::~Shader()
+    ShaderImpl::~ShaderImpl()
     {
         glDeleteProgram(programId);
     }
 
-    int32_t getUniformLocation(Shader& shader, std::string_view name)
+    bool Shader::isValid() const
+    {
+        return impl != nullptr;
+    }
+
+    int32_t Shader::getUniformLocation(std::string_view name) const
     {
         const std::string key(name);
-        const auto it = shader.uniformLocationCache.find(key);
-        if (it != shader.uniformLocationCache.end()) {
+        const auto it = impl->uniformLocationCache.find(key);
+        if (it != impl->uniformLocationCache.end()) {
             return it->second;
         }
 
-        const GLint location = glGetUniformLocation(shader.programId, key.c_str());
-        shader.uniformLocationCache.emplace(key, location);
+        const GLint location = glGetUniformLocation(impl->programId, key.c_str());
+        impl->uniformLocationCache.emplace(key, location);
         return location;
     }
 
-    std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
+    std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
     {
         const auto shaderProgramId = createShaderProgram(vertexShaderSource, fragmentShaderSource);
         if (not shaderProgramId.has_value()) {
-            return nullptr;
+            return std::nullopt;
         }
 
-        auto shader = std::make_unique<Shader>();
-        shader->programId = shaderProgramId.value();
-        return shader;
+        auto impl = std::make_shared<ShaderImpl>();
+        impl->programId = shaderProgramId.value();
+        return Shader {.impl = std::move(impl)};
     }
 
-    std::unique_ptr<Shader> loadShaderFromMemory(std::string_view effectSource)
+    std::optional<Shader> loadShaderFromMemory(std::string_view effectSource)
     {
         std::string fragmentSource;
         fragmentSource.reserve(effectFragmentHeaderSource.size() + effectSource.size() + effectFragmentFooterSource.size());
@@ -143,28 +151,41 @@ namespace p5
         return loadShaderFromMemory(detail::defaultVertexShaderSource, fragmentSource);
     }
 
-    void setUniform(Shader& shader, std::string_view name, float value)
+    std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath)
     {
-        shader.uniforms[std::string(name)] = value;
+        std::ifstream file(effectFilepath, std::ios::binary);
+        if (not file) {
+            error("loadShaderFromFile() failed to open \"{}\"", effectFilepath.string());
+            return std::nullopt;
+        }
+
+        std::ostringstream contents;
+        contents << file.rdbuf();
+        return loadShaderFromMemory(contents.str());
     }
 
-    void setUniform(Shader& shader, std::string_view name, const float2& value)
+    void Shader::setUniform(std::string_view name, float value)
     {
-        shader.uniforms[std::string(name)] = value;
+        impl->uniforms[std::string(name)] = value;
     }
 
-    void setUniform(Shader& shader, std::string_view name, const float3& value)
+    void Shader::setUniform(std::string_view name, const float2& value)
     {
-        shader.uniforms[std::string(name)] = value;
+        impl->uniforms[std::string(name)] = value;
     }
 
-    void setUniform(Shader& shader, std::string_view name, const float4& value)
+    void Shader::setUniform(std::string_view name, const float3& value)
     {
-        shader.uniforms[std::string(name)] = value;
+        impl->uniforms[std::string(name)] = value;
     }
 
-    void setUniform(Shader& shader, std::string_view name, const matrix4x4& value)
+    void Shader::setUniform(std::string_view name, const float4& value)
     {
-        shader.uniforms[std::string(name)] = value;
+        impl->uniforms[std::string(name)] = value;
+    }
+
+    void Shader::setUniform(std::string_view name, const matrix4x4& value)
+    {
+        impl->uniforms[std::string(name)] = value;
     }
 } // namespace p5

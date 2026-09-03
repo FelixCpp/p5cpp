@@ -214,14 +214,14 @@ namespace p5::gif
 
         void requestFrame()
         {
-            // flush() first: the framebuffer's colorTexture only reflects draw calls the
+            // flush() first: the graphics target's colorTexture only reflects draw calls the
             // Renderer has actually submitted, not ones still batched -- same precondition
-            // loadPixels() has always relied on (see Graphics::loadPixels()).
+            // loadPixels() has always relied on (see Canvas::loadPixels()).
             flush();
 
-            std::shared_ptr<Framebuffer> framebuffer = peekFramebuffer();
-            if (framebuffer == nullptr) {
-                error("GIF recording: requestFrame() called with no framebuffer pushed");
+            Graphics graphics = peekGraphics();
+            if (not graphics.isValid()) {
+                error("GIF recording: requestFrame() called with no graphics pushed");
                 return;
             }
 
@@ -229,7 +229,7 @@ namespace p5::gif
             // to make room instead of stalling. In that case a slot that was already counted as
             // outstanding is simply being reused, not added to, so the outstanding count doesn't
             // change.
-            if (requestPixelReadback(*m_pixelReader, *framebuffer->colorTexture)) {
+            if (requestPixelReadback(*m_pixelReader, graphics.colorTexture)) {
                 ++m_outstandingRequests;
             }
         }

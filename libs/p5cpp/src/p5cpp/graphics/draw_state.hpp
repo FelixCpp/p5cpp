@@ -30,9 +30,9 @@ namespace p5
         TextureFilter textureFilter = TextureFilter::linear;
         TextureWrap textureWrap = TextureWrap::clampToEdge;
 
-        std::shared_ptr<Shader> shader = nullptr;
+        Shader shader;
 
-        std::shared_ptr<Font> textFont = nullptr;
+        Font textFont;
         float textSize = 12.0f;
         TextAlignment textAlignment = TextAlignment::topLeft;
         TextWrap textWrap = TextWrap::none;

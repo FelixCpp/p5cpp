@@ -2,7 +2,7 @@ add_library(p5cpp_audio STATIC
   ./src/p5cpp_audio/audio_engine.cpp
   ./src/p5cpp_audio/audio_plugin.cpp
   ./src/p5cpp_audio/p5cpp_audio.cpp
-  ./src/p5cpp_audio/sound_api.cpp
+  ./src/p5cpp_audio/sound.cpp
   ./src/p5cpp_audio/sound_resource.cpp
 )
 

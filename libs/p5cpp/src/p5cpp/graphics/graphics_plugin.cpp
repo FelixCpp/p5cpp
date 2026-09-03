@@ -1,12 +1,11 @@
 #include <p5cpp/graphics/graphics_plugin.hpp>
-#include <p5cpp/graphics/framebuffer.hpp>
 #include <p5cpp/window/window.hpp>
 
 namespace p5
 {
     GraphicsPlugin::GraphicsPlugin()
-        : m_graphics(nullptr),
-          m_defaultFramebuffer(nullptr),
+        : m_canvas(nullptr),
+          m_defaultGraphics(),
           m_size(0, 0),
           m_samples(4)
     {
@@ -14,18 +13,18 @@ namespace p5
 
     void GraphicsPlugin::setup(Context& context, const Next& next)
     {
-        m_graphics = std::make_unique<Graphics>();
-        context.provide(m_graphics.get());
+        m_canvas = std::make_unique<Canvas>();
+        context.provide(m_canvas.get());
         context.provide(this);
 
         Window& window = context.require<Window>();
         m_size = window.getLogicalSize();
 
-        recreateDefaultFramebuffer();
+        recreateDefaultGraphics();
 
-        m_graphics->pushFramebuffer(m_defaultFramebuffer, true);
+        m_canvas->pushGraphics(m_defaultGraphics, true);
         next();
-        m_graphics->popFramebuffer();
+        m_canvas->popGraphics();
     }
 
     void GraphicsPlugin::event(Context& context, const Next& next, const WindowEvent& event)
@@ -35,7 +34,7 @@ namespace p5
             const auto isWindowMinimized = resize.width == 0 or resize.height == 0;
             if (not isWindowMinimized) {
                 m_size = uint2 {.x = resize.width, .y = resize.height};
-                recreateDefaultFramebuffer();
+                recreateDefaultGraphics();
             }
         }
 
@@ -44,14 +43,14 @@ namespace p5
 
     void GraphicsPlugin::draw(Context& context, const Next& next)
     {
-        m_graphics->pushFramebuffer(m_defaultFramebuffer, true);
+        m_canvas->pushGraphics(m_defaultGraphics, true);
         next();
-        m_graphics->popFramebuffer();
+        m_canvas->popGraphics();
 
         Window& window = context.require<Window>();
         const uint2& size = window.getPhysicalSize();
-        if (m_defaultFramebuffer != nullptr) {
-            blitFramebufferToScreen(m_defaultFramebuffer, size.x, size.y);
+        if (m_defaultGraphics.isValid()) {
+            blitGraphicsToScreen(m_defaultGraphics, size.x, size.y);
         }
     }
 
@@ -60,14 +59,14 @@ namespace p5
         next();
 
         context.remove<GraphicsPlugin>();
-        context.remove<Graphics>();
-        m_graphics.reset();
+        context.remove<Canvas>();
+        m_canvas.reset();
     }
 
     void GraphicsPlugin::smooth(uint32_t samples)
     {
         m_samples = samples;
-        recreateDefaultFramebuffer();
+        recreateDefaultGraphics();
     }
 
     void GraphicsPlugin::noSmooth()
@@ -75,12 +74,12 @@ namespace p5
         smooth(0);
     }
 
-    void GraphicsPlugin::recreateDefaultFramebuffer()
+    void GraphicsPlugin::recreateDefaultGraphics()
     {
-        if (auto recreated = createFramebuffer(m_size.x, m_size.y, m_samples)) {
-            m_defaultFramebuffer = std::move(recreated);
+        if (auto recreated = createGraphics(m_size.x, m_size.y, m_samples)) {
+            m_defaultGraphics = std::move(recreated).value();
         } else {
-            error("GraphicsPlugin::recreateDefaultFramebuffer() failed; the default framebuffer is unchanged");
+            error("GraphicsPlugin::recreateDefaultGraphics() failed; the default graphics target is unchanged");
         }
     }
 } // namespace p5

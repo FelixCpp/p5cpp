@@ -3,24 +3,24 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/draw_state_stack.hpp>
 #include <p5cpp/graphics/matrix_stack.hpp>
-#include <p5cpp/graphics/framebuffer_stack.hpp>
+#include <p5cpp/graphics/graphics_stack.hpp>
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/shape_builder.hpp>
 
 namespace p5
 {
-    class Graphics
+    class Canvas
     {
     public:
-        Graphics();
+        Canvas();
 
         void push(bool extend);
         void pop();
 
-        void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, bool extend);
-        void popFramebuffer();
-        std::shared_ptr<Framebuffer> peekFramebuffer() const;
-        const uint2& getFramebufferSize() const;
+        void pushGraphics(Graphics graphics, bool extend);
+        void popGraphics();
+        Graphics peekGraphics() const;
+        uint2 getGraphicsSize() const;
 
         void flush();
         Pixels loadPixels();
@@ -60,7 +60,7 @@ namespace p5
         void clip(float x, float y, float width, float height);
         void noClip();
 
-        void shader(std::shared_ptr<Shader> shader);
+        void shader(Shader shader);
         void noShader();
 
         void background(color_t color);
@@ -88,10 +88,10 @@ namespace p5
         void textureUVMode(TextureUVMode mode);
         void textureFilter(TextureFilter filter);
         void textureWrap(TextureWrap wrap);
-        void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
-        void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
+        void image(Texture texture, float left, float top, float width, float height);
+        void image(Texture texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
-        void textFont(std::shared_ptr<Font> font);
+        void textFont(Font font);
         void noTextFont();
         void textSize(float pixels);
         void textAlign(TextAlignment alignment);
@@ -106,26 +106,26 @@ namespace p5
         std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     private:
-        std::shared_ptr<Shader> resolveActiveShader(const std::shared_ptr<Shader>& fallback);
-        std::shared_ptr<Texture> resolveActiveTexture(const std::shared_ptr<Texture>& texture = nullptr);
+        Shader resolveActiveShader(const Shader& fallback);
+        Texture resolveActiveTexture(const Texture& texture = {});
         float2 applyTransform(const float2& point) const;
 
-        void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const std::shared_ptr<Texture>& texture = nullptr);
+        void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const Texture& texture = {});
         void submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state);
         void submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state);
         void submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state);
         void submitPoint(const float2& position, color_t color, const DrawState& state);
         void submitBuiltShape(const BuiltShape& shape, bool close);
-        void submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const std::shared_ptr<Texture>& atlasTexture, const DrawState& state);
+        void submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const Texture& atlasTexture, const DrawState& state);
 
         DrawStateStack m_stateStack;
         MatrixStack m_matrixStack;
-        FramebufferStack m_framebufferStack;
+        GraphicsStack m_graphicsStack;
         std::unique_ptr<Renderer> m_renderer;
-        std::shared_ptr<Shader> m_defaultFillShader;
-        std::shared_ptr<Shader> m_defaultTextShader;
-        std::shared_ptr<Texture> m_defaultTexture;
-        std::shared_ptr<Font> m_defaultFont;
+        Shader m_defaultFillShader;
+        Shader m_defaultTextShader;
+        Texture m_defaultTexture;
+        Font m_defaultFont;
         ShapeBuilder m_shape;
     };
 } // namespace p5

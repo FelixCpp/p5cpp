@@ -1,7 +1,7 @@
 #pragma once
 
 #include <p5cpp/p5cpp.hpp>
-#include <p5cpp/graphics/graphics.hpp>
+#include <p5cpp/graphics/canvas.hpp>
 
 namespace p5
 {
@@ -19,10 +19,10 @@ namespace p5
         void noSmooth();
 
     private:
-        void recreateDefaultFramebuffer();
+        void recreateDefaultGraphics();
 
-        std::unique_ptr<Graphics> m_graphics;
-        std::shared_ptr<Framebuffer> m_defaultFramebuffer;
+        std::unique_ptr<Canvas> m_canvas;
+        Graphics m_defaultGraphics;
         uint2 m_size;
         uint32_t m_samples;
     };

@@ -14,7 +14,7 @@ struct BubbleWord
     std::vector<Contour> contours;
     rect2f bounds;
 
-    explicit BubbleWord(const std::string& text, Font* font)
+    explicit BubbleWord(const std::string& text, [[maybe_unused]] const Font& font)
     {
         const std::vector<TextPoint> textPoints = textToPoints(
             text,
@@ -135,10 +135,10 @@ struct TextToPoints : Sketch
     {
         setWindowSize(800, 400);
         with([&] {
-            const std::shared_ptr<Font> font = loadFontFromFile("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf");
-            bubbleWords.emplace_back("First", font.get());
-            bubbleWords.emplace_back("Second", font.get());
-            bubbleWords.emplace_back("Third", font.get());
+            const Font font = loadFont("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf").value();
+            bubbleWords.emplace_back("First", font);
+            bubbleWords.emplace_back("Second", font);
+            bubbleWords.emplace_back("Third", font);
         });
     }
 

@@ -239,7 +239,7 @@ namespace p5
         }
     } // namespace
 
-    class FreeTypeHarfBuzzFont : public Font
+    class FreeTypeHarfBuzzFont : public FontImpl
     {
     public:
         // rasterFace and hbFace are two independent FT_Face handles opened from the same font data.
@@ -252,7 +252,7 @@ namespace p5
         // rasterization code never touches sidesteps the whole class of bug regardless of query order.
         FreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
             : m_rasterFace(rasterFace), m_hbFace(hbFace), m_hbFont(hbFont),
-              m_atlasTexture(loadTextureFromMemory(atlasWidth, atlasHeight, {}, TexturePixelFormat::r8)),
+              m_atlasTexture(loadTexture(atlasWidth, atlasHeight, {}, TexturePixelFormat::r8).value()),
               m_atlasEmPixels(atlasEmPixels)
         {
             // Prepopulate printable ASCII so common Latin text never hits an on-demand rasterize hitch
@@ -323,7 +323,7 @@ namespace p5
             return decomposeGlyphOutline(glyphIndex);
         }
 
-        std::shared_ptr<Texture> getAtlasTexture() const override
+        Texture getAtlasTexture() const override
         {
             return m_atlasTexture;
         }
@@ -405,8 +405,8 @@ namespace p5
 
         std::optional<rect2f> packIntoAtlas(const std::vector<uint8_t>& cellCoverage, int cellWidth, int cellHeight)
         {
-            const uint32_t atlasWidth = m_atlasTexture->size.x;
-            const uint32_t atlasHeight = m_atlasTexture->size.y;
+            const uint32_t atlasWidth = m_atlasTexture.size.x;
+            const uint32_t atlasHeight = m_atlasTexture.size.y;
 
             const uint32_t paddedWidth = static_cast<uint32_t>(cellWidth) + 2 * kAtlasPaddingTexels;
             const uint32_t paddedHeight = static_cast<uint32_t>(cellHeight) + 2 * kAtlasPaddingTexels;
@@ -441,7 +441,7 @@ namespace p5
                 }
             }
 
-            updateSubImage(*m_atlasTexture, m_shelfX, m_shelfY, paddedWidth, paddedHeight, padded);
+            m_atlasTexture.updateSubImage(m_shelfX, m_shelfY, paddedWidth, paddedHeight, padded);
 
             const rect2f uvRect {
                 static_cast<float>(m_shelfX + kAtlasPaddingTexels) / static_cast<float>(atlasWidth),
@@ -501,7 +501,7 @@ namespace p5
         FT_Face m_rasterFace;
         FT_Face m_hbFace;
         hb_font_t* m_hbFont;
-        std::shared_ptr<Texture> m_atlasTexture;
+        Texture m_atlasTexture;
         uint32_t m_atlasEmPixels;
         std::unordered_map<uint32_t, GlyphMetrics> m_glyphCache;
         std::unordered_map<uint32_t, std::vector<std::vector<float2>>> m_outlineCache;
@@ -518,10 +518,10 @@ namespace p5
         // bad_alloc from the ASCII-prepopulation loop in its constructor body) -- at that point
         // ownership never successfully transferred, and FreeTypeHarfBuzzFont's own destructor never
         // runs for an object whose constructor didn't complete.
-        std::unique_ptr<Font> makeFreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
+        std::optional<Font> makeFreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
         {
             try {
-                return std::make_unique<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels);
+                return Font {.impl = std::make_shared<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels)};
             } catch (...) {
                 hb_font_destroy(hbFont);
                 std::lock_guard<std::mutex> lock(freeTypeMutex());
@@ -532,21 +532,21 @@ namespace p5
         }
     } // namespace
 
-    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
+    std::optional<Font> loadFont(std::span<const uint8_t> data, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
     {
         FT_Face rasterFace = nullptr;
         FT_Face hbFace = nullptr;
         {
             std::lock_guard<std::mutex> lock(freeTypeMutex());
             if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &rasterFace) != 0) {
-                return nullptr;
+                return std::nullopt;
             }
 
             // A second, independent face for HarfBuzz — see the FreeTypeHarfBuzzFont comment for why this
             // must not be the same FT_Face our own glyph rasterization mutates via FT_Set_Pixel_Sizes().
             if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &hbFace) != 0) {
                 FT_Done_Face(rasterFace);
-                return nullptr;
+                return std::nullopt;
             }
         }
 
@@ -555,19 +555,19 @@ namespace p5
             std::lock_guard<std::mutex> lock(freeTypeMutex());
             FT_Done_Face(hbFace);
             FT_Done_Face(rasterFace);
-            return nullptr;
+            return std::nullopt;
         }
 
         // hb_ft_font_create() otherwise tracks the wrapped face's *current* pixel size dynamically
         // rather than fixing the scale to the font's design-unit em square at creation time. Pin it
         // explicitly so shape() always returns design-unit advances/offsets, matching what
-        // Graphics::text()'s scale math assumes.
+        // Canvas::text()'s scale math assumes.
         hb_font_set_scale(hbFont, static_cast<int>(hbFace->units_per_EM), static_cast<int>(hbFace->units_per_EM));
 
         return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels);
     }
 
-    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
+    std::optional<Font> loadFont(const std::filesystem::path& filepath, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
     {
         const std::string filepathStr = filepath.string();
 
@@ -576,13 +576,13 @@ namespace p5
         {
             std::lock_guard<std::mutex> lock(freeTypeMutex());
             if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &rasterFace) != 0) {
-                return nullptr;
+                return std::nullopt;
             }
 
-            // See loadFontFromMemory() for why HarfBuzz needs its own independent face here.
+            // See loadFont(span)'s overload for why HarfBuzz needs its own independent face here.
             if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &hbFace) != 0) {
                 FT_Done_Face(rasterFace);
-                return nullptr;
+                return std::nullopt;
             }
         }
 
@@ -591,13 +591,24 @@ namespace p5
             std::lock_guard<std::mutex> lock(freeTypeMutex());
             FT_Done_Face(hbFace);
             FT_Done_Face(rasterFace);
-            return nullptr;
+            return std::nullopt;
         }
 
         hb_font_set_scale(hbFont, static_cast<int>(hbFace->units_per_EM), static_cast<int>(hbFace->units_per_EM));
 
         return makeFreeTypeHarfBuzzFont(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels);
     }
+
+    bool Font::isValid() const { return impl != nullptr; }
+
+    std::vector<ShapedGlyph> Font::shape(std::string_view utf8Text) const { return impl->shape(utf8Text); }
+    const GlyphMetrics& Font::getGlyphMetrics(uint32_t glyphIndex) const { return impl->getGlyphMetrics(glyphIndex); }
+    std::vector<std::vector<float2>> Font::getGlyphContours(uint32_t glyphIndex) const { return impl->getGlyphContours(glyphIndex); }
+    Texture Font::getAtlasTexture() const { return impl->getAtlasTexture(); }
+    float Font::getUnitsPerEm() const { return impl->getUnitsPerEm(); }
+    float Font::getAscent() const { return impl->getAscent(); }
+    float Font::getDescent() const { return impl->getDescent(); }
+    float Font::getLineGap() const { return impl->getLineGap(); }
 } // namespace p5
 
 namespace p5
@@ -828,7 +839,7 @@ namespace p5
             }
         }
 
-        void appendLineToPoints(Font& font, const ShapedLine& line, float scale, float penX, float penY, float letterSpacing, const TextToPointsOptions& options, std::vector<TextPoint>& outPoints, uint32_t& nextContourIndex)
+        void appendLineToPoints(const Font& font, const ShapedLine& line, float scale, float penX, float penY, float letterSpacing, const TextToPointsOptions& options, std::vector<TextPoint>& outPoints, uint32_t& nextContourIndex)
         {
             for (const ShapedGlyph& g : line.glyphs) {
                 const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};

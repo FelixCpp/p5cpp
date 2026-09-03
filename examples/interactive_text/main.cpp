@@ -12,13 +12,13 @@ typedef struct
     uint8_t alpha;
 } Cell;
 
-static std::shared_ptr<Texture> createTexture(std::string_view text)
+static Texture createTexture(std::string_view text)
 {
-    const std::shared_ptr<Font> font = loadFontFromFile("fonts/Arial Rounded Bold.ttf", 1024 * 3, 1024 * 3, 128 * 3);
-    const rect2f bounds = textBounds(*font, 320.0f, text);
-    const std::shared_ptr<Framebuffer> framebuffer = createFramebuffer(bounds.width, bounds.height);
+    const Font font = loadFont("fonts/Arial Rounded Bold.ttf", 1024 * 3, 1024 * 3, 128 * 3).value();
+    const rect2f bounds = textBounds(font, 320.0f, text);
+    const Graphics graphics = createGraphics(bounds.width, bounds.height).value();
 
-    withFramebuffer(framebuffer, [&]() {
+    withGraphics(graphics, [&]() {
         background(rgba(255));
         fill(rgba(0));
         noStroke();
@@ -28,7 +28,7 @@ static std::shared_ptr<Texture> createTexture(std::string_view text)
         p5::text(text, bounds.width * 0.5f, bounds.height * 0.5f, bounds.width, bounds.height);
     });
 
-    return framebuffer->colorTexture;
+    return graphics.colorTexture;
 }
 
 struct InteractiveText : Sketch
@@ -39,7 +39,7 @@ struct InteractiveText : Sketch
     size_t cellHeight;
 
     std::vector<Cell> cells;
-    std::shared_ptr<Texture> texture = createTexture("Felix");
+    Texture texture = createTexture("Felix");
 
     inline static constexpr color_t colorPalette[] = {
         0xabcd5eFF,
@@ -56,15 +56,15 @@ struct InteractiveText : Sketch
     {
         cellWidth = 5;
         cellHeight = 5;
-        columns = texture->size.x / cellWidth;
-        rows = texture->size.y / cellHeight;
+        columns = texture.size.x / cellWidth;
+        rows = texture.size.y / cellHeight;
 
         setWindowSize(columns * cellWidth, rows * cellHeight);
 
-        Pixels pixels = loadPixels(*texture);
+        Pixels pixels = texture.loadPixels();
         for (size_t row = 0; row < rows; ++row) {
             for (size_t column = 0; column < columns; ++column) {
-                const color_t pixelColor = getPixel(pixels, column * cellWidth, row * cellHeight);
+                const color_t pixelColor = pixels.get(column * cellWidth, row * cellHeight);
                 const bool isLetter = getBrightness(pixelColor) < 127;
                 if (not isLetter) {
                     continue;

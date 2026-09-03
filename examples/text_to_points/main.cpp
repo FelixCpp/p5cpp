@@ -7,7 +7,7 @@ using namespace p5;
 // change simplifyThreshold (how aggressively near-straight runs get pruned).
 struct TextToPoints : Sketch
 {
-    std::shared_ptr<Font> font = loadFontFromFile("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf");
+    Font font = loadFont("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf").value();
 
     void setup() override
     {

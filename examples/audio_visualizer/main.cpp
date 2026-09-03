@@ -10,8 +10,8 @@ using namespace p5::audio;
 
 struct AudioVisualizer : Sketch
 {
-    Sound sound = loadSoundFromFile("sound.mp3");
-    Sound alias = createSoundAlias(sound);
+    std::optional<Sound> sound = loadSound("sound.mp3");
+    Sound alias = sound->createAlias();
 
     MixedAudioProcessorHandle levelProcessor;
     std::atomic<float> level {0.0f};
@@ -33,15 +33,15 @@ struct AudioVisualizer : Sketch
     {
         setWindowSize(800, 600);
 
-        setSoundVolume(sound, 1.0f);
-        setSoundVolume(alias, 0.4f);
-        setSoundLoop(sound, true);
+        sound->setVolume(1.0f);
+        alias.setVolume(0.4f);
+        sound->setLoop(true);
 
         levelProcessor = attachMixedAudioProcessor([this](const std::span<float> frames, uint32_t) {
             level.store(rmsOf(frames), std::memory_order_relaxed);
         });
 
-        soundLevelProcessor = attachSoundProcessor(sound, [this](const std::span<float> frames, uint32_t) {
+        soundLevelProcessor = sound->attachProcessor([this](const std::span<float> frames, uint32_t) {
             soundLevel.store(rmsOf(frames), std::memory_order_relaxed);
         });
     }
@@ -55,11 +55,11 @@ struct AudioVisualizer : Sketch
         background(rgba(20, 20, 30));
 
         if (isKeyPressed(Key::A)) {
-            playSound(sound);
+            sound->play();
         }
 
         if (isKeyPressed(Key::B)) {
-            playSound(alias);
+            alias.play();
         }
 
         const uint2 windowSize = getWindowSize();
@@ -79,7 +79,7 @@ struct AudioVisualizer : Sketch
 
     ~AudioVisualizer() override
     {
-        detachSoundProcessor(sound, soundLevelProcessor);
+        sound->detachProcessor(soundLevelProcessor);
         detachMixedAudioProcessor(levelProcessor);
     }
 };

@@ -23,35 +23,35 @@ namespace p5::audio
         void setMasterVolume(float volume);
         float getMasterVolume();
 
-        Sound loadSoundFromFile(const std::filesystem::path& filepath);
-        Sound loadSoundFromMemory(std::span<const uint8_t> data);
-        Sound createSoundAlias(const Sound& sound);
-        void playSound(const Sound& sound);
-        void playSoundOverlapped(const Sound& sound);
-        void pauseSound(const Sound& sound);
-        void resumeSound(const Sound& sound);
-        void stopSound(const Sound& sound);
-        bool isSoundPlaying(const Sound& sound);
-        PlaybackState getSoundPlaybackState(const Sound& sound);
+        std::optional<Sound> loadSound(const std::filesystem::path& filepath);
+        std::optional<Sound> loadSound(std::span<const uint8_t> data);
+        Sound createAlias(const Sound& sound);
+        void play(const Sound& sound);
+        void playOverlapped(const Sound& sound);
+        void pause(const Sound& sound);
+        void resume(const Sound& sound);
+        void stop(const Sound& sound);
+        bool isPlaying(const Sound& sound);
+        PlaybackState getPlaybackState(const Sound& sound);
 
-        void setSoundVolume(const Sound& sound, float volume);
-        void setSoundPitch(const Sound& sound, float pitch);
-        void setSoundPan(const Sound& sound, float pan);
+        void setVolume(const Sound& sound, float volume);
+        void setPitch(const Sound& sound, float pitch);
+        void setPan(const Sound& sound, float pan);
 
-        void setSoundLoop(const Sound& sound, bool loop);
-        bool isSoundLooping(const Sound& sound);
+        void setLoop(const Sound& sound, bool loop);
+        bool isLooping(const Sound& sound);
 
-        void seekSound(const Sound& sound, float seconds);
-        float getSoundTimePlayed(const Sound& sound);
-        float getSoundTimeLength(const Sound& sound);
+        void seek(const Sound& sound, float seconds);
+        float getTimePlayed(const Sound& sound);
+        float getTimeLength(const Sound& sound);
 
         void pruneFinishedOverlaps();
 
         MixedAudioProcessorHandle attachMixedAudioProcessor(MixedAudioProcessor processor);
         void detachMixedAudioProcessor(MixedAudioProcessorHandle handle);
 
-        SoundProcessorHandle attachSoundProcessor(const Sound& sound, SoundProcessor processor);
-        void detachSoundProcessor(const Sound& sound, SoundProcessorHandle handle);
+        SoundProcessorHandle attachProcessor(const Sound& sound, SoundProcessor processor);
+        void detachProcessor(const Sound& sound, SoundProcessorHandle handle);
 
     private:
         explicit AudioEngine();

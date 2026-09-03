@@ -69,7 +69,7 @@ struct RotatingTypography : Sketch
 {
     inline static constexpr size_t num = 8;
     std::vector<Type> texts;
-    std::shared_ptr<Font> font = loadFontFromFile("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf");
+    Font font = loadFont("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf").value();
 
     void setup() override
     {

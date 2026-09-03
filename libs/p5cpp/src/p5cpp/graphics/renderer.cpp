@@ -1,4 +1,7 @@
 #include <p5cpp/graphics/renderer.hpp>
+#include <p5cpp/graphics/texture_impl.hpp>
+#include <p5cpp/graphics/shader_impl.hpp>
+#include <p5cpp/graphics/graphics_impl.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -133,27 +136,27 @@ namespace p5
         glDeleteBuffers(1, &m_ebo);
     }
 
-    void Renderer::begin(std::shared_ptr<Framebuffer> framebuffer)
+    void Renderer::begin(Graphics graphics)
     {
-        if (framebuffer == nullptr) {
-            error("Renderer::begin() called with a null framebuffer");
+        if (not graphics.isValid()) {
+            error("Renderer::begin() called with invalid graphics");
             return;
         }
 
-        m_framebuffer = framebuffer;
+        m_graphics = graphics;
 
-        // Render into the multisampled target if this framebuffer has one — its contents get
-        // resolved into framebuffer->id (the readable/sample-able texture) at the end of flush().
-        const uint32_t drawFramebufferId = framebuffer->msaaFramebufferId != 0 ? framebuffer->msaaFramebufferId : framebuffer->id;
+        // Render into the multisampled target if this graphics target has one — its contents get
+        // resolved into graphics.impl->id (the readable/sample-able texture) at the end of flush().
+        const uint32_t drawFramebufferId = graphics.impl->msaaFramebufferId != 0 ? graphics.impl->msaaFramebufferId : graphics.impl->id;
         glBindFramebuffer(GL_FRAMEBUFFER, drawFramebufferId);
 
-        const uint2& size = framebuffer->size;
+        const uint2& size = graphics.size;
         glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
 
         glEnable(GL_BLEND);
 
         m_projectionMatrix = orthographicProjectionMatrix(0.0f, 0.0f, static_cast<float>(size.x), static_cast<float>(size.y), -1.0f, 1.0f);
-        m_framebufferSize = size;
+        m_graphicsSize = size;
 
         m_currentVertexOffset = 0;
         m_currentIndexOffset = 0;
@@ -186,7 +189,7 @@ namespace p5
                 glEnable(GL_SCISSOR_TEST);
                 glScissor(
                     static_cast<GLint>(batch.clipRect->left),
-                    static_cast<GLint>(static_cast<float>(m_framebufferSize.y) - (batch.clipRect->top + batch.clipRect->height)),
+                    static_cast<GLint>(static_cast<float>(m_graphicsSize.y) - (batch.clipRect->top + batch.clipRect->height)),
                     static_cast<GLsizei>(std::max(batch.clipRect->width, 0.0f)),
                     static_cast<GLsizei>(std::max(batch.clipRect->height, 0.0f))
                 );
@@ -194,16 +197,16 @@ namespace p5
                 glDisable(GL_SCISSOR_TEST);
             }
 
-            glUseProgram(batch.shader->programId);
-            const GLint projectionLocation = getUniformLocation(*batch.shader, "u_ProjectionMatrix");
+            glUseProgram(batch.shader.impl->programId);
+            const GLint projectionLocation = batch.shader.getUniformLocation("u_ProjectionMatrix");
             if (projectionLocation >= 0) {
                 glUniformMatrix4fv(projectionLocation, 1, GL_TRUE, m_projectionMatrix.m.data());
             }
 
-            const GLint textureLocation = getUniformLocation(*batch.shader, "u_Texture");
+            const GLint textureLocation = batch.shader.getUniformLocation("u_Texture");
             if (textureLocation >= 0) {
                 glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, batch.texture->id);
+                glBindTexture(GL_TEXTURE_2D, batch.texture.impl->id);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, toGl(batch.textureFilter));
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, toGl(batch.textureFilter));
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, toGl(batch.textureWrap));
@@ -212,7 +215,7 @@ namespace p5
             }
 
             for (const auto& [name, value] : batch.uniforms) {
-                const GLint location = getUniformLocation(*batch.shader, name);
+                const GLint location = batch.shader.getUniformLocation(name);
                 if (location < 0)
                     continue;
 
@@ -236,14 +239,14 @@ namespace p5
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.indexCount), GL_UNSIGNED_INT, reinterpret_cast<void*>(batch.indexOffset * sizeof(uint32_t)));
         }
 
-        if (m_framebuffer != nullptr and m_framebuffer->msaaFramebufferId != 0) {
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, m_framebuffer->msaaFramebufferId);
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_framebuffer->id);
-            glBlitFramebuffer(0, 0, static_cast<GLint>(m_framebufferSize.x), static_cast<GLint>(m_framebufferSize.y), 0, 0, static_cast<GLint>(m_framebufferSize.x), static_cast<GLint>(m_framebufferSize.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        if (m_graphics.isValid() and m_graphics.impl->msaaFramebufferId != 0) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, m_graphics.impl->msaaFramebufferId);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_graphics.impl->id);
+            glBlitFramebuffer(0, 0, static_cast<GLint>(m_graphicsSize.x), static_cast<GLint>(m_graphicsSize.y), 0, 0, static_cast<GLint>(m_graphicsSize.x), static_cast<GLint>(m_graphicsSize.y), GL_COLOR_BUFFER_BIT, GL_NEAREST);
             // Restore the draw target rather than leaving FBO 0 bound — any further draws before
             // end() (e.g. after a mid-frame flush()/loadPixels() call) must keep landing in the
             // multisampled target, not the default framebuffer.
-            glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer->msaaFramebufferId);
+            glBindFramebuffer(GL_FRAMEBUFFER, m_graphics.impl->msaaFramebufferId);
         }
 
         m_currentVertexOffset = 0;
@@ -275,7 +278,7 @@ namespace p5
         // and scaling the margin off the actual capacity -- rather than a fixed vertex/index count --
         // keeps this correct regardless of what size Renderer::create() was called with. It is still
         // only a heuristic, not a hard guarantee, against a caller-supplied shape whose own vertex
-        // count is unbounded (e.g. Graphics::text() -- see its per-chunk submission, added precisely
+        // count is unbounded (e.g. Canvas::text() -- see its per-chunk submission, added precisely
         // because a long paragraph could otherwise overrun this margin) or exceptionally large (an
         // extremely long user beginShape()/vertex() path); write()'s doc comment covers that case.
         const bool lowOnVertices = m_currentVertexOffset > 0 and (m_maxVertexCount - m_currentVertexOffset) < m_maxVertexCount / 4;
@@ -292,13 +295,13 @@ namespace p5
         return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentIndexOffset);
     }
 
-    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const std::shared_ptr<Texture>& texture, const std::shared_ptr<Shader>& shader)
+    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader)
     {
         const size_t indexCount = m_currentIndexOffset - writer.m_indexOffset;
         if (indexCount == 0)
             return;
 
-        const auto& uniforms = shader->uniforms;
+        const auto& uniforms = shader.impl->uniforms;
 
         // Uniforms live on the shader itself and are typically small maps, so comparing them for
         // equality here is cheap; a batch extends the previous one only if every other GPU-relevant

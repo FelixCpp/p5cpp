@@ -34,30 +34,36 @@ namespace p5::audio
         return ma_engine_get_volume(&m_engine);
     }
 
-    Sound AudioEngine::loadSoundFromFile(const std::filesystem::path& filepath)
+    std::optional<Sound> AudioEngine::loadSound(const std::filesystem::path& filepath)
     {
-        return Sound {
-            .resource = SoundResource::loadFromFile(m_engine, filepath),
-        };
+        std::unique_ptr<SoundResource> resource = SoundResource::loadFromFile(m_engine, filepath);
+        if (resource == nullptr) {
+            return std::nullopt;
+        }
+
+        return Sound {.resource = std::move(resource)};
     }
 
-    Sound AudioEngine::loadSoundFromMemory(const std::span<const uint8_t> data)
+    std::optional<Sound> AudioEngine::loadSound(const std::span<const uint8_t> data)
     {
-        return Sound {
-            .resource = SoundResource::loadFromMemory(m_engine, data),
-        };
+        std::unique_ptr<SoundResource> resource = SoundResource::loadFromMemory(m_engine, data);
+        if (resource == nullptr) {
+            return std::nullopt;
+        }
+
+        return Sound {.resource = std::move(resource)};
     }
 
-    Sound AudioEngine::createSoundAlias(const Sound& sound)
+    Sound AudioEngine::createAlias(const Sound& sound)
     {
         return Sound {
             .resource = SoundResource::createAlias(m_engine, *sound.resource),
         };
     }
 
-    void AudioEngine::playSoundOverlapped(const Sound& sound)
+    void AudioEngine::playOverlapped(const Sound& sound)
     {
-        Sound alias = createSoundAlias(sound);
+        Sound alias = createAlias(sound);
         alias.resource->play();
         m_activeOverlaps.push_back(std::move(alias));
     }
@@ -69,13 +75,13 @@ namespace p5::audio
         });
     }
 
-    void AudioEngine::playSound(const Sound& sound) { sound.resource->play(); }
-    void AudioEngine::pauseSound(const Sound& sound) { sound.resource->pause(); }
-    void AudioEngine::resumeSound(const Sound& sound) { sound.resource->resume(); }
-    void AudioEngine::stopSound(const Sound& sound) { sound.resource->stop(); }
-    bool AudioEngine::isSoundPlaying(const Sound& sound) { return sound.resource->isPlaying(); }
+    void AudioEngine::play(const Sound& sound) { sound.resource->play(); }
+    void AudioEngine::pause(const Sound& sound) { sound.resource->pause(); }
+    void AudioEngine::resume(const Sound& sound) { sound.resource->resume(); }
+    void AudioEngine::stop(const Sound& sound) { sound.resource->stop(); }
+    bool AudioEngine::isPlaying(const Sound& sound) { return sound.resource->isPlaying(); }
 
-    PlaybackState AudioEngine::getSoundPlaybackState(const Sound& sound)
+    PlaybackState AudioEngine::getPlaybackState(const Sound& sound)
     {
         if (sound.resource->isPlaying()) {
             return PlaybackState::Playing;
@@ -117,23 +123,23 @@ namespace p5::audio
         }
     }
 
-    void AudioEngine::setSoundVolume(const Sound& sound, const float volume) { sound.resource->setVolume(volume); }
-    void AudioEngine::setSoundPitch(const Sound& sound, const float pitch) { sound.resource->setPitch(pitch); }
-    void AudioEngine::setSoundPan(const Sound& sound, const float pan) { sound.resource->setPan(pan); }
+    void AudioEngine::setVolume(const Sound& sound, const float volume) { sound.resource->setVolume(volume); }
+    void AudioEngine::setPitch(const Sound& sound, const float pitch) { sound.resource->setPitch(pitch); }
+    void AudioEngine::setPan(const Sound& sound, const float pan) { sound.resource->setPan(pan); }
 
-    void AudioEngine::setSoundLoop(const Sound& sound, const bool loop) { sound.resource->setLooping(loop); }
-    bool AudioEngine::isSoundLooping(const Sound& sound) { return sound.resource->isLooping(); }
+    void AudioEngine::setLoop(const Sound& sound, const bool loop) { sound.resource->setLooping(loop); }
+    bool AudioEngine::isLooping(const Sound& sound) { return sound.resource->isLooping(); }
 
-    void AudioEngine::seekSound(const Sound& sound, const float seconds) { sound.resource->seek(seconds); }
-    float AudioEngine::getSoundTimePlayed(const Sound& sound) { return sound.resource->getTimePlayed(); }
-    float AudioEngine::getSoundTimeLength(const Sound& sound) { return sound.resource->getTimeLength(); }
+    void AudioEngine::seek(const Sound& sound, const float seconds) { sound.resource->seek(seconds); }
+    float AudioEngine::getTimePlayed(const Sound& sound) { return sound.resource->getTimePlayed(); }
+    float AudioEngine::getTimeLength(const Sound& sound) { return sound.resource->getTimeLength(); }
 
-    SoundProcessorHandle AudioEngine::attachSoundProcessor(const Sound& sound, SoundProcessor processor)
+    SoundProcessorHandle AudioEngine::attachProcessor(const Sound& sound, SoundProcessor processor)
     {
         return sound.resource->attachProcessor(std::move(processor));
     }
 
-    void AudioEngine::detachSoundProcessor(const Sound& sound, const SoundProcessorHandle handle)
+    void AudioEngine::detachProcessor(const Sound& sound, const SoundProcessorHandle handle)
     {
         sound.resource->detachProcessor(handle);
     }

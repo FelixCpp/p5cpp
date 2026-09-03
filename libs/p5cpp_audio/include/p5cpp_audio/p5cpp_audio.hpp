@@ -4,46 +4,56 @@
 
 namespace p5::audio
 {
+    enum class PlaybackState
+    {
+        Stopped, // never played, or explicitly stopped via stop() -- position is at the start
+        Playing, // currently playing, not stopped or paused
+        Paused,  // paused via pause() -- position is preserved, ready to continue via resume()
+    };
+
+    using SoundProcessor = std::function<void(std::span<float> frames, uint32_t channels)>;
+    struct SoundProcessorHandle
+    {
+        uint64_t id = 0;
+    };
+
     struct SoundResource;
     struct Sound
     {
         std::shared_ptr<SoundResource> resource;
+
+        bool isValid() const;
+
+        void play();
+        void playOverlapped();
+        void pause();
+        void resume();
+        void stop();
+        bool isPlaying() const;
+        PlaybackState getPlaybackState() const;
+
+        void setVolume(float volume);
+        void setPitch(float pitch);
+        void setPan(float pan);
+
+        void setLoop(bool loop);
+        bool isLooping() const;
+
+        void seek(float seconds);
+        float getTimePlayed() const;
+        float getTimeLength() const;
+
+        Sound createAlias() const;
+
+        SoundProcessorHandle attachProcessor(SoundProcessor processor);
+        void detachProcessor(SoundProcessorHandle handle);
     };
 
-    enum class PlaybackState
-    {
-        Stopped, // never played, or explicitly stopped via stopSound() -- position is at the start
-        Playing, // currently playing, not stopped or paused
-        Paused,  // paused via pauseSound() -- position is preserved, ready to continue via resumeSound()
-    };
-
-    Sound loadSoundFromFile(const std::filesystem::path& filepath);
-    Sound loadSoundFromMemory(std::span<const uint8_t> data);
-
-    void playSound(const Sound& sound);
-    void pauseSound(const Sound& sound);
-    void resumeSound(const Sound& sound);
-    void stopSound(const Sound& sound);
-    bool isSoundPlaying(const Sound& sound);
-    PlaybackState getSoundPlaybackState(const Sound& sound);
-    bool isSoundValid(const Sound& sound);
-
-    void setSoundVolume(const Sound& sound, float volume);
-    void setSoundPitch(const Sound& sound, float pitch);
-    void setSoundPan(const Sound& sound, float pan);
-
-    void setSoundLoop(const Sound& sound, bool loop);
-    bool isSoundLooping(const Sound& sound);
-
-    void seekSound(const Sound& sound, float seconds);
-    float getSoundTimePlayed(const Sound& sound);
-    float getSoundTimeLength(const Sound& sound);
+    std::optional<Sound> loadSound(const std::filesystem::path& filepath);
+    std::optional<Sound> loadSound(std::span<const uint8_t> data);
 
     void setMasterVolume(float volume);
     float getMasterVolume();
-
-    void playSoundOverlapped(const Sound& sound);
-    Sound createSoundAlias(const Sound& sound);
 
     using MixedAudioProcessor = std::function<void(std::span<float> frames, uint32_t channels)>;
     struct MixedAudioProcessorHandle
@@ -53,15 +63,6 @@ namespace p5::audio
 
     MixedAudioProcessorHandle attachMixedAudioProcessor(MixedAudioProcessor processor);
     void detachMixedAudioProcessor(MixedAudioProcessorHandle handle);
-
-    using SoundProcessor = std::function<void(std::span<float> frames, uint32_t channels)>;
-    struct SoundProcessorHandle
-    {
-        uint64_t id = 0;
-    };
-
-    SoundProcessorHandle attachSoundProcessor(const Sound& sound, SoundProcessor processor);
-    void detachSoundProcessor(const Sound& sound, SoundProcessorHandle handle);
 } // namespace p5::audio
 
 namespace p5::audio

@@ -620,21 +620,23 @@ namespace p5
 
 namespace p5
 {
+    struct ShaderImpl;
     struct Shader
     {
-        uint32_t programId = 0;
-        std::unordered_map<std::string, int32_t> uniformLocationCache;
-        std::unordered_map<std::string, UniformValue> uniforms;
+        std::shared_ptr<ShaderImpl> impl;
 
-        Shader() = default;
-        Shader(const Shader&) = delete;
-        Shader& operator=(const Shader&) = delete;
-        ~Shader();
+        bool operator==(const Shader&) const = default;
+        bool isValid() const;
+
+        int32_t getUniformLocation(std::string_view name) const;
+        void setUniform(std::string_view name, float value);
+        void setUniform(std::string_view name, const float2& value);
+        void setUniform(std::string_view name, const float3& value);
+        void setUniform(std::string_view name, const float4& value);
+        void setUniform(std::string_view name, const matrix4x4& value);
     };
 
-    int32_t getUniformLocation(Shader& shader, std::string_view name);
-
-    std::unique_ptr<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+    std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
 
     // Compiles a shader from just a fragment "effect" function, LÖVE2D-pixel-shader style — the library
     // supplies the vertex stage (position/UV/color pass-through) and the fragment stage's boilerplate,
@@ -646,13 +648,11 @@ namespace p5
     // effect needs can be declared directly in effectSource (e.g. `uniform float u_Time;`) and set from
     // C++ via setUniform() as usual. For full control over the vertex stage too, use the two-argument
     // loadShaderFromMemory(vertexShaderSource, fragmentShaderSource) overload instead.
-    std::unique_ptr<Shader> loadShaderFromMemory(std::string_view effectSource);
+    std::optional<Shader> loadShaderFromMemory(std::string_view effectSource);
 
-    void setUniform(Shader& shader, std::string_view name, float value);
-    void setUniform(Shader& shader, std::string_view name, const float2& value);
-    void setUniform(Shader& shader, std::string_view name, const float3& value);
-    void setUniform(Shader& shader, std::string_view name, const float4& value);
-    void setUniform(Shader& shader, std::string_view name, const matrix4x4& value);
+    // Same effect-shader shortcut as the single-argument loadShaderFromMemory(), but reading
+    // effectSource from a file instead of a string already in memory.
+    std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath);
 } // namespace p5
 
 namespace p5
@@ -685,48 +685,48 @@ namespace p5
         r8,
     };
 
+    struct Pixels;
+    struct TextureImpl;
     struct Texture
     {
-        uint32_t id = 0;
+        std::shared_ptr<TextureImpl> impl;
         uint2 size {0, 0};
         TexturePixelFormat pixelFormat = TexturePixelFormat::rgba8;
 
-        Texture() = default;
-        Texture(const Texture&) = delete;
-        Texture& operator=(const Texture&) = delete;
-        ~Texture();
+        bool operator==(const Texture&) const = default;
+        bool isValid() const;
+
+        void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data);
+        Pixels loadPixels() const;
+        void updatePixels(const Pixels& pixels);
+        bool saveToFileAsPNG(const std::filesystem::path& filepath) const;
+        bool saveToFileAsJPEG(const std::filesystem::path& filepath, int quality = 90) const;
+        bool saveToFileAsBMP(const std::filesystem::path& filepath) const;
     };
 
-    std::unique_ptr<Texture> loadTextureFromMemory(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format = TexturePixelFormat::rgba8);
-    std::unique_ptr<Texture> loadTextureFromFile(const std::filesystem::path& filepath);
-    void updateSubImage(Texture& texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data);
-    std::vector<uint8_t> queryPixelData(const Texture& texture);
-    bool saveTextureToFileAsPNG(const Texture& texture, const std::filesystem::path& filepath);
-    bool saveTextureToFileAsJPEG(const Texture& texture, const std::filesystem::path& filepath, int quality = 90);
-    bool saveTextureToFileAsBMP(const Texture& texture, const std::filesystem::path& filepath);
+    std::optional<Texture> loadTexture(const std::filesystem::path& filepath);
+    std::optional<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format = TexturePixelFormat::rgba8);
 } // namespace p5
 
 namespace p5
 {
-    struct Framebuffer
+    struct GraphicsImpl;
+    struct Graphics
     {
-        uint32_t id = 0;                         // resolve FBO — holds colorTexture, always readable/sample-able
-        uint32_t depthStencilRenderbufferId = 0; // currently unused by the rendering pipeline (clip() uses
-                                                 // glScissor, not the stencil buffer); kept for FBO completeness
-        uint32_t msaaFramebufferId = 0;          // 0 = no antialiasing; else the FBO actually rendered into
-        uint32_t msaaColorRenderbufferId = 0;
-        std::shared_ptr<Texture> colorTexture;
+        std::shared_ptr<GraphicsImpl> impl;
+        Texture colorTexture;
         uint2 size {0, 0};
 
-        Framebuffer() = default;
-        Framebuffer(const Framebuffer&) = delete;
-        Framebuffer& operator=(const Framebuffer&) = delete;
-        ~Framebuffer();
+        bool operator==(const Graphics&) const = default;
+        bool isValid() const;
+
+        Pixels loadPixels() const;
+        void updatePixels(const Pixels& pixels);
     };
 
-    std::unique_ptr<Framebuffer> createFramebuffer(uint32_t width, uint32_t height, uint32_t samples = 0);
-    void blitFramebufferToScreen(const std::shared_ptr<Framebuffer>& framebuffer, uint32_t screenWidth, uint32_t screenHeight);
-    std::shared_ptr<Framebuffer> peekFramebuffer();
+    std::optional<Graphics> createGraphics(uint32_t width, uint32_t height, uint32_t samples = 0);
+    void blitGraphicsToScreen(const Graphics& graphics, uint32_t screenWidth, uint32_t screenHeight);
+    Graphics peekGraphics();
 } // namespace p5
 
 namespace p5
@@ -736,16 +736,10 @@ namespace p5
         uint32_t width;
         uint32_t height;
         std::vector<color_t> data;
+
+        color_t get(int32_t x, int32_t y) const;
+        void set(int32_t x, int32_t y, color_t color);
     };
-
-    color_t getPixel(const Pixels& pixels, int32_t x, int32_t y);
-    void setPixel(Pixels& pixels, int32_t x, int32_t y, color_t color);
-
-    Pixels loadPixels(const Texture& texture);
-    void updatePixels(Texture& texture, const Pixels& pixels);
-
-    Pixels loadPixels(const Framebuffer& framebuffer);
-    void updatePixels(Framebuffer& framebuffer, const Pixels& pixels);
 
     struct PixelReaderSlot
     {
@@ -775,8 +769,6 @@ namespace p5
 
 namespace p5
 {
-    struct Font;
-
     enum class TextAlignment
     {
         topLeft,
@@ -821,30 +813,50 @@ namespace p5
         uint32_t contourIndex = 0;
     };
 
-    struct TextToPointsOptions
+    // FontImpl is the actual, swappable font backend (currently only FreeTypeHarfBuzzFont, kept
+    // private) -- Font itself is just a cheap, copyable handle around it, so multiple sketch-side
+    // holders (a DrawState's textFont, a sketch member, a TextToPointsOptions override, ...) can
+    // share one loaded font without needing shared_ptr<Font> wrapping at every call site.
+    struct FontImpl
     {
-        float sampleFactor = 0.1f;
-        float simplifyThreshold = 0.0f;
-        Font* font = nullptr;
-        std::optional<float> size = std::nullopt;
-        std::optional<float> letterSpacing = std::nullopt;
-    };
-
-    struct Font
-    {
-        virtual ~Font() = default;
+        virtual ~FontImpl() = default;
         virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text) const = 0;
         virtual const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) = 0;
         virtual std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) = 0;
-        virtual std::shared_ptr<Texture> getAtlasTexture() const = 0;
+        virtual Texture getAtlasTexture() const = 0;
         virtual float getUnitsPerEm() const = 0;
         virtual float getAscent() const = 0;
         virtual float getDescent() const = 0;
         virtual float getLineGap() const = 0;
     };
 
-    std::unique_ptr<Font> loadFontFromMemory(std::span<const uint8_t> data, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
-    std::unique_ptr<Font> loadFontFromFile(const std::filesystem::path& filepath, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
+    struct Font
+    {
+        std::shared_ptr<FontImpl> impl;
+
+        bool isValid() const;
+
+        std::vector<ShapedGlyph> shape(std::string_view utf8Text) const;
+        const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) const;
+        std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) const;
+        Texture getAtlasTexture() const;
+        float getUnitsPerEm() const;
+        float getAscent() const;
+        float getDescent() const;
+        float getLineGap() const;
+    };
+
+    std::optional<Font> loadFont(std::span<const uint8_t> data, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
+    std::optional<Font> loadFont(const std::filesystem::path& filepath, uint32_t atlasWidth = 1024, uint32_t atlasHeight = 1024, uint32_t atlasEmPixels = 128);
+
+    struct TextToPointsOptions
+    {
+        float sampleFactor = 0.1f;
+        float simplifyThreshold = 0.0f;
+        std::optional<Font> font = std::nullopt;
+        std::optional<float> size = std::nullopt;
+        std::optional<float> letterSpacing = std::nullopt;
+    };
 } // namespace p5
 
 namespace p5
@@ -876,9 +888,9 @@ namespace p5
 
 namespace p5
 {
-    void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, bool extend = true);
-    void popFramebuffer();
-    const uint2& getFramebufferSize();
+    void pushGraphics(Graphics graphics, bool extend = true);
+    void popGraphics();
+    uint2 getGraphicsSize();
     float getWidth();
     float getHeight();
 
@@ -919,7 +931,7 @@ namespace p5
     void clip(float x, float y, float width, float height);
     void noClip();
 
-    void shader(std::shared_ptr<Shader> shader);
+    void shader(Shader shader);
     void noShader();
 
     void background(color_t color);
@@ -947,10 +959,12 @@ namespace p5
     void textureUVMode(TextureUVMode mode);
     void textureFilter(TextureFilter filter);
     void textureWrap(TextureWrap wrap);
-    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height);
-    void image(std::shared_ptr<Texture> texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
+    void image(Texture texture, float left, float top, float width, float height);
+    void image(Texture texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
+    void image(const Graphics& graphics, float left, float top, float width, float height);
+    void image(const Graphics& graphics, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
-    void textFont(std::shared_ptr<Font> font);
+    void textFont(Font font);
     void noTextFont();
     void textSize(float pixels);
     void textAlign(TextAlignment alignment);
@@ -967,13 +981,13 @@ namespace p5
 
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
-    template <std::invocable Func> void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func);
+    template <std::invocable Func> void withGraphics(Graphics graphics, Func&& func, bool extend = true);
     template <std::invocable Func> void withState(Func&& func, bool extend = true);
     template <std::invocable Func> void withMatrix(Func&& func, bool extend = true);
     template <std::invocable Func> void with(Func&& func, bool extend = true);
     template <std::invocable Func> void withClip(float x, float y, float width, float height, Func&& func);
-    template <std::invocable Func> void withShader(std::shared_ptr<Shader> shader, Func&& func);
-    template <std::invocable Func> void withFont(std::shared_ptr<Font> font, Func&& func);
+    template <std::invocable Func> void withShader(Shader shader, Func&& func);
+    template <std::invocable Func> void withFont(Font font, Func&& func);
 } // namespace p5
 
 namespace p5
@@ -1374,14 +1388,14 @@ namespace p5
 namespace p5
 {
     template <std::invocable Func>
-    inline void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func, bool extend)
+    inline void withGraphics(Graphics graphics, Func&& func, bool extend)
     {
         try {
-            pushFramebuffer(std::move(framebuffer), extend);
+            pushGraphics(graphics, extend);
             func();
-            popFramebuffer();
+            popGraphics();
         } catch (...) {
-            popFramebuffer();
+            popGraphics();
             throw;
         }
     }
@@ -1439,10 +1453,10 @@ namespace p5
     }
 
     template <std::invocable Func>
-    inline void withShader(std::shared_ptr<Shader> shader, Func&& func)
+    inline void withShader(Shader shader, Func&& func)
     {
         try {
-            p5::shader(std::move(shader));
+            p5::shader(shader);
             func();
             noShader();
         } catch (...) {
@@ -1452,10 +1466,10 @@ namespace p5
     }
 
     template <std::invocable Func>
-    inline void withFont(std::shared_ptr<Font> font, Func&& func)
+    inline void withFont(Font font, Func&& func)
     {
         try {
-            textFont(std::move(font));
+            textFont(font);
             func();
             noTextFont();
         } catch (...) {
