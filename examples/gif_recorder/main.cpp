@@ -15,12 +15,15 @@ struct GifRecorderExample : Sketch
     //     x = value;
     // });
 
-    SequentialTransitionComposite seq = sequential({
+    RepeatingTransitionComposite seq = repeating(sequential({
         waitUntil([](float) {
             return isMouseButtonPressed(MouseButton::Left);
         }),
         intercept([this]() {
-            saveGif("pretty_animation.gif", 4.0f, 30);
+            // Use 15fps instead of 30 for smoother playback.
+            // Higher fps = more glReadPixels calls per second → more GPU stalls.
+            // At 15fps on a 400x400 canvas: ~2 blocking readbacks/sec — much less stutter.
+            saveGif("pretty_animation.gif", 4.0f, 15);
         }),
         tween(1.0f, curves::easeInOutSine, [this](float progress) {
             x = lerp(100.0f, 300.0f, progress);
@@ -34,7 +37,7 @@ struct GifRecorderExample : Sketch
         tween(1.0f, curves::easeInOutSine, [this](float progress) {
             y = lerp(300.0f, 100.0f, progress);
         }),
-    });
+    }));
 
     void setup() override
     {
@@ -44,7 +47,8 @@ struct GifRecorderExample : Sketch
     void draw() override
     {
         // if (isKeyPressed(Key::Space)) {
-        //     saveGif("pretty_animation.gif", 3.0f, 30);
+        //     // Lower frame rate (e.g. 15) reduces stutter significantly for large canvases or long recordings.
+        //     saveGif("pretty_animation.gif", 3.0f, 15);
         // }
 
         seq.advance(getDeltaTime());

@@ -14,10 +14,10 @@ namespace p5
     public:
         Graphics();
 
-        void push();
+        void push(bool extend);
         void pop();
 
-        void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer);
+        void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, bool extend);
         void popFramebuffer();
         std::shared_ptr<Framebuffer> peekFramebuffer() const;
         const uint2& getFramebufferSize() const;
@@ -26,11 +26,11 @@ namespace p5
         Pixels loadPixels();
         void updatePixels(const Pixels& pixels);
 
-        void pushState();
+        void pushState(bool extend);
         void popState();
         DrawState& peekState();
 
-        void pushMatrix();
+        void pushMatrix(bool extend);
         void popMatrix();
         matrix4x4& peekMatrix();
         void applyMatrix(const matrix4x4& matrix);

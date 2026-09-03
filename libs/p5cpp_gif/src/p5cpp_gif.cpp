@@ -1,10 +1,16 @@
+#include "p5cpp/p5cpp.hpp"
 #include <p5cpp_gif/p5cpp_gif.hpp>
 
 #include <msf_gif.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <condition_variable>
 #include <fstream>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 namespace p5::gif
 {
@@ -29,24 +35,23 @@ namespace p5::gif
             return stream;
         }
 
-        bool feed(Pixels pixels)
+        bool feed(const Pixels& pixels)
         {
-            if (pixels.width != m_width or pixels.height != m_height) {
+            if (static_cast<uint32_t>(pixels.width) != m_width or static_cast<uint32_t>(pixels.height) != m_height) {
                 error("Recording frame size mismatch: expected {}x{}, got {}x{}", m_width, m_height, pixels.width, pixels.height);
                 return false;
             }
 
-            std::vector<uint8_t> bytes(pixels.data.size() * 4);
-            for (size_t i = 0; i < pixels.data.size(); ++i) {
-                bytes[i * 4 + 0] = getRed(pixels.data[i]);
-                bytes[i * 4 + 1] = getGreen(pixels.data[i]);
-                bytes[i * 4 + 2] = getBlue(pixels.data[i]);
-                bytes[i * 4 + 3] = getAlpha(pixels.data[i]);
+            for (uint32_t i = 0; i < pixels.width * pixels.height; ++i) {
+                color_t c = pixels.data[i];
+                m_bytes[i * 4 + 0] = getRed(c);
+                m_bytes[i * 4 + 1] = getGreen(c);
+                m_bytes[i * 4 + 2] = getBlue(c);
+                m_bytes[i * 4 + 3] = getAlpha(c);
             }
 
             const int centiSecondsPerFrame = std::max(1, static_cast<int>(std::lround(100.0f / m_framesPerSecond)));
-            const int stride = static_cast<int>(pixels.width * 4);
-            if (not msf_gif_frame_to_file(&m_gifState, bytes.data(), centiSecondsPerFrame, GIF_QUALITY, stride)) {
+            if (not msf_gif_frame_to_file(&m_gifState, m_bytes.data(), centiSecondsPerFrame, GIF_QUALITY, static_cast<int>(m_width * 4))) {
                 warn("Failed to write frame to GIF file");
                 return false;
             }
@@ -66,10 +71,12 @@ namespace p5::gif
 
     private:
         explicit GIFFileStream(const std::filesystem::path& filepath, uint32_t width, uint32_t height, float framesPerSecond)
-            : m_fileStream(filepath, std::ios::binary),
+            : m_gifState {},
+              m_fileStream(filepath, std::ios::binary),
               m_width(width),
               m_height(height),
-              m_framesPerSecond(framesPerSecond)
+              m_framesPerSecond(framesPerSecond),
+              m_bytes(width * height * 4, 0)
         {
         }
 
@@ -82,31 +89,30 @@ namespace p5::gif
             return bytesWrittenAfter - bytesWrittenBefore;
         }
 
-        MsfGifState m_gifState {};
+        MsfGifState m_gifState;
         std::ofstream m_fileStream;
         uint32_t m_width;
         uint32_t m_height;
-
         float m_framesPerSecond;
+        std::vector<uint8_t> m_bytes;
     };
 } // namespace p5::gif
 
 namespace p5::gif
 {
-    class GIFRecording
+    class GIFFrameTimer
     {
     public:
-        static std::unique_ptr<GIFRecording> create(const std::filesystem::path& filepath, const float durationInSeconds, const float framesPerSecond, const uint32_t width, const uint32_t height)
+        GIFFrameTimer(float durationInSeconds, float framesPerSecond)
+            : m_durationInSeconds(durationInSeconds),
+              m_frameIntervalInSeconds(1.0f / framesPerSecond),
+              m_elapsedTimeSinceStart(0.0f),
+              m_elapsedTimeSinceLastCapture(0.0f),
+              m_isRecordingComplete(false)
         {
-            std::unique_ptr<GIFFileStream> fileStream = GIFFileStream::create(filepath, width, height, framesPerSecond);
-            if (fileStream == nullptr) {
-                return nullptr;
-            }
-
-            return std::unique_ptr<GIFRecording>(new GIFRecording(std::move(fileStream), durationInSeconds, framesPerSecond));
         }
 
-        void update(float deltaTimeInSeconds)
+        void tryCapture(float deltaTimeInSeconds, std::invocable auto&& callback)
         {
             if (m_isRecordingComplete) {
                 return;
@@ -115,8 +121,8 @@ namespace p5::gif
             m_elapsedTimeSinceStart += deltaTimeInSeconds;
             m_elapsedTimeSinceLastCapture += deltaTimeInSeconds;
 
-            while (m_elapsedTimeSinceLastCapture >= m_frameIntervalInSeconds) {
-                captureFrame(loadPixels());
+            if (m_elapsedTimeSinceLastCapture >= m_frameIntervalInSeconds) {
+                callback();
                 m_elapsedTimeSinceLastCapture -= m_frameIntervalInSeconds;
             }
 
@@ -130,34 +136,126 @@ namespace p5::gif
             return m_isRecordingComplete;
         }
 
-        void finish()
-        {
-            m_fileStream->finish();
-        }
-
     private:
-        void captureFrame(Pixels pixels)
-        {
-            m_fileStream->feed(std::move(pixels));
-        }
-
-        explicit GIFRecording(std::unique_ptr<GIFFileStream> fileStream, float durationInSeconds, float framesPerSecond)
-            : m_durationInSeconds {durationInSeconds},
-              m_frameIntervalInSeconds {1.0f / framesPerSecond},
-              m_elapsedTimeSinceStart {0.0f},
-              m_elapsedTimeSinceLastCapture {0.0f},
-              m_isRecordingComplete {false},
-              m_fileStream {std::move(fileStream)}
-        {
-        }
-
         float m_durationInSeconds;
         float m_frameIntervalInSeconds;
         float m_elapsedTimeSinceStart;
         float m_elapsedTimeSinceLastCapture;
         bool m_isRecordingComplete;
+    };
+} // namespace p5::gif
+
+namespace p5::gif
+{
+    class AsyncGIFFrameSink
+    {
+    public:
+        static std::unique_ptr<AsyncGIFFrameSink> create(const std::filesystem::path& filepath, float durationInSeconds, float framesPerSecond, uint32_t width, uint32_t height)
+        {
+            std::unique_ptr<GIFFileStream> fileStream = GIFFileStream::create(filepath, width, height, framesPerSecond);
+            if (fileStream == nullptr) {
+                return nullptr;
+            }
+
+            return std::unique_ptr<AsyncGIFFrameSink>(new AsyncGIFFrameSink(std::move(fileStream), durationInSeconds, framesPerSecond));
+        }
+
+        ~AsyncGIFFrameSink()
+        {
+            requestStop();
+
+            if (m_thread.joinable()) {
+                m_thread.join();
+            }
+        }
+
+        void update(float deltaTimeInSeconds)
+        {
+            m_frameTimer.tryCapture(deltaTimeInSeconds, [this] {
+                captureFrame();
+            });
+
+            if (m_frameTimer.isRecordingComplete()) {
+                requestStop();
+            }
+        }
+
+        bool isRecordingComplete() const
+        {
+            return m_finished.load(std::memory_order_acquire);
+        }
+
+    private:
+        explicit AsyncGIFFrameSink(std::unique_ptr<GIFFileStream> fileStream, float durationInSeconds, float framesPerSecond)
+            : m_queue {},
+              m_cv {},
+              m_stopping {false},
+              m_finished {false},
+              m_fileStream {std::move(fileStream)},
+              m_frameTimer {durationInSeconds, framesPerSecond},
+              m_mutex {},
+              m_thread {&AsyncGIFFrameSink::workerLoop, this}
+        {
+        }
+
+        void captureFrame()
+        {
+            Pixels pixels = loadPixels();
+            {
+                std::lock_guard lock(m_mutex);
+                m_queue.push(std::move(pixels));
+            }
+            m_cv.notify_one();
+        }
+
+        void requestStop()
+        {
+            {
+                std::lock_guard lock(m_mutex);
+                if (m_stopping) {
+                    return;
+                }
+                m_stopping = true;
+            }
+            m_cv.notify_one();
+        }
+
+        void workerLoop()
+        {
+            while (true) {
+                Pixels pixels;
+
+                {
+                    std::unique_lock lock(m_mutex);
+                    m_cv.wait(lock, [this] {
+                        return not m_queue.empty() or m_stopping;
+                    });
+
+                    if (m_queue.empty() and m_stopping) {
+                        break;
+                    }
+
+                    pixels = std::move(m_queue.front());
+                    m_queue.pop();
+                }
+
+                m_fileStream->feed(pixels);
+            }
+
+            m_fileStream->finish();
+            m_finished.store(true, std::memory_order_release);
+        }
+
+        std::queue<Pixels> m_queue;
+        std::condition_variable m_cv;
+        std::atomic<bool> m_stopping;
+        std::atomic<bool> m_finished;
 
         std::unique_ptr<GIFFileStream> m_fileStream;
+        GIFFrameTimer m_frameTimer;
+
+        std::mutex m_mutex;
+        std::thread m_thread;
     };
 } // namespace p5::gif
 
@@ -168,7 +266,7 @@ namespace p5::gif
     public:
         bool insertRecording(const std::filesystem::path& filepath, float recordingDurationInSeconds, int frameRatePerSecond)
         {
-            std::shared_ptr<GIFRecording> recording = GIFRecording::create(filepath, recordingDurationInSeconds, frameRatePerSecond, getWidth(), getHeight());
+            std::shared_ptr<AsyncGIFFrameSink> recording = AsyncGIFFrameSink::create(filepath, recordingDurationInSeconds, frameRatePerSecond, getWidth(), getHeight());
             if (recording == nullptr) {
                 return false;
             }
@@ -182,11 +280,10 @@ namespace p5::gif
             const float deltaTimeInSeconds = static_cast<float>(getDeltaTime());
 
             for (auto itr = m_recordings.begin(); itr != m_recordings.end();) {
-                std::shared_ptr<GIFRecording>& recording = *itr;
+                std::shared_ptr<AsyncGIFFrameSink>& recording = *itr;
                 recording->update(deltaTimeInSeconds);
 
                 if (recording->isRecordingComplete()) {
-                    recording->finish();
                     itr = m_recordings.erase(itr);
                 } else {
                     ++itr;
@@ -194,8 +291,32 @@ namespace p5::gif
             }
         }
 
+        void drawRecordingOverlay()
+        {
+            const bool isRecording = not m_recordings.empty();
+            if (not isRecording) {
+                return;
+            }
+
+            with(
+                [] {
+                    textSize(24.0f);
+                    fill(rgba(255));
+                    noStroke();
+                    textAlign(TextAlignment::topLeft);
+                    text("Recording Gif ...", 40.0f, 10.0f);
+
+                    stroke(rgba(255));
+                    strokeWeight(2.0f);
+                    fill(rgba(100.0f + (std::sin(getGlobalTime() * 10.0f) * 0.5f + 0.5f) * (255.0f - 100.0f), 0, 0));
+                    circle(20.0f, 22.5f, 10.0f);
+                },
+                false
+            );
+        }
+
     private:
-        std::vector<std::shared_ptr<GIFRecording>> m_recordings;
+        std::vector<std::shared_ptr<AsyncGIFFrameSink>> m_recordings;
     };
 } // namespace p5::gif
 
@@ -235,6 +356,7 @@ namespace p5::gif
             next();
 
             recorder->updateRecordings();
+            recorder->drawRecordingOverlay();
         }
 
         void destroy(Context& context, const Next& next) override

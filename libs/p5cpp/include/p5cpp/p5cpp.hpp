@@ -732,8 +732,8 @@ namespace p5
 {
     struct Pixels
     {
-        uint32_t width = 0;
-        uint32_t height = 0;
+        uint32_t width;
+        uint32_t height;
         std::vector<color_t> data;
     };
 
@@ -850,7 +850,7 @@ namespace p5
 
 namespace p5
 {
-    void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer);
+    void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, bool extend = true);
     void popFramebuffer();
     const uint2& getFramebufferSize();
     float getWidth();
@@ -864,12 +864,12 @@ namespace p5
     Pixels loadPixels();
     void updatePixels(const Pixels& pixels);
 
-    void push();
+    void push(bool extend = true);
     void pop();
 
-    void pushState();
+    void pushState(bool extend = true);
     void popState();
-    void pushMatrix();
+    void pushMatrix(bool extend = true);
     void popMatrix();
     void setMatrix(const matrix4x4& matrix);
     void applyMatrix(const matrix4x4& matrix);
@@ -942,9 +942,9 @@ namespace p5
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     template <std::invocable Func> void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func);
-    template <std::invocable Func> void withState(Func&& func);
-    template <std::invocable Func> void withMatrix(Func&& func);
-    template <std::invocable Func> void with(Func&& func);
+    template <std::invocable Func> void withState(Func&& func, bool extend = true);
+    template <std::invocable Func> void withMatrix(Func&& func, bool extend = true);
+    template <std::invocable Func> void with(Func&& func, bool extend = true);
     template <std::invocable Func> void withClip(float x, float y, float width, float height, Func&& func);
     template <std::invocable Func> void withShader(std::shared_ptr<Shader> shader, Func&& func);
     template <std::invocable Func> void withFont(std::shared_ptr<Font> font, Func&& func);
@@ -1348,10 +1348,10 @@ namespace p5
 namespace p5
 {
     template <std::invocable Func>
-    inline void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func)
+    inline void withFramebuffer(std::shared_ptr<Framebuffer> framebuffer, Func&& func, bool extend)
     {
         try {
-            pushFramebuffer(std::move(framebuffer));
+            pushFramebuffer(std::move(framebuffer), extend);
             func();
             popFramebuffer();
         } catch (...) {
@@ -1361,10 +1361,10 @@ namespace p5
     }
 
     template <std::invocable Func>
-    inline void withState(Func&& func)
+    inline void withState(Func&& func, bool extend)
     {
         try {
-            pushState();
+            pushState(extend);
             func();
             popState();
         } catch (...) {
@@ -1374,10 +1374,10 @@ namespace p5
     }
 
     template <std::invocable Func>
-    inline void withMatrix(Func&& func)
+    inline void withMatrix(Func&& func, bool extend)
     {
         try {
-            pushMatrix();
+            pushMatrix(extend);
             func();
             popMatrix();
         } catch (...) {
@@ -1387,10 +1387,10 @@ namespace p5
     }
 
     template <std::invocable Func>
-    inline void with(Func&& func)
+    inline void with(Func&& func, bool extend)
     {
         try {
-            push();
+            push(extend);
             func();
             pop();
         } catch (...) {

@@ -166,10 +166,10 @@ namespace p5
     {
     }
 
-    void Graphics::push()
+    void Graphics::push(const bool extend)
     {
-        pushState();
-        pushMatrix();
+        pushState(extend);
+        pushMatrix(extend);
     }
 
     void Graphics::pop()
@@ -178,12 +178,12 @@ namespace p5
         popState();
     }
 
-    void Graphics::pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer)
+    void Graphics::pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, const bool extend)
     {
         m_renderer->end();
         m_renderer->begin(framebuffer);
         m_framebufferStack.push(std::move(framebuffer));
-        push();
+        push(extend);
     }
 
     void Graphics::popFramebuffer()
@@ -243,9 +243,9 @@ namespace p5
         p5::updatePixels(*framebuffer, pixels);
     }
 
-    void Graphics::pushState()
+    void Graphics::pushState(const bool extend)
     {
-        m_stateStack.push(peekState());
+        m_stateStack.push(extend ? peekState() : DrawState {});
     }
 
     void Graphics::popState()
@@ -258,9 +258,9 @@ namespace p5
         return m_stateStack.peek();
     }
 
-    void Graphics::pushMatrix()
+    void Graphics::pushMatrix(const bool extend)
     {
-        m_matrixStack.push(peekMatrix());
+        m_matrixStack.push(extend ? peekMatrix() : identityMatrix());
     }
 
     void Graphics::popMatrix()
@@ -753,7 +753,7 @@ namespace p5
 
     void Graphics::bezier(float x1, float y1, float controlX1, float controlY1, float controlX2, float controlY2, float x2, float y2)
     {
-        pushState();
+        pushState(true);
         noFill();
         beginShape(ShapeMode::path);
         vertex(x1, y1);
@@ -764,7 +764,7 @@ namespace p5
 
     void Graphics::curve(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4)
     {
-        pushState();
+        pushState(true);
         noFill();
         beginShape(ShapeMode::path);
         curveVertex(x1, y1);

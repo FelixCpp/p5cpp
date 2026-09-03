@@ -23,7 +23,7 @@ namespace p5
 
         recreateDefaultFramebuffer();
 
-        m_graphics->pushFramebuffer(m_defaultFramebuffer);
+        m_graphics->pushFramebuffer(m_defaultFramebuffer, true);
         next();
         m_graphics->popFramebuffer();
     }
@@ -44,7 +44,7 @@ namespace p5
 
     void GraphicsPlugin::draw(Context& context, const Next& next)
     {
-        m_graphics->pushFramebuffer(m_defaultFramebuffer);
+        m_graphics->pushFramebuffer(m_defaultFramebuffer, true);
         next();
         m_graphics->popFramebuffer();
 

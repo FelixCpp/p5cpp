@@ -18,7 +18,7 @@ namespace p5
         }
     } // namespace
 
-    void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer) { graphics().pushFramebuffer(std::move(framebuffer)); }
+    void pushFramebuffer(std::shared_ptr<Framebuffer> framebuffer, bool extend) { graphics().pushFramebuffer(std::move(framebuffer), extend); }
     void popFramebuffer() { graphics().popFramebuffer(); }
     const uint2& getFramebufferSize() { return graphics().getFramebufferSize(); }
     float getWidth() { return static_cast<float>(graphics().getFramebufferSize().x); }
@@ -28,11 +28,11 @@ namespace p5
     void flush() { graphics().flush(); }
     Pixels loadPixels() { return graphics().loadPixels(); }
     void updatePixels(const Pixels& pixels) { graphics().updatePixels(pixels); }
-    void push() { graphics().push(); }
+    void push(bool extend) { graphics().push(extend); }
     void pop() { graphics().pop(); }
-    void pushState() { graphics().pushState(); }
+    void pushState(bool extend) { graphics().pushState(extend); }
     void popState() { graphics().popState(); }
-    void pushMatrix() { graphics().pushMatrix(); }
+    void pushMatrix(bool extend) { graphics().pushMatrix(extend); }
     void popMatrix() { graphics().popMatrix(); }
     void applyMatrix(const matrix4x4& matrix) { graphics().applyMatrix(matrix); }
     void setMatrix(const matrix4x4& matrix) { graphics().setMatrix(matrix); }
