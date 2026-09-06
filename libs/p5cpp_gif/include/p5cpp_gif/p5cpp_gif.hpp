@@ -2,30 +2,82 @@
 
 #include <p5cpp/p5cpp.hpp>
 
+#include <functional>
+#include <optional>
+#include <span>
+#include <variant>
+
 namespace p5::gif
 {
-    // Records the canvas for recordingDurationInSeconds and writes it to path as an animated GIF,
-    // sampling one frame every 1/frameRatePerSecond seconds. Mirrors p5.js's saveGif(), except it
-    // writes straight to a file instead of triggering a browser download.
-    //
-    // Call this once (e.g. on a key press) to arm a recording; the actual capturing happens over the
-    // following frames' draw() calls, and the GIF is encoded and flushed to path once the duration has
-    // elapsed. Returns true once the recording has been armed, not once the file has finished writing.
-    //
-    // Performance note: frame capture reads the framebuffer back asynchronously (via
-    // requestPixelReadback()/pollPixelReadback(), backed by a small ring of fenced Pixel Buffer
-    // Objects), so it does not stall the render thread the way a direct
-    // glGetTexImage()/loadPixels() call would. In exchange, a
-    // captured frame reaches the encoder roughly one to a few frames after it was requested; on a
-    // sufficiently overloaded GPU/large canvas, an undrained readback can be dropped rather than
-    // captured (a frame is lost, but the render thread still never blocks). The recording still
-    // finishes only once every requested frame has actually been drained, so the file's total
-    // length is unaffected -- only the tail end lands slightly after recordingDurationInSeconds
-    // elapses.
-    //
-    // Returns false (and logs an error) if a recording is already in progress, path/duration/frame rate
-    // are invalid, or createGIFRecorderPlugin() was never registered in the sketch's plugin list.
-    bool saveGif(const std::filesystem::path& path, float recordingDurationInSeconds, int frameRatePerSecond = 15);
 
+    struct RecordForFrameCount
+    {
+        size_t frameCount;
+    };
+
+    struct RecordForSeconds
+    {
+        float seconds;
+    };
+
+    using RecordUntilCondition = std::function<bool(float elapsedTimeInSeconds)>;
+
+    struct RecordUntil
+    {
+        RecordUntilCondition condition;
+    };
+
+    using GifStopCondition = std::variant<RecordForFrameCount, RecordForSeconds, RecordUntil>;
+
+    constexpr RecordForFrameCount recordForFrames(size_t frameCount);
+    constexpr RecordForSeconds recordForSeconds(float seconds);
+    RecordUntil recordUntil(RecordUntilCondition condition);
+
+    struct GifRecordingOptions
+    {
+        float framesPerSecond = 30.0f;
+    };
+
+    struct GifRecordingResource;
+    struct GifRecording
+    {
+        std::shared_ptr<GifRecordingResource> resource;
+
+        bool operator==(const GifRecording&) const = default;
+        bool isValid() const;
+        bool isActive() const;
+        std::optional<float> getProgress() const;
+        void cancel();
+    };
+
+    std::optional<GifRecording> recordGif(const std::filesystem::path& path, const GifStopCondition& condition, const GifRecordingOptions& options = {});
     std::unique_ptr<Plugin> createGIFRecorderPlugin();
+
+    struct GifRecordingStatus
+    {
+        std::string label;
+        std::optional<float> progress; // nullopt for RecordUntil recordings -- no known endpoint
+    };
+
+    using GifRecordingOverlayCallback = std::function<void(std::span<const GifRecordingStatus> recordings)>;
+    void defaultGifRecordingOverlay(std::span<const GifRecordingStatus> recordings);
+    void setGifRecordingOverlayCallback(GifRecordingOverlayCallback callback);
+} // namespace p5::gif
+
+namespace p5::gif
+{
+    inline constexpr RecordForFrameCount recordForFrames(size_t frameCount)
+    {
+        return {.frameCount = frameCount};
+    }
+
+    inline constexpr RecordForSeconds recordForSeconds(float seconds)
+    {
+        return {.seconds = seconds};
+    }
+
+    inline RecordUntil recordUntil(RecordUntilCondition condition)
+    {
+        return {.condition = std::move(condition)};
+    }
 } // namespace p5::gif

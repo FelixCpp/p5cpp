@@ -1,4 +1,3 @@
-add_subdirectory(animation_test)
 add_subdirectory(audio_visualizer)
 add_subdirectory(bubble_words)
 add_subdirectory(disco_grid)

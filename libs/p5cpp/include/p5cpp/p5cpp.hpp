@@ -629,11 +629,6 @@ namespace p5
         bool isValid() const;
 
         int32_t getUniformLocation(std::string_view name) const;
-        void setUniform(std::string_view name, float value);
-        void setUniform(std::string_view name, const float2& value);
-        void setUniform(std::string_view name, const float3& value);
-        void setUniform(std::string_view name, const float4& value);
-        void setUniform(std::string_view name, const matrix4x4& value);
     };
 
     std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
@@ -645,14 +640,21 @@ namespace p5
     //   vec4 effect(vec4 color, sampler2D image, vec2 texCoord, vec2 screenCoord) { ... }
     //
     // called once per fragment; its return value becomes the fragment's output color. Extra uniforms the
-    // effect needs can be declared directly in effectSource (e.g. `uniform float u_Time;`) and set from
-    // C++ via setUniform() as usual. For full control over the vertex stage too, use the two-argument
-    // loadShaderFromMemory(vertexShaderSource, fragmentShaderSource) overload instead.
+    // effect needs can be declared directly in effectSource (e.g. `uniform float u_Time;`) and set after
+    // activating the shader via shader(), using the free setUniform() functions below. For full control
+    // over the vertex stage too, use the two-argument loadShaderFromMemory(vertexShaderSource,
+    // fragmentShaderSource) overload instead.
     std::optional<Shader> loadShaderFromMemory(std::string_view effectSource);
 
     // Same effect-shader shortcut as the single-argument loadShaderFromMemory(), but reading
     // effectSource from a file instead of a string already in memory.
     std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath);
+
+    void setUniform(std::string_view name, float value);
+    void setUniform(std::string_view name, const float2& value);
+    void setUniform(std::string_view name, const float3& value);
+    void setUniform(std::string_view name, const float4& value);
+    void setUniform(std::string_view name, const matrix4x4& value);
 } // namespace p5
 
 namespace p5

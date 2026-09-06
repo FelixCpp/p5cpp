@@ -62,6 +62,11 @@ namespace p5
 
         void shader(Shader shader);
         void noShader();
+        void setUniform(std::string_view name, float value);
+        void setUniform(std::string_view name, const float2& value);
+        void setUniform(std::string_view name, const float3& value);
+        void setUniform(std::string_view name, const float4& value);
+        void setUniform(std::string_view name, const matrix4x4& value);
 
         void background(color_t color);
         void rect(float left, float top, float width, float height);

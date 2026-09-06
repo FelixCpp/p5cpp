@@ -66,6 +66,37 @@ namespace p5
 
             return result;
         }
+
+        bool isConvexPolygon(const std::span<const float2>& positions)
+        {
+            const size_t count = positions.size();
+            if (count < 3)
+                return false;
+
+            constexpr float epsilon = 1e-6f;
+            int sign = 0;
+            for (size_t i = 0; i < count; ++i) {
+                const float2& prev = positions[(i + count - 1) % count];
+                const float2& curr = positions[i];
+                const float2& next = positions[(i + 1) % count];
+
+                const float2 edge1 {curr.x - prev.x, curr.y - prev.y};
+                const float2 edge2 {next.x - curr.x, next.y - curr.y};
+                const float cross = edge1.x * edge2.y - edge1.y * edge2.x;
+
+                if (std::abs(cross) < epsilon)
+                    continue;
+
+                const int crossSign = cross > 0.0f ? 1 : -1;
+                if (sign == 0) {
+                    sign = crossSign;
+                } else if (crossSign != sign) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
     } // namespace
 
     void tesselate_triangle(VertexSink& sink, const std::span<const float2, 3>& positions, const std::span<const float2, 3>& texCoords, const std::span<const float4, 3>& colors)
@@ -177,6 +208,11 @@ namespace p5
                 error("tesselate_polygon: non-finite vertex position, texCoord, or color; skipping shape");
                 return;
             }
+        }
+
+        if (isConvexPolygon(positions)) {
+            tesselate_triangle_fan(sink, positions, texCoords, colors);
+            return;
         }
 
         constexpr size_t channelCount = 6; // texCoord.x, texCoord.y, color.r, color.g, color.b, color.a

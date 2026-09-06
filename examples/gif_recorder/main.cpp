@@ -10,20 +10,9 @@ struct GifRecorderExample : Sketch
 {
     float x = 100.0f;
     float y = 100.0f;
-
-    // ValueTweenTransition<float> f = valueTween(0.0f, 400.0f, 2.0f, curves::easeInOutQuad, [this](const float& value) {
-    //     x = value;
-    // });
+    std::optional<GifRecording> recording;
 
     RepeatingTransitionComposite seq = repeating(sequential({
-        waitUntil([](float) {
-            return isMouseButtonPressed(MouseButton::Left);
-        }),
-        intercept([this]() {
-            // Capture no longer blocks the render thread (see AsyncPixelReader), so fps mainly
-            // trades off file size/encode cost vs. playback smoothness now, not render stutter.
-            saveGif("pretty_animation.gif", 4.0f, 15);
-        }),
         tween(1.0f, curves::easeInOutSine, [this](float progress) {
             x = lerp(100.0f, 300.0f, progress);
         }),
@@ -45,10 +34,13 @@ struct GifRecorderExample : Sketch
 
     void draw() override
     {
-        // if (isKeyPressed(Key::Space)) {
-        //     // Lower frame rate (e.g. 15) reduces stutter significantly for large canvases or long recordings.
-        //     saveGif("pretty_animation.gif", 3.0f, 15);
-        // }
+        if (isMouseButtonPressed(MouseButton::Left) and not recording.has_value()) {
+            recording = recordGif("pretty_animation.gif", recordForSeconds(4.0f), {.framesPerSecond = 15.0f});
+        }
+
+        if (recording.has_value() and recording->isActive() and isMouseButtonPressed(MouseButton::Right)) {
+            recording->cancel();
+        }
 
         seq.advance(getDeltaTime());
 

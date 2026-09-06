@@ -2,6 +2,8 @@
 
 #include <p5cpp/p5cpp.hpp>
 
+#include <vector>
+
 namespace p5
 {
     struct BuiltShape
@@ -32,13 +34,11 @@ namespace p5
         bool m_isBuilding;
         ShapeMode m_mode;
 
-        std::unique_ptr<float2[]> m_positions;
-        std::unique_ptr<float2[]> m_texCoords;
-        std::unique_ptr<color_t[]> m_fillColors;
-        std::unique_ptr<color_t[]> m_strokeColors;
-        size_t m_vertexCount;
-        size_t m_vertexCapacity;
+        std::vector<float2> m_positions;
+        std::vector<float2> m_texCoords;
+        std::vector<color_t> m_fillColors;
+        std::vector<color_t> m_strokeColors;
 
-        std::vector<float2> m_curvePoints; // raw points passed to curveVertex(), before Catmull-Rom subdivision
+        std::vector<float2> m_curvePoints;
     };
 } // namespace p5

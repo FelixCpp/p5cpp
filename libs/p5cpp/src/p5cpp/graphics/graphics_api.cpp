@@ -55,6 +55,11 @@ namespace p5
     void noClip() { canvas().noClip(); }
     void shader(Shader shader) { canvas().shader(shader); }
     void noShader() { canvas().noShader(); }
+    void setUniform(std::string_view name, float value) { canvas().setUniform(name, value); }
+    void setUniform(std::string_view name, const float2& value) { canvas().setUniform(name, value); }
+    void setUniform(std::string_view name, const float3& value) { canvas().setUniform(name, value); }
+    void setUniform(std::string_view name, const float4& value) { canvas().setUniform(name, value); }
+    void setUniform(std::string_view name, const matrix4x4& value) { canvas().setUniform(name, value); }
     void background(color_t color) { canvas().background(color); }
     void rect(float left, float top, float width, float height) { canvas().rect(left, top, width, height); }
     void rect(float left, float top, float width, float height, const BorderRadius& borderRadius) { canvas().rect(left, top, width, height, borderRadius); }

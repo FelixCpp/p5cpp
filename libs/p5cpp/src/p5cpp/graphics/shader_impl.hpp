@@ -11,7 +11,6 @@ namespace p5
     {
         uint32_t programId = 0;
         std::unordered_map<std::string, int32_t> uniformLocationCache;
-        std::unordered_map<std::string, UniformValue> uniforms;
 
         ShaderImpl() = default;
         ShaderImpl(const ShaderImpl&) = delete;

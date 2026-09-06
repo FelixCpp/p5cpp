@@ -5,10 +5,8 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <stdexcept>
 #include <cassert>
 #include <limits>
-#include <string>
 #include <type_traits>
 
 namespace p5
@@ -120,10 +118,10 @@ namespace p5
         : m_vao(vao),
           m_vbo(vbo),
           m_ebo(ebo),
-          m_vertices(std::make_unique<Vertex[]>(maxVertexCount)),
-          m_indices(std::make_unique<uint32_t[]>(maxIndexCount)),
-          m_maxVertexCount(maxVertexCount),
-          m_maxIndexCount(maxIndexCount),
+          m_vertices(maxVertexCount),
+          m_indices(maxIndexCount),
+          m_uploadedVertexCapacity(maxVertexCount),
+          m_uploadedIndexCapacity(maxIndexCount),
           m_currentVertexOffset(0),
           m_currentIndexOffset(0)
     {
@@ -177,10 +175,10 @@ namespace p5
         glBindVertexArray(m_vao);
 
         glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_currentVertexOffset * sizeof(Vertex)), m_vertices.get());
+        glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_currentVertexOffset * sizeof(Vertex)), m_vertices.data());
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_currentIndexOffset * sizeof(uint32_t)), m_indices.get());
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(m_currentIndexOffset * sizeof(uint32_t)), m_indices.data());
 
         for (const RendererBatch& batch : m_batches) {
             apply(batch.blendMode);
@@ -256,18 +254,34 @@ namespace p5
 
     void Renderer::appendVertex(const Vertex& vertex)
     {
-        if (m_currentVertexOffset >= m_maxVertexCount)
-            throw std::runtime_error("Renderer: vertex buffer capacity (" + std::to_string(m_maxVertexCount) + ") exceeded; increase initialMaxVertices");
+        if (m_currentVertexOffset >= m_vertices.size()) {
+            m_vertices.resize(m_vertices.size() * 2);
+        }
 
         m_vertices[m_currentVertexOffset++] = vertex;
+
+        if (m_vertices.size() > m_uploadedVertexCapacity) {
+            glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+            glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_vertices.size() * sizeof(Vertex)), nullptr, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            m_uploadedVertexCapacity = m_vertices.size();
+        }
     }
 
     void Renderer::appendIndex(uint32_t index)
     {
-        if (m_currentIndexOffset >= m_maxIndexCount)
-            throw std::runtime_error("Renderer: index buffer capacity (" + std::to_string(m_maxIndexCount) + ") exceeded; increase initialMaxIndices");
+        if (m_currentIndexOffset >= m_indices.size()) {
+            m_indices.resize(m_indices.size() * 2);
+        }
 
         m_indices[m_currentIndexOffset++] = index;
+
+        if (m_indices.size() > m_uploadedIndexCapacity) {
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_indices.size() * sizeof(uint32_t)), nullptr, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+            m_uploadedIndexCapacity = m_indices.size();
+        }
     }
 
     void Renderer::flushIfNearCapacity()
@@ -276,13 +290,11 @@ namespace p5
         // even a modestly-sized buffer comfortably covers any single shape whose size this library
         // itself bounds (a full-circle fan or stroked path tops out in the low hundreds of vertices),
         // and scaling the margin off the actual capacity -- rather than a fixed vertex/index count --
-        // keeps this correct regardless of what size Renderer::create() was called with. It is still
-        // only a heuristic, not a hard guarantee, against a caller-supplied shape whose own vertex
-        // count is unbounded (e.g. Canvas::text() -- see its per-chunk submission, added precisely
-        // because a long paragraph could otherwise overrun this margin) or exceptionally large (an
-        // extremely long user beginShape()/vertex() path); write()'s doc comment covers that case.
-        const bool lowOnVertices = m_currentVertexOffset > 0 and (m_maxVertexCount - m_currentVertexOffset) < m_maxVertexCount / 4;
-        const bool lowOnIndices = m_currentIndexOffset > 0 and (m_maxIndexCount - m_currentIndexOffset) < m_maxIndexCount / 4;
+        // keeps this correct regardless of what size Renderer::create() was called with.
+        const size_t maxVertexCount = m_vertices.size();
+        const size_t maxIndexCount = m_indices.size();
+        const bool lowOnVertices = m_currentVertexOffset > 0 and (maxVertexCount - m_currentVertexOffset) < maxVertexCount / 4;
+        const bool lowOnIndices = m_currentIndexOffset > 0 and (maxIndexCount - m_currentIndexOffset) < maxIndexCount / 4;
         if (lowOnVertices or lowOnIndices)
             flush();
     }
@@ -295,17 +307,12 @@ namespace p5
         return Writer(*this, static_cast<uint32_t>(m_currentVertexOffset), m_currentIndexOffset);
     }
 
-    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader)
+    void Renderer::finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader, const std::unordered_map<std::string, UniformValue>& uniforms)
     {
         const size_t indexCount = m_currentIndexOffset - writer.m_indexOffset;
         if (indexCount == 0)
             return;
 
-        const auto& uniforms = shader.impl->uniforms;
-
-        // Uniforms live on the shader itself and are typically small maps, so comparing them for
-        // equality here is cheap; a batch extends the previous one only if every other GPU-relevant
-        // property also matches.
         if (not m_batches.empty()) {
             RendererBatch& lastBatch = m_batches.back();
             if (lastBatch.blendMode == blendMode and lastBatch.clipRect == clipRect and lastBatch.textureFilter == textureFilter and lastBatch.textureWrap == textureWrap and lastBatch.shader == shader and lastBatch.texture == texture and lastBatch.uniforms == uniforms) {

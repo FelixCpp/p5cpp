@@ -392,12 +392,40 @@ namespace p5
     void Canvas::shader(Shader shader)
     {
         DrawState& state = peekState();
+        if (not(state.shader == shader)) {
+            state.shaderUniforms.clear();
+        }
         state.shader = shader;
     }
 
     void Canvas::noShader()
     {
         shader(Shader {});
+    }
+
+    void Canvas::setUniform(std::string_view name, float value)
+    {
+        peekState().shaderUniforms[std::string(name)] = value;
+    }
+
+    void Canvas::setUniform(std::string_view name, const float2& value)
+    {
+        peekState().shaderUniforms[std::string(name)] = value;
+    }
+
+    void Canvas::setUniform(std::string_view name, const float3& value)
+    {
+        peekState().shaderUniforms[std::string(name)] = value;
+    }
+
+    void Canvas::setUniform(std::string_view name, const float4& value)
+    {
+        peekState().shaderUniforms[std::string(name)] = value;
+    }
+
+    void Canvas::setUniform(std::string_view name, const matrix4x4& value)
+    {
+        peekState().shaderUniforms[std::string(name)] = value;
     }
 
     Shader Canvas::resolveActiveShader(const Shader& fallback)
@@ -431,7 +459,7 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_quad(writer, positions, texCoords, colors);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(texture), resolveActiveShader(m_defaultFillShader));
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(texture), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
     }
 
     void Canvas::submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state)
@@ -448,7 +476,7 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader));
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
     }
 
     void Canvas::submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state)
@@ -469,7 +497,7 @@ namespace p5
             case ShapeMode::polygon:
             default: tesselate_polygon(writer, positions, texCoords, convertedColors); break;
         }
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader));
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
     }
 
     void Canvas::submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const Texture& atlasTexture, const DrawState& state)
@@ -483,7 +511,7 @@ namespace p5
         // requirement for glyph scaling (see font.cpp -- each atlas cell is baked once and reused,
         // bilinear-scaled, for every requested textSize()), not a style choice like it is for
         // image()'s user textures.
-        m_renderer->finish(writer, state.blendMode, state.clipRect, TextureFilter::linear, TextureWrap::clampToEdge, atlasTexture, resolveActiveShader(m_defaultTextShader));
+        m_renderer->finish(writer, state.blendMode, state.clipRect, TextureFilter::linear, TextureWrap::clampToEdge, atlasTexture, resolveActiveShader(m_defaultTextShader), state.shaderUniforms);
     }
 
     void Canvas::background(color_t color)

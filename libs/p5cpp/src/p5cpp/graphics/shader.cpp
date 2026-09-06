@@ -164,28 +164,4 @@ namespace p5
         return loadShaderFromMemory(contents.str());
     }
 
-    void Shader::setUniform(std::string_view name, float value)
-    {
-        impl->uniforms[std::string(name)] = value;
-    }
-
-    void Shader::setUniform(std::string_view name, const float2& value)
-    {
-        impl->uniforms[std::string(name)] = value;
-    }
-
-    void Shader::setUniform(std::string_view name, const float3& value)
-    {
-        impl->uniforms[std::string(name)] = value;
-    }
-
-    void Shader::setUniform(std::string_view name, const float4& value)
-    {
-        impl->uniforms[std::string(name)] = value;
-    }
-
-    void Shader::setUniform(std::string_view name, const matrix4x4& value)
-    {
-        impl->uniforms[std::string(name)] = value;
-    }
 } // namespace p5

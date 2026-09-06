@@ -4,6 +4,8 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <unordered_map>
 
 namespace p5
 {
@@ -31,6 +33,7 @@ namespace p5
         TextureWrap textureWrap = TextureWrap::clampToEdge;
 
         Shader shader;
+        std::unordered_map<std::string, UniformValue> shaderUniforms;
 
         Font textFont;
         float textSize = 12.0f;

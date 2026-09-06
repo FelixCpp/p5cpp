@@ -47,7 +47,16 @@ int main()
         }
 
         s_kernel->addPlugin(std::make_unique<SketchLoaderPlugin>(std::move(spec.sketch)));
-        result = s_kernel->run();
+
+        try {
+            result = s_kernel->run();
+        } catch (const std::exception& ex) {
+            error("Unhandled exception escaped Kernel::run(): {}", ex.what());
+            result = Kernel::RunResult {.shouldRestart = false, .exitCode = 1};
+        } catch (...) {
+            error("Unhandled non-standard exception escaped Kernel::run()");
+            result = Kernel::RunResult {.shouldRestart = false, .exitCode = 1};
+        }
     } while (result.shouldRestart);
 
     return result.exitCode;

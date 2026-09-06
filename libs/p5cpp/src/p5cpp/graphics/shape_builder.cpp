@@ -21,13 +21,7 @@ namespace p5
 {
     ShapeBuilder::ShapeBuilder()
         : m_isBuilding(false),
-          m_mode(ShapeMode::points),
-          m_positions(std::make_unique<float2[]>(4)),
-          m_texCoords(std::make_unique<float2[]>(4)),
-          m_fillColors(std::make_unique<color_t[]>(4)),
-          m_strokeColors(std::make_unique<color_t[]>(4)),
-          m_vertexCount(0),
-          m_vertexCapacity(4)
+          m_mode(ShapeMode::points)
     {
     }
 
@@ -40,7 +34,10 @@ namespace p5
 
         m_isBuilding = true;
         m_mode = mode;
-        m_vertexCount = 0;
+        m_positions.clear();
+        m_texCoords.clear();
+        m_fillColors.clear();
+        m_strokeColors.clear();
         m_curvePoints.clear();
     }
 
@@ -61,18 +58,13 @@ namespace p5
 
         m_isBuilding = false;
 
-        const std::span<const float2> positions {m_positions.get(), m_vertexCount};
-        const std::span<const float2> texCoords {m_texCoords.get(), m_vertexCount};
-        const std::span<const color_t> fillColors {m_fillColors.get(), m_vertexCount};
-        const std::span<const color_t> strokeColors {m_strokeColors.get(), m_vertexCount};
-
         return BuiltShape {
             .mode = m_mode,
-            .vertexCount = m_vertexCount,
-            .positions = positions,
-            .texCoords = texCoords,
-            .fillColors = fillColors,
-            .strokeColors = strokeColors
+            .vertexCount = m_positions.size(),
+            .positions = m_positions,
+            .texCoords = m_texCoords,
+            .fillColors = m_fillColors,
+            .strokeColors = m_strokeColors
         };
     }
 
@@ -88,30 +80,10 @@ namespace p5
             return;
         }
 
-        if (m_vertexCount >= m_vertexCapacity) {
-            const auto vertexCapacity = std::max(static_cast<size_t>(4), m_vertexCapacity * 2);
-            auto positions = std::make_unique<float2[]>(vertexCapacity);
-            auto texCoords = std::make_unique<float2[]>(vertexCapacity);
-            auto fillColors = std::make_unique<color_t[]>(vertexCapacity);
-            auto strokeColors = std::make_unique<color_t[]>(vertexCapacity);
-
-            std::copy(m_positions.get(), m_positions.get() + m_vertexCount, positions.get());
-            std::copy(m_texCoords.get(), m_texCoords.get() + m_vertexCount, texCoords.get());
-            std::copy(m_fillColors.get(), m_fillColors.get() + m_vertexCount, fillColors.get());
-            std::copy(m_strokeColors.get(), m_strokeColors.get() + m_vertexCount, strokeColors.get());
-
-            m_positions = std::move(positions);
-            m_texCoords = std::move(texCoords);
-            m_fillColors = std::move(fillColors);
-            m_strokeColors = std::move(strokeColors);
-            m_vertexCapacity = vertexCapacity;
-        }
-
-        m_positions[m_vertexCount] = {x, y};
-        m_texCoords[m_vertexCount] = {u, v};
-        m_fillColors[m_vertexCount] = fillColor;
-        m_strokeColors[m_vertexCount] = strokeColor;
-        ++m_vertexCount;
+        m_positions.push_back({x, y});
+        m_texCoords.push_back({u, v});
+        m_fillColors.push_back(fillColor);
+        m_strokeColors.push_back(strokeColor);
     }
 
     void ShapeBuilder::bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float endX, float endY)
@@ -121,12 +93,12 @@ namespace p5
             return;
         }
 
-        if (m_vertexCount == 0) {
+        if (m_positions.empty()) {
             error("ShapeBuilder::bezierVertex() called with no starting vertex");
             return;
         }
 
-        const float2 startPoint = m_positions[m_vertexCount - 1];
+        const float2 startPoint = m_positions.back();
         const float2 controlPoint1 = {controlX1, controlY1};
         const float2 controlPoint2 = {controlX2, controlY2};
         const float2 endPoint = {endX, endY};
@@ -137,7 +109,7 @@ namespace p5
             const float t = static_cast<float>(i) / static_cast<float>(segments);
             const float u = 1.0f - t;
             const float2 point = u * u * u * startPoint + 3.0f * u * u * t * controlPoint1 + 3.0f * u * t * t * controlPoint2 + t * t * t * endPoint;
-            vertex(point.x, point.y, m_texCoords[m_vertexCount - 1].x, m_texCoords[m_vertexCount - 1].y, m_fillColors[m_vertexCount - 1], m_strokeColors[m_vertexCount - 1]);
+            vertex(point.x, point.y, m_texCoords.back().x, m_texCoords.back().y, m_fillColors.back(), m_strokeColors.back());
         }
     }
 
@@ -148,12 +120,12 @@ namespace p5
             return;
         }
 
-        if (m_vertexCount == 0) {
+        if (m_positions.empty()) {
             error("ShapeBuilder::quadraticVertex() called with no starting vertex");
             return;
         }
 
-        const float2 startPoint = m_positions[m_vertexCount - 1];
+        const float2 startPoint = m_positions.back();
         const float2 controlPoint = {controlX, controlY};
         const float2 endPoint = {endX, endY};
 
@@ -163,7 +135,7 @@ namespace p5
             const float t = static_cast<float>(i) / static_cast<float>(segments);
             const float u = 1.0f - t;
             const float2 point = u * u * startPoint + 2.0f * u * t * controlPoint + t * t * endPoint;
-            vertex(point.x, point.y, m_texCoords[m_vertexCount - 1].x, m_texCoords[m_vertexCount - 1].y, m_fillColors[m_vertexCount - 1], m_strokeColors[m_vertexCount - 1]);
+            vertex(point.x, point.y, m_texCoords.back().x, m_texCoords.back().y, m_fillColors.back(), m_strokeColors.back());
         }
     }
 
@@ -193,7 +165,7 @@ namespace p5
 
         // curveVertex() is called without a preceding vertex() (per the p5.js pattern), so seed the
         // shape's first output vertex from the Catmull-Rom segment's own start point.
-        if (m_vertexCount == 0) {
+        if (m_positions.empty()) {
             vertex(p1.x, p1.y, fillColor, strokeColor);
         }
 
@@ -203,7 +175,7 @@ namespace p5
             const float t = static_cast<float>(i) / static_cast<float>(segments);
             const float u = 1.0f - t;
             const float2 point = u * u * u * p1 + 3.0f * u * u * t * controlPoint1 + 3.0f * u * t * t * controlPoint2 + t * t * t * p2;
-            vertex(point.x, point.y, m_texCoords[m_vertexCount - 1].x, m_texCoords[m_vertexCount - 1].y, m_fillColors[m_vertexCount - 1], m_strokeColors[m_vertexCount - 1]);
+            vertex(point.x, point.y, m_texCoords.back().x, m_texCoords.back().y, m_fillColors.back(), m_strokeColors.back());
         }
     }
 } // namespace p5
