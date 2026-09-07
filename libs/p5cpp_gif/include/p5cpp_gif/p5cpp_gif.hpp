@@ -9,7 +9,6 @@
 
 namespace p5::gif
 {
-
     struct RecordForFrameCount
     {
         size_t frameCount;
@@ -51,7 +50,7 @@ namespace p5::gif
     };
 
     std::optional<GifRecording> recordGif(const std::filesystem::path& path, const GifStopCondition& condition, const GifRecordingOptions& options = {});
-    std::unique_ptr<Plugin> createGIFRecorderPlugin();
+    std::unique_ptr<Plugin> createGifRecorderPlugin();
 
     struct GifRecordingStatus
     {

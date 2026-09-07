@@ -36,9 +36,6 @@ target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 harfbuzz stb)
 target_include_directories(p5cpp PUBLIC include)
 target_include_directories(p5cpp PRIVATE src)
 
-# Scoped to the p5cpp target itself (not set globally) so it doesn't force vendored
-# dependencies like harfbuzz to build under C++23; PUBLIC so consumers linking against
-# p5cpp (e.g. the examples) inherit the requirement without redeclaring it.
 target_compile_features(p5cpp PUBLIC cxx_std_23)
 
 if (MSVC)

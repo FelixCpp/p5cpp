@@ -4,6 +4,7 @@ add_library(p5cpp_animation STATIC
 
 target_include_directories(p5cpp_animation PUBLIC include)
 target_link_libraries(p5cpp_animation PRIVATE p5cpp)
+target_compile_features(p5cpp_animation PUBLIC cxx_std_23)
 
 if (MSVC)
   target_compile_options(p5cpp_animation PRIVATE /W4)

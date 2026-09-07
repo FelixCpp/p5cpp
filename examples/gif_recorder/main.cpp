@@ -35,7 +35,7 @@ struct GifRecorderExample : Sketch
     void draw() override
     {
         if (isMouseButtonPressed(MouseButton::Left) and not recording.has_value()) {
-            recording = recordGif("pretty_animation.gif", recordForSeconds(4.0f), {.framesPerSecond = 15.0f});
+            recording = recordGif("pretty_animation.gif", recordForSeconds(10), {.framesPerSecond = 15.0f});
         }
 
         if (recording.has_value() and recording->isActive() and isMouseButtonPressed(MouseButton::Right)) {
@@ -56,7 +56,7 @@ SketchSpec p5::createSpec()
     return {
         .plugins = [] {
             std::vector<std::unique_ptr<Plugin>> plugins;
-            plugins.push_back(gif::createGIFRecorderPlugin());
+            plugins.push_back(gif::createGifRecorderPlugin());
             return plugins;
         },
         .sketch = [] {

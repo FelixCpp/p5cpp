@@ -815,10 +815,6 @@ namespace p5
         uint32_t contourIndex = 0;
     };
 
-    // FontImpl is the actual, swappable font backend (currently only FreeTypeHarfBuzzFont, kept
-    // private) -- Font itself is just a cheap, copyable handle around it, so multiple sketch-side
-    // holders (a DrawState's textFont, a sketch member, a TextToPointsOptions override, ...) can
-    // share one loaded font without needing shared_ptr<Font> wrapping at every call site.
     struct FontImpl
     {
         virtual ~FontImpl() = default;
@@ -1371,7 +1367,12 @@ namespace p5
 {
     constexpr BorderRadius BorderRadius::all(float radius)
     {
-        return BorderRadius {CornerRadius::circular(radius), CornerRadius::circular(radius), CornerRadius::circular(radius), CornerRadius::circular(radius)};
+        return BorderRadius {
+            .topLeft = CornerRadius::circular(radius),
+            .topRight = CornerRadius::circular(radius),
+            .bottomRight = CornerRadius::circular(radius),
+            .bottomLeft = CornerRadius::circular(radius),
+        };
     }
 
     constexpr BorderRadius BorderRadius::symmetric(float horizontal, float vertical)
