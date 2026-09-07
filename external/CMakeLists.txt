@@ -13,6 +13,11 @@ set(HB_BUILD_UTILS OFF CACHE BOOL "" FORCE)
 set(HB_BUILD_RASTER OFF CACHE BOOL "" FORCE)
 set(HB_BUILD_VECTOR OFF CACHE BOOL "" FORCE)
 set(HB_BUILD_GPU OFF CACHE BOOL "" FORCE)
+# We only use HarfBuzz's default OpenType shaper, not the CoreText backend.
+# Keeping it off also sidesteps a -Wcast-align error that recent macOS SDKs
+# trigger inside ApplicationServices headers, which HarfBuzz upgrades to a
+# hard error for its own translation units (see src/hb.hh).
+set(HB_HAVE_CORETEXT OFF CACHE BOOL "" FORCE)
 add_subdirectory(harfbuzz)
 
 add_library(

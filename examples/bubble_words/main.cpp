@@ -100,7 +100,7 @@ private:
     }
 };
 
-struct TextToPoints : Sketch
+struct VPainting : Sketch
 {
     static constexpr float holdDuration = 2.0f;
     static constexpr float fadeDuration = 0.6f;
@@ -163,7 +163,7 @@ SketchSpec p5::createSpec()
 {
     return {
         .sketch = [] {
-            return std::make_unique<TextToPoints>();
+            return std::make_unique<VPainting>();
         }
     };
 }
