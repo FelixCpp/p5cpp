@@ -10,16 +10,16 @@ struct VPainting : Sketch
     size_t columns;
     size_t rows;
 
-    float noiseOffsetX;
-    float noiseOffsetY;
     std::vector<float> noiseValues;
+    std::vector<color_t> monaLisaPixelColors;
+    float noiseOffsetZ = 0.0f;
 
     Graphics painting;
 
     static size_t getCellSize(size_t canvasWidth, size_t canvasHeight)
     {
         const size_t minCellSize = 10;
-        const size_t maxCellSize = 25;
+        const size_t maxCellSize = 15;
 
         const size_t cellSize = std::max(minCellSize, std::min(maxCellSize, canvasWidth / 100));
         return cellSize;
@@ -41,10 +41,7 @@ struct VPainting : Sketch
         const size_t canvasHeight = 1000;
         const size_t canvasWidth = static_cast<size_t>(canvasHeight * aspectRatio);
 
-        cellSize = getCellSize(canvasWidth, canvasHeight);
-        columns = canvasWidth / cellSize;
-        rows = canvasHeight / cellSize;
-        noiseValues = generateNoiseValues(columns, rows);
+        setWindowSize(canvasWidth, canvasHeight);
 
         if (std::optional<Graphics> graphics = createGraphics(canvasWidth, canvasHeight)) {
             painting = std::move(*graphics);
@@ -53,57 +50,68 @@ struct VPainting : Sketch
             quit(1);
         }
 
-        withGraphics(painting, [this] {
-            drawPainting(monaLisa.loadPixels());
-        });
-
-        setWindowSize(canvasWidth, canvasHeight);
+        cellSize = getCellSize(canvasWidth, canvasHeight);
+        columns = canvasWidth / cellSize;
+        rows = canvasHeight / cellSize;
+        noiseValues = generateNoiseValues(columns, rows);
+        monaLisaPixelColors = readPixelColorsFromPixels(monaLisa.loadPixels(), columns, rows);
     }
 
-    void drawPainting(const Pixels& pixels)
+    void drawPainting(std::span<const color_t> pixelColors)
     {
         for (size_t y = 0; y < rows; ++y) {
             for (size_t x = 0; x < columns; ++x) {
-                const int monaLisaPixelX = static_cast<int>((static_cast<float>(x) / static_cast<float>(columns)) * static_cast<float>(monaLisa.size.x));
-                const int monaLisaPixelY = static_cast<int>((static_cast<float>(y) / static_cast<float>(rows)) * static_cast<float>(monaLisa.size.y));
-                const color_t monaLisaPixelColor = pixels.get(monaLisaPixelX, monaLisaPixelY);
+                const color_t monaLisaPixelColor = pixelColors[y * columns + x];
                 const int screenPixelX = static_cast<int>(x * cellSize);
                 const int screenPixelY = static_cast<int>(y * cellSize);
                 const float cellCenterX = static_cast<float>(screenPixelX + static_cast<int>(cellSize) / 2);
                 const float cellCenterY = static_cast<float>(screenPixelY + static_cast<int>(cellSize) / 2);
 
-                const float noiseValue = noiseValues[y * columns + x];
-                const bool isHorizontal = noiseValue > 0.5f;
+                const float noiseValue = noiseValues.at(y * columns + x);
+                const float rotationAngle = map(noiseValue, 0.0f, 1.0f, 0.0f, TAU);
 
-                drawV(cellCenterX, cellCenterY, isHorizontal, monaLisaPixelColor);
+                drawV(cellCenterX, cellCenterY, rotationAngle, monaLisaPixelColor);
             }
         }
     }
 
     void draw() override
     {
-        background(rgba(21, 21, 31));
+        float noiseSpeed = 0.01f;
+        float noiseY = 0.0f;
+        for (size_t y = 0; y < rows; ++y) {
+            float noiseX = 0.0f;
+            for (size_t x = 0; x < columns; ++x) {
+                const size_t noiseIndex = y * columns + x;
+                noiseValues[noiseIndex] = noise(noiseX, noiseY, noiseOffsetZ);
+                noiseX += 0.005f;
+            }
+            noiseY += 0.005f;
+        }
+        noiseOffsetZ += 0.001f;
+
+        withGraphics(painting, [this] {
+            background(rgba(0));
+            drawPainting(monaLisaPixelColors);
+        });
+
         const float windowCenterX = static_cast<float>(getWidth()) * 0.5f;
         const float windowCenterY = static_cast<float>(getHeight()) * 0.5f;
         const float paintingWidth = static_cast<float>(painting.size.x);
         const float paintingHeight = static_cast<float>(painting.size.y);
-        noStroke();
-        fill(rgba(0));
-        rect(windowCenterX - paintingWidth * 0.5f, windowCenterY - paintingHeight * 0.5f, paintingWidth, paintingHeight);
         image(painting, windowCenterX - paintingWidth * 0.5f, windowCenterY - paintingHeight * 0.5f, paintingWidth, paintingHeight);
     }
 
-    void drawV(const float cellCenterX, const float cellCenterY, const bool horizontal, const color_t color)
+    void drawV(const float cellCenterX, const float cellCenterY, const float rotation, const color_t color)
     {
-        withMatrix([this, cellCenterX, cellCenterY, horizontal, color] {
+        withMatrix([this, cellCenterX, cellCenterY, rotation, color] {
             translate(cellCenterX, cellCenterY);
-            if (horizontal) {
-                rotate(radians(90.0f));
-            }
+            rotate(rotation);
 
             const float cellSpacing = 2.0f;
             const float halfCellSize = static_cast<float>(cellSize) * 0.5f - cellSpacing;
-            const float strokeWeightValue = static_cast<float>(cellSize) * 0.1f;
+            const int lumin = getLuminance(color);
+            const float strokeWeightValue = map(static_cast<float>(lumin), 0.0f, 255.0f, 0.5f, 1.5f);
 
             noFill();
             stroke(color);
@@ -132,6 +140,19 @@ struct VPainting : Sketch
             offsetY += 0.1f;
         }
         return values;
+    }
+
+    static std::vector<color_t> readPixelColorsFromPixels(const Pixels& pixels, size_t columns, size_t rows)
+    {
+        std::vector<color_t> pixelColors(columns * rows);
+        for (size_t y = 0; y < rows; ++y) {
+            for (size_t x = 0; x < columns; ++x) {
+                const int pixelX = static_cast<int>((static_cast<float>(x) / static_cast<float>(columns)) * static_cast<float>(pixels.width));
+                const int pixelY = static_cast<int>((static_cast<float>(y) / static_cast<float>(rows)) * static_cast<float>(pixels.height));
+                pixelColors[y * columns + x] = pixels.get(pixelX, pixelY);
+            }
+        }
+        return pixelColors;
     }
 };
 
