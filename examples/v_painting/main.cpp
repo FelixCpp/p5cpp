@@ -28,7 +28,7 @@ struct VPainting : Sketch
     void setup() override
     {
         setWindowResizable(false);
-        if (std::optional<Texture> texture = loadTexture("Mona-Lisa.jpg")) {
+        if (std::optional<Texture> texture = loadTexture("assets/Mona-Lisa.jpg")) {
             monaLisa = std::move(*texture);
         } else {
             error("Failed to load Mona-Lisa.jpg texture.");
