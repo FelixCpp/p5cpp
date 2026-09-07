@@ -859,7 +859,7 @@ namespace p5
 
 namespace p5
 {
-    class CornerRadius : public float2
+    class CornerRadius
     {
     public:
         static constexpr CornerRadius circular(float radius);

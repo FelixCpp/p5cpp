@@ -8,10 +8,6 @@ namespace p5
     {
         std::mt19937& rng()
         {
-            // thread_local, not a plain static: mt19937::operator() mutates the engine's internal
-            // state with no internal synchronization, so a shared instance would be a data race
-            // across threads calling random()/randomSeed() concurrently. Matches perlin_noise.cpp's
-            // existing thread_local noise state for the same reason.
             static thread_local std::mt19937 engine(std::random_device {}());
             return engine;
         }
