@@ -47,17 +47,18 @@ namespace p5::webcam
             }
         }
 
-        return std::unique_ptr<CaptureResource>(new CaptureResource(provider, std::move(supportedResolutions)));
+        return std::unique_ptr<CaptureResource>(new CaptureResource(provider, std::move(supportedResolutions), options.flipHorizontal));
     }
 
-    CaptureResource::CaptureResource(CcapProvider* provider, std::vector<WebcamResolution> supportedResolutions)
+    CaptureResource::CaptureResource(CcapProvider* provider, std::vector<WebcamResolution> supportedResolutions, bool flipHorizontal)
         : m_provider {provider},
           m_texture {},
           m_packedFrameBuffer {},
           m_supportedResolutions {std::move(supportedResolutions)},
           m_pendingWidth {0},
           m_pendingHeight {0},
-          m_hasPendingFrame {false}
+          m_hasPendingFrame {false},
+          m_flipHorizontal {flipHorizontal}
     {
     }
 
@@ -144,6 +145,15 @@ namespace p5::webcam
             for (uint32_t destRow = 0; destRow < info.height; ++destRow) {
                 const uint32_t srcRow = needsRowFlip ? (info.height - 1 - destRow) : destRow;
                 std::copy_n(info.data[0] + static_cast<size_t>(srcRow) * info.stride[0], packedRowBytes, m_packedFrameBuffer.data() + static_cast<size_t>(destRow) * packedRowBytes);
+            }
+        }
+
+        if (m_flipHorizontal) {
+            for (uint32_t row = 0; row < info.height; ++row) {
+                uint8_t* rowData = m_packedFrameBuffer.data() + static_cast<size_t>(row) * packedRowBytes;
+                for (uint32_t x = 0; x < info.width / 2; ++x) {
+                    std::swap_ranges(rowData + x * 4, rowData + x * 4 + 4, rowData + (info.width - 1 - x) * 4);
+                }
             }
         }
 

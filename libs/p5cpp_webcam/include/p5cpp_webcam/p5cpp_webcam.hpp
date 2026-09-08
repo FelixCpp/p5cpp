@@ -26,6 +26,7 @@ namespace p5::webcam
         uint32_t requestedWidth = 0;
         uint32_t requestedHeight = 0;
         float requestedFPS = 0.0f;
+        bool flipHorizontal = false;
     };
 
     struct CaptureResource;

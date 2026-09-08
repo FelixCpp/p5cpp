@@ -26,7 +26,7 @@ namespace p5::webcam
         void close();
 
     private:
-        CaptureResource(CcapProvider* provider, std::vector<WebcamResolution> supportedResolutions);
+        CaptureResource(CcapProvider* provider, std::vector<WebcamResolution> supportedResolutions, bool flipHorizontal);
 
         void pollLatestFrame();
         void uploadPendingFrame();
@@ -38,5 +38,6 @@ namespace p5::webcam
         uint32_t m_pendingWidth;
         uint32_t m_pendingHeight;
         bool m_hasPendingFrame;
+        bool m_flipHorizontal;
     };
 } // namespace p5::webcam
