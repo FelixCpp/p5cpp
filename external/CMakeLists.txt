@@ -3,6 +3,7 @@
 # dependencies without CMake support (libtess2, stb, msf_gif) get their targets
 # defined here instead, so we never write build files into a git submodule.
 
+add_subdirectory(CameraCapture)
 add_subdirectory(glfw)
 add_subdirectory(freetype)
 add_subdirectory(glad)

@@ -19,3 +19,6 @@
 [submodule "external/msf_gif"]
 	path = external/msf_gif
 	url = https://github.com/notnullnotvoid/msf_gif.git
+[submodule "external/CameraCapture"]
+	path = external/CameraCapture
+	url = https://github.com/wysaid/CameraCapture.git
