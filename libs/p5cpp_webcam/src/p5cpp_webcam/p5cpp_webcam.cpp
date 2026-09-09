@@ -113,9 +113,19 @@ namespace p5::webcam
 
 namespace p5::webcam
 {
-    Pixels Capture::loadPixels()
+    bool Capture::update()
+    {
+        return resource->update();
+    }
+
+    std::optional<ReadOnlyPixels> Capture::loadPixels()
     {
         return resource->loadPixels();
+    }
+
+    std::optional<Texture> Capture::loadTexture()
+    {
+        return resource->loadTexture();
     }
 
     std::span<const WebcamResolution> Capture::getSupportedResolutions() const

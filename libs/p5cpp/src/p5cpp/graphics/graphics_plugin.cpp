@@ -29,11 +29,10 @@ namespace p5
 
     void GraphicsPlugin::event(Context& context, const Next& next, const WindowEvent& event)
     {
-        if (event.is<WindowEvent::WindowResize>()) {
-            const auto& resize = event.as<WindowEvent::WindowResize>();
-            const auto isWindowMinimized = resize.width == 0 or resize.height == 0;
+        if (const auto* resize = event.as_if<WindowEvent::WindowResize>()) {
+            const auto isWindowMinimized = resize->width == 0 or resize->height == 0;
             if (not isWindowMinimized) {
-                m_size = uint2 {.x = resize.width, .y = resize.height};
+                m_size = uint2 {.x = resize->width, .y = resize->height};
                 recreateDefaultGraphics();
             }
         }

@@ -23,6 +23,7 @@ namespace p5
 
         next();
 
+        m_window->centerWindow();
         m_window->setVisible(true);
     }
 

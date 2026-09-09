@@ -1,18 +1,10 @@
 #include <p5cpp/input/input.hpp>
 
-namespace
-{
-    template <typename... Ts> struct Overloaded : Ts...
-    {
-        using Ts::operator()...;
-    };
-} // namespace
-
 namespace p5
 {
     void Input::process(const WindowEvent& event)
     {
-        event.visit(Overloaded {
+        event.on(
             [this](const WindowEvent::KeyPress& keyPress) {
                 m_keyDown[static_cast<size_t>(keyPress.key)] = true;
                 if (not keyPress.repeat) {
@@ -56,10 +48,7 @@ namespace p5
             },
             [this](const WindowEvent::CharInput& charInput) {
                 m_typedChars.push_back(charInput.codepoint);
-            },
-            [](const auto&) {
-            },
-        });
+            });
     }
 
     void Input::reset()

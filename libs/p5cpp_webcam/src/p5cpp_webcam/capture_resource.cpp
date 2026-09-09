@@ -35,7 +35,7 @@ namespace p5::webcam
             return nullptr;
         }
 
-        return std::unique_ptr<CaptureResource>(new CaptureResource(provider, options.flipHorizontal, options.syncToGpuTexture));
+        return std::unique_ptr<CaptureResource>(new CaptureResource(provider, options.flipHorizontal));
     }
 
     CaptureResource::~CaptureResource()
@@ -43,23 +43,23 @@ namespace p5::webcam
         close();
     }
 
-    const Pixels& CaptureResource::loadPixels()
+    bool CaptureResource::update()
     {
-        CcapVideoFrame* frame = ccap_provider_grab(m_provider, 100);
+        CcapVideoFrame* frame = ccap_provider_grab(m_provider, 500);
         if (frame == nullptr) {
-            error("CaptureResource::loadPixels(): failed to grab a frame from the underlying CameraCapture provider");
-            return m_pixels;
+            error("CaptureResource::update(): failed to grab a frame from the underlying CameraCapture provider");
+            return false;
         }
 
         CcapVideoFrameInfo frameInfo;
         if (not ccap_video_frame_get_info(frame, &frameInfo)) {
-            error("CaptureResource::loadPixels(): failed to get frame info from the underlying CameraCapture provider");
-            return m_pixels;
+            error("CaptureResource::update(): failed to get frame info from the underlying CameraCapture provider");
+            return false;
         }
 
         if (frameInfo.pixelFormat != CCAP_PIXEL_FORMAT_BGRA32) {
-            error("CaptureResource::loadPixels(): unexpected pixel format from the underlying CameraCapture provider");
-            return m_pixels;
+            error("CaptureResource::update(): unexpected pixel format from the underlying CameraCapture provider");
+            return false;
         }
 
         const int width = static_cast<int>(frameInfo.width);
@@ -73,10 +73,6 @@ namespace p5::webcam
         m_pixels.height = height;
         m_pixels.data.resize(static_cast<size_t>(packedRowBytes) * static_cast<size_t>(height));
 
-        // Convert straight into the tightly-packed destination buffer (dst stride = packedRowBytes,
-        // independent of the source's possibly-padded stride) and flip vertically in the same pass
-        // (negative height) so the camera's bottom-to-top frame ends up top-down, matching the rest
-        // of the engine's Pixels convention.
         ccap_convert_bgra_to_rgba(rawData, stride, m_pixels.data.data(), packedRowBytes, width, -height);
 
         if (m_flipHorizontal) {
@@ -91,7 +87,37 @@ namespace p5::webcam
 
         ccap_video_frame_release(frame);
 
-        return m_pixels;
+        m_hasFrame = true;
+        m_textureDirty = true;
+
+        return true;
+    }
+
+    std::optional<ReadOnlyPixels> CaptureResource::loadPixels()
+    {
+        if (not m_hasFrame) {
+            return std::nullopt;
+        }
+
+        return m_pixels.asReadOnly();
+    }
+
+    std::optional<Texture> CaptureResource::loadTexture()
+    {
+        if (not m_hasFrame) {
+            return std::nullopt;
+        }
+
+        if (m_gpuPixelStream == nullptr) {
+            m_gpuPixelStream = std::make_unique<GpuPixelStream>();
+        }
+
+        if (m_textureDirty) {
+            m_gpuPixelStream->feed(m_pixels.width, m_pixels.height, m_pixels.data);
+            m_textureDirty = false;
+        }
+
+        return m_gpuPixelStream->getTexture();
     }
 
     std::span<const WebcamResolution> CaptureResource::getSupportedResolutions()
@@ -126,9 +152,9 @@ namespace p5::webcam
         }
     }
 
-    CaptureResource::CaptureResource(CcapProvider* provider, bool flipHorizontal, bool syncToGpuTexture)
+    CaptureResource::CaptureResource(CcapProvider* provider, bool flipHorizontal)
         : m_provider {provider},
-          m_gpuPixelStream(syncToGpuTexture ? std::make_unique<GpuPixelStream>() : nullptr),
+          m_gpuPixelStream {},
           m_packedFrameBuffer {},
           m_flipHorizontal {flipHorizontal}
     {

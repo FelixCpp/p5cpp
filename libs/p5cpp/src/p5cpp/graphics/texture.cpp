@@ -164,36 +164,6 @@ namespace p5
         return result != 0;
     }
 
-    color_t Pixels::get(int32_t x, int32_t y) const
-    {
-        if (x < 0 or y < 0 or static_cast<uint32_t>(x) >= width or static_cast<uint32_t>(y) >= height) {
-            error("Pixels::get() coordinates ({}, {}) are out of bounds for {}x{} Pixels", x, y, width, height);
-            return rgba(0, 0);
-        }
-
-        const size_t index = static_cast<size_t>(y) * width + static_cast<size_t>(x);
-        return rgba(
-            data[index * 4 + 0],
-            data[index * 4 + 1],
-            data[index * 4 + 2],
-            data[index * 4 + 3]
-        );
-    }
-
-    void Pixels::set(int32_t x, int32_t y, color_t color)
-    {
-        if (x < 0 or y < 0 or static_cast<uint32_t>(x) >= width or static_cast<uint32_t>(y) >= height) {
-            error("Pixels::set() coordinates ({}, {}) are out of bounds for {}x{} Pixels", x, y, width, height);
-            return;
-        }
-
-        const size_t index = static_cast<size_t>(y) * width + static_cast<size_t>(x);
-        data[index * 4 + 0] = getRed(color);
-        data[index * 4 + 1] = getGreen(color);
-        data[index * 4 + 2] = getBlue(color);
-        data[index * 4 + 3] = getAlpha(color);
-    }
-
     Pixels Texture::loadPixels() const
     {
         if (pixelFormat != TexturePixelFormat::rgba8) {
@@ -205,14 +175,11 @@ namespace p5
         auto bytes = queryPixelData(*this);
         flipRowsVertically(bytes, width, height);
 
-        Pixels pixels {.width = width, .height = height, .data = std::move(bytes)};
-
-        // Pixels pixels {.width = width, .height = height, .data = std::vector<color_t>(static_cast<size_t>(width) * height)};
-        // for (size_t i = 0; i < pixels.data.size(); ++i) {
-        //     pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
-        // }
-
-        return pixels;
+        return Pixels {
+            .width = width,
+            .height = height,
+            .data = std::move(bytes)
+        };
     }
 
     void Texture::updatePixels(const Pixels& pixels)

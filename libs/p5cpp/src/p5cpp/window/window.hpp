@@ -25,6 +25,8 @@ namespace p5
         void setResizable(bool resizable);
         void setVisible(bool visible);
 
+        void centerWindow();
+
         void maximize();
         void minimize();
         bool isMaximized() const;

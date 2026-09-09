@@ -22,7 +22,7 @@ SpaceBeforeCpp11BracedList: true
 BinPackArguments: false
 AllowAllArgumentsOnNextLine: true
 LambdaBodyIndentation: "Signature"
-AllowShortLambdasOnASingleLine: "None"
+AllowShortLambdasOnASingleLine: "Empty"
 AllowShortBlocksOnASingleLine: "Never"
 PenaltyBreakBeforeFirstCallParameter: 0
 ContinuationIndentWidth: 4

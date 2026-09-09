@@ -27,7 +27,6 @@ namespace p5::webcam
         uint32_t requestedHeight;
         float requestedFPS;
         bool flipHorizontal = false;
-        bool syncToGpuTexture = true;
     };
 
     struct CaptureResource;
@@ -35,7 +34,14 @@ namespace p5::webcam
     {
         std::shared_ptr<CaptureResource> resource;
 
-        Pixels loadPixels();
+        // Blocks (up to 500ms) grabbing the next frame from the camera. Call this once per draw()
+        // before reading loadPixels()/loadTexture(); they never grab a frame themselves, so calling
+        // either (or both) any number of times between two update() calls just re-reads the same
+        // frame instead of hitting the camera again. Returns false if no frame could be grabbed.
+        bool update();
+
+        std::optional<ReadOnlyPixels> loadPixels();
+        std::optional<Texture> loadTexture();
         std::span<const WebcamResolution> getSupportedResolutions() const;
         void close();
     };

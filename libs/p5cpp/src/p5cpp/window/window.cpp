@@ -456,6 +456,22 @@ namespace p5
         }
     }
 
+    void Window::centerWindow()
+    {
+        if (GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor()) {
+            int monitorLeft, monitorTop, monitorWidth, monitorHeight;
+            glfwGetMonitorWorkarea(primaryMonitor, &monitorLeft, &monitorTop, &monitorWidth, &monitorHeight);
+
+            int windowWidth, windowHeight;
+            glfwGetWindowSize(m_window, &windowWidth, &windowHeight);
+
+            int windowLeft = monitorLeft + (monitorWidth - windowWidth) / 2;
+            int windowTop = monitorTop + (monitorHeight - windowHeight) / 2;
+
+            glfwSetWindowPos(m_window, windowLeft, windowTop);
+        }
+    }
+
     void Window::maximize()
     {
         glfwMaximizeWindow(m_window);

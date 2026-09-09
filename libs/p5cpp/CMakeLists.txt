@@ -19,6 +19,7 @@ add_library(
   ./src/p5cpp/graphics/graphics_stack.cpp
   ./src/p5cpp/graphics/draw_state_stack.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
+  ./src/p5cpp/graphics/pixels.cpp
   ./src/p5cpp/graphics/shader.cpp
   ./src/p5cpp/graphics/shape_builder.cpp
   ./src/p5cpp/graphics/canvas.cpp

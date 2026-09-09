@@ -208,6 +208,15 @@ namespace p5
         bool numLock;
     };
 
+    // Combines several call operators (typically lambdas) into a single overload set, for use
+    // with std::visit or WindowEvent::visit/on. A more specific (non-template) overload is
+    // preferred over a generic `(const auto&)` catch-all, so a catch-all can be listed alongside
+    // specific ones without ambiguity.
+    template <typename... Ts> struct Overloaded : Ts...
+    {
+        using Ts::operator()...;
+    };
+
     class WindowEvent
     {
     public:
@@ -339,7 +348,9 @@ namespace p5
 
         template <std::derived_from<EventTypeTag> T> constexpr bool is() const;
         template <std::derived_from<EventTypeTag> T> constexpr const T& as() const;
-        template <typename Visitor> constexpr decltype(auto) visit(Visitor&& visitor) const;
+        template <std::derived_from<EventTypeTag> T> constexpr const T* as_if() const;
+        template <typename... Visitors> constexpr decltype(auto) visit(Visitors&&... visitors) const;
+        template <typename... Visitors> constexpr void on(Visitors&&... visitors) const;
 
     private:
         EventType m_eventType;
@@ -733,14 +744,25 @@ namespace p5
 
 namespace p5
 {
-    struct Pixels
+    struct ReadOnlyPixels
     {
-        uint32_t width;
-        uint32_t height;
-        std::vector<uint8_t> data;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        std::span<const uint8_t> data;
 
         color_t get(int32_t x, int32_t y) const;
+    };
+
+    struct Pixels
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        std::vector<uint8_t> data;
+
         void set(int32_t x, int32_t y, color_t color);
+        color_t get(int32_t x, int32_t y) const;
+
+        ReadOnlyPixels asReadOnly() const;
     };
 
     struct PixelReaderSlot
@@ -1254,10 +1276,28 @@ namespace p5
         return std::get<T>(m_eventType);
     }
 
-    template <typename Visitor>
-    inline constexpr decltype(auto) WindowEvent::visit(Visitor&& visitor) const
+    template <std::derived_from<WindowEvent::EventTypeTag> T>
+    inline constexpr const T* WindowEvent::as_if() const
     {
-        return std::visit(std::forward<Visitor>(visitor), m_eventType);
+        return std::get_if<T>(&m_eventType);
+    }
+
+    template <typename... Visitors>
+    inline constexpr decltype(auto) WindowEvent::visit(Visitors&&... visitors) const
+    {
+        return std::visit(Overloaded {std::forward<Visitors>(visitors)...}, m_eventType);
+    }
+
+    template <typename... Visitors>
+    inline constexpr void WindowEvent::on(Visitors&&... visitors) const
+    {
+        std::visit(
+            Overloaded {
+                std::forward<Visitors>(visitors)...,
+                [](const auto&) {}
+            },
+            m_eventType
+        );
     }
 } // namespace p5
 

@@ -36,7 +36,9 @@ namespace p5::camera
 
 namespace p5::camera
 {
-    inline void withCamera(std::invocable auto&& func)
+    template <typename Func>
+        requires std::invocable<Func>
+    inline void withCamera(Func&& func)
     {
         try {
             beginCamera();
