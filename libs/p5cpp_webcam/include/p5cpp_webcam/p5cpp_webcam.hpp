@@ -23,10 +23,11 @@ namespace p5::webcam
 
     struct CaptureOptions
     {
-        uint32_t requestedWidth = 0;
-        uint32_t requestedHeight = 0;
-        float requestedFPS = 0.0f;
+        uint32_t requestedWidth;
+        uint32_t requestedHeight;
+        float requestedFPS;
         bool flipHorizontal = false;
+        bool syncToGpuTexture = true;
     };
 
     struct CaptureResource;
@@ -34,12 +35,7 @@ namespace p5::webcam
     {
         std::shared_ptr<CaptureResource> resource;
 
-        bool operator==(const Capture&) const = default;
-        bool isValid() const;
-        bool isFrameNew() const;
-        Texture getTexture() const;
-        Pixels getPixels() const;
-        float getFPS() const;
+        Pixels loadPixels();
         std::span<const WebcamResolution> getSupportedResolutions() const;
         void close();
     };
@@ -49,5 +45,13 @@ namespace p5::webcam
 
 namespace p5::webcam
 {
-    std::unique_ptr<Plugin> createWebcamPlugin();
+    enum class LogLevel
+    {
+        none,
+        error,
+        warning,
+        info,
+    };
+
+    std::unique_ptr<Plugin> createWebcamPlugin(LogLevel level = LogLevel::warning);
 } // namespace p5::webcam

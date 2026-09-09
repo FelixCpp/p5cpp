@@ -29,7 +29,7 @@ struct WebcamExample : Sketch
             return;
         }
 
-        std::optional<Capture> openedCapture = openCapture(1, options);
+        std::optional<Capture> openedCapture = openCapture(0, options);
         if (not openedCapture.has_value()) {
             error("Failed to open the default webcam.");
             return;

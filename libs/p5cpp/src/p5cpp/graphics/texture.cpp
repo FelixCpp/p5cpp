@@ -171,7 +171,13 @@ namespace p5
             return rgba(0, 0);
         }
 
-        return data[static_cast<size_t>(y) * width + static_cast<size_t>(x)];
+        const size_t index = static_cast<size_t>(y) * width + static_cast<size_t>(x);
+        return rgba(
+            data[index * 4 + 0],
+            data[index * 4 + 1],
+            data[index * 4 + 2],
+            data[index * 4 + 3]
+        );
     }
 
     void Pixels::set(int32_t x, int32_t y, color_t color)
@@ -181,7 +187,11 @@ namespace p5
             return;
         }
 
-        data[static_cast<size_t>(y) * width + static_cast<size_t>(x)] = color;
+        const size_t index = static_cast<size_t>(y) * width + static_cast<size_t>(x);
+        data[index * 4 + 0] = getRed(color);
+        data[index * 4 + 1] = getGreen(color);
+        data[index * 4 + 2] = getBlue(color);
+        data[index * 4 + 3] = getAlpha(color);
     }
 
     Pixels Texture::loadPixels() const
@@ -195,10 +205,12 @@ namespace p5
         auto bytes = queryPixelData(*this);
         flipRowsVertically(bytes, width, height);
 
-        Pixels pixels {.width = width, .height = height, .data = std::vector<color_t>(static_cast<size_t>(width) * height)};
-        for (size_t i = 0; i < pixels.data.size(); ++i) {
-            pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
-        }
+        Pixels pixels {.width = width, .height = height, .data = std::move(bytes)};
+
+        // Pixels pixels {.width = width, .height = height, .data = std::vector<color_t>(static_cast<size_t>(width) * height)};
+        // for (size_t i = 0; i < pixels.data.size(); ++i) {
+        //     pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
+        // }
 
         return pixels;
     }
@@ -216,13 +228,8 @@ namespace p5
             return;
         }
 
-        std::vector<uint8_t> bytes(pixels.data.size() * 4);
-        for (size_t i = 0; i < pixels.data.size(); ++i) {
-            bytes[i * 4 + 0] = getRed(pixels.data[i]);
-            bytes[i * 4 + 1] = getGreen(pixels.data[i]);
-            bytes[i * 4 + 2] = getBlue(pixels.data[i]);
-            bytes[i * 4 + 3] = getAlpha(pixels.data[i]);
-        }
+        // Pixels::data is already tightly-packed RGBA8 bytes; copy so the flip below doesn't mutate the caller's Pixels.
+        std::vector<uint8_t> bytes = pixels.data;
 
         // Pixels is top-down (see loadPixels()'s flip above); glTexSubImage2D expects the same
         // bottom-up row order queryPixelData() returns, so flip back before uploading.
@@ -330,7 +337,7 @@ namespace p5
 
         flipRowsVertically(bytes, reader.width, reader.height);
 
-        Pixels pixels {.width = reader.width, .height = reader.height, .data = std::vector<color_t>(static_cast<size_t>(reader.width) * reader.height)};
+        Pixels pixels {.width = reader.width, .height = reader.height, .data = std::move(bytes)};
         for (size_t i = 0; i < pixels.data.size(); ++i) {
             pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
         }

@@ -1,3 +1,4 @@
+#include "ccap_utils_c.h"
 #include <p5cpp_webcam/p5cpp_webcam.hpp>
 #include <p5cpp_webcam/capture_resource.hpp>
 
@@ -18,24 +19,17 @@ namespace p5::webcam
     class WebcamPlugin : public Plugin
     {
     public:
+        explicit WebcamPlugin(LogLevel level)
+            : m_logLevel(level)
+        {
+        }
+
         void setup([[maybe_unused]] Context& context, const Next& next) override
         {
             activePlugin = this;
 
-            if (not registerErrorCallback()) {
+            if (not registerErrorCallback(m_logLevel)) {
                 error("Failed to register error callback for CameraCapture library.");
-            }
-
-            m_provider = ccap_provider_create();
-            if (m_provider == nullptr) {
-                error("Failed to create CameraCapture provider.");
-                next();
-                return;
-            }
-
-            m_availableCameras = queryAvailableCameras(m_provider);
-            if (m_availableCameras.empty()) {
-                error("No available cameras found.");
             }
 
             next();
@@ -45,22 +39,44 @@ namespace p5::webcam
         {
             next();
 
-            if (m_provider != nullptr) {
-                ccap_provider_destroy(m_provider);
-                m_provider = nullptr;
-            }
-
             activePlugin = nullptr;
         }
 
-        std::span<const Webcam> getAvailableCameras() const
+        std::span<const Webcam> getAvailableCameras()
         {
+            if (m_availableCameras.empty()) {
+                CcapProvider* provider = ccap_provider_create();
+                if (provider == nullptr) {
+                    error("Failed to create CameraCapture provider.");
+                    return {};
+                }
+
+                m_availableCameras = queryAvailableCameras(provider);
+                if (m_availableCameras.empty()) {
+                    warn("No available cameras found.");
+                }
+
+                ccap_provider_destroy(provider);
+            }
+
             return m_availableCameras;
         }
 
     private:
-        static bool registerErrorCallback()
+        static bool registerErrorCallback(const LogLevel level)
         {
+            const CcapLogLevel ccapLogLevel = std::invoke([&]() {
+                switch (level) {
+                    case LogLevel::none: return CCAP_LOG_LEVEL_NONE;
+                    case LogLevel::error: return CCAP_LOG_LEVEL_ERROR;
+                    case LogLevel::warning: return CCAP_LOG_LEVEL_WARNING;
+                    case LogLevel::info: return CCAP_LOG_LEVEL_INFO;
+                    default: return CCAP_LOG_LEVEL_NONE;
+                }
+            });
+
+            ccap_set_log_level(ccapLogLevel);
+
             return ccap_set_error_callback(
                 [](CcapErrorCode errorCode, const char* errorDescription, [[maybe_unused]] void* userData) {
                     error("CameraCapture error (code {}): {}", static_cast<std::underlying_type_t<CcapErrorCode>>(errorCode), errorDescription);
@@ -77,78 +93,39 @@ namespace p5::webcam
                 return {};
             }
 
-            std::vector<Webcam> cameras;
-            cameras.reserve(deviceList.deviceCount);
+            std::vector<Webcam> webcams;
+            webcams.reserve(deviceList.deviceCount);
 
             for (size_t i = 0; i < deviceList.deviceCount; ++i) {
-                cameras.push_back({.name = std::string(deviceList.deviceNames[i]), .globalIndex = i});
+                webcams.push_back({
+                    .name = std::string(deviceList.deviceNames[i]),
+                    .globalIndex = i,
+                });
             }
 
-            return cameras;
+            return webcams;
         }
 
-        CcapProvider* m_provider = nullptr;
         std::vector<Webcam> m_availableCameras;
+        LogLevel m_logLevel;
     };
 } // namespace p5::webcam
 
 namespace p5::webcam
 {
-    bool Capture::isValid() const
+    Pixels Capture::loadPixels()
     {
-        return resource != nullptr;
-    }
-
-    bool Capture::isFrameNew() const
-    {
-        if (resource == nullptr) {
-            return false;
-        }
-
-        return resource->isFrameNew();
-    }
-
-    Texture Capture::getTexture() const
-    {
-        if (resource == nullptr) {
-            return {};
-        }
-
-        return resource->getTexture();
-    }
-
-    Pixels Capture::getPixels() const
-    {
-        if (resource == nullptr) {
-            return {};
-        }
-
-        return resource->getPixels();
-    }
-
-    float Capture::getFPS() const
-    {
-        if (resource == nullptr) {
-            return 0.0f;
-        }
-
-        return resource->getFPS();
+        return resource->loadPixels();
     }
 
     std::span<const WebcamResolution> Capture::getSupportedResolutions() const
     {
-        if (resource == nullptr) {
-            return {};
-        }
-
         return resource->getSupportedResolutions();
     }
 
     void Capture::close()
     {
-        if (resource != nullptr) {
-            resource->close();
-        }
+        resource->close();
     }
 } // namespace p5::webcam
 
@@ -177,8 +154,8 @@ namespace p5::webcam
 
 namespace p5::webcam
 {
-    std::unique_ptr<Plugin> createWebcamPlugin()
+    std::unique_ptr<Plugin> createWebcamPlugin(LogLevel level)
     {
-        return std::make_unique<WebcamPlugin>();
+        return std::make_unique<WebcamPlugin>(level);
     }
 } // namespace p5::webcam

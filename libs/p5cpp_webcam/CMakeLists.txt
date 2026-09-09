@@ -1,6 +1,7 @@
 add_library(p5cpp_webcam STATIC
   ./src/p5cpp_webcam/capture_resource.cpp
   ./src/p5cpp_webcam/p5cpp_webcam.cpp
+  ./src/p5cpp_webcam/gpu_pixel_stream.cpp
 )
 
 target_include_directories(p5cpp_webcam PUBLIC include)

@@ -2,6 +2,7 @@
 
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp_webcam/p5cpp_webcam.hpp>
+#include <p5cpp_webcam/gpu_pixel_stream.hpp>
 
 #include <ccap_c.h>
 
@@ -15,29 +16,22 @@ namespace p5::webcam
         static std::unique_ptr<CaptureResource> create(size_t deviceIndex, const CaptureOptions& options);
         ~CaptureResource();
 
-        CaptureResource(const CaptureResource&) = delete;
-        CaptureResource& operator=(const CaptureResource&) = delete;
+        const Pixels& loadPixels();
 
-        bool isFrameNew();
-        Texture getTexture();
-        Pixels getPixels();
-        float getFPS() const;
-        std::span<const WebcamResolution> getSupportedResolutions() const;
+        std::span<const WebcamResolution> getSupportedResolutions();
         void close();
 
     private:
-        CaptureResource(CcapProvider* provider, std::vector<WebcamResolution> supportedResolutions, bool flipHorizontal);
-
-        void pollLatestFrame();
-        void uploadPendingFrame();
+        explicit CaptureResource(CcapProvider* provider, bool flipHorizontal, bool syncToGpuTexture);
 
         CcapProvider* m_provider;
-        Texture m_texture;
+
+        std::unique_ptr<GpuPixelStream> m_gpuPixelStream;
+        Pixels m_pixels;
+        // CpuPixelStream m_cpuPixelStream;
+
         std::vector<uint8_t> m_packedFrameBuffer;
         std::vector<WebcamResolution> m_supportedResolutions;
-        uint32_t m_pendingWidth;
-        uint32_t m_pendingHeight;
-        bool m_hasPendingFrame;
         bool m_flipHorizontal;
     };
 } // namespace p5::webcam

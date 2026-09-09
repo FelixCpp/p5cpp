@@ -737,7 +737,7 @@ namespace p5
     {
         uint32_t width;
         uint32_t height;
-        std::vector<color_t> data;
+        std::vector<uint8_t> data;
 
         color_t get(int32_t x, int32_t y) const;
         void set(int32_t x, int32_t y, color_t color);

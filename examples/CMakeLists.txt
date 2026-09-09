@@ -1,3 +1,4 @@
+add_subdirectory(ascii_video)
 add_subdirectory(audio_visualizer)
 add_subdirectory(bubble_words)
 add_subdirectory(camera2d)
