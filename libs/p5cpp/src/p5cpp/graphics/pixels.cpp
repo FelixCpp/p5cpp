@@ -1,5 +1,7 @@
 #include <p5cpp/p5cpp.hpp>
 
+#include <cstring>
+
 namespace p5
 {
     void Pixels::set(int32_t x, int32_t y, color_t color)
@@ -44,6 +46,11 @@ namespace p5
             .data = std::span<const uint8_t>(data.data(), data.size()),
         };
     }
+
+    Pixels Pixels::getSubPixels(uint32_t x, uint32_t y, uint32_t subWidth, uint32_t subHeight) const
+    {
+        return asReadOnly().getSubPixels(x, y, subWidth, subHeight);
+    }
 } // namespace p5
 
 namespace p5
@@ -64,5 +71,31 @@ namespace p5
         uint8_t a = data[byteIndex + 3];
 
         return rgba(r, g, b, a);
+    }
+
+    Pixels ReadOnlyPixels::getSubPixels(uint32_t x, uint32_t y, uint32_t subWidth, uint32_t subHeight) const
+    {
+        if (subWidth == 0 or subHeight == 0) {
+            error("getSubPixels() region must have non-zero width and height");
+            return {};
+        }
+        if (x + subWidth > width or y + subHeight > height) {
+            error("getSubPixels() region is out of bounds");
+            return {};
+        }
+
+        Pixels result;
+        result.width = subWidth;
+        result.height = subHeight;
+        result.data.resize(static_cast<size_t>(subWidth) * static_cast<size_t>(subHeight) * 4);
+
+        const size_t rowBytes = static_cast<size_t>(subWidth) * 4;
+        for (uint32_t row = 0; row < subHeight; ++row) {
+            const uint8_t* src = data.data() + (static_cast<size_t>(y + row) * width + x) * 4;
+            uint8_t* dst = result.data.data() + static_cast<size_t>(row) * rowBytes;
+            std::memcpy(dst, src, rowBytes);
+        }
+
+        return result;
     }
 } // namespace p5

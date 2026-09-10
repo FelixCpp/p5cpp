@@ -113,7 +113,7 @@ namespace p5::webcam
         }
 
         if (m_textureDirty) {
-            m_gpuPixelStream->feed(m_pixels.width, m_pixels.height, m_pixels.data);
+            m_gpuPixelStream->feed(m_pixels);
             m_textureDirty = false;
         }
 

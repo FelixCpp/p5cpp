@@ -2,11 +2,11 @@
 
 namespace p5::webcam
 {
-    void GpuPixelStream::feed(uint32_t width, uint32_t height, std::span<const uint8_t> data)
+    void GpuPixelStream::feed(const Pixels& pixels)
     {
-        const bool hasSizeChanged = m_texture.size.x != width or m_texture.size.y != height;
+        const bool hasSizeChanged = m_texture.size.x != pixels.width or m_texture.size.y != pixels.height;
         if (not m_texture.isValid() or hasSizeChanged) {
-            std::optional<Texture> recreated = loadTexture(width, height, data, TexturePixelFormat::rgba8);
+            std::optional<Texture> recreated = loadTexture(pixels.width, pixels.height, {}, TexturePixelFormat::rgba8);
 
             if (not recreated.has_value()) {
                 error("GpuPixelStream: failed to (re)create the frame texture");
@@ -14,9 +14,12 @@ namespace p5::webcam
             }
 
             m_texture = std::move(recreated).value();
-        } else {
-            m_texture.updateSubImage(0, 0, width, height, data);
         }
+
+        // updatePixels() flips pixels' top-down rows into the texture's bottom-up GL storage --
+        // skipping it and uploading pixels.data as-is (as this used to do via updateSubImage())
+        // renders the frame vertically mirrored.
+        m_texture.updatePixels(pixels);
     }
 
     Texture GpuPixelStream::getTexture() const

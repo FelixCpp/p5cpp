@@ -7,7 +7,10 @@ namespace p5::webcam
     class GpuPixelStream
     {
     public:
-        void feed(uint32_t width, uint32_t height, std::span<const uint8_t> data);
+        // pixels must use Pixels' usual top-down convention (row 0 = top of the image, like
+        // Texture::loadPixels()'s output) -- feed() takes care of getting that onto the GPU in
+        // Texture's bottom-up convention correctly.
+        void feed(const Pixels& pixels);
 
         Texture getTexture() const;
 

@@ -129,6 +129,59 @@ namespace p5
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    Texture Texture::getSubTexture(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const
+    {
+        if (width == 0 or height == 0) {
+            error("getSubTexture() region must have non-zero width and height");
+            return {};
+        }
+        if (x + width > size.x or y + height > size.y) {
+            error("getSubTexture() region is out of bounds");
+            return {};
+        }
+
+        std::optional<Texture> subTexture = loadTexture(width, height, {}, pixelFormat);
+        if (not subTexture.has_value()) {
+            return {};
+        }
+
+        // Unlike updateSubImage(), x/y here are top-down (y = 0 at the TOP), matching
+        // Pixels::getSubPixels() and everyday expectations -- convert to GL's bottom-up texture
+        // space for the actual blit below.
+        const uint32_t glY = size.y - y - height;
+
+        // GPU-side copy via glBlitFramebuffer between two throwaway FBOs (one wrapping this
+        // texture as the read source, one wrapping the new texture as the draw target) -- no CPU
+        // pixel roundtrip. Deliberately NOT glCopyTexSubImage2D: that entry point also validates
+        // the currently bound *draw* framebuffer internally (even though this is a read), and a
+        // freshly created, never-drawn-to FBO bound there reliably segfaults inside Apple's
+        // legacy OpenGL driver (GLDObject::release() null deref, radar-worthy but unfixable from
+        // here). blitGraphicsToScreen() already relies on glBlitFramebuffer for the same kind of
+        // copy, so this sticks to the path this codebase has already proven out on this driver.
+        GLuint readFbo = 0;
+        GLuint drawFbo = 0;
+        glGenFramebuffers(1, &readFbo);
+        glGenFramebuffers(1, &drawFbo);
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, impl->id, 0);
+
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFbo);
+        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, subTexture->impl->id, 0);
+
+        glBlitFramebuffer(
+            static_cast<GLint>(x), static_cast<GLint>(glY), static_cast<GLint>(x + width), static_cast<GLint>(glY + height),
+            0, 0, static_cast<GLint>(width), static_cast<GLint>(height),
+            GL_COLOR_BUFFER_BIT, GL_NEAREST
+        );
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &readFbo);
+        glDeleteFramebuffers(1, &drawFbo);
+
+        return subTexture.value();
+    }
+
     bool Texture::isValid() const
     {
         return impl != nullptr;
@@ -302,13 +355,11 @@ namespace p5
         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
+        // GL's readback is bottom-up (row 0 = bottom of the image, see the Texture/Pixels
+        // orientation note in p5cpp.hpp); flip it to Pixels' top-down convention before handing
+        // it back, same as Texture::loadPixels().
         flipRowsVertically(bytes, reader.width, reader.height);
 
-        Pixels pixels {.width = reader.width, .height = reader.height, .data = std::move(bytes)};
-        for (size_t i = 0; i < pixels.data.size(); ++i) {
-            pixels.data[i] = rgba(bytes[i * 4 + 0], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
-        }
-
-        return pixels;
+        return Pixels {.width = reader.width, .height = reader.height, .data = std::move(bytes)};
     }
 } // namespace p5

@@ -712,6 +712,8 @@ namespace p5
         void updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data);
         Pixels loadPixels() const;
         void updatePixels(const Pixels& pixels);
+        Texture getSubTexture(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const;
+
         bool saveToFileAsPNG(const std::filesystem::path& filepath) const;
         bool saveToFileAsJPEG(const std::filesystem::path& filepath, int quality = 90) const;
         bool saveToFileAsBMP(const std::filesystem::path& filepath) const;
@@ -751,6 +753,7 @@ namespace p5
         std::span<const uint8_t> data;
 
         color_t get(int32_t x, int32_t y) const;
+        Pixels getSubPixels(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const;
     };
 
     struct Pixels
@@ -763,6 +766,7 @@ namespace p5
         color_t get(int32_t x, int32_t y) const;
 
         ReadOnlyPixels asReadOnly() const;
+        Pixels getSubPixels(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const;
     };
 
     struct PixelReaderSlot
