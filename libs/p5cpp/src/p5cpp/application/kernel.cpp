@@ -19,9 +19,8 @@ namespace p5
         const auto next = Next {
             m_plugins,
             startIndex,
-            &m_context,
-            [](Plugin& plugin, Context& context, const Next& next) {
-                plugin.setup(context, next);
+            [](Plugin& plugin, const Next& next) {
+                plugin.setup(next);
             },
             nullptr,
         };
@@ -74,9 +73,8 @@ namespace p5
         const auto next = Next {
             m_plugins,
             0,
-            &m_context,
-            [](Plugin& plugin, Context& context, const Next& next) {
-                plugin.setup(context, next);
+            [](Plugin& plugin, const Next& next) {
+                plugin.setup(next);
             },
             nullptr,
         };
@@ -89,10 +87,9 @@ namespace p5
         const auto next = Next {
             m_plugins,
             0,
-            &m_context,
-            [](Plugin& plugin, Context& context, const Next& next) {
+            [](Plugin& plugin, const Next& next) {
                 const WindowEvent& event = *static_cast<const WindowEvent*>(next.getPayload());
-                plugin.event(context, next, event);
+                plugin.event(next, event);
             },
             &event,
         };
@@ -105,9 +102,8 @@ namespace p5
         const auto next = Next {
             m_plugins,
             0,
-            &m_context,
-            [](Plugin& plugin, Context& context, const Next& next) {
-                plugin.draw(context, next);
+            [](Plugin& plugin, const Next& next) {
+                plugin.draw(next);
             },
             nullptr,
         };
@@ -120,9 +116,8 @@ namespace p5
         const auto next = Next {
             m_plugins,
             0,
-            &m_context,
-            [](Plugin& plugin, Context& context, const Next& next) {
-                plugin.destroy(context, next);
+            [](Plugin& plugin, const Next& next) {
+                plugin.destroy(next);
             },
             nullptr,
         };

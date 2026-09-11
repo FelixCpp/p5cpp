@@ -463,6 +463,14 @@ namespace p5
     private:
         std::unordered_map<std::type_index, void*> m_instances;
     };
+
+    Context& getContext();
+
+    template <typename T> void provideDependency(T* instance);
+    template <typename T> void removeDependency();
+    template <typename T> T& requireDependency();
+    template <typename T> T* getDependency();
+    template <typename T> bool hasDependency();
 } // namespace p5
 
 namespace p5
@@ -471,15 +479,15 @@ namespace p5
 
     class Next
     {
+        using Step = void (*)(Plugin&, const Next&);
+
     public:
-        explicit Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload);
+        explicit Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Step step, const void* payload);
         void operator()() const;
 
         const void* getPayload() const;
 
     private:
-        using Step = void (*)(Plugin&, Context&, const Next&);
-
         const std::deque<std::unique_ptr<Plugin>>& m_chain;
         size_t m_index;
         Context* context;
@@ -490,10 +498,10 @@ namespace p5
     struct Plugin
     {
         virtual ~Plugin() = default;
-        virtual void setup(Context& context, const Next& next);
-        virtual void event(Context& context, const Next& next, const WindowEvent& event);
-        virtual void draw(Context& context, const Next& next);
-        virtual void destroy(Context& context, const Next& next);
+        virtual void setup(const Next& next);
+        virtual void event(const Next& next, const WindowEvent& event);
+        virtual void draw(const Next& next);
+        virtual void destroy(const Next& next);
     };
 
 } // namespace p5
@@ -1341,6 +1349,15 @@ namespace p5
     {
         return m_instances.contains(typeid(T));
     }
+} // namespace p5
+
+namespace p5
+{
+    template <typename T> void provideDependency(T* instance) { getContext().provide(instance); }
+    template <typename T> void removeDependency() { getContext().remove<T>(); }
+    template <typename T> T& requireDependency() { return getContext().require<T>(); }
+    template <typename T> T* getDependency() { return getContext().get<T>(); }
+    template <typename T> bool hasDependency() { return getContext().has<T>(); }
 } // namespace p5
 
 namespace p5

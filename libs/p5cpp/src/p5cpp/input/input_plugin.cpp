@@ -2,31 +2,30 @@
 
 namespace p5
 {
-    void InputPlugin::setup(Context& context, const Next& next)
+    void InputPlugin::setup(const Next& next)
     {
-        context.provide(&m_input);
+        m_input = std::make_unique<Input>();
+        provideDependency(m_input.get());
 
         next();
     }
 
-    void InputPlugin::event(Context& context, const Next& next, const WindowEvent& event)
+    void InputPlugin::event(const Next& next, const WindowEvent& event)
     {
-        m_input.process(event);
+        m_input->process(event);
 
         next();
     }
 
-    void InputPlugin::draw(Context& context, const Next& next)
+    void InputPlugin::draw(const Next& next)
     {
         next();
-
-        m_input.reset();
+        m_input->reset();
     }
 
-    void InputPlugin::destroy(Context& context, const Next& next)
+    void InputPlugin::destroy(const Next& next)
     {
         next();
-
-        context.remove<Input>();
+        removeDependency<Input>();
     }
 } // namespace p5

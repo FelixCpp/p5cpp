@@ -9,7 +9,7 @@ namespace p5
     {
     }
 
-    void SketchLoaderPlugin::setup([[maybe_unused]] Context& context, [[maybe_unused]] const Next& next)
+    void SketchLoaderPlugin::setup([[maybe_unused]] const Next& next)
     {
         std::unique_ptr<Sketch> sketch = m_sketchFactory();
 
@@ -23,14 +23,14 @@ namespace p5
     {
     }
 
-    void SketchPlugin::setup(Context& context, const Next& next)
+    void SketchPlugin::setup(const Next& next)
     {
-        context.provide(m_sketch.get());
+        provideDependency(m_sketch.get());
         m_sketch->setup();
         next();
     }
 
-    void SketchPlugin::event([[maybe_unused]] Context& context, const Next& next, const WindowEvent& event)
+    void SketchPlugin::event(const Next& next, const WindowEvent& event)
     {
         if (m_sketch != nullptr) {
             m_sketch->event(event);
@@ -39,18 +39,21 @@ namespace p5
         next();
     }
 
-    void SketchPlugin::draw(Context& context, const Next& next)
+    void SketchPlugin::draw(const Next& next)
     {
-        if (m_sketch != nullptr and context.require<Lifecycle>().shouldDrawThisFrame()) {
+        Lifecycle& lifecycle = requireDependency<Lifecycle>();
+        if (m_sketch != nullptr and lifecycle.shouldDrawThisFrame()) {
             m_sketch->draw();
         }
 
         next();
     }
 
-    void SketchPlugin::destroy([[maybe_unused]] Context& context, const Next& next)
+    void SketchPlugin::destroy(const Next& next)
     {
         next();
+
+        removeDependency<Sketch>();
 
         if (m_sketch != nullptr) {
             m_sketch->destroy();

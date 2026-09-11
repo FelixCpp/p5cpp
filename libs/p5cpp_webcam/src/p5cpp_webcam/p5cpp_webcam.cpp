@@ -24,7 +24,7 @@ namespace p5::webcam
         {
         }
 
-        void setup([[maybe_unused]] Context& context, const Next& next) override
+        void setup(const Next& next) override
         {
             activePlugin = this;
 
@@ -35,7 +35,7 @@ namespace p5::webcam
             next();
         }
 
-        void destroy([[maybe_unused]] Context& context, const Next& next) override
+        void destroy(const Next& next) override
         {
             next();
 

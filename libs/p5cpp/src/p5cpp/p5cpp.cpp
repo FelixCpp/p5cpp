@@ -14,6 +14,11 @@ namespace p5
     {
         return *s_kernel;
     }
+
+    Context& getContext()
+    {
+        return s_kernel->getContext();
+    }
 } // namespace p5
 
 namespace p5

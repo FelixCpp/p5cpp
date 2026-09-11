@@ -8,12 +8,12 @@ namespace p5
     class InputPlugin : public Plugin
     {
     public:
-        void setup(Context& context, const Next& next);
-        void event(Context& context, const Next& next, const WindowEvent& event);
-        void draw(Context& context, const Next& next);
-        void destroy(Context& context, const Next& next);
+        void setup(const Next& next);
+        void event(const Next& next, const WindowEvent& event);
+        void draw(const Next& next);
+        void destroy(const Next& next);
 
     private:
-        Input m_input;
+        std::unique_ptr<Input> m_input;
     };
 } // namespace p5

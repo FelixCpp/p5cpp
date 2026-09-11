@@ -63,15 +63,15 @@ namespace p5::gif
     class GIFRecorderPlugin : public Plugin
     {
     public:
-        void setup(Context& context, const Next& next) override
+        void setup(const Next& next) override
         {
             recorder = std::make_unique<GifRecorder>();
-            context.provide<GifRecorder>(recorder.get());
+            provideDependency(recorder.get());
 
             next();
         }
 
-        void draw([[maybe_unused]] Context& context, const Next& next) override
+        void draw(const Next& next) override
         {
             next();
 
@@ -79,11 +79,11 @@ namespace p5::gif
             recorder->drawRecordingOverlay();
         }
 
-        void destroy(Context& context, const Next& next) override
+        void destroy(const Next& next) override
         {
             next();
 
-            context.remove<GifRecorder>();
+            removeDependency<GifRecorder>();
             recorder.reset();
         }
     };
