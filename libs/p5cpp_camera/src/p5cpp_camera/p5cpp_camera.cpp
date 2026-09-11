@@ -130,25 +130,25 @@ namespace p5::camera
     class CameraPlugin : public Plugin
     {
     public:
-        void setup(Context& context, const Next& next) override
+        void setup(const Next& next) override
         {
             controller = std::make_unique<CameraController>();
-            context.provide(controller.get());
+            provideDependency(controller.get());
 
             next();
         }
 
-        void draw([[maybe_unused]] Context& context, const Next& next) override
+        void draw(const Next& next) override
         {
             controller->update();
             next();
         }
 
-        void destroy(Context& context, const Next& next) override
+        void destroy(const Next& next) override
         {
             next();
 
-            context.remove<CameraController>();
+            removeDependency<CameraController>();
             controller.reset();
         }
     };

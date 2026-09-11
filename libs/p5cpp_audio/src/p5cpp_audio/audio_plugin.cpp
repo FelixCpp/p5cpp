@@ -13,31 +13,31 @@ namespace p5::audio
     class AudioPlugin : public Plugin
     {
     public:
-        void setup(Context& context, const Next& next) override
+        void setup(const Next& next) override
         {
             s_audioEngine = AudioEngine::create();
-            context.provide(s_audioEngine.get());
+            provideDependency(s_audioEngine.get());
 
             next();
         }
 
-        void event([[maybe_unused]] Context& context, const Next& next, [[maybe_unused]] const WindowEvent& event) override
+        void event(const Next& next, [[maybe_unused]] const WindowEvent& event) override
         {
             next();
         }
 
-        void draw([[maybe_unused]] Context& context, const Next& next) override
+        void draw(const Next& next) override
         {
             s_audioEngine->pruneFinishedOverlaps();
 
             next();
         }
 
-        void destroy(Context& context, const Next& next) override
+        void destroy(const Next& next) override
         {
             next();
 
-            context.remove<AudioEngine>();
+            removeDependency<AudioEngine>();
             s_audioEngine.reset();
         }
 

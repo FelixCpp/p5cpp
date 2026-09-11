@@ -11,13 +11,13 @@ namespace p5
     {
     }
 
-    void GraphicsPlugin::setup(Context& context, const Next& next)
+    void GraphicsPlugin::setup(const Next& next)
     {
         m_canvas = std::make_unique<Canvas>();
-        context.provide(m_canvas.get());
-        context.provide(this);
+        provideDependency(m_canvas.get());
+        provideDependency(this);
 
-        Window& window = context.require<Window>();
+        Window& window = requireDependency<Window>();
         m_size = window.getLogicalSize();
 
         recreateDefaultGraphics();
@@ -27,7 +27,7 @@ namespace p5
         m_canvas->popGraphics();
     }
 
-    void GraphicsPlugin::event(Context& context, const Next& next, const WindowEvent& event)
+    void GraphicsPlugin::event(const Next& next, const WindowEvent& event)
     {
         if (const auto* resize = event.as_if<WindowEvent::WindowResize>()) {
             const auto isWindowMinimized = resize->width == 0 or resize->height == 0;
@@ -40,25 +40,26 @@ namespace p5
         next();
     }
 
-    void GraphicsPlugin::draw(Context& context, const Next& next)
+    void GraphicsPlugin::draw(const Next& next)
     {
         m_canvas->pushGraphics(m_defaultGraphics, true);
         next();
         m_canvas->popGraphics();
 
-        Window& window = context.require<Window>();
+        Window& window = requireDependency<Window>();
         const uint2& size = window.getPhysicalSize();
         if (m_defaultGraphics.isValid()) {
             blitGraphicsToScreen(m_defaultGraphics, size.x, size.y);
         }
     }
 
-    void GraphicsPlugin::destroy(Context& context, const Next& next)
+    void GraphicsPlugin::destroy(const Next& next)
     {
         next();
 
-        context.remove<GraphicsPlugin>();
-        context.remove<Canvas>();
+        removeDependency<Canvas>();
+        removeDependency<GraphicsPlugin>();
+
         m_canvas.reset();
     }
 

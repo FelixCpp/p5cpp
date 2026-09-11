@@ -8,9 +8,9 @@ namespace p5
     {
     }
 
-    void WindowPlugin::setup(Context& context, const Next& next)
+    void WindowPlugin::setup(const Next& next)
     {
-        m_window = Window::create(800, 600, "p5cpp", [this](const WindowEvent& event) {
+        m_window = Window::create(800, 600, "p5cpp", [](const WindowEvent& event) {
             Kernel& kernel = getKernel();
             kernel.process(event);
         });
@@ -19,7 +19,7 @@ namespace p5
             throw std::runtime_error("Failed to create window (GLFW/OpenGL initialization failed)");
         }
 
-        context.provide(m_window.get());
+        provideDependency(m_window.get());
 
         next();
 
@@ -27,23 +27,23 @@ namespace p5
         m_window->setVisible(true);
     }
 
-    void WindowPlugin::event(Context& context, const Next& next, const WindowEvent& event)
+    void WindowPlugin::event(const Next& next, [[maybe_unused]] const WindowEvent& event)
     {
         next();
     }
 
-    void WindowPlugin::draw(Context& context, const Next& next)
+    void WindowPlugin::draw(const Next& next)
     {
         m_window->pollEvents();
         next();
         m_window->swapBuffers();
     }
 
-    void WindowPlugin::destroy(Context& context, const Next& next)
+    void WindowPlugin::destroy(const Next& next)
     {
         next();
 
-        context.remove<Window>();
+        removeDependency<Window>();
         m_window.reset();
     }
 } // namespace p5

@@ -10,12 +10,12 @@ namespace p5
     public:
         LifecyclePlugin();
 
-        void setup(Context& context, const Next& next) override;
-        void event(Context& context, const Next& next, const WindowEvent& event) override;
-        void draw(Context& context, const Next& next) override;
-        void destroy(Context& context, const Next& next) override;
+        void setup(const Next& next) override;
+        void event(const Next& next, const WindowEvent& event) override;
+        void draw(const Next& next) override;
+        void destroy(const Next& next) override;
 
     private:
-        Lifecycle m_lifecycle;
+        std::unique_ptr<Lifecycle> m_lifecycle;
     };
 } // namespace p5

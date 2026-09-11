@@ -9,10 +9,10 @@ namespace p5
     public:
         explicit SketchPlugin(std::unique_ptr<Sketch> sketch);
 
-        void setup(Context& context, const Next& next);
-        void event(Context& context, const Next& next, const WindowEvent& event);
-        void draw(Context& context, const Next& next);
-        void destroy(Context& context, const Next& next);
+        void setup(const Next& next);
+        void event(const Next& next, const WindowEvent& event);
+        void draw(const Next& next);
+        void destroy(const Next& next);
 
     private:
         std::unique_ptr<Sketch> m_sketch;
@@ -23,7 +23,7 @@ namespace p5
     public:
         explicit SketchLoaderPlugin(SketchFactory sketchFactory);
 
-        void setup(Context& context, const Next& next);
+        void setup(const Next& next);
 
     private:
         SketchFactory m_sketchFactory;

@@ -7,37 +7,39 @@ namespace p5
     {
     }
 
-    void LifecyclePlugin::setup(Context& context, const Next& next)
+    void LifecyclePlugin::setup(const Next& next)
     {
-        m_lifecycle = Lifecycle();
-        context.provide(&m_lifecycle);
+        m_lifecycle = std::make_unique<Lifecycle>();
+        provideDependency(m_lifecycle.get());
 
         next();
     }
 
-    void LifecyclePlugin::event(Context& context, const Next& next, const WindowEvent& event)
+    void LifecyclePlugin::event(const Next& next, const WindowEvent& event)
     {
         if (event.is<WindowEvent::Close>()) {
-            m_lifecycle.close();
+            m_lifecycle->close();
         }
 
         if (const auto* keyPress = event.as_if<WindowEvent::KeyPress>()) {
             if (keyPress->key == Key::Escape) {
-                m_lifecycle.close();
+                m_lifecycle->close();
             }
         }
 
         next();
     }
 
-    void LifecyclePlugin::draw(Context& context, const Next& next)
+    void LifecyclePlugin::draw(const Next& next)
     {
         next();
     }
 
-    void LifecyclePlugin::destroy(Context& context, const Next& next)
+    void LifecyclePlugin::destroy(const Next& next)
     {
         next();
-        context.remove<Lifecycle>();
+
+        removeDependency<Lifecycle>();
+        m_lifecycle.reset();
     }
 } // namespace p5

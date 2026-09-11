@@ -2,8 +2,8 @@
 
 namespace p5
 {
-    Next::Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Context* context, void (*step)(Plugin&, Context&, const Next&), const void* payload)
-        : m_chain(chain), m_index(index), context(context), m_step(step), payload(payload)
+    Next::Next(const std::deque<std::unique_ptr<Plugin>>& chain, size_t index, Step step, const void* payload)
+        : m_chain(chain), m_index(index), m_step(step), payload(payload)
     {
     }
 
@@ -13,8 +13,8 @@ namespace p5
             return;
         }
 
-        const Next following {m_chain, m_index + 1, context, m_step, payload};
-        m_step(*m_chain[m_index], *context, following);
+        const Next following {m_chain, m_index + 1, m_step, payload};
+        m_step(*m_chain[m_index], following);
     }
 
     const void* Next::getPayload() const
