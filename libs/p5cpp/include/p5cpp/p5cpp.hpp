@@ -94,6 +94,8 @@ namespace p5
         inline constexpr bool operator!=(const rect2&) const = default;
     };
 
+    template <typename T> constexpr value2<T> center(const rect2<T>& rectangle);
+
     typedef rect2<float> rect2f;
     typedef rect2<int32_t> rect2i;
     typedef rect2<uint32_t> rect2u;
@@ -1235,6 +1237,11 @@ namespace p5
             matrix.m[4] * point.x + matrix.m[5] * point.y + matrix.m[7],
         };
     }
+} // namespace p5
+
+namespace p5
+{
+    template <typename T> inline constexpr value2<T> center(const rect2<T>& rectangle) { return {rectangle.left + rectangle.width / 2, rectangle.top + rectangle.height / 2}; }
 } // namespace p5
 
 namespace p5

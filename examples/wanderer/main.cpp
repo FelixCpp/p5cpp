@@ -42,10 +42,11 @@ inline static constexpr std::optional<float2> getLineToLineIntersection(const fl
 class Wanderer
 {
 public:
-    explicit Wanderer(const float2& position, float directionChangeInterval)
+    explicit Wanderer(const float2& position, const color_t color, const Direction direction, const float directionChangeInterval)
         : m_directionChangeInterval(directionChangeInterval),
           m_timeElapsedSinceLastDirectionChange(0.0f),
-          m_direction(Direction::right),
+          m_direction(direction),
+          m_color(color),
           m_position(position),
           m_movementPoints({{position, false}})
     {
@@ -57,7 +58,7 @@ public:
 
         if (m_timeElapsedSinceLastDirectionChange >= m_directionChangeInterval) {
             changeDirection();
-            m_directionChangeInterval = random(0.5f, 2.0f);
+            m_directionChangeInterval = random(0.1f, 0.3f);
             m_timeElapsedSinceLastDirectionChange = 0.0f;
         }
 
@@ -71,7 +72,7 @@ public:
 
     void show()
     {
-        stroke(colorPalette.at(1));
+        stroke(m_color);
         strokeWeight(2.0f);
         noFill();
 
@@ -85,30 +86,13 @@ public:
             line(previous.position.x, previous.position.y, current.position.x, current.position.y);
         }
 
-
         if (not m_movementPoints.empty()) {
             const MovementPoint& last = m_movementPoints.back();
             if (last.isEnd) {
                 return;
             }
 
-            stroke(colorPalette.at(2));
-            strokeWeight(2.0f);
-            noFill();
             line(last.position.x, last.position.y, m_position.x, m_position.y);
-        }
-
-
-        for (const Intersection& intersection : resolveNewestIntersections()) {
-            const MovementPoint& a = m_movementPoints.at(intersection.fromMovementPointIndex);
-            const MovementPoint& b = m_movementPoints.at(intersection.toMovementPointIndex);
-            stroke(rgba(0, 255, 0));
-            strokeWeight(2.0f);
-            line(a.position.x, a.position.y, b.position.x, b.position.y);
-
-            noStroke();
-            fill(rgba(255));
-            circle(intersection.position.x, intersection.position.y, 2.0f);
         }
     }
 
@@ -140,6 +124,10 @@ private:
         std::vector<Intersection> intersections;
 
         for (size_t i = 1; i < m_movementPoints.size(); ++i) {
+            if (i == m_movementPoints.size() - 1) {
+                continue;
+            }
+
             const MovementPoint& previous = m_movementPoints.at(i - 1);
             if (previous.isEnd) {
                 continue;
@@ -248,34 +236,104 @@ private:
     float m_timeElapsedSinceLastDirectionChange;
 
     Direction m_direction;
+    color_t m_color;
 
     float2 m_position;
     std::vector<MovementPoint> m_movementPoints;
 };
 
+class GameField
+{
+public:
+    explicit GameField(const rect2f& boundary)
+        : m_boundary(boundary)
+    {
+        const float2 randomPosition {
+            .x = random(boundary.left, boundary.left + boundary.width),
+            .y = random(boundary.top, boundary.top + boundary.height),
+        };
+
+        const Direction randomDirection = static_cast<Direction>(static_cast<int>(random(0, 4)));
+
+        wanderers.push_back(Wanderer {randomPosition, colorPalette.at(0), randomDirection, 1.0f});
+    }
+
+    void update(const float deltaTime)
+    {
+        for (Wanderer& wanderer : wanderers) {
+            wanderer.update(m_boundary, deltaTime);
+        }
+    }
+
+    void show()
+    {
+        for (Wanderer& wanderer : wanderers) {
+            wanderer.show();
+        }
+
+        noFill();
+        stroke(rgba(255));
+        strokeWeight(4.0f);
+        rect(m_boundary.left, m_boundary.top, m_boundary.width, m_boundary.height, BorderRadius::all(15.0f));
+    }
+
+private:
+    std::vector<Wanderer> wanderers;
+    rect2f m_boundary;
+};
+
 struct WandererSketch : Sketch
 {
-    Wanderer wanderer {float2 {.x = 450.0f, .y = 450.0f}, 1.0f};
+    // Wanderer wanderer {float2 {.x = 450.0f, .y = 450.0f}, colorPalette.at(0), 1.0f};
+    std::vector<GameField> gameFields;
 
     void setup() override
     {
-        setWindowSize(900, 900);
+        const int totalWindowWidth = 900;
+        const int totalWindowHeight = 900;
+        setWindowSize(totalWindowWidth, totalWindowHeight);
+
+        // rect2f topLeftGameFieldBoundary {50.0f, 50.0f, 350.0f, 350.0f};
+        // gameFields.push_back(GameField {topLeftGameFieldBoundary});
+        //
+        // rect2f topRightGameFieldBoundary {500.0f, 50.0f, 350.0f, 350.0f};
+        // gameFields.push_back(GameField {topRightGameFieldBoundary});
+        //
+        // rect2f bottomLeftGameFieldBoundary {50.0f, 500.0f, 350.0f, 350.0f};
+        // gameFields.push_back(GameField {bottomLeftGameFieldBoundary});
+        //
+        // rect2f bottomRightGameFieldBoundary {500.0f, 500.0f, 350.0f, 350.0f};
+        // gameFields.push_back(GameField {bottomRightGameFieldBoundary});
+
+        const size_t columns = 3;
+        const size_t rows = 3;
+        const float windowMargin = 50.0f;
+        const float gameFieldSpacing = 50.0f;
+        const float gameFieldWidth = (totalWindowWidth - windowMargin * 2.0f - gameFieldSpacing * (columns - 1)) / columns;
+        const float gameFieldHeight = (totalWindowHeight - windowMargin * 2.0f - gameFieldSpacing * (rows - 1)) / rows;
+
+        for (size_t row = 0; row < rows; ++row) {
+            for (size_t column = 0; column < columns; ++column) {
+                const float left = windowMargin + column * (gameFieldWidth + gameFieldSpacing);
+                const float top = windowMargin + row * (gameFieldHeight + gameFieldSpacing);
+                const rect2f gameFieldBoundary {left, top, gameFieldWidth, gameFieldHeight};
+                gameFields.push_back(GameField {gameFieldBoundary});
+            }
+        }
     }
 
     void draw() override
     {
         const float deltaTime = getDeltaTime();
-        const rect2f boundary {100.0f, 100.0f, 700.0f, 700.0f};
 
-        wanderer.update(boundary, deltaTime);
+        for (GameField& gameField : gameFields) {
+            gameField.update(deltaTime);
+        }
 
         background(rgba(21, 21, 31));
-        wanderer.show();
-
-        noFill();
-        stroke(rgba(255));
-        strokeWeight(4.0f);
-        rect(boundary.left, boundary.top, boundary.width, boundary.height, BorderRadius::all(15.0f));
+        for (GameField& gameField : gameFields) {
+            gameField.show();
+        }
     }
 };
 
