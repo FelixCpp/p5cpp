@@ -25,6 +25,10 @@ namespace p5
             if (keyPress->key == Key::Escape) {
                 m_lifecycle->close();
             }
+
+            if (keyPress->key == Key::R and keyPress->mods.control) {
+                m_lifecycle->restart();
+            }
         }
 
         next();
