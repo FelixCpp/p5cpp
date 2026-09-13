@@ -10,7 +10,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <limits>
 #include <type_traits>
 
 namespace p5
@@ -90,8 +89,7 @@ namespace p5
 
     bool Renderer::PipelineKey::operator<(const PipelineKey& other) const
     {
-        return std::tie(shader, blendMode.srcColorFactor, blendMode.dstColorFactor, blendMode.colorEquation, blendMode.srcAlphaFactor, blendMode.dstAlphaFactor, blendMode.alphaEquation, sampleCount, colorFormat)
-             < std::tie(other.shader, other.blendMode.srcColorFactor, other.blendMode.dstColorFactor, other.blendMode.colorEquation, other.blendMode.srcAlphaFactor, other.blendMode.dstAlphaFactor, other.blendMode.alphaEquation, other.sampleCount, other.colorFormat);
+        return std::tie(shader, blendMode.srcColorFactor, blendMode.dstColorFactor, blendMode.colorEquation, blendMode.srcAlphaFactor, blendMode.dstAlphaFactor, blendMode.alphaEquation, sampleCount, colorFormat) < std::tie(other.shader, other.blendMode.srcColorFactor, other.blendMode.dstColorFactor, other.blendMode.colorEquation, other.blendMode.srcAlphaFactor, other.blendMode.dstAlphaFactor, other.blendMode.alphaEquation, other.sampleCount, other.colorFormat);
     }
 
     bool Renderer::TextureBindGroupKey::operator<(const TextureBindGroupKey& other) const
