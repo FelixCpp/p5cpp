@@ -1,5 +1,6 @@
 #include <p5cpp/window/window_plugin.hpp>
 #include <p5cpp/application/kernel.hpp>
+#include <p5cpp/graphics/gpu_device.hpp>
 
 namespace p5
 {
@@ -36,7 +37,7 @@ namespace p5
     {
         m_window->pollEvents();
         next();
-        m_window->swapBuffers();
+        requireDependency<GpuDevice>().present();
     }
 
     void WindowPlugin::destroy(const Next& next)

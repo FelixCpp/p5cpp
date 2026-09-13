@@ -11,9 +11,6 @@ namespace p5
         inline static thread_local int32_t s_perlinOctaves = 4;
         inline static thread_local float s_perlinFalloff = 0.5f;
 
-        // Sums octaves of stb's seeded gradient noise (lacunarity fixed at 2, like p5.js'
-        // noiseDetail()). stb_perlin_fbm_noise3() can't be reused here since it always
-        // samples with seed 0, ignoring noiseSeed().
         float perlinFbm(float x, float y, float z)
         {
             float sum = 0.0f;

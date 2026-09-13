@@ -123,7 +123,7 @@ namespace p5
     {
         const size_t count = positions.size();
         if (count < 3)
-            return; // not enough points for a single triangle; avoid writing orphaned vertices no index will reference
+            return;
 
         addVertices(sink, positions, texCoords, colors);
 
@@ -139,7 +139,7 @@ namespace p5
     {
         const size_t count = positions.size();
         if (count < 3)
-            return; // not enough points for a single triangle; avoid writing orphaned vertices no index will reference
+            return;
 
         addVertices(sink, positions, texCoords, colors);
 
@@ -178,7 +178,7 @@ namespace p5
             return;
         }
         if (count < 4)
-            return; // not enough points for a single quad; avoid writing orphaned vertices no index will reference
+            return;
 
         addVertices(sink, positions, texCoords, colors);
 
@@ -193,15 +193,6 @@ namespace p5
         if (positions.size() < 3)
             return;
 
-        // Each attribute channel below is tesselated as its own independent libtess2 run (see
-        // tesselateAttribute()), smuggled through as a fake Z coordinate so libtess2's own
-        // interpolation fills in synthesized vertices (e.g. at self-intersections). libtess2 rejects
-        // non-finite coordinates per *run* (IsValidCoord in tess.c), so a single NaN/Inf confined to,
-        // say, texCoord.y would silently empty out only that one channel's output while the other five
-        // stay fully populated -- reading channel 1..5 at an index sized off channel 0's count would
-        // then run off the end of that channel's vector. Reject non-finite input up front so every
-        // channel sees the same (valid) input and libtess2 either tesselates all six consistently or
-        // rejects all six consistently.
         for (size_t i = 0; i < positions.size(); ++i) {
             const bool finite = std::isfinite(positions[i].x) and std::isfinite(positions[i].y) and std::isfinite(texCoords[i].x) and std::isfinite(texCoords[i].y) and std::isfinite(colors[i].x) and std::isfinite(colors[i].y) and std::isfinite(colors[i].z) and std::isfinite(colors[i].w);
             if (not finite) {
@@ -215,7 +206,7 @@ namespace p5
             return;
         }
 
-        constexpr size_t channelCount = 6; // texCoord.x, texCoord.y, color.r, color.g, color.b, color.a
+        constexpr size_t channelCount = 6;
         const auto channelValue = [&](size_t channel, size_t vertexIndex) -> float {
             switch (channel) {
                 case 0: return texCoords[vertexIndex].x;
@@ -236,10 +227,6 @@ namespace p5
             channels[channel] = tesselateAttribute(positions, attribute, channel == 0);
         }
 
-        // Defense in depth against the channels disagreeing on output vertex count for any reason
-        // (finite input should keep all six runs consistent per the guard above, but each channel is
-        // still a genuinely independent libtess2 call) -- bound the read by the smallest channel
-        // instead of assuming channel 0's count applies to all of them.
         size_t vertexCount = channels[0].vertices.size() / 3;
         for (size_t channel = 1; channel < channelCount; ++channel)
             vertexCount = std::min(vertexCount, channels[channel].vertices.size() / 3);
@@ -258,7 +245,7 @@ namespace p5
         };
         for (size_t i = 0; i + 2 < elements.size(); i += 3) {
             if (not inBounds(elements[i]) or not inBounds(elements[i + 1]) or not inBounds(elements[i + 2]))
-                continue; // element referenced a vertex trimmed by the channel-count guard above
+                continue;
             addTriangle(sink, static_cast<uint32_t>(elements[i]), static_cast<uint32_t>(elements[i + 1]), static_cast<uint32_t>(elements[i + 2]));
         }
     }
@@ -306,7 +293,6 @@ namespace p5
             return len > 1e-9f ? scale2(a, 1.0f / len) : float2 {0.0f, 0.0f};
         }
 
-        // Rotates `a` by +90 degrees.
         float2 perpendicular(const float2& a)
         {
             return {-a.y, a.x};

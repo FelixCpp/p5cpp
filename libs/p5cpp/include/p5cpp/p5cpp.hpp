@@ -648,23 +648,26 @@ namespace p5
 
         bool operator==(const Shader&) const = default;
         bool isValid() const;
-
-        int32_t getUniformLocation(std::string_view name) const;
     };
 
     std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
 
     // Compiles a shader from just a fragment "effect" function, LÖVE2D-pixel-shader style — the library
     // supplies the vertex stage (position/UV/color pass-through) and the fragment stage's boilerplate,
-    // so effectSource only needs to define:
+    // so effectSource is WGSL that only needs to define:
     //
-    //   vec4 effect(vec4 color, sampler2D image, vec2 texCoord, vec2 screenCoord) { ... }
+    //   fn effect(color: vec4f, image: texture_2d<f32>, imageSampler: sampler, texCoord: vec2f, screenCoord: vec2f) -> vec4f { ... }
     //
-    // called once per fragment; its return value becomes the fragment's output color. Extra uniforms the
-    // effect needs can be declared directly in effectSource (e.g. `uniform float u_Time;`) and set after
-    // activating the shader via shader(), using the free setUniform() functions below. For full control
-    // over the vertex stage too, use the two-argument loadShaderFromMemory(vertexShaderSource,
-    // fragmentShaderSource) overload instead.
+    // called once per fragment (use textureSample(image, imageSampler, texCoord) to sample image);
+    // its return value becomes the fragment's output color. Extra uniforms the effect needs can be set
+    // after activating the shader via shader(), using the free setUniform() functions below, but must be
+    // declared in effectSource as fields of a single struct bound at @group(2) @binding(0), e.g.:
+    //
+    //   struct Uniforms { u_Time: f32 };
+    //   @group(2) @binding(0) var<uniform> u_Extra: Uniforms;
+    //
+    // referenced inside effect() as u_Extra.u_Time. For full control over the vertex stage too, use the
+    // two-argument loadShaderFromMemory(vertexShaderSource, fragmentShaderSource) overload instead.
     std::optional<Shader> loadShaderFromMemory(std::string_view effectSource);
 
     // Same effect-shader shortcut as the single-argument loadShaderFromMemory(), but reading
@@ -781,9 +784,10 @@ namespace p5
 
     struct PixelReaderSlot
     {
-        uint32_t pboId = 0;
-        void* fence = nullptr; // GLsync; kept opaque so this header stays GL-free
-        bool pending = false;
+        void* buffer = nullptr;    // WGPUBuffer; kept opaque so this header doesn't need a graphics-backend include
+        bool mapRequested = false; // wgpuBufferMapAsync() has been issued for this slot's in-flight readback
+        bool mapComplete = false;  // the map callback has fired; wgpuBufferGetConstMappedRange() is safe to call
+        bool pending = false;      // a readback was requested and hasn't been drained by pollPixelReadback() yet
     };
 
     struct PixelReader

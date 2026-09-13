@@ -13,40 +13,29 @@ namespace p5
     namespace detail
     {
         inline static constexpr std::string_view defaultFragmentShaderSource = R"(
-            #version 410
+            @group(1) @binding(0) var u_Texture: texture_2d<f32>;
+            @group(1) @binding(1) var u_Sampler: sampler;
 
-            layout (location = 0) out vec4 o_FragColor;
-
-            in vec2 v_TexCoord;
-            in vec4 v_Color;
-
-            uniform sampler2D u_Texture;
-
-            void main()
-            {
-                o_FragColor = texture(u_Texture, v_TexCoord) * v_Color;
+            @fragment
+            fn fs_main(
+                @location(0) v_TexCoord: vec2f,
+                @location(1) v_Color: vec4f,
+            ) -> @location(0) vec4f {
+                return textureSample(u_Texture, u_Sampler, v_TexCoord) * v_Color;
             }
         )";
 
-        // Glyph atlas cells store plain 8-bit AA coverage (see font.cpp), not a signed distance field --
-        // same architecture as Processing's PFont/FontTexture. Coverage is read straight through as
-        // alpha; the GPU's own bilinear filtering on the atlas texture (see loadTexture())
-        // is the only antialiasing applied when a glyph is displayed larger or smaller than the size it
-        // was baked at.
         inline static constexpr std::string_view defaultTextFragmentShaderSource = R"(
-            #version 410
+            @group(1) @binding(0) var u_Texture: texture_2d<f32>;
+            @group(1) @binding(1) var u_Sampler: sampler;
 
-            layout (location = 0) out vec4 o_FragColor;
-
-            in vec2 v_TexCoord;
-            in vec4 v_Color;
-
-            uniform sampler2D u_Texture;
-
-            void main()
-            {
-                float coverage = texture(u_Texture, v_TexCoord).r;
-                o_FragColor = vec4(v_Color.rgb, v_Color.a * coverage);
+            @fragment
+            fn fs_main(
+                @location(0) v_TexCoord: vec2f,
+                @location(1) v_Color: vec4f,
+            ) -> @location(0) vec4f {
+                let coverage = textureSample(u_Texture, u_Sampler, v_TexCoord).r;
+                return vec4f(v_Color.rgb, v_Color.a * coverage);
             }
         )";
 
@@ -493,7 +482,7 @@ namespace p5
             case ShapeMode::quadStrip: tesselate_quad_strip(writer, positions, texCoords, convertedColors); break;
             case ShapeMode::points:
             case ShapeMode::lines:
-            case ShapeMode::path: return; // points/lines/path have no interior to fill
+            case ShapeMode::path: return;
             case ShapeMode::polygon:
             default: tesselate_polygon(writer, positions, texCoords, convertedColors); break;
         }
@@ -507,10 +496,6 @@ namespace p5
 
         Renderer::Writer writer = m_renderer->write();
         tesselate_quads(writer, positions, texCoords, convertedColors);
-        // Filter/wrap are forced (not state.textureFilter/textureWrap): linear sampling is a correctness
-        // requirement for glyph scaling (see font.cpp -- each atlas cell is baked once and reused,
-        // bilinear-scaled, for every requested textSize()), not a style choice like it is for
-        // image()'s user textures.
         m_renderer->finish(writer, state.blendMode, state.clipRect, TextureFilter::linear, TextureWrap::clampToEdge, atlasTexture, resolveActiveShader(m_defaultTextShader), state.shaderUniforms);
     }
 
@@ -599,7 +584,6 @@ namespace p5
 
         const DrawState& state = peekState();
 
-        // OPEN fills the same pie wedge as PIE, but only strokes the arc itself (no radii/chord).
         const bool includeCenterInFill = mode == ArcMode::pie or mode == ArcMode::open;
         const bool closeStroke = mode == ArcMode::pie or mode == ArcMode::chord;
 
@@ -865,10 +849,10 @@ namespace p5
         };
 
         const float2 texCoords[4] = {
-            {u1, v2},
-            {u2, v2},
-            {u2, v1},
             {u1, v1},
+            {u2, v1},
+            {u2, v2},
+            {u1, v2},
         };
 
         submitQuad(positions, texCoords, tintColor, state, texture);

@@ -6,27 +6,26 @@ namespace p5
 {
     namespace detail
     {
-        // The vertex stage every built-in shader (fill, text, and effect shaders built via the
-        // single-argument loadShaderFromMemory()) shares: plain position/UV/color pass-through plus the
-        // 2D orthographic projection. Shared between graphics.cpp (default fill/text shaders) and
-        // shader.cpp (effect-shader wrapping) so there is one canonical vertex contract.
         inline static constexpr std::string_view defaultVertexShaderSource = R"(
-            #version 410
+            struct VertexOutput {
+                @builtin(position) position: vec4f,
+                @location(0) texCoord: vec2f,
+                @location(1) color: vec4f,
+            };
 
-            layout (location = 0) in vec2 a_Position;
-            layout (location = 1) in vec2 a_TexCoord;
-            layout (location = 2) in vec4 a_Color;
+            @group(0) @binding(0) var<uniform> u_ProjectionMatrix: mat4x4f;
 
-            uniform mat4 u_ProjectionMatrix;
-
-            out vec2 v_TexCoord;
-            out vec4 v_Color;
-
-            void main()
-            {
-                gl_Position = u_ProjectionMatrix * vec4(a_Position, 0.0, 1.0);
-                v_TexCoord = a_TexCoord;
-                v_Color = a_Color;
+            @vertex
+            fn vs_main(
+                @location(0) a_Position: vec2f,
+                @location(1) a_TexCoord: vec2f,
+                @location(2) a_Color: vec4f,
+            ) -> VertexOutput {
+                var out: VertexOutput;
+                out.position = u_ProjectionMatrix * vec4f(a_Position, 0.0, 1.0);
+                out.texCoord = a_TexCoord;
+                out.color = a_Color;
+                return out;
             }
         )";
     } // namespace detail

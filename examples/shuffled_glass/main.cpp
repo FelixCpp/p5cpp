@@ -5,25 +5,25 @@ using namespace p5;
 std::optional<Shader> createGaussianBlurShader()
 {
     const std::string_view blurShaderCode = R"(
-        uniform float u_BlurRadius;
-        uniform vec2 u_Resolution;
+        struct Uniforms {
+            u_BlurRadius: f32,
+            u_Resolution: vec2f,
+        };
+        @group(2) @binding(0) var<uniform> u_Extra: Uniforms;
 
-        vec4 effect(vec4 color, sampler2D image, vec2 texCoord, vec2 screenCoord)
-        {
-            vec2 texelSize = 1.0 / u_Resolution;
-            vec4 outColor = vec4(0.0);
-            float totalWeight = 0.0;
+        fn effect(color: vec4f, image: texture_2d<f32>, imageSampler: sampler, texCoord: vec2f, screenCoord: vec2f) -> vec4f {
+            let texelSize = 1.0 / u_Extra.u_Resolution;
+            var outColor = vec4f(0.0);
+            var totalWeight = 0.0;
 
-            int kernelRadius = int(ceil(u_BlurRadius));
+            let kernelRadius = i32(ceil(u_Extra.u_BlurRadius));
 
-            for (int ix = -kernelRadius; ix <= kernelRadius; ix++)
-            {
-                for (int iy = -kernelRadius; iy <= kernelRadius; iy++)
-                {
-                    float x = float(ix);
-                    float y = float(iy);
-                    float weight = exp(-(x * x + y * y) / (2.0 * u_BlurRadius * u_BlurRadius));
-                    outColor += texture(image, texCoord + vec2(x, y) * texelSize) * weight;
+            for (var ix = -kernelRadius; ix <= kernelRadius; ix++) {
+                for (var iy = -kernelRadius; iy <= kernelRadius; iy++) {
+                    let x = f32(ix);
+                    let y = f32(iy);
+                    let weight = exp(-(x * x + y * y) / (2.0 * u_Extra.u_BlurRadius * u_Extra.u_BlurRadius));
+                    outColor += textureSample(image, imageSampler, texCoord + vec2f(x, y) * texelSize) * weight;
                     totalWeight += weight;
                 }
             }

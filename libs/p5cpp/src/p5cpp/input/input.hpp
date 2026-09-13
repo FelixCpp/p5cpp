@@ -35,8 +35,6 @@ namespace p5
 
         std::span<const std::string> droppedFiles() const;
 
-        // Unicode codepoints (WindowEvent::CharInput) typed since the last reset(); layout-aware text
-        // input, unlike isKeyDown()/isKeyPressed() which report physical, layout-independent keys.
         std::span<const uint32_t> typedChars() const;
 
     private:

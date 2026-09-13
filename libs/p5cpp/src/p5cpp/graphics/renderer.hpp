@@ -3,11 +3,13 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/vertex_sink.hpp>
 
-#include <glad/glad.h>
+#include <webgpu/webgpu.h>
 
+#include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace p5
 {
@@ -55,18 +57,66 @@ namespace p5
         void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader, const std::unordered_map<std::string, UniformValue>& uniforms);
 
     private:
-        explicit Renderer(GLuint vao, GLuint vbo, GLuint ebo, size_t maxVertexCount, size_t maxIndexCount);
+        struct PipelineKey
+        {
+            ShaderImpl* shader;
+            BlendMode blendMode;
+            uint32_t sampleCount;
+            WGPUTextureFormat colorFormat;
+
+            bool operator<(const PipelineKey& other) const;
+        };
+        struct PipelineEntry
+        {
+            Shader shader;
+            WGPURenderPipeline pipeline;
+        };
+
+        struct TextureBindGroupKey
+        {
+            TextureImpl* texture;
+            TextureFilter filter;
+            TextureWrap wrap;
+
+            bool operator<(const TextureBindGroupKey& other) const;
+        };
+        struct TextureBindGroupEntry
+        {
+            Texture texture;
+            WGPUBindGroup bindGroup;
+        };
+
+        explicit Renderer(WGPUBuffer vertexBuffer, WGPUBuffer indexBuffer, size_t maxVertexCount, size_t maxIndexCount);
 
         void appendVertex(const Vertex& vertex);
         void appendIndex(uint32_t index);
-        // Flushes already-finish()ed batches early if headroom in either buffer has dropped below a
-        // reserved margin, so the next shape starts with most of the buffer free again. Only called
-        // from write(), between shapes -- see write()'s comment for why that's always safe.
         void flushIfNearCapacity();
 
-        GLuint m_vao;
-        GLuint m_vbo;
-        GLuint m_ebo;
+        WGPURenderPipeline getOrCreatePipeline(const Shader& shader, const BlendMode& blendMode, uint32_t sampleCount, WGPUTextureFormat colorFormat);
+        WGPUBindGroup getOrCreateTextureBindGroup(const Texture& texture, TextureFilter filter, TextureWrap wrap);
+        WGPUSampler getOrCreateSampler(TextureFilter filter, TextureWrap wrap);
+
+        uint32_t writeExtraUniforms(const RendererBatch& batch);
+
+        WGPUBuffer m_vertexBuffer;
+        WGPUBuffer m_indexBuffer;
+
+        WGPUBindGroupLayout m_projectionLayout;
+        WGPUBindGroupLayout m_textureLayout;
+        WGPUBindGroupLayout m_extraUniformsLayout;
+        WGPUPipelineLayout m_pipelineLayout;
+
+        WGPUBuffer m_projectionBuffer;
+        WGPUBindGroup m_projectionBindGroup;
+
+        WGPUBuffer m_extraUniformsBuffer;
+        WGPUBindGroup m_extraUniformsBindGroup;
+        size_t m_extraUniformsBufferCapacity;
+        size_t m_extraUniformsWriteCursor;
+
+        std::map<PipelineKey, PipelineEntry> m_pipelines;
+        std::map<TextureBindGroupKey, TextureBindGroupEntry> m_textureBindGroups;
+        std::map<std::pair<TextureFilter, TextureWrap>, WGPUSampler> m_samplers;
 
         std::vector<Vertex> m_vertices;
         std::vector<uint32_t> m_indices;

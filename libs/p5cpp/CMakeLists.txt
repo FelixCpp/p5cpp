@@ -13,14 +13,17 @@ add_library(
   ./src/p5cpp/input/input.cpp
   ./src/p5cpp/input/input_plugin.cpp
   ./src/p5cpp/input/input_api.cpp
+  ./src/p5cpp/graphics/gpu_device.cpp
   ./src/p5cpp/graphics/renderer.cpp
   ./src/p5cpp/graphics/tessellators.cpp
   ./src/p5cpp/graphics/graphics.cpp
+  ./src/p5cpp/graphics/blit_pass.cpp
   ./src/p5cpp/graphics/graphics_stack.cpp
   ./src/p5cpp/graphics/draw_state_stack.cpp
   ./src/p5cpp/graphics/matrix_stack.cpp
   ./src/p5cpp/graphics/pixels.cpp
   ./src/p5cpp/graphics/shader.cpp
+  ./src/p5cpp/graphics/wgsl_uniform_layout.cpp
   ./src/p5cpp/graphics/shape_builder.cpp
   ./src/p5cpp/graphics/canvas.cpp
   ./src/p5cpp/graphics/graphics_api.cpp
@@ -33,7 +36,7 @@ add_library(
   ./src/p5cpp/log.cpp
 )
 
-target_link_libraries(p5cpp PRIVATE glfw glad freetype libtess2 harfbuzz stb)
+target_link_libraries(p5cpp PRIVATE glfw freetype libtess2 harfbuzz stb wgpu-native glfw3webgpu)
 target_include_directories(p5cpp PUBLIC include)
 target_include_directories(p5cpp PRIVATE src)
 

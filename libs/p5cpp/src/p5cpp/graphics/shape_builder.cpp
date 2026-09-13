@@ -7,10 +7,6 @@ namespace p5
 {
     int curveSegmentCount(float controlPolygonLength)
     {
-        // A non-finite length (e.g. a NaN/Inf control point sneaking in from bezierVertex()/
-        // quadraticVertex()/curveVertex()'s unvalidated float arguments) makes std::ceil() return
-        // NaN/Inf too, and casting that to int is undefined behavior -- fall back to the minimum
-        // segment count instead of casting a non-finite value.
         if (not std::isfinite(controlPolygonLength))
             return 8;
         return std::clamp(static_cast<int>(std::ceil(controlPolygonLength / 3.0f)), 8, 128);
@@ -157,14 +153,10 @@ namespace p5
         const float2 p2 = m_curvePoints[n - 2];
         const float2 p3 = m_curvePoints[n - 1];
 
-        // `tightness` == 0 reproduces the standard (uniform) Catmull-Rom spline; increasing it towards 1
-        // pulls the curve straight through p1/p2 as p5.js's curveTightness() does.
         const float tangentScale = (1.0f - tightness) / 6.0f;
         const float2 controlPoint1 = p1 + (p2 - p0) * tangentScale;
         const float2 controlPoint2 = p2 - (p3 - p1) * tangentScale;
 
-        // curveVertex() is called without a preceding vertex() (per the p5.js pattern), so seed the
-        // shape's first output vertex from the Catmull-Rom segment's own start point.
         if (m_positions.empty()) {
             vertex(p1.x, p1.y, fillColor, strokeColor);
         }

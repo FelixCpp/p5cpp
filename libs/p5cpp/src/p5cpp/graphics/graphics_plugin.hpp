@@ -2,6 +2,7 @@
 
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/canvas.hpp>
+#include <p5cpp/graphics/gpu_device.hpp>
 
 namespace p5
 {
@@ -21,6 +22,7 @@ namespace p5
     private:
         void recreateDefaultGraphics();
 
+        std::unique_ptr<GpuDevice> m_gpuDevice;
         std::unique_ptr<Canvas> m_canvas;
         Graphics m_defaultGraphics;
         uint2 m_size;

@@ -1,8 +1,6 @@
 #include <p5cpp/window/window.hpp>
 #include <iostream>
 
-#include <glad/glad.h>
-
 namespace p5
 {
     static Key mapKey(int glfwKey)
@@ -193,12 +191,7 @@ namespace p5
 
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-        glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
         const std::string titleStr(title);
         GLFWwindow* window = glfwCreateWindow(width, height, titleStr.c_str(), nullptr, nullptr);
@@ -207,17 +200,9 @@ namespace p5
             return nullptr;
         }
 
-        glfwMakeContextCurrent(window);
-        glfwSwapInterval(1); // Enable V-Sync
-
-        if (not gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
-            glfwDestroyWindow(window);
-            glfwTerminate();
-            return nullptr;
-        }
-
         Window* instance = new Window {window, eventCallback};
         instance->m_title = titleStr;
+
         glfwSetWindowUserPointer(window, instance);
         glfwSetWindowSizeCallback(window, [](GLFWwindow* window, int width, int height) {
             Window* instance = static_cast<Window*>(glfwGetWindowUserPointer(window));
@@ -538,11 +523,6 @@ namespace p5
         glfwPollEvents();
     }
 
-    void Window::swapBuffers()
-    {
-        glfwSwapBuffers(m_window);
-    }
-
     uint2 Window::getPhysicalSize() const
     {
         int width, height;
@@ -577,6 +557,11 @@ namespace p5
     bool Window::isVisible() const
     {
         return glfwGetWindowAttrib(m_window, GLFW_VISIBLE) == GLFW_TRUE;
+    }
+
+    GLFWwindow* Window::getHandle() const
+    {
+        return m_window;
     }
 
     Window::Window(GLFWwindow* window, const EventCallback& eventCallback)

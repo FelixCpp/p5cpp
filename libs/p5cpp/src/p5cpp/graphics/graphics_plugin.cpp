@@ -4,7 +4,8 @@
 namespace p5
 {
     GraphicsPlugin::GraphicsPlugin()
-        : m_canvas(nullptr),
+        : m_gpuDevice(nullptr),
+          m_canvas(nullptr),
           m_defaultGraphics(),
           m_size(0, 0),
           m_samples(4)
@@ -13,11 +14,18 @@ namespace p5
 
     void GraphicsPlugin::setup(const Next& next)
     {
+        Window& window = requireDependency<Window>();
+
+        m_gpuDevice = GpuDevice::create(window);
+        if (m_gpuDevice == nullptr) {
+            throw std::runtime_error("Failed to create GpuDevice (WebGPU initialization failed)");
+        }
+        provideDependency(m_gpuDevice.get());
+
         m_canvas = std::make_unique<Canvas>();
         provideDependency(m_canvas.get());
         provideDependency(this);
 
-        Window& window = requireDependency<Window>();
         m_size = window.getLogicalSize();
 
         recreateDefaultGraphics();
@@ -35,6 +43,10 @@ namespace p5
                 m_size = uint2 {.x = resize->width, .y = resize->height};
                 recreateDefaultGraphics();
             }
+        }
+
+        if (const auto* resize = event.as_if<WindowEvent::FramebufferResize>()) {
+            m_gpuDevice->reconfigure(resize->width, resize->height);
         }
 
         next();
@@ -59,8 +71,12 @@ namespace p5
 
         removeDependency<Canvas>();
         removeDependency<GraphicsPlugin>();
+        removeDependency<GpuDevice>();
+
+        m_defaultGraphics = Graphics {};
 
         m_canvas.reset();
+        m_gpuDevice.reset();
     }
 
     void GraphicsPlugin::smooth(uint32_t samples)

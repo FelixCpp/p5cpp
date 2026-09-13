@@ -21,7 +21,5 @@ namespace p5
 
 namespace p5
 {
-    // `closed` treats `positions` as a loop (adds an implicit segment back from the last to the first point,
-    // with a join instead of a cap at the seam) rather than an open polyline.
     void tesselate_path(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed = false);
 }

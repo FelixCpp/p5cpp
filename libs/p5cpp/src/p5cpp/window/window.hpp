@@ -38,7 +38,6 @@ namespace p5
         bool isFullscreen() const;
 
         void pollEvents();
-        void swapBuffers();
 
         uint2 getPhysicalSize() const;
         uint2 getLogicalSize() const;
@@ -46,6 +45,8 @@ namespace p5
         std::string_view getTitle() const;
         bool isResizable() const;
         bool isVisible() const;
+
+        GLFWwindow* getHandle() const;
 
     private:
         explicit Window(GLFWwindow* window, const EventCallback& eventCallback);

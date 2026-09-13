@@ -13,16 +13,10 @@ namespace p5
         void close(int exitCode);
         void close();
         void restart();
-        // Resolves whether this frame should actually draw (isLooping(), or a pending redraw()
-        // request), consuming that pending request, and -- only when drawing -- advances
-        // frameCount/deltaTime/globalTime. Called once per frame from Kernel::run(); the result is
-        // read back via shouldDrawThisFrame() for the rest of that frame's dispatch chain.
         void nextFrame();
 
         void loop();
         void noLoop();
-        // Requests a single extra draw() call for the next frame even while noLoop() is active.
-        // No-op while already looping. Consumed (and cleared) by the next nextFrame().
         void redraw();
 
         bool shouldClose() const;

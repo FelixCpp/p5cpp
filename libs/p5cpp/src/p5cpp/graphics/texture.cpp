@@ -1,11 +1,12 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/texture_impl.hpp>
+#include <p5cpp/graphics/gpu_device.hpp>
 
-#include <glad/glad.h>
+#include <webgpu/webgpu.h>
+#include <webgpu/wgpu.h>
 #include <stb_image.h>
 #include <stb_image_write.h>
 
-#include <algorithm>
 #include <cstring>
 #include <optional>
 
@@ -13,76 +14,176 @@ namespace p5
 {
     namespace
     {
-        struct GLPixelFormat
+        struct GpuPixelFormat
         {
-            GLint internalFormat;
-            GLenum externalFormat;
-            size_t bytesPerPixel;
+            WGPUTextureFormat format;
+            uint32_t bytesPerPixel;
         };
 
-        std::optional<GLPixelFormat> toGLPixelFormat(TexturePixelFormat format)
+        std::optional<GpuPixelFormat> toGpuPixelFormat(TexturePixelFormat format)
         {
             switch (format) {
-                case TexturePixelFormat::rgba8: return GLPixelFormat {GL_RGBA8, GL_RGBA, 4};
-                case TexturePixelFormat::r8: return GLPixelFormat {GL_R8, GL_RED, 1};
+                case TexturePixelFormat::rgba8: return GpuPixelFormat {WGPUTextureFormat_RGBA8Unorm, 4};
+                case TexturePixelFormat::r8: return GpuPixelFormat {WGPUTextureFormat_R8Unorm, 1};
                 default:
                     error("Texture: unknown TexturePixelFormat");
                     return std::nullopt;
             }
         }
 
-        void flipRowsVertically(std::vector<uint8_t>& pixelData, uint32_t width, uint32_t height)
+        constexpr uint32_t kCopyBytesPerRowAlignment = 256;
+
+        uint32_t alignedBytesPerRow(uint32_t width, uint32_t bytesPerPixel)
         {
-            const size_t rowBytes = static_cast<size_t>(width) * 4;
-            for (uint32_t y = 0; y < height / 2; ++y) {
-                uint8_t* top = pixelData.data() + static_cast<size_t>(y) * rowBytes;
-                uint8_t* bottom = pixelData.data() + static_cast<size_t>(height - 1 - y) * rowBytes;
-                std::swap_ranges(top, top + rowBytes, bottom);
-            }
+            const uint32_t unaligned = width * bytesPerPixel;
+            return (unaligned + kCopyBytesPerRowAlignment - 1) / kCopyBytesPerRowAlignment * kCopyBytesPerRowAlignment;
         }
 
-        std::vector<uint8_t> queryPixelData(const Texture& texture)
+        void beginBufferMapRead(WGPUBuffer buffer, uint64_t size, bool* complete)
         {
-            std::vector<uint8_t> pixelData(static_cast<size_t>(texture.size.x) * static_cast<size_t>(texture.size.y) * 4);
-            glBindTexture(GL_TEXTURE_2D, texture.impl->id);
-            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
-            glBindTexture(GL_TEXTURE_2D, 0);
-            return pixelData;
+            WGPUBufferMapCallbackInfo callbackInfo {};
+            callbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
+            callbackInfo.callback = [](WGPUMapAsyncStatus status, WGPUStringView message, void* userdata1, void*) {
+                if (status != WGPUMapAsyncStatus_Success) {
+                    error("GPU buffer map failed: {}", std::string_view(message.data, message.length));
+                }
+                *static_cast<bool*>(userdata1) = true;
+            };
+            callbackInfo.userdata1 = complete;
+
+            wgpuBufferMapAsync(buffer, WGPUMapMode_Read, 0, size, callbackInfo);
+        }
+
+        std::optional<std::vector<uint8_t>> queryPixelData(const Texture& texture)
+        {
+            GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+            WGPUDevice device = gpuDevice.getDevice();
+
+            const uint32_t bytesPerRow = alignedBytesPerRow(texture.size.x, 4);
+            const uint64_t bufferSize = static_cast<uint64_t>(bytesPerRow) * texture.size.y;
+
+            WGPUBufferDescriptor bufferDesc {};
+            bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
+            bufferDesc.size = bufferSize;
+            WGPUBuffer stagingBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+            if (stagingBuffer == nullptr) {
+                error("Texture readback failed to allocate a staging buffer");
+                return std::nullopt;
+            }
+
+            WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
+
+            WGPUTexelCopyTextureInfo src {};
+            src.texture = texture.impl->texture;
+            src.origin = WGPUOrigin3D {0, 0, 0};
+            src.aspect = WGPUTextureAspect_All;
+
+            WGPUTexelCopyBufferInfo dst {};
+            dst.buffer = stagingBuffer;
+            dst.layout.bytesPerRow = bytesPerRow;
+            dst.layout.rowsPerImage = texture.size.y;
+
+            const WGPUExtent3D copySize {texture.size.x, texture.size.y, 1};
+            wgpuCommandEncoderCopyTextureToBuffer(encoder, &src, &dst, &copySize);
+
+            WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, nullptr);
+            wgpuQueueSubmit(gpuDevice.getQueue(), 1, &commandBuffer);
+            wgpuCommandBufferRelease(commandBuffer);
+            wgpuCommandEncoderRelease(encoder);
+
+            bool complete = false;
+            beginBufferMapRead(stagingBuffer, bufferSize, &complete);
+            while (not complete) {
+                wgpuDevicePoll(device, /* wait */ true, nullptr);
+            }
+
+            std::optional<std::vector<uint8_t>> result;
+            if (const void* mapped = wgpuBufferGetConstMappedRange(stagingBuffer, 0, bufferSize)) {
+                std::vector<uint8_t> pixelData(static_cast<size_t>(texture.size.x) * texture.size.y * 4);
+                const uint8_t* mappedBytes = static_cast<const uint8_t*>(mapped);
+                for (uint32_t row = 0; row < texture.size.y; ++row) {
+                    std::memcpy(pixelData.data() + static_cast<size_t>(row) * texture.size.x * 4, mappedBytes + static_cast<size_t>(row) * bytesPerRow, static_cast<size_t>(texture.size.x) * 4);
+                }
+                result = std::move(pixelData);
+            } else {
+                error("Texture readback failed to map its staging buffer");
+            }
+
+            wgpuBufferUnmap(stagingBuffer);
+            wgpuBufferDestroy(stagingBuffer);
+            wgpuBufferRelease(stagingBuffer);
+
+            return result;
         }
     } // namespace
 
+    std::optional<WGPUTextureFormat> toWGPUTextureFormat(TexturePixelFormat format)
+    {
+        const std::optional<GpuPixelFormat> gpuFormat = toGpuPixelFormat(format);
+        if (not gpuFormat.has_value()) {
+            return std::nullopt;
+        }
+        return gpuFormat->format;
+    }
+
     TextureImpl::~TextureImpl()
     {
-        glDeleteTextures(1, &id);
+        if (view != nullptr) {
+            wgpuTextureViewRelease(view);
+        }
+        if (texture != nullptr) {
+            wgpuTextureDestroy(texture);
+            wgpuTextureRelease(texture);
+        }
     }
 
     std::optional<Texture> loadTexture(uint32_t width, uint32_t height, std::span<const uint8_t> data, TexturePixelFormat format)
     {
-        const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(format);
-        if (not glFormatOpt.has_value()) {
+        const std::optional<GpuPixelFormat> gpuFormatOpt = toGpuPixelFormat(format);
+        if (not gpuFormatOpt.has_value()) {
             return std::nullopt;
         }
-        const GLPixelFormat& glFormat = *glFormatOpt;
+        const GpuPixelFormat& gpuFormat = *gpuFormatOpt;
 
-        const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
+        const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * gpuFormat.bytesPerPixel;
         if (not data.empty() and data.size() != expectedSize) {
             error("loadTexture() data size does not match width * height * bytesPerPixel");
             return std::nullopt;
         }
 
-        GLuint textureId;
-        glGenTextures(1, &textureId);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, glFormat.internalFormat, width, height, 0, glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
-        glBindTexture(GL_TEXTURE_2D, 0);
+        GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+
+        WGPUTextureDescriptor desc {};
+        desc.dimension = WGPUTextureDimension_2D;
+        desc.size = WGPUExtent3D {width, height, 1};
+        desc.format = gpuFormat.format;
+        desc.mipLevelCount = 1;
+        desc.sampleCount = 1;
+        desc.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst | WGPUTextureUsage_CopySrc | WGPUTextureUsage_RenderAttachment;
+
+        WGPUTexture texture = wgpuDeviceCreateTexture(gpuDevice.getDevice(), &desc);
+        if (texture == nullptr) {
+            error("loadTexture() failed to create the GPU texture");
+            return std::nullopt;
+        }
+
+        if (not data.empty()) {
+            WGPUTexelCopyTextureInfo dst {};
+            dst.texture = texture;
+            dst.origin = WGPUOrigin3D {0, 0, 0};
+            dst.aspect = WGPUTextureAspect_All;
+
+            WGPUTexelCopyBufferLayout layout {};
+            layout.bytesPerRow = width * gpuFormat.bytesPerPixel;
+            layout.rowsPerImage = height;
+
+            const WGPUExtent3D writeSize {width, height, 1};
+            wgpuQueueWriteTexture(gpuDevice.getQueue(), &dst, data.data(), data.size(), &layout, &writeSize);
+        }
 
         auto impl = std::make_shared<TextureImpl>();
-        impl->id = textureId;
+        impl->texture = texture;
+        impl->view = wgpuTextureCreateView(texture, nullptr);
 
         return Texture {.impl = std::move(impl), .size = uint2 {.x = width, .y = height}, .pixelFormat = format};
     }
@@ -90,8 +191,6 @@ namespace p5
     std::optional<Texture> loadTexture(const std::filesystem::path& filepath)
     {
         typedef decltype(&stbi_image_free) stbi_deleter;
-
-        stbi_set_flip_vertically_on_load(1);
 
         const std::string filepathStr = filepath.string();
         int width, height, channels;
@@ -106,14 +205,13 @@ namespace p5
 
     void Texture::updateSubImage(uint32_t x, uint32_t y, uint32_t width, uint32_t height, std::span<const uint8_t> data)
     {
-        const std::optional<GLPixelFormat> glFormatOpt = toGLPixelFormat(pixelFormat);
-        if (not glFormatOpt.has_value()) {
+        const std::optional<GpuPixelFormat> gpuFormatOpt = toGpuPixelFormat(pixelFormat);
+        if (not gpuFormatOpt.has_value()) {
             return;
         }
+        const GpuPixelFormat& gpuFormat = *gpuFormatOpt;
 
-        const GLPixelFormat& glFormat = glFormatOpt.value();
-
-        const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * glFormat.bytesPerPixel;
+        const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * gpuFormat.bytesPerPixel;
         if (data.size() != expectedSize) {
             error("updateSubImage() data size does not match width * height * bytesPerPixel");
             return;
@@ -123,10 +221,19 @@ namespace p5
             return;
         }
 
-        glBindTexture(GL_TEXTURE_2D, impl->id);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat.externalFormat, GL_UNSIGNED_BYTE, data.data());
-        glBindTexture(GL_TEXTURE_2D, 0);
+        GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+
+        WGPUTexelCopyTextureInfo dst {};
+        dst.texture = impl->texture;
+        dst.origin = WGPUOrigin3D {x, y, 0};
+        dst.aspect = WGPUTextureAspect_All;
+
+        WGPUTexelCopyBufferLayout layout {};
+        layout.bytesPerRow = width * gpuFormat.bytesPerPixel;
+        layout.rowsPerImage = height;
+
+        const WGPUExtent3D writeSize {width, height, 1};
+        wgpuQueueWriteTexture(gpuDevice.getQueue(), &dst, data.data(), data.size(), &layout, &writeSize);
     }
 
     Texture Texture::getSubTexture(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const
@@ -145,39 +252,26 @@ namespace p5
             return {};
         }
 
-        // Unlike updateSubImage(), x/y here are top-down (y = 0 at the TOP), matching
-        // Pixels::getSubPixels() and everyday expectations -- convert to GL's bottom-up texture
-        // space for the actual blit below.
-        const uint32_t glY = size.y - y - height;
+        GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(gpuDevice.getDevice(), nullptr);
 
-        // GPU-side copy via glBlitFramebuffer between two throwaway FBOs (one wrapping this
-        // texture as the read source, one wrapping the new texture as the draw target) -- no CPU
-        // pixel roundtrip. Deliberately NOT glCopyTexSubImage2D: that entry point also validates
-        // the currently bound *draw* framebuffer internally (even though this is a read), and a
-        // freshly created, never-drawn-to FBO bound there reliably segfaults inside Apple's
-        // legacy OpenGL driver (GLDObject::release() null deref, radar-worthy but unfixable from
-        // here). blitGraphicsToScreen() already relies on glBlitFramebuffer for the same kind of
-        // copy, so this sticks to the path this codebase has already proven out on this driver.
-        GLuint readFbo = 0;
-        GLuint drawFbo = 0;
-        glGenFramebuffers(1, &readFbo);
-        glGenFramebuffers(1, &drawFbo);
+        WGPUTexelCopyTextureInfo src {};
+        src.texture = impl->texture;
+        src.origin = WGPUOrigin3D {x, y, 0};
+        src.aspect = WGPUTextureAspect_All;
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, impl->id, 0);
+        WGPUTexelCopyTextureInfo dst {};
+        dst.texture = subTexture->impl->texture;
+        dst.origin = WGPUOrigin3D {0, 0, 0};
+        dst.aspect = WGPUTextureAspect_All;
 
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFbo);
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, subTexture->impl->id, 0);
+        const WGPUExtent3D copySize {width, height, 1};
+        wgpuCommandEncoderCopyTextureToTexture(encoder, &src, &dst, &copySize);
 
-        glBlitFramebuffer(
-            static_cast<GLint>(x), static_cast<GLint>(glY), static_cast<GLint>(x + width), static_cast<GLint>(glY + height),
-            0, 0, static_cast<GLint>(width), static_cast<GLint>(height),
-            GL_COLOR_BUFFER_BIT, GL_NEAREST
-        );
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteFramebuffers(1, &readFbo);
-        glDeleteFramebuffers(1, &drawFbo);
+        WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, nullptr);
+        wgpuQueueSubmit(gpuDevice.getQueue(), 1, &commandBuffer);
+        wgpuCommandBufferRelease(commandBuffer);
+        wgpuCommandEncoderRelease(encoder);
 
         return subTexture.value();
     }
@@ -192,8 +286,10 @@ namespace p5
         const std::string filepathStr = filepath.string();
         const auto [width, height] = size;
         auto pixelData = queryPixelData(*this);
-        flipRowsVertically(pixelData, width, height);
-        const int result = stbi_write_png(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), static_cast<int>(width) * 4);
+        if (not pixelData.has_value()) {
+            return false;
+        }
+        const int result = stbi_write_png(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData->data(), static_cast<int>(width) * 4);
         return result != 0;
     }
 
@@ -202,8 +298,10 @@ namespace p5
         const std::string filepathStr = filepath.string();
         const auto [width, height] = size;
         auto pixelData = queryPixelData(*this);
-        flipRowsVertically(pixelData, width, height);
-        const int result = stbi_write_jpg(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data(), quality);
+        if (not pixelData.has_value()) {
+            return false;
+        }
+        const int result = stbi_write_jpg(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData->data(), quality);
         return result != 0;
     }
 
@@ -212,8 +310,10 @@ namespace p5
         const std::string filepathStr = filepath.string();
         const auto [width, height] = size;
         auto pixelData = queryPixelData(*this);
-        flipRowsVertically(pixelData, width, height);
-        const int result = stbi_write_bmp(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData.data());
+        if (not pixelData.has_value()) {
+            return false;
+        }
+        const int result = stbi_write_bmp(filepathStr.c_str(), static_cast<int>(width), static_cast<int>(height), STBI_rgb_alpha, pixelData->data());
         return result != 0;
     }
 
@@ -226,12 +326,14 @@ namespace p5
 
         const auto [width, height] = size;
         auto bytes = queryPixelData(*this);
-        flipRowsVertically(bytes, width, height);
+        if (not bytes.has_value()) {
+            return {};
+        }
 
         return Pixels {
             .width = width,
             .height = height,
-            .data = std::move(bytes)
+            .data = std::move(bytes).value()
         };
     }
 
@@ -248,23 +350,15 @@ namespace p5
             return;
         }
 
-        // Pixels::data is already tightly-packed RGBA8 bytes; copy so the flip below doesn't mutate the caller's Pixels.
-        std::vector<uint8_t> bytes = pixels.data;
-
-        // Pixels is top-down (see loadPixels()'s flip above); glTexSubImage2D expects the same
-        // bottom-up row order queryPixelData() returns, so flip back before uploading.
-        flipRowsVertically(bytes, width, height);
-        updateSubImage(0, 0, width, height, bytes);
+        updateSubImage(0, 0, width, height, pixels.data);
     }
 
     PixelReader::~PixelReader()
     {
         for (PixelReaderSlot& slot : ring) {
-            if (slot.fence != nullptr) {
-                glDeleteSync(static_cast<GLsync>(slot.fence));
-            }
-            if (slot.pboId != 0) {
-                glDeleteBuffers(1, &slot.pboId);
+            if (slot.buffer != nullptr) {
+                wgpuBufferDestroy(static_cast<WGPUBuffer>(slot.buffer));
+                wgpuBufferRelease(static_cast<WGPUBuffer>(slot.buffer));
             }
         }
     }
@@ -276,18 +370,20 @@ namespace p5
             return nullptr;
         }
 
+        GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+
         auto reader = std::make_unique<PixelReader>();
         reader->width = width;
         reader->height = height;
         reader->ring.resize(ringSize);
 
-        const GLsizeiptr byteSize = static_cast<GLsizeiptr>(width) * static_cast<GLsizeiptr>(height) * 4;
+        const uint64_t bufferSize = static_cast<uint64_t>(alignedBytesPerRow(width, 4)) * height;
         for (PixelReaderSlot& slot : reader->ring) {
-            glGenBuffers(1, &slot.pboId);
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.pboId);
-            glBufferData(GL_PIXEL_PACK_BUFFER, byteSize, nullptr, GL_STREAM_READ);
+            WGPUBufferDescriptor desc {};
+            desc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
+            desc.size = bufferSize;
+            slot.buffer = wgpuDeviceCreateBuffer(gpuDevice.getDevice(), &desc);
         }
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
         return reader;
     }
@@ -304,20 +400,45 @@ namespace p5
         }
 
         PixelReaderSlot& slot = reader.ring[reader.writeIndex];
-        const bool droppedUndrained = slot.pending;
-        if (droppedUndrained) {
-            warn("requestPixelReadback(): dropping an undrained frame -- pollPixelReadback() isn't keeping up");
-            glDeleteSync(static_cast<GLsync>(slot.fence));
-            slot.fence = nullptr;
+        WGPUBuffer buffer = static_cast<WGPUBuffer>(slot.buffer);
+
+        if (slot.pending and slot.mapRequested and not slot.mapComplete) {
+            warn("requestPixelReadback(): the previous readback for this ring slot hasn't completed yet -- dropping this request (pollPixelReadback() isn't keeping up)");
+            return false;
         }
 
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.pboId);
-        glBindTexture(GL_TEXTURE_2D, texture.impl->id);
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        slot.fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        const bool droppedUndrained = slot.pending;
+        if (droppedUndrained) {
+            wgpuBufferUnmap(buffer);
+            warn("requestPixelReadback(): dropping an undrained frame -- pollPixelReadback() isn't keeping up");
+        }
+
+        GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(gpuDevice.getDevice(), nullptr);
+
+        WGPUTexelCopyTextureInfo src {};
+        src.texture = texture.impl->texture;
+        src.origin = WGPUOrigin3D {0, 0, 0};
+        src.aspect = WGPUTextureAspect_All;
+
+        WGPUTexelCopyBufferInfo dst {};
+        dst.buffer = buffer;
+        dst.layout.bytesPerRow = alignedBytesPerRow(reader.width, 4);
+        dst.layout.rowsPerImage = reader.height;
+
+        const WGPUExtent3D copySize {reader.width, reader.height, 1};
+        wgpuCommandEncoderCopyTextureToBuffer(encoder, &src, &dst, &copySize);
+
+        WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, nullptr);
+        wgpuQueueSubmit(gpuDevice.getQueue(), 1, &commandBuffer);
+        wgpuCommandBufferRelease(commandBuffer);
+        wgpuCommandEncoderRelease(encoder);
+
+        slot.mapComplete = false;
+        slot.mapRequested = true;
         slot.pending = true;
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        const uint64_t bufferSize = static_cast<uint64_t>(alignedBytesPerRow(reader.width, 4)) * reader.height;
+        beginBufferMapRead(buffer, bufferSize, &slot.mapComplete);
 
         reader.writeIndex = (reader.writeIndex + 1) % reader.ring.size();
         return not droppedUndrained;
@@ -330,35 +451,36 @@ namespace p5
             return std::nullopt;
         }
 
-        // Zero timeout: this only ever polls the fence's current status, never waits on it.
-        const GLenum waitResult = glClientWaitSync(static_cast<GLsync>(slot.fence), 0, 0);
-        if (waitResult == GL_TIMEOUT_EXPIRED or waitResult == GL_WAIT_FAILED) {
+        GpuDevice& gpuDevice = requireDependency<GpuDevice>();
+        wgpuDevicePoll(gpuDevice.getDevice(), /* wait */ false, nullptr);
+
+        if (not slot.mapComplete) {
             return std::nullopt;
         }
 
-        glDeleteSync(static_cast<GLsync>(slot.fence));
-        slot.fence = nullptr;
         slot.pending = false;
+        slot.mapRequested = false;
+        slot.mapComplete = false;
         reader.readIndex = (reader.readIndex + 1) % reader.ring.size();
 
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, slot.pboId);
-        const GLsizeiptr byteSize = static_cast<GLsizeiptr>(reader.width) * static_cast<GLsizeiptr>(reader.height) * 4;
-        const void* mapped = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, byteSize, GL_MAP_READ_BIT);
+        WGPUBuffer buffer = static_cast<WGPUBuffer>(slot.buffer);
+        const uint32_t bytesPerRow = alignedBytesPerRow(reader.width, 4);
+        const uint64_t bufferSize = static_cast<uint64_t>(bytesPerRow) * reader.height;
+
+        const void* mapped = wgpuBufferGetConstMappedRange(buffer, 0, bufferSize);
         if (mapped == nullptr) {
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            error("pollPixelReadback() failed to map its PBO");
+            wgpuBufferUnmap(buffer);
+            error("pollPixelReadback() failed to read its mapped buffer");
             return std::nullopt;
         }
 
-        std::vector<uint8_t> bytes(static_cast<size_t>(byteSize));
-        std::memcpy(bytes.data(), mapped, bytes.size());
-        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        std::vector<uint8_t> bytes(static_cast<size_t>(reader.width) * reader.height * 4);
+        const uint8_t* mappedBytes = static_cast<const uint8_t*>(mapped);
+        for (uint32_t row = 0; row < reader.height; ++row) {
+            std::memcpy(bytes.data() + static_cast<size_t>(row) * reader.width * 4, mappedBytes + static_cast<size_t>(row) * bytesPerRow, static_cast<size_t>(reader.width) * 4);
+        }
 
-        // GL's readback is bottom-up (row 0 = bottom of the image, see the Texture/Pixels
-        // orientation note in p5cpp.hpp); flip it to Pixels' top-down convention before handing
-        // it back, same as Texture::loadPixels().
-        flipRowsVertically(bytes, reader.width, reader.height);
+        wgpuBufferUnmap(buffer);
 
         return Pixels {.width = reader.width, .height = reader.height, .data = std::move(bytes)};
     }

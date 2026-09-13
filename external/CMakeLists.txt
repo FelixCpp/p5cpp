@@ -6,8 +6,9 @@
 add_subdirectory(CameraCapture)
 add_subdirectory(glfw)
 add_subdirectory(freetype)
-add_subdirectory(glad)
 add_subdirectory(miniaudio)
+add_subdirectory(wgpu-native)
+add_subdirectory(glfw3webgpu)
 
 set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
 set(HB_BUILD_UTILS OFF CACHE BOOL "" FORCE)
