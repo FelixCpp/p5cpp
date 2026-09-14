@@ -20,6 +20,7 @@ namespace p5
         if (m_gpuDevice == nullptr) {
             throw std::runtime_error("Failed to create GpuDevice (WebGPU initialization failed)");
         }
+
         provideDependency(m_gpuDevice.get());
 
         m_canvas = std::make_unique<Canvas>();

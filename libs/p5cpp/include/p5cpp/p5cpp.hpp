@@ -143,6 +143,8 @@ namespace p5
     constexpr uint8_t getAlpha(color_t color);
     constexpr uint8_t getBrightness(color_t color);
     constexpr uint8_t getLuminance(color_t color);
+
+    constexpr color_t lerpColor(color_t from, color_t to, float t);
 } // namespace p5
 
 namespace p5
@@ -199,6 +201,14 @@ namespace p5
         Count,
     };
     // clang-format on
+
+    enum class SwipeDirection
+    {
+        up,
+        down,
+        left,
+        right,
+    };
 
     struct KeyMods
     {
@@ -418,6 +428,12 @@ namespace p5
 
     double getScrollX();
     double getScrollY();
+
+    bool isSwiped(MouseButton button = MouseButton::Left);
+    SwipeDirection getSwipeDirection(MouseButton button = MouseButton::Left);
+    double getSwipeDistance(MouseButton button = MouseButton::Left);
+    double getSwipeDuration(MouseButton button = MouseButton::Left);
+    void setSwipeThreshold(double minDistance, double maxDurationInSeconds);
 
     bool isCursorInWindow();
 
@@ -1267,6 +1283,16 @@ namespace p5
     inline constexpr uint8_t getAlpha(color_t color) { return static_cast<uint8_t>(color & 0xFF); }
     inline constexpr uint8_t getBrightness(color_t color) { return static_cast<uint8_t>((getRed(color) + getGreen(color) + getBlue(color)) / 3); }
     inline constexpr uint8_t getLuminance(color_t color) { return static_cast<uint8_t>(0.2126f * getRed(color) + 0.7152f * getGreen(color) + 0.0722f * getBlue(color)); }
+
+    inline constexpr color_t lerpColor(color_t from, color_t to, float t)
+    {
+        const uint8_t r = static_cast<uint8_t>(std::lerp(getRed(from), getRed(to), t));
+        const uint8_t g = static_cast<uint8_t>(std::lerp(getGreen(from), getGreen(to), t));
+        const uint8_t b_ = static_cast<uint8_t>(std::lerp(getBlue(from), getBlue(to), t));
+        const uint8_t a_ = static_cast<uint8_t>(std::lerp(getAlpha(from), getAlpha(to), t));
+
+        return rgba(r, g, b_, a_);
+    }
 } // namespace p5
 
 namespace p5

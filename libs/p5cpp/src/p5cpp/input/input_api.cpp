@@ -82,6 +82,31 @@ namespace p5
         return input().scrollY();
     }
 
+    bool isSwiped(MouseButton button)
+    {
+        return input().isSwiped(button);
+    }
+
+    SwipeDirection getSwipeDirection(MouseButton button)
+    {
+        return input().swipeDirection(button);
+    }
+
+    double getSwipeDistance(MouseButton button)
+    {
+        return input().swipeDistance(button);
+    }
+
+    double getSwipeDuration(MouseButton button)
+    {
+        return input().swipeDuration(button);
+    }
+
+    void setSwipeThreshold(double minDistance, double maxDurationInSeconds)
+    {
+        input().setSwipeThreshold(minDistance, maxDurationInSeconds);
+    }
+
     bool isCursorInWindow()
     {
         return input().cursorInWindow();

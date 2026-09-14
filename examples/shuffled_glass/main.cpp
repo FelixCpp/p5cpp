@@ -35,7 +35,7 @@ std::optional<Shader> createGaussianBlurShader()
     return loadShaderFromMemory(blurShaderCode);
 }
 
-struct VPainting : Sketch
+struct ShuffledGlass : Sketch
 {
     Texture landscape = loadTexture("assets/landscape.jpg").value();
     Shader blurShader = createGaussianBlurShader().value();
@@ -122,7 +122,7 @@ SketchSpec p5::createSpec()
 {
     return {
         .sketch = [] {
-            return std::make_unique<VPainting>();
+            return std::make_unique<ShuffledGlass>();
         }
     };
 }

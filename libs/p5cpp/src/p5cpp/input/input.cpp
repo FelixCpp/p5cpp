@@ -1,5 +1,7 @@
 #include <p5cpp/input/input.hpp>
 
+#include <cmath>
+
 namespace p5
 {
     void Input::process(const WindowEvent& event)
@@ -21,6 +23,11 @@ namespace p5
                 m_buttonPressed[buttonIndex] = true;
                 m_mouseX = buttonPress.x;
                 m_mouseY = buttonPress.y;
+
+                m_dragging[buttonIndex] = true;
+                m_dragStartX[buttonIndex] = buttonPress.x;
+                m_dragStartY[buttonIndex] = buttonPress.y;
+                m_dragStartTime[buttonIndex] = getGlobalTime();
             },
             [this](const WindowEvent::MouseButtonRelease& buttonRelease) {
                 const auto buttonIndex = static_cast<size_t>(buttonRelease.button);
@@ -28,6 +35,24 @@ namespace p5
                 m_buttonReleased[buttonIndex] = true;
                 m_mouseX = buttonRelease.x;
                 m_mouseY = buttonRelease.y;
+
+                if (m_dragging[buttonIndex]) {
+                    m_dragging[buttonIndex] = false;
+
+                    const double deltaX = buttonRelease.x - m_dragStartX[buttonIndex];
+                    const double deltaY = buttonRelease.y - m_dragStartY[buttonIndex];
+                    const double distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+                    const double duration = getGlobalTime() - m_dragStartTime[buttonIndex];
+
+                    if (distance >= m_swipeMinDistance && duration <= m_swipeMaxDuration) {
+                        m_swiped[buttonIndex] = true;
+                        m_swipeDistance[buttonIndex] = distance;
+                        m_swipeDuration[buttonIndex] = duration;
+                        m_swipeDirection[buttonIndex] = (std::abs(deltaX) > std::abs(deltaY))
+                            ? (deltaX > 0.0 ? SwipeDirection::right : SwipeDirection::left)
+                            : (deltaY > 0.0 ? SwipeDirection::down : SwipeDirection::up);
+                    }
+                }
             },
             [this](const WindowEvent::MouseMove& mouseMove) {
                 m_mouseX = mouseMove.x;
@@ -57,6 +82,7 @@ namespace p5
         m_keyReleased.fill(false);
         m_buttonPressed.fill(false);
         m_buttonReleased.fill(false);
+        m_swiped.fill(false);
         m_scrollX = 0.0;
         m_scrollY = 0.0;
         m_droppedFiles.clear();
@@ -123,6 +149,32 @@ namespace p5
     double Input::scrollY() const
     {
         return m_scrollY;
+    }
+
+    bool Input::isSwiped(MouseButton button) const
+    {
+        return m_swiped[static_cast<size_t>(button)];
+    }
+
+    SwipeDirection Input::swipeDirection(MouseButton button) const
+    {
+        return m_swipeDirection[static_cast<size_t>(button)];
+    }
+
+    double Input::swipeDistance(MouseButton button) const
+    {
+        return m_swipeDistance[static_cast<size_t>(button)];
+    }
+
+    double Input::swipeDuration(MouseButton button) const
+    {
+        return m_swipeDuration[static_cast<size_t>(button)];
+    }
+
+    void Input::setSwipeThreshold(double minDistance, double maxDurationInSeconds)
+    {
+        m_swipeMinDistance = minDistance;
+        m_swipeMaxDuration = maxDurationInSeconds;
     }
 
     bool Input::cursorInWindow() const

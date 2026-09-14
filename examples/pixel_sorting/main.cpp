@@ -1,8 +1,6 @@
 #include <p5cpp/p5cpp.hpp>
-#include <p5cpp_camera/p5cpp_camera.hpp>
 
 using namespace p5;
-using namespace p5::camera;
 
 struct PixelSorting : Sketch
 {
@@ -21,17 +19,7 @@ struct PixelSorting : Sketch
 
     void draw() override
     {
-
-        if (isKeyPressed(Key::R)) {
-            resetCamera();
-        }
-
         background(rgba(31, 31, 51));
-
-        const float mx = static_cast<float>(getMouseX());
-        const float my = static_cast<float>(getMouseY());
-        const float2 mousePos {mx, my};
-        const size_t radius = 200;
 
         if (isSorting) {
             if (cursorX < pixels.width) {
@@ -51,9 +39,7 @@ struct PixelSorting : Sketch
         const float width = static_cast<float>(getWidth());
         const float height = static_cast<float>(getHeight());
 
-        withCamera([&] {
-            image(texture, 0.0f, 0.0f, width, height);
-        });
+        image(texture, 0.0f, 0.0f, width, height);
     }
 
     void sortColumn(Pixels& pixels, size_t x, size_t initialY, size_t finalY)
@@ -156,11 +142,6 @@ struct PixelSorting : Sketch
 SketchSpec p5::createSpec()
 {
     return {
-        .plugins = [] {
-            std::vector<std::unique_ptr<Plugin>> plugins;
-            plugins.emplace_back(createCameraPlugin());
-            return plugins;
-        },
         .sketch = [] {
             return std::make_unique<PixelSorting>();
         }
