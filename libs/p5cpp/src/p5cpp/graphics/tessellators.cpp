@@ -323,10 +323,18 @@ namespace p5
         }
     } // namespace
 
-    void tesselate_path(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed)
+    void tesselate_path(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed, bool synthesizeCrossTrackV)
     {
         if (strokeWeight <= 0.0f)
             return;
+
+        const auto withV = [synthesizeCrossTrackV](const PathPoint& point, float v) {
+            if (not synthesizeCrossTrackV)
+                return point;
+            PathPoint result = point;
+            result.texCoord.y = v;
+            return result;
+        };
 
         std::vector<PathPoint> pts;
         pts.reserve(positions.size());
@@ -364,10 +372,10 @@ namespace p5
             const PathPoint& p0 = pts[i];
             const PathPoint& p1 = pts[next(i)];
 
-            const uint32_t left0 = emitVertex(sink, vertexCount, offsetBy(p0.position, normals[i], halfWidth), p0);
-            const uint32_t right0 = emitVertex(sink, vertexCount, offsetBy(p0.position, normals[i], -halfWidth), p0);
-            const uint32_t left1 = emitVertex(sink, vertexCount, offsetBy(p1.position, normals[i], halfWidth), p1);
-            const uint32_t right1 = emitVertex(sink, vertexCount, offsetBy(p1.position, normals[i], -halfWidth), p1);
+            const uint32_t left0 = emitVertex(sink, vertexCount, offsetBy(p0.position, normals[i], halfWidth), withV(p0, 1.0f));
+            const uint32_t right0 = emitVertex(sink, vertexCount, offsetBy(p0.position, normals[i], -halfWidth), withV(p0, -1.0f));
+            const uint32_t left1 = emitVertex(sink, vertexCount, offsetBy(p1.position, normals[i], halfWidth), withV(p1, 1.0f));
+            const uint32_t right1 = emitVertex(sink, vertexCount, offsetBy(p1.position, normals[i], -halfWidth), withV(p1, -1.0f));
 
             sink.addIndex(left0);
             sink.addIndex(right0);
@@ -395,16 +403,16 @@ namespace p5
             const float2 innerPrev = offsetBy(joint.position, outerN0, -halfWidth);
             const float2 innerNext = offsetBy(joint.position, outerN1, -halfWidth);
 
-            const uint32_t jointIndex = emitVertex(sink, vertexCount, joint.position, joint);
-            const uint32_t innerPrevIndex = emitVertex(sink, vertexCount, innerPrev, joint);
-            const uint32_t innerNextIndex = emitVertex(sink, vertexCount, innerNext, joint);
+            const uint32_t jointIndex = emitVertex(sink, vertexCount, joint.position, withV(joint, 0.0f));
+            const uint32_t innerPrevIndex = emitVertex(sink, vertexCount, innerPrev, withV(joint, -outerSign));
+            const uint32_t innerNextIndex = emitVertex(sink, vertexCount, innerNext, withV(joint, -outerSign));
             sink.addIndex(jointIndex);
             sink.addIndex(innerPrevIndex);
             sink.addIndex(innerNextIndex);
 
             const auto emitOuterBevel = [&] {
-                const uint32_t outerPrevIndex = emitVertex(sink, vertexCount, outerPrev, joint);
-                const uint32_t outerNextIndex = emitVertex(sink, vertexCount, outerNext, joint);
+                const uint32_t outerPrevIndex = emitVertex(sink, vertexCount, outerPrev, withV(joint, outerSign));
+                const uint32_t outerNextIndex = emitVertex(sink, vertexCount, outerNext, withV(joint, outerSign));
                 sink.addIndex(jointIndex);
                 sink.addIndex(outerPrevIndex);
                 sink.addIndex(outerNextIndex);
@@ -423,7 +431,7 @@ namespace p5
                     if (std::abs(sweep) < roundJoinThreshold)
                         emitOuterBevel();
                     else
-                        emitArcFan(sink, vertexCount, joint, jointIndex, outerPrev, startAngle, sweep, halfWidth, arcAngleStep);
+                        emitArcFan(sink, vertexCount, withV(joint, outerSign), jointIndex, outerPrev, startAngle, sweep, halfWidth, arcAngleStep);
                     break;
                 }
 
@@ -437,9 +445,9 @@ namespace p5
                         const float cosHalf = dot2(miterDir, outerN0);
                         if (cosHalf > 1e-4f && halfWidth / cosHalf <= miterLimit * halfWidth) {
                             const float2 miterTip = offsetBy(joint.position, miterDir, halfWidth / cosHalf);
-                            const uint32_t outerPrevIndex = emitVertex(sink, vertexCount, outerPrev, joint);
-                            const uint32_t miterTipIndex = emitVertex(sink, vertexCount, miterTip, joint);
-                            const uint32_t outerNextIndex = emitVertex(sink, vertexCount, outerNext, joint);
+                            const uint32_t outerPrevIndex = emitVertex(sink, vertexCount, outerPrev, withV(joint, outerSign));
+                            const uint32_t miterTipIndex = emitVertex(sink, vertexCount, miterTip, withV(joint, outerSign));
+                            const uint32_t outerNextIndex = emitVertex(sink, vertexCount, outerNext, withV(joint, outerSign));
                             sink.addIndex(jointIndex);
                             sink.addIndex(outerPrevIndex);
                             sink.addIndex(miterTipIndex);
@@ -472,10 +480,10 @@ namespace p5
                 case StrokeCapStyle::square: {
                     const float2 leftExt = offsetBy(leftPoint, outward, halfWidth);
                     const float2 rightExt = offsetBy(rightPoint, outward, halfWidth);
-                    const uint32_t leftIndex = emitVertex(sink, vertexCount, leftPoint, endpoint);
-                    const uint32_t rightIndex = emitVertex(sink, vertexCount, rightPoint, endpoint);
-                    const uint32_t leftExtIndex = emitVertex(sink, vertexCount, leftExt, endpoint);
-                    const uint32_t rightExtIndex = emitVertex(sink, vertexCount, rightExt, endpoint);
+                    const uint32_t leftIndex = emitVertex(sink, vertexCount, leftPoint, withV(endpoint, 1.0f));
+                    const uint32_t rightIndex = emitVertex(sink, vertexCount, rightPoint, withV(endpoint, -1.0f));
+                    const uint32_t leftExtIndex = emitVertex(sink, vertexCount, leftExt, withV(endpoint, 1.0f));
+                    const uint32_t rightExtIndex = emitVertex(sink, vertexCount, rightExt, withV(endpoint, -1.0f));
                     sink.addIndex(leftIndex);
                     sink.addIndex(rightIndex);
                     sink.addIndex(rightExtIndex);
@@ -487,9 +495,9 @@ namespace p5
 
                 case StrokeCapStyle::triangle: {
                     const float2 apex = offsetBy(endpoint.position, outward, halfWidth);
-                    const uint32_t leftIndex = emitVertex(sink, vertexCount, leftPoint, endpoint);
-                    const uint32_t rightIndex = emitVertex(sink, vertexCount, rightPoint, endpoint);
-                    const uint32_t apexIndex = emitVertex(sink, vertexCount, apex, endpoint);
+                    const uint32_t leftIndex = emitVertex(sink, vertexCount, leftPoint, withV(endpoint, 1.0f));
+                    const uint32_t rightIndex = emitVertex(sink, vertexCount, rightPoint, withV(endpoint, -1.0f));
+                    const uint32_t apexIndex = emitVertex(sink, vertexCount, apex, withV(endpoint, 0.0f));
                     sink.addIndex(leftIndex);
                     sink.addIndex(rightIndex);
                     sink.addIndex(apexIndex);

@@ -133,15 +133,15 @@ namespace p5
     static MouseButton mapMouseButton(int glfwButton)
     {
         switch (glfwButton) {
-            case GLFW_MOUSE_BUTTON_LEFT: return MouseButton::Left;
-            case GLFW_MOUSE_BUTTON_RIGHT: return MouseButton::Right;
-            case GLFW_MOUSE_BUTTON_MIDDLE: return MouseButton::Middle;
-            case GLFW_MOUSE_BUTTON_4: return MouseButton::Button4;
-            case GLFW_MOUSE_BUTTON_5: return MouseButton::Button5;
-            case GLFW_MOUSE_BUTTON_6: return MouseButton::Button6;
-            case GLFW_MOUSE_BUTTON_7: return MouseButton::Button7;
-            case GLFW_MOUSE_BUTTON_8: return MouseButton::Button8;
-            default: return MouseButton::Button8;
+            case GLFW_MOUSE_BUTTON_LEFT: return MouseButton::left;
+            case GLFW_MOUSE_BUTTON_RIGHT: return MouseButton::right;
+            case GLFW_MOUSE_BUTTON_MIDDLE: return MouseButton::middle;
+            case GLFW_MOUSE_BUTTON_4: return MouseButton::button4;
+            case GLFW_MOUSE_BUTTON_5: return MouseButton::button5;
+            case GLFW_MOUSE_BUTTON_6: return MouseButton::button6;
+            case GLFW_MOUSE_BUTTON_7: return MouseButton::button7;
+            case GLFW_MOUSE_BUTTON_8: return MouseButton::button8;
+            default: return MouseButton::button8;
         }
     }
 

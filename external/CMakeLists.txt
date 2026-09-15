@@ -41,3 +41,6 @@ target_compile_definitions(stb INTERFACE STB_IMAGE_IMPLEMENTATION STB_IMAGE_WRIT
 add_library(msf_gif INTERFACE)
 target_include_directories(msf_gif SYSTEM INTERFACE msf_gif)
 target_compile_definitions(msf_gif INTERFACE MSF_GIF_IMPL)
+
+add_library(microui STATIC microui/microui.c)
+target_include_directories(microui SYSTEM PUBLIC microui)

@@ -48,9 +48,9 @@ namespace p5
         std::array<bool, static_cast<size_t>(Key::Count)> m_keyPressed {};
         std::array<bool, static_cast<size_t>(Key::Count)> m_keyReleased {};
 
-        std::array<bool, static_cast<size_t>(MouseButton::Count)> m_buttonDown {};
-        std::array<bool, static_cast<size_t>(MouseButton::Count)> m_buttonPressed {};
-        std::array<bool, static_cast<size_t>(MouseButton::Count)> m_buttonReleased {};
+        std::array<bool, static_cast<size_t>(MouseButton::count)> m_buttonDown {};
+        std::array<bool, static_cast<size_t>(MouseButton::count)> m_buttonPressed {};
+        std::array<bool, static_cast<size_t>(MouseButton::count)> m_buttonReleased {};
 
         double m_mouseX = 0.0;
         double m_mouseY = 0.0;
@@ -60,15 +60,15 @@ namespace p5
         double m_scrollX = 0.0;
         double m_scrollY = 0.0;
 
-        std::array<bool, static_cast<size_t>(MouseButton::Count)> m_dragging {};
-        std::array<double, static_cast<size_t>(MouseButton::Count)> m_dragStartX {};
-        std::array<double, static_cast<size_t>(MouseButton::Count)> m_dragStartY {};
-        std::array<double, static_cast<size_t>(MouseButton::Count)> m_dragStartTime {};
+        std::array<bool, static_cast<size_t>(MouseButton::count)> m_dragging {};
+        std::array<double, static_cast<size_t>(MouseButton::count)> m_dragStartX {};
+        std::array<double, static_cast<size_t>(MouseButton::count)> m_dragStartY {};
+        std::array<double, static_cast<size_t>(MouseButton::count)> m_dragStartTime {};
 
-        std::array<bool, static_cast<size_t>(MouseButton::Count)> m_swiped {};
-        std::array<SwipeDirection, static_cast<size_t>(MouseButton::Count)> m_swipeDirection {};
-        std::array<double, static_cast<size_t>(MouseButton::Count)> m_swipeDistance {};
-        std::array<double, static_cast<size_t>(MouseButton::Count)> m_swipeDuration {};
+        std::array<bool, static_cast<size_t>(MouseButton::count)> m_swiped {};
+        std::array<SwipeDirection, static_cast<size_t>(MouseButton::count)> m_swipeDirection {};
+        std::array<double, static_cast<size_t>(MouseButton::count)> m_swipeDistance {};
+        std::array<double, static_cast<size_t>(MouseButton::count)> m_swipeDuration {};
 
         double m_swipeMinDistance = 50.0;
         double m_swipeMaxDuration = 0.5;

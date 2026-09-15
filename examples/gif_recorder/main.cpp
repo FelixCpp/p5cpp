@@ -34,11 +34,11 @@ struct GifRecorderExample : Sketch
 
     void draw() override
     {
-        if (isMouseButtonPressed(MouseButton::Left) and not recording.has_value()) {
+        if (isMouseButtonPressed(MouseButton::left) and not recording.has_value()) {
             recording = recordGif("pretty_animation.gif", recordForSeconds(3.0f), {.framesPerSecond = 15.0f});
         }
 
-        if (recording.has_value() and recording->isActive() and isMouseButtonPressed(MouseButton::Right)) {
+        if (recording.has_value() and recording->isActive() and isMouseButtonPressed(MouseButton::right)) {
             recording->cancel();
         }
 

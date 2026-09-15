@@ -764,20 +764,4 @@ namespace p5
         return width * scale + static_cast<float>(glyphs.size()) * letterSpacing;
     }
 
-    rect2f textBounds(const Font& font, float size, std::string_view str, TextWrap wrap, float maxWidth, float letterSpacing)
-    {
-        const detail::LineLayout layout = detail::layoutLines(font, size, str, wrap, maxWidth, letterSpacing);
-        const float scale = size / layout.unitsPerEm;
-
-        float blockWidth = 0.0f;
-        for (const detail::ShapedLine& line : layout.lines) {
-            blockWidth = std::max(blockWidth, line.width * scale);
-        }
-
-        const float leading = (font.getAscent() + font.getDescent() + font.getLineGap()) * scale;
-        const float blockTop = font.getAscent() * scale;
-        const float blockHeight = blockTop + static_cast<float>(layout.lines.size() - 1) * leading + font.getDescent() * scale;
-
-        return rect2f {0.0f, 0.0f, blockWidth, blockHeight};
-    }
 } // namespace p5

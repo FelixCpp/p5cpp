@@ -197,8 +197,8 @@ namespace p5
     // clang-format off
     enum class MouseButton
     {
-        Left, Right, Middle, Button4, Button5, Button6, Button7, Button8,
-        Count,
+        left, right, middle, button4, button5, button6, button7, button8,
+        count,
     };
     // clang-format on
 
@@ -429,10 +429,10 @@ namespace p5
     double getScrollX();
     double getScrollY();
 
-    bool isSwiped(MouseButton button = MouseButton::Left);
-    SwipeDirection getSwipeDirection(MouseButton button = MouseButton::Left);
-    double getSwipeDistance(MouseButton button = MouseButton::Left);
-    double getSwipeDuration(MouseButton button = MouseButton::Left);
+    bool isSwiped(MouseButton button = MouseButton::left);
+    SwipeDirection getSwipeDirection(MouseButton button = MouseButton::left);
+    double getSwipeDistance(MouseButton button = MouseButton::left);
+    double getSwipeDuration(MouseButton button = MouseButton::left);
     void setSwipeThreshold(double minDistance, double maxDurationInSeconds);
 
     bool isCursorInWindow();
@@ -911,6 +911,18 @@ namespace p5
         std::optional<float> size = std::nullopt;
         std::optional<float> letterSpacing = std::nullopt;
     };
+
+    struct TextBoundsOptions
+    {
+        std::optional<Font> font = std::nullopt;
+        std::optional<float> size = std::nullopt;
+        std::optional<float> letterSpacing = std::nullopt;
+        std::optional<TextWrap> wrap = std::nullopt;
+        std::optional<float> leading = std::nullopt;
+        std::optional<TextAlignment> alignment = std::nullopt;
+        float maxWidth = 0.0f;
+        float maxHeight = 0.0f;
+    };
 } // namespace p5
 
 namespace p5
@@ -1013,6 +1025,10 @@ namespace p5
     void textureUVMode(TextureUVMode mode);
     void textureFilter(TextureFilter filter);
     void textureWrap(TextureWrap wrap);
+
+    void texture(Texture texture);
+    void noTexture();
+
     void image(Texture texture, float left, float top, float width, float height);
     void image(Texture texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
     void image(const Graphics& graphics, float left, float top, float width, float height);
@@ -1029,9 +1045,8 @@ namespace p5
     void text(std::string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
 
     float textWidth(const Font& font, float size, std::string_view str, float letterSpacing = 0.0f);
-    rect2f textBounds(const Font& font, float size, std::string_view str, TextWrap wrap = TextWrap::none, float maxWidth = 0.0f, float letterSpacing = 0.0f);
     float textWidth(std::string_view str);
-    rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
+    rect2f textBounds(std::string_view str, const TextBoundsOptions& options = {});
 
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
@@ -1041,6 +1056,7 @@ namespace p5
     template <std::invocable Func> void with(Func&& func, bool extend = true);
     template <std::invocable Func> void withClip(float x, float y, float width, float height, Func&& func);
     template <std::invocable Func> void withShader(Shader shader, Func&& func);
+    template <std::invocable Func> void withTexture(Texture texture, Func&& func);
     template <std::invocable Func> void withFont(Font font, Func&& func);
 } // namespace p5
 
@@ -1562,6 +1578,19 @@ namespace p5
             noShader();
         } catch (...) {
             noShader();
+            throw;
+        }
+    }
+
+    template <std::invocable Func>
+    inline void withTexture(Texture texture, Func&& func)
+    {
+        try {
+            p5::texture(texture);
+            func();
+            noTexture();
+        } catch (...) {
+            noTexture();
             throw;
         }
     }

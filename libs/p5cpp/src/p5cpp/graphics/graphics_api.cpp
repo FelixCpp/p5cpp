@@ -82,6 +82,8 @@ namespace p5
     void textureUVMode(TextureUVMode mode) { canvas().textureUVMode(mode); }
     void textureFilter(TextureFilter filter) { canvas().textureFilter(filter); }
     void textureWrap(TextureWrap wrap) { canvas().textureWrap(wrap); }
+    void texture(Texture texture) { canvas().texture(texture); }
+    void noTexture() { canvas().noTexture(); }
     void image(Texture texture, float left, float top, float width, float height) { canvas().image(texture, left, top, width, height); }
     void image(Texture texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2) { canvas().image(texture, left, top, width, height, u1, v1, u2, v2); }
     void image(const Graphics& graphics, float left, float top, float width, float height) { canvas().image(graphics.colorTexture, left, top, width, height); }
@@ -96,6 +98,6 @@ namespace p5
     void textLetterSpacing(float pixels) { canvas().textLetterSpacing(pixels); }
     void text(std::string_view str, float x, float y, float maxWidth, float maxHeight) { canvas().text(str, x, y, maxWidth, maxHeight); }
     float textWidth(std::string_view str) { return canvas().textWidth(str); }
-    rect2f textBounds(std::string_view str, float maxWidth) { return canvas().textBounds(str, maxWidth); }
+    rect2f textBounds(std::string_view str, const TextBoundsOptions& options) { return canvas().textBounds(str, options); }
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options) { return canvas().textToPoints(str, x, y, options); }
 } // namespace p5

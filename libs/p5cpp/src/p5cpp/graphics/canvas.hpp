@@ -93,6 +93,8 @@ namespace p5
         void textureUVMode(TextureUVMode mode);
         void textureFilter(TextureFilter filter);
         void textureWrap(TextureWrap wrap);
+        void texture(Texture texture);
+        void noTexture();
         void image(Texture texture, float left, float top, float width, float height);
         void image(Texture texture, float left, float top, float width, float height, float u1, float v1, float u2, float v2);
 
@@ -107,7 +109,7 @@ namespace p5
         void text(std::string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
 
         float textWidth(std::string_view str);
-        rect2f textBounds(std::string_view str, float maxWidth = 0.0f);
+        rect2f textBounds(std::string_view str, const TextBoundsOptions& options = {});
         std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     private:
@@ -117,7 +119,7 @@ namespace p5
 
         void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const Texture& texture = {});
         void submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state);
-        void submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state);
+        void submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state, bool synthesizeCrossTrackV = false);
         void submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state);
         void submitPoint(const float2& position, color_t color, const DrawState& state);
         void submitBuiltShape(const BuiltShape& shape, bool close);

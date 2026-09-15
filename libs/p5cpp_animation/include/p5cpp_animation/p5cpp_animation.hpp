@@ -62,6 +62,10 @@ namespace p5::animation
 
 namespace p5::animation
 {
+    // Only capture `this` here if it stays at a fixed address for as long as the transition lives
+    // (e.g. a Sketch member). Never for an object stored by value in a std::vector or similar -
+    // reallocation/erase invalidates the pointer while the receiver is still stored and waiting to fire.
+    // Prefer a lerpable value type via ValueTweenTransition<T> to read values back pull-style instead.
     typedef std::function<void(float)> ProgressReceiver;
 
     class TweenTransition
@@ -92,6 +96,7 @@ namespace p5::animation
 
 namespace p5::animation
 {
+    // Same `this`-capture hazard as ProgressReceiver (see above) applies here.
     template <typename T>
     using ValueTweenReceiver = std::function<void(const T&)>;
 
@@ -107,6 +112,9 @@ namespace p5::animation
     public:
         constexpr explicit ValueTweenTransition(TweenTransition tween, T from, T to, ValueTweenReceiver<T> receiver = nullptr);
         AdvanceResult advance(float deltaTimeInSeconds);
+
+        float progress() const;
+        bool isFinished() const;
 
         const T& value() const;
 
@@ -127,6 +135,7 @@ namespace p5::animation
 
 namespace p5::animation
 {
+    // Same `this`-capture hazard as ProgressReceiver (see above) applies here.
     typedef std::function<void(float position)> SpringReceiver;
 
     class SpringTransition
@@ -452,7 +461,8 @@ namespace p5::animation
           m_receiver {std::move(receiver)},
           m_from {std::move(from)},
           m_to {std::move(to)},
-          m_current {m_from}
+          m_current {m_from},
+          m_isCompleted {false}
     {
     }
 
@@ -468,8 +478,7 @@ namespace p5::animation
         }
 
         const AdvanceResult result = m_tween.advance(deltaTimeInSeconds);
-        const float progress = m_tween.progress();
-        m_current = m_from + (m_to - m_from) * progress;
+        m_current = m_from + (m_to - m_from) * progress();
         m_isCompleted = result.isCompleted;
 
         if (m_receiver != nullptr) {
@@ -477,6 +486,20 @@ namespace p5::animation
         }
 
         return result;
+    }
+
+    template <typename T>
+        requires lerpable<T>
+    inline float ValueTweenTransition<T>::progress() const
+    {
+        return m_tween.progress();
+    }
+
+    template <typename T>
+        requires lerpable<T>
+    inline bool ValueTweenTransition<T>::isFinished() const
+    {
+        return m_isCompleted;
     }
 
     template <typename T>

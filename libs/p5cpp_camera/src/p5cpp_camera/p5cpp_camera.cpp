@@ -10,7 +10,7 @@ namespace p5::camera
     public:
         void update()
         {
-            if (m_panEnabled and isMouseButtonDown(MouseButton::Middle)) {
+            if (m_panEnabled and isMouseButtonDown(MouseButton::middle)) {
                 m_pan.x += static_cast<float>(getMouseDeltaX());
                 m_pan.y += static_cast<float>(getMouseDeltaY());
             }

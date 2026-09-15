@@ -32,6 +32,7 @@ namespace p5
         TextureFilter textureFilter = TextureFilter::linear;
         TextureWrap textureWrap = TextureWrap::clampToEdge;
 
+        Texture texture;
         Shader shader;
         std::unordered_map<std::string, UniformValue> shaderUniforms;
 

@@ -453,18 +453,25 @@ namespace p5
 
     void Canvas::submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state)
     {
-        const std::vector<float2> texCoords(positions.size(), float2 {0.0f, 0.0f});
+        std::vector<float2> texCoords(positions.size());
+        float pathLength = 0.0f;
+        for (size_t i = 0; i < positions.size(); ++i) {
+            if (i > 0)
+                pathLength += distance(positions[i - 1], positions[i]);
+            texCoords[i] = {pathLength, 0.0f};
+        }
+
         const std::vector<color_t> colors(positions.size(), color);
-        submitStroke(positions, texCoords, colors, closed, state);
+        submitStroke(positions, texCoords, colors, closed, state, /*synthesizeCrossTrackV=*/true);
     }
 
-    void Canvas::submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state)
+    void Canvas::submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state, bool synthesizeCrossTrackV)
     {
         std::vector<float4> convertedColors(colors.size());
         std::ranges::transform(colors, convertedColors.begin(), detail::toFloat4);
 
         Renderer::Writer writer = m_renderer->write();
-        tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed);
+        tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed, synthesizeCrossTrackV);
         m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
     }
 
@@ -486,7 +493,8 @@ namespace p5
             case ShapeMode::polygon:
             default: tesselate_polygon(writer, positions, texCoords, convertedColors); break;
         }
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
+
+        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(state.texture), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
     }
 
     void Canvas::submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const Texture& atlasTexture, const DrawState& state)
@@ -634,12 +642,31 @@ namespace p5
         const DrawState& state = peekState();
         ShapeBuilder builder;
         builder.beginShape(ShapeMode::triangles);
+
+        const float minX = std::min({x1, x2, x3});
+        const float maxX = std::max({x1, x2, x3});
+        const float minY = std::min({y1, y2, y3});
+        const float maxY = std::max({y1, y2, y3});
+        const float width = maxX - minX;
+        const float height = maxY - minY;
+
+        const auto uvOf = [&](float x, float y) -> float2 {
+            return {
+                width > 1e-6f ? (x - minX) / width : 0.5f,
+                height > 1e-6f ? (y - minY) / height : 0.5f,
+            };
+        };
+
         const float2 p1 = applyTransform({x1, y1});
         const float2 p2 = applyTransform({x2, y2});
         const float2 p3 = applyTransform({x3, y3});
-        builder.vertex(p1.x, p1.y, 0.0f, 0.0f, state.fillColor, state.strokeColor);
-        builder.vertex(p2.x, p2.y, 1.0f, 0.0f, state.fillColor, state.strokeColor);
-        builder.vertex(p3.x, p3.y, 0.5f, 1.0f, state.fillColor, state.strokeColor);
+        const float2 uv1 = uvOf(x1, y1);
+        const float2 uv2 = uvOf(x2, y2);
+        const float2 uv3 = uvOf(x3, y3);
+
+        builder.vertex(p1.x, p1.y, uv1.x, uv1.y, state.fillColor, state.strokeColor);
+        builder.vertex(p2.x, p2.y, uv2.x, uv2.y, state.fillColor, state.strokeColor);
+        builder.vertex(p3.x, p3.y, uv3.x, uv3.y, state.fillColor, state.strokeColor);
         submitBuiltShape(builder.endShape(), true);
     }
 
@@ -698,6 +725,12 @@ namespace p5
     {
         const DrawState& state = peekState();
         const float2 p = applyTransform({x, y});
+
+        if (state.textureUVMode == TextureUVMode::pixel and state.texture.isValid()) {
+            u /= static_cast<float>(state.texture.size.x);
+            v /= static_cast<float>(state.texture.size.y);
+        }
+
         m_shape.vertex(p.x, p.y, u, v, state.fillColor, state.strokeColor);
     }
 
@@ -803,6 +836,16 @@ namespace p5
     {
         DrawState& state = peekState();
         state.textureWrap = wrap;
+    }
+
+    void Canvas::texture(Texture texture)
+    {
+        peekState().texture = std::move(texture);
+    }
+
+    void Canvas::noTexture()
+    {
+        peekState().texture = Texture {};
     }
 
     void Canvas::image(Texture texture, float left, float top, float width, float height)
@@ -998,11 +1041,35 @@ namespace p5
         return p5::textWidth(font, state.textSize, str, state.textLetterSpacing);
     }
 
-    rect2f Canvas::textBounds(std::string_view str, float maxWidth)
+    rect2f Canvas::textBounds(std::string_view str, const TextBoundsOptions& options)
     {
         DrawState& state = peekState();
-        const Font& font = state.textFont.isValid() ? state.textFont : m_defaultFont;
-        return p5::textBounds(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing);
+        const Font& font = options.font.value_or(state.textFont.isValid() ? state.textFont : m_defaultFont);
+        const float size = options.size.value_or(state.textSize);
+        const float letterSpacing = options.letterSpacing.value_or(state.textLetterSpacing);
+        const TextWrap wrap = options.wrap.value_or(state.textWrap);
+        const TextAlignment alignment = options.alignment.value_or(state.textAlignment);
+        const std::optional<float> leadingOverride = options.leading.has_value() ? options.leading : state.textLeadingOverride;
+
+        const float scale = size / font.getUnitsPerEm();
+        const detail::LineLayout layout = detail::layoutLines(font, size, str, wrap, options.maxWidth, letterSpacing);
+        const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, alignment, {0.0f, 0.0f}, leadingOverride);
+
+        size_t visibleLines = layout.lines.size();
+        if (options.maxHeight > 0.0f) {
+            visibleLines = 0;
+            for (size_t i = 0; i < layout.lines.size(); ++i) {
+                const float baselineOffset = blockLayout.blockTop + static_cast<float>(i) * blockLayout.leading;
+                if (baselineOffset > options.maxHeight and visibleLines > 0) {
+                    break;
+                }
+                ++visibleLines;
+            }
+        }
+
+        const float blockHeight = blockLayout.blockTop + static_cast<float>(visibleLines > 0 ? visibleLines - 1 : 0) * blockLayout.leading + font.getDescent() * scale;
+
+        return rect2f {blockLayout.blockOrigin.x, blockLayout.blockOrigin.y, blockLayout.blockWidth, blockHeight};
     }
 
     std::vector<TextPoint> Canvas::textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options)

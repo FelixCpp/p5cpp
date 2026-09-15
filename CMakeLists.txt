@@ -21,6 +21,7 @@ add_subdirectory(libs/p5cpp_animation)
 add_subdirectory(libs/p5cpp_audio)
 add_subdirectory(libs/p5cpp_camera)
 add_subdirectory(libs/p5cpp_gif)
+add_subdirectory(libs/p5cpp_gui)
 add_subdirectory(libs/p5cpp_webcam)
 
 option(P5CPP_BUILD_EXAMPLES "Build the p5cpp example sketches" ON)

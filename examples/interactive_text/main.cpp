@@ -15,7 +15,7 @@ typedef struct
 static Texture createTexture(std::string_view text)
 {
     const Font font = loadFont("fonts/Arial Rounded Bold.ttf", 1024 * 3, 1024 * 3, 128 * 3).value();
-    const rect2f bounds = textBounds(font, 320.0f, text);
+    const rect2f bounds = textBounds(text, {.font = font, .size = 320.0f});
     const Graphics graphics = createGraphics(bounds.width, bounds.height).value();
 
     withGraphics(graphics, [&]() {
