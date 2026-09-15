@@ -11,7 +11,6 @@ A [p5.js](https://p5js.org/)/[Processing](https://processing.org/)-flavored crea
   <img src="docs/screenshots/disco_grid.png" width="24%" alt="disco_grid example">
   <img src="docs/screenshots/jelly_tentacles.png" width="24%" alt="jelly_tentacles example">
   <img src="docs/screenshots/rotating_typography.png" width="24%" alt="rotating_typography example">
-  <img src="docs/screenshots/ripple_effect.png" width="24%" alt="ripple_effect example — WGSL chain-lightning shader">
 </p>
 
 ## Why p5cpp
