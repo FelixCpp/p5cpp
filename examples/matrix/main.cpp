@@ -1,13 +1,10 @@
 #include <p5cpp/p5cpp.hpp>
+#include <p5cpp_animation/p5cpp_animation.hpp>
+#include <p5cpp_gui/p5cpp_gui.hpp>
 
 using namespace p5;
-
-inline static constexpr int windowWidth = 800;
-inline static constexpr int windowHeight = 600;
-inline static constexpr int cellWidth = 15;
-inline static constexpr int cellHeight = 15;
-inline static constexpr int columns = windowWidth / cellWidth;
-inline static constexpr int rows = windowHeight / cellHeight;
+using namespace p5::animation;
+using namespace p5::gui;
 
 // clang-format off
 inline static constexpr char characterSet[] = {
@@ -25,42 +22,97 @@ inline static char get_random_character()
     return characterSet[randomIndex];
 }
 
-struct CharacterGrid
+struct MatrixDisplayCell
 {
-    std::unique_ptr<char[]> characters;
+    char character;
+    ValueTweenTransition<float> opacity;
+    ValueTweenTransition<float> highlight;
 };
 
-inline static void character_grid_randomize_character(CharacterGrid& grid, size_t cellX, size_t cellY)
+struct MatrixDisplay
 {
-    if (cellX < 0 or cellX >= columns or cellY < 0 or cellY >= rows) {
-        return;
-    }
+    std::vector<MatrixDisplayCell> cells;
 
-    const size_t cellIndex = cellY * columns + cellX;
-    grid.characters[cellIndex] = get_random_character();
+    int cellWidth;
+    int cellHeight;
+    int columns;
+    int rows;
+
+    color_t regularColor;
+};
+
+inline static void matrix_display_update(MatrixDisplay& display, float deltaTime)
+{
+    for (size_t i = 0; i < display.cells.size(); ++i) {
+        MatrixDisplayCell& cell = display.cells[i];
+
+        cell.opacity.advance(deltaTime);
+        cell.highlight.advance(deltaTime);
+    }
 }
 
-inline static void character_grid_draw_cell(const CharacterGrid& grid, size_t cellX, size_t cellY, bool highlighted)
+inline static int matrix_display_get_cell_index(const MatrixDisplay& display, int cellX, int cellY)
 {
-    if (cellX < 0 or cellX >= columns or cellY < 0 or cellY >= rows) {
+    return cellY * display.columns + cellX;
+}
+
+inline static void matrix_display_show(const MatrixDisplay& display)
+{
+    const float cellSize = static_cast<float>(std::min(display.cellWidth, display.cellHeight));
+
+    push();
+    noStroke();
+    textAlign(TextAlignment::center);
+    textSize(cellSize);
+
+    for (size_t y = 0; y < display.rows; ++y) {
+        for (int x = 0; x < display.columns; ++x) {
+            const int cellIndex = matrix_display_get_cell_index(display, x, y);
+            const MatrixDisplayCell& cell = display.cells[cellIndex];
+
+            const float cellCenterX = static_cast<float>(x * display.cellWidth) + static_cast<float>(display.cellWidth) * 0.5f;
+            const float cellCenterY = static_cast<float>(y * display.cellHeight) + static_cast<float>(display.cellHeight) * 0.5f;
+
+            constexpr color_t highlightedColor = rgba(255);
+
+            const color_t transparentColor = withOpacity(lerpColor(display.regularColor, highlightedColor, cell.highlight.value()), cell.opacity.value());
+
+            fill(transparentColor);
+            text(std::format("{}", cell.character), cellCenterX, cellCenterY);
+        }
+    }
+    pop();
+}
+
+inline static bool matrix_display_is_valid_cell(const MatrixDisplay& display, int cellX, int cellY)
+{
+    return cellX >= 0 and cellX < display.columns and cellY >= 0 and cellY < display.rows;
+}
+
+inline static void matrix_display_despawn_cell(MatrixDisplay& display, int cellX, int cellY)
+{
+    if (not matrix_display_is_valid_cell(display, cellX, cellY)) {
         return;
     }
 
-    const float cellCenterX = static_cast<float>(cellX * cellWidth) + static_cast<float>(cellWidth) * 0.5f;
-    const float cellCenterY = static_cast<float>(cellY * cellHeight) + static_cast<float>(cellHeight) * 0.5f;
+    const int cellIndex = matrix_display_get_cell_index(display, cellX, cellY);
+    MatrixDisplayCell& cell = display.cells[cellIndex];
 
-    const float cellSize = static_cast<float>(std::min(cellWidth, cellHeight));
-    const size_t cellIndex = cellY * columns + cellX;
-    const char character = grid.characters[cellIndex];
+    cell.opacity = valueTween(1.0f, 0.0f, 0.5f, curves::easeLinear);
+}
 
-    constexpr color_t regularColor = rgba(30, 220, 190);
-    constexpr color_t highlightedColor = rgba(255);
+inline static void matrix_display_spawn_cell(MatrixDisplay& display, int cellX, int cellY)
+{
+    if (not matrix_display_is_valid_cell(display, cellX, cellY)) {
+        return;
+    }
 
-    fill(highlighted ? highlightedColor : regularColor);
-    noStroke();
-    textSize(cellSize);
-    textAlign(TextAlignment::center);
-    text(std::format("{}", character), cellCenterX, cellCenterY);
+    const int cellIndex = matrix_display_get_cell_index(display, cellX, cellY);
+    MatrixDisplayCell& cell = display.cells[cellIndex];
+
+    cell.character = get_random_character();
+    cell.highlight = valueTween(1.0f, 0.0f, 0.25f, curves::easeLinear);
+    cell.opacity = valueTween(0.0f, 1.0f, 0.1f, curves::easeLinear);
 }
 
 struct Slice
@@ -75,14 +127,6 @@ inline static void slice_make_step(Slice& slice)
     ++slice.lowerEnd;
 }
 
-inline static void slice_draw(const Slice& slice, const CharacterGrid& characterGrid, int column)
-{
-    for (int i = slice.upperEnd; i <= slice.lowerEnd; ++i) {
-        const bool isHighlighted = i == slice.lowerEnd;
-        character_grid_draw_cell(characterGrid, column, i, isHighlighted);
-    }
-}
-
 struct MatrixColumn
 {
     int position;
@@ -92,165 +136,227 @@ struct MatrixColumn
     std::array<Slice, 3> slices;
 };
 
-inline static void matrix_column_make_step(MatrixColumn& column, CharacterGrid& grid)
-{
-    for (size_t i = 0; i < column.slices.size(); ++i) {
-        Slice& slice = column.slices.at(i);
-
-        slice_make_step(slice);
-        character_grid_randomize_character(grid, column.position, slice.lowerEnd);
-    }
-}
-
-inline static int compute_random_slice_length()
+inline static int compute_random_slice_length(int rows)
 {
     static constexpr int MIN_SLICE_LENGTH = 5;
-    static constexpr int MAX_SLICE_LENGTH = MIN_SLICE_LENGTH + ((rows / 2) - MIN_SLICE_LENGTH);
+    const int MAX_SLICE_LENGTH = MIN_SLICE_LENGTH + ((rows / 2) - MIN_SLICE_LENGTH);
     return static_cast<int>(std::floor(random(MIN_SLICE_LENGTH, MAX_SLICE_LENGTH)));
 }
 
-inline static int compute_random_slice_gap()
+inline static int compute_random_slice_gap(int rows)
 {
-    static constexpr int MIN_SLICE_GAP = 3;
-    static constexpr int MAX_SLICE_GAP = MIN_SLICE_GAP + ((rows / 4) - MIN_SLICE_GAP);
+    static constexpr int MIN_SLICE_GAP = 10;
+    const int MAX_SLICE_GAP = MIN_SLICE_GAP + ((rows / 2) - MIN_SLICE_GAP);
     return static_cast<int>(std::floor(random(MIN_SLICE_GAP, MAX_SLICE_GAP)));
 }
 
-inline static std::array<Slice, 3> spawn_slices()
+inline static int matrix_column_get_topmost_upper_end(const MatrixColumn& column)
+{
+    int topmostUpperEnd = std::numeric_limits<int>::max();
+
+    for (const Slice& slice : column.slices) {
+        topmostUpperEnd = std::min(topmostUpperEnd, slice.upperEnd);
+    }
+
+    return topmostUpperEnd;
+}
+
+inline static void matrix_column_reset_slice(const MatrixColumn& column, Slice& slice, const MatrixDisplay& display)
+{
+    const int topmostUpperEnd = matrix_column_get_topmost_upper_end(column);
+    const int gap = compute_random_slice_gap(display.rows);
+    const int lowerEnd = std::min(topmostUpperEnd - gap, 0);
+
+    const int length = compute_random_slice_length(display.rows);
+    slice.lowerEnd = lowerEnd;
+    slice.upperEnd = lowerEnd - length;
+}
+
+inline static void matrix_column_make_step(MatrixColumn& column, MatrixDisplay& display)
+{
+    for (Slice& slice : column.slices) {
+        matrix_display_despawn_cell(display, column.position, slice.upperEnd);
+        slice_make_step(slice);
+        matrix_display_spawn_cell(display, column.position, slice.lowerEnd);
+
+        const bool isOutOfSight = slice.upperEnd > display.rows;
+        // info("UpperEnd > Rows ({} > {}) = {}", slice.upperEnd, display.rows, isOutOfSight);
+        if (isOutOfSight) {
+            matrix_column_reset_slice(column, slice, display);
+        }
+    }
+}
+
+inline static std::array<Slice, 3> spawn_slices(int rows)
 {
     std::array<Slice, 3> slices;
 
-    static constexpr size_t MIN_INITIAL_OFFSET = 0;
-    static constexpr size_t MAX_INITIAL_OFFSET = rows / 2;
-    size_t offset = static_cast<size_t>(std::floor(random(MIN_INITIAL_OFFSET, MAX_INITIAL_OFFSET)));
+    static constexpr int MIN_INITIAL_OFFSET = 0;
+    const int MAX_INITIAL_OFFSET = rows / 2;
+    int offset = static_cast<int>(std::floor(random(MIN_INITIAL_OFFSET, MAX_INITIAL_OFFSET)));
 
     for (size_t i = 0; i < slices.size(); ++i) {
         Slice& slice = slices.at(i);
-        const int length = compute_random_slice_length();
+        const int length = compute_random_slice_length(rows);
 
         slice.lowerEnd = 0 - offset;
         slice.upperEnd = slice.lowerEnd - length;
 
-        const int gap = compute_random_slice_gap();
+        const int gap = compute_random_slice_gap(rows);
         offset += (length + gap);
     }
 
     return slices;
 }
 
-inline static void matrix_column_reset_slice(const MatrixColumn& column, Slice& slice)
-{
-    int highestUpperEnd = std::numeric_limits<int>::max();
-    for (size_t i = 0; i < column.slices.size(); ++i) {
-        highestUpperEnd = std::min(highestUpperEnd, column.slices.at(i).upperEnd);
-    }
-
-    const int gap = compute_random_slice_gap();
-    const int lowerEnd = std::min(highestUpperEnd - gap, 0);
-
-    const int length = compute_random_slice_length();
-    slice.lowerEnd = lowerEnd;
-    slice.upperEnd = slice.lowerEnd - length;
-}
-
-inline static void matrix_column_update_slices(MatrixColumn& column)
-{
-    for (size_t i = 0; i < column.slices.size(); ++i) {
-        Slice& slice = column.slices.at(i);
-        const bool isOutOfSight = slice.upperEnd > rows;
-
-        if (isOutOfSight) {
-            matrix_column_reset_slice(column, slice);
-        }
-    }
-}
-
-inline static void matrix_column_update(MatrixColumn& column, CharacterGrid& characterGrid, float deltaTime)
+inline static void matrix_column_update(MatrixColumn& column, MatrixDisplay& display, float deltaTime)
 {
     column.elapsedTimeSinceLastStep += deltaTime;
     while (column.elapsedTimeSinceLastStep >= column.stepInterval) {
-        matrix_column_make_step(column, characterGrid);
+        matrix_column_make_step(column, display);
         column.elapsedTimeSinceLastStep -= column.stepInterval;
-    }
-
-    matrix_column_update_slices(column);
-}
-
-inline static void matrix_column_draw(const MatrixColumn& column, const CharacterGrid& characterGrid)
-{
-    for (size_t i = 0; i < column.slices.size(); ++i) {
-        slice_draw(column.slices.at(i), characterGrid, column.position);
     }
 }
 
 struct Matrix : Sketch
 {
-    std::array<MatrixColumn, columns> matrixColumns;
-    CharacterGrid grid;
+    std::vector<MatrixColumn> matrixColumns;
+    MatrixDisplay display;
+
+    Font font = loadFont("fonts/Arial Rounded Bold.ttf").value();
+
+    float colorR = 30.0f;
+    float colorG = 220.0f;
+    float colorB = 190.0f;
+    bool showColorPanel = false;
+
+    float cellWidth = 15;
+    float cellHeight = 15;
 
     void setup() override
     {
+        const int windowWidth = 800;
+        const int windowHeight = 600;
         setWindowSize(windowWidth, windowHeight);
-        setWindowResizable(false);
+        rebuild(windowWidth, windowHeight);
+    }
 
-        grid = CharacterGrid {
-            .characters = std::make_unique<char[]>(columns * rows),
+    inline static std::vector<MatrixDisplayCell> generate_matrix_display_cells(int columns, int rows)
+    {
+        MatrixDisplayCell initialCell = {
+            .character = '\0',
+            .opacity = valueTweenJump(0.0f),
+            .highlight = valueTweenJump(0.0f),
         };
 
+        return {static_cast<size_t>(columns * rows), initialCell};
+    }
+
+    void rebuild(int windowWidth, int windowHeight)
+    {
+        const int cellWidthInt = static_cast<int>(cellWidth);
+        const int cellHeightInt = static_cast<int>(cellHeight);
+        const int columns = (windowWidth + cellWidthInt - 1) / cellWidthInt;
+        const int rows = (windowHeight + cellHeightInt - 1) / cellHeightInt;
+
+        display = {
+            .cells = generate_matrix_display_cells(columns, rows),
+            .cellWidth = cellWidthInt,
+            .cellHeight = cellHeightInt,
+            .columns = columns,
+            .rows = rows,
+            .regularColor = rgba(static_cast<int32_t>(colorR), static_cast<int32_t>(colorG), static_cast<int32_t>(colorB)),
+        };
+
+        matrixColumns.resize(columns);
         for (size_t i = 0; i < matrixColumns.size(); ++i) {
             matrixColumns[i] = MatrixColumn {
                 .position = static_cast<int>(i),
-                .stepInterval = random(0.025f, 0.05f),
+                .stepInterval = random(0.05f, 0.1f),
                 .elapsedTimeSinceLastStep = 0.0f,
-                .slices = spawn_slices()
+                .slices = spawn_slices(display.rows)
             };
         }
     }
 
-    Font font = loadFont("fonts/Arial Rounded Bold.ttf").value();
+    void event(const WindowEvent& event) override
+    {
+        event.on(
+            [this](const WindowEvent::WindowResize& resize) {
+                rebuild(resize.width, resize.height);
+            },
+            [this](const WindowEvent::KeyPress& keyPress) {
+                if (keyPress.key == Key::C) {
+                    showColorPanel = not showColorPanel;
+                }
+            }
+        );
+    }
 
     void draw() override
     {
         const float deltaTime = getDeltaTime();
-        // textFont(font);
+        textFont(font);
+
+        matrix_display_update(display, deltaTime);
 
         for (MatrixColumn& column : matrixColumns) {
-            matrix_column_update(column, grid, deltaTime);
+            matrix_column_update(column, display, deltaTime);
         }
+
+        display.regularColor = rgba(static_cast<int32_t>(colorR), static_cast<int32_t>(colorG), static_cast<int32_t>(colorB));
 
         background(rgba(31, 31, 51));
+        matrix_display_show(display);
 
-        for (MatrixColumn& column : matrixColumns) {
-            matrix_column_draw(column, grid);
-        }
+        with([] {
+            noStroke();
+            textSize(16.0f);
+            textAlign(TextAlignment::topLeft);
 
-        if (false)
-            draw_debug_grid();
-    }
+            std::string message = "Press 'C' to open Control Panel";
+            rect2f boundingBox = textBounds(message);
+            constexpr float padding = 10.0f;
+            boundingBox.left -= padding;
+            boundingBox.top -= padding;
+            boundingBox.width += padding * 2.0f;
+            boundingBox.height += padding * 2.0f;
 
-    void draw_debug_grid()
-    {
-        for (size_t y = 0; y < rows; ++y) {
-            for (size_t x = 0; x < columns; ++x) {
-                const float px = static_cast<float>(x * cellWidth);
-                const float py = static_cast<float>(y * cellHeight);
-                const float width = static_cast<float>(cellWidth);
-                const float height = static_cast<float>(cellHeight);
+            translate(30.0f, 30.0f);
+            fill(rgba(0, 150));
+            rect(boundingBox.left, boundingBox.top, boundingBox.width, boundingBox.height);
 
-                noFill();
-                stroke(rgba(255, 100));
-                strokeWeight(1.0f);
-                rect(px, py, width, height);
+            fill(rgba(255));
+            text("Press 'C' to open Control Panel", 0.0f, 0.0f);
+        },
+             false);
 
-                const size_t index = y * columns + x;
-                const char character = grid.characters[index];
+        if (showColorPanel) {
+            withGui([this] {
+                mu_Context* ctx = getGuiContext();
+                if (mu_begin_window_ex(ctx, "Color", mu_rect(50, 50, 320, 240), MU_OPT_NOCLOSE)) {
+                    const int widths[] = {120, -1};
+                    mu_layout_row(ctx, 2, widths, 0);
+                    mu_label(ctx, "Red:");
+                    mu_slider(ctx, &colorR, 0, 255);
+                    mu_label(ctx, "Green:");
+                    mu_slider(ctx, &colorG, 0, 255);
+                    mu_label(ctx, "Blue:");
+                    mu_slider(ctx, &colorB, 0, 255);
 
-                // textSize(cellWidth);
-                // fill(rgba(255, 100));
-                // noStroke();
-                // textAlign(TextAlignment::center);
-                // text(std::format("{}", character), px + cellWidth / 2, py + cellHeight / 2);
-            }
+                    mu_label(ctx, "Cell Width:");
+                    mu_slider(ctx, &cellWidth, 1, 40);
+                    mu_label(ctx, "Cell Height:");
+                    mu_slider(ctx, &cellHeight, 1, 40);
+
+                    if (mu_button_ex(ctx, "Submit", 0, 0)) {
+                        const auto [windowWidth, windowHeight] = getWindowSize();
+                        rebuild(windowWidth, windowHeight);
+                    }
+
+                    mu_end_window(ctx);
+                }
+            });
         }
     }
 };
@@ -260,7 +366,7 @@ SketchSpec p5::createSpec()
     return SketchSpec {
         .plugins = [] {
             std::vector<std::unique_ptr<Plugin>> plugins;
-            // plugins.emplace_back(gui::createGuiPlugin());
+            plugins.emplace_back(gui::createGuiPlugin());
             return plugins;
         },
         .sketch = [] {

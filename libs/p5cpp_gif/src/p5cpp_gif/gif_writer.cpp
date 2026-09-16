@@ -58,13 +58,7 @@ namespace p5::gif
                 return false;
             }
 
-            for (uint32_t i = 0; i < pixels.width * pixels.height; ++i) {
-                color_t c = pixels.data[i];
-                m_bytes[i * 4 + 0] = getRed(c);
-                m_bytes[i * 4 + 1] = getGreen(c);
-                m_bytes[i * 4 + 2] = getBlue(c);
-                m_bytes[i * 4 + 3] = getAlpha(c);
-            }
+            std::copy(pixels.data.begin(), pixels.data.end(), m_bytes.begin());
 
             const int centiSecondsPerFrame = std::max(1, static_cast<int>(std::lround(100.0f / m_framesPerSecond)));
             if (not msf_gif_frame_to_file(&m_gifState, m_bytes.data(), centiSecondsPerFrame, GIF_QUALITY, static_cast<int>(m_width * 4))) {

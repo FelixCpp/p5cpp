@@ -14,17 +14,17 @@ namespace p5
         size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
         size_t byteIndex = index * 4;
 
-        data[byteIndex + 0] = getRed(color);
-        data[byteIndex + 1] = getGreen(color);
-        data[byteIndex + 2] = getBlue(color);
-        data[byteIndex + 3] = getAlpha(color);
+        data[byteIndex + 0] = color.r;
+        data[byteIndex + 1] = color.g;
+        data[byteIndex + 2] = color.b;
+        data[byteIndex + 3] = color.a;
     }
 
     color_t Pixels::get(int32_t x, int32_t y) const
     {
         if (x < 0 or x >= static_cast<int32_t>(width) or y < 0 or y >= static_cast<int32_t>(height)) {
             error("Pixels::get(): coordinates out of bounds");
-            return 0;
+            return {};
         }
 
         size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
@@ -59,7 +59,7 @@ namespace p5
     {
         if (x < 0 or x >= static_cast<int32_t>(width) or y < 0 or y >= static_cast<int32_t>(height)) {
             error("ReadOnlyPixels::get(): coordinates out of bounds");
-            return 0;
+            return {};
         }
 
         size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);

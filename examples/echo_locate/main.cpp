@@ -68,13 +68,8 @@ inline static void sweep_draw(const Sweep& sweep)
         return;
     }
 
-    const float alpha = 1.0f - sweep.radius.progress();
-    const color_t sweepColor = rgba(
-        getRed(SWEEP_COLOR),
-        getGreen(SWEEP_COLOR),
-        getBlue(SWEEP_COLOR),
-        static_cast<uint8_t>(alpha * 255)
-    );
+    const float opacity = 1.0f - sweep.radius.progress();
+    const color_t sweepColor = withOpacity(SWEEP_COLOR, opacity);
 
     noFill();
     stroke(sweepColor);

@@ -96,7 +96,7 @@ struct WebcamExample : Sketch
 
                     if (colorize) {
                         // boost saturation a bit so faint webcam colors still pop against the dark backdrop
-                        fill(rgba(getRed(sourceColor), getGreen(sourceColor), getBlue(sourceColor)));
+                        fill(rgba(sourceColor.r, sourceColor.g, sourceColor.b));
                     } else {
                         fill(rgba(brightness));
                     }

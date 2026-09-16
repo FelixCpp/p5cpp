@@ -42,14 +42,14 @@ struct InteractiveText : Sketch
     Texture texture = createTexture("Felix");
 
     inline static constexpr color_t colorPalette[] = {
-        0xabcd5eFF,
-        0x14976bFF,
-        0x2b67afFF,
-        0x62b6deFF,
-        0xf589a3FF,
-        0xef562fFF,
-        0xfc8405FF,
-        0xf9d531FF,
+        rgba(0xab, 0xcd, 0x5e),
+        rgba(0x14, 0x97, 0x6b),
+        rgba(0x2b, 0x67, 0xaf),
+        rgba(0x62, 0xb6, 0xde),
+        rgba(0xf5, 0x89, 0xa3),
+        rgba(0xef, 0x56, 0x2f),
+        rgba(0xfc, 0x84, 0x05),
+        rgba(0xf9, 0xd5, 0x31),
     };
 
     void setup() override
@@ -103,7 +103,7 @@ struct InteractiveText : Sketch
                 cell.alpha = std::max(0, static_cast<int>(cell.alpha) - 10);
             }
 
-            const color_t cellColor = (colorPalette[cell.colorIndex] & 0xFFFFFF00) | static_cast<color_t>(cell.alpha);
+            const color_t cellColor = withAlpha(colorPalette[cell.colorIndex], cell.alpha);
 
             fill(cellColor);
             stroke(rgba(0));

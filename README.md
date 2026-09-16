@@ -8,6 +8,11 @@ A [p5.js](https://p5js.org/)/[Processing](https://processing.org/)-flavored crea
 <p align="center"><sub><code>examples/wanderer</code> — eight boards of colored wanderers carving out trails</sub></p>
 
 <p align="center">
+  <img src="docs/screenshots/matrix.gif" width="55%" alt="matrix example — falling character rain in the style of The Matrix">
+</p>
+<p align="center"><sub><code>examples/matrix</code> — falling character rain with tweened fade-in/fade-out trails</sub></p>
+
+<p align="center">
   <img src="docs/screenshots/disco_grid.png" width="24%" alt="disco_grid example">
   <img src="docs/screenshots/jelly_tentacles.png" width="24%" alt="jelly_tentacles example">
   <img src="docs/screenshots/rotating_typography.png" width="24%" alt="rotating_typography example">
@@ -127,7 +132,7 @@ move.advance(getDeltaTime());
 
 ## Examples
 
-`examples/` has +20 complete sketches exercising most of the API — generative art, text/typography, image/pixel manipulation, GUI, audio-reactive visuals, GIF export, webcam, and the 2D camera. Each is its own CMake target under `build/examples/<name>/<name>` once built. A few worth a look: `wanderer`, `disco_grid` and `jelly_tentacles` (generative), `ripple_effect` (WGSL shaders), `rotating_typography` and `text_to_points` (text), `world_map`, `pixel_sorting` and `shuffled_glass` (pixel/image effects).
+`examples/` has +20 complete sketches exercising most of the API — generative art, text/typography, image/pixel manipulation, GUI, audio-reactive visuals, GIF export, webcam, and the 2D camera. Each is its own CMake target under `build/examples/<name>/<name>` once built. A few worth a look: `wanderer`, `matrix`, `disco_grid` and `jelly_tentacles` (generative), `ripple_effect` (WGSL shaders), `rotating_typography` and `text_to_points` (text), `world_map`, `pixel_sorting` and `shuffled_glass` (pixel/image effects).
 
 ## Project layout
 

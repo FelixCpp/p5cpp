@@ -133,14 +133,23 @@ namespace p5
 
 namespace p5
 {
-    typedef uint32_t color_t;
+    struct color_t
+    {
+        uint8_t r, g, b, a;
+
+        inline constexpr bool operator==(const color_t&) const = default;
+        inline constexpr bool operator!=(const color_t&) const = default;
+    };
+
     constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha = 255);
     constexpr color_t rgba(int32_t grey, int32_t alpha = 255);
 
-    constexpr uint8_t getRed(color_t color);
-    constexpr uint8_t getGreen(color_t color);
-    constexpr uint8_t getBlue(color_t color);
-    constexpr uint8_t getAlpha(color_t color);
+    constexpr color_t withRed(color_t color, uint8_t red);
+    constexpr color_t withGreen(color_t color, uint8_t green);
+    constexpr color_t withBlue(color_t color, uint8_t blue);
+    constexpr color_t withAlpha(color_t color, uint8_t alpha);
+    constexpr color_t withOpacity(color_t color, float opacity);
+
     constexpr uint8_t getBrightness(color_t color);
     constexpr uint8_t getLuminance(color_t color);
 
@@ -1292,30 +1301,33 @@ namespace p5
 {
     inline constexpr color_t rgba(int32_t red, int32_t green, int32_t blue, int32_t alpha)
     {
-        const uint8_t r = static_cast<uint8_t>(std::clamp(red, 0, 255));
-        const uint8_t g = static_cast<uint8_t>(std::clamp(green, 0, 255));
-        const uint8_t b = static_cast<uint8_t>(std::clamp(blue, 0, 255));
-        const uint8_t a = static_cast<uint8_t>(std::clamp(alpha, 0, 255));
-
-        return (r << 24) | (g << 16) | (b << 8) | a;
+        return {
+            static_cast<uint8_t>(std::clamp(red, 0, 255)),
+            static_cast<uint8_t>(std::clamp(green, 0, 255)),
+            static_cast<uint8_t>(std::clamp(blue, 0, 255)),
+            static_cast<uint8_t>(std::clamp(alpha, 0, 255)),
+        };
     }
 
     inline constexpr color_t rgba(int32_t grey, int32_t alpha) { return rgba(grey, grey, grey, alpha); }
-    inline constexpr uint8_t getRed(color_t color) { return static_cast<uint8_t>((color >> 24) & 0xFF); }
-    inline constexpr uint8_t getGreen(color_t color) { return static_cast<uint8_t>((color >> 16) & 0xFF); }
-    inline constexpr uint8_t getBlue(color_t color) { return static_cast<uint8_t>((color >> 8) & 0xFF); }
-    inline constexpr uint8_t getAlpha(color_t color) { return static_cast<uint8_t>(color & 0xFF); }
-    inline constexpr uint8_t getBrightness(color_t color) { return static_cast<uint8_t>((getRed(color) + getGreen(color) + getBlue(color)) / 3); }
-    inline constexpr uint8_t getLuminance(color_t color) { return static_cast<uint8_t>(0.2126f * getRed(color) + 0.7152f * getGreen(color) + 0.0722f * getBlue(color)); }
+
+    inline constexpr color_t withRed(color_t color, uint8_t red) { return {red, color.g, color.b, color.a}; }
+    inline constexpr color_t withGreen(color_t color, uint8_t green) { return {color.r, green, color.b, color.a}; }
+    inline constexpr color_t withBlue(color_t color, uint8_t blue) { return {color.r, color.g, blue, color.a}; }
+    inline constexpr color_t withAlpha(color_t color, uint8_t alpha) { return {color.r, color.g, color.b, alpha}; }
+    inline constexpr color_t withOpacity(color_t color, float opacity) { return {color.r, color.g, color.b, static_cast<uint8_t>(std::clamp(opacity, 0.0f, 1.0f) * 255.0f)}; }
+
+    inline constexpr uint8_t getBrightness(color_t color) { return static_cast<uint8_t>((color.r + color.g + color.b) / 3); }
+    inline constexpr uint8_t getLuminance(color_t color) { return static_cast<uint8_t>(0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b); }
 
     inline constexpr color_t lerpColor(color_t from, color_t to, float t)
     {
-        const uint8_t r = static_cast<uint8_t>(std::lerp(getRed(from), getRed(to), t));
-        const uint8_t g = static_cast<uint8_t>(std::lerp(getGreen(from), getGreen(to), t));
-        const uint8_t b_ = static_cast<uint8_t>(std::lerp(getBlue(from), getBlue(to), t));
-        const uint8_t a_ = static_cast<uint8_t>(std::lerp(getAlpha(from), getAlpha(to), t));
-
-        return rgba(r, g, b_, a_);
+        return rgba(
+            static_cast<uint8_t>(std::lerp(from.r, to.r, t)),
+            static_cast<uint8_t>(std::lerp(from.g, to.g, t)),
+            static_cast<uint8_t>(std::lerp(from.b, to.b, t)),
+            static_cast<uint8_t>(std::lerp(from.a, to.a, t))
+        );
     }
 } // namespace p5
 

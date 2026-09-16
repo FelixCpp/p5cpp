@@ -62,10 +62,6 @@ namespace p5::animation
 
 namespace p5::animation
 {
-    // Only capture `this` here if it stays at a fixed address for as long as the transition lives
-    // (e.g. a Sketch member). Never for an object stored by value in a std::vector or similar -
-    // reallocation/erase invalidates the pointer while the receiver is still stored and waiting to fire.
-    // Prefer a lerpable value type via ValueTweenTransition<T> to read values back pull-style instead.
     typedef std::function<void(float)> ProgressReceiver;
 
     class TweenTransition
@@ -91,12 +87,12 @@ namespace p5::animation
         bool m_isCompleted;
     };
 
-    constexpr TweenTransition tween(float durationInSeconds, Curve curve, ProgressReceiver receiver);
+    constexpr TweenTransition tween(float durationInSeconds, Curve curve, ProgressReceiver receiver = nullptr);
+    constexpr TweenTransition tweenJump(ProgressReceiver receiver = nullptr);
 } // namespace p5::animation
 
 namespace p5::animation
 {
-    // Same `this`-capture hazard as ProgressReceiver (see above) applies here.
     template <typename T>
     using ValueTweenReceiver = std::function<void(const T&)>;
 
@@ -131,6 +127,9 @@ namespace p5::animation
 
     template <typename T>
     constexpr ValueTweenTransition<T> valueTween(T from, T to, float durationInSeconds, Curve curve, ValueTweenReceiver<T> receiver = nullptr);
+
+    template <typename T>
+    constexpr ValueTweenTransition<T> valueTweenJump(T to, ValueTweenReceiver<T> receiver = nullptr);
 } // namespace p5::animation
 
 namespace p5::animation
@@ -383,10 +382,10 @@ namespace p5::animation
     inline constexpr TweenTransition::TweenTransition(float durationInSeconds, Curve curve, ProgressReceiver receiver)
         : m_durationInSeconds {durationInSeconds},
           m_elapsedTimeInSeconds {0.0f},
-          m_currentProgress {0.0f},
+          m_currentProgress {durationInSeconds <= 0.0f ? 1.0f : 0.0f},
           m_curve {curve},
           m_receiver {std::move(receiver)},
-          m_isCompleted {false}
+          m_isCompleted {m_currentProgress >= 1.0f}
     {
     }
 
@@ -448,6 +447,15 @@ namespace p5::animation
             durationInSeconds,
             curve,
             std::move(receiver)
+        };
+    }
+
+    inline constexpr TweenTransition tweenJump(ProgressReceiver receiver)
+    {
+        return TweenTransition {
+            0.0f,
+            curves::easeLinear,
+            receiver,
         };
     }
 } // namespace p5::animation
@@ -518,6 +526,17 @@ namespace p5::animation
         return ValueTweenTransition<T> {
             tween(durationInSeconds, curve, nullptr),
             std::move(from),
+            std::move(to),
+            std::move(receiver)
+        };
+    }
+
+    template <typename T>
+    constexpr ValueTweenTransition<T> valueTweenJump(T to, ValueTweenReceiver<T> receiver)
+    {
+        return ValueTweenTransition<T> {
+            tween(0.0f, curves::easeLinear, nullptr),
+            to,
             std::move(to),
             std::move(receiver)
         };

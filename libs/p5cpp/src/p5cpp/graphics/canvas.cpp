@@ -46,10 +46,10 @@ namespace p5
         float4 toFloat4(color_t color)
         {
             return {
-                static_cast<float>(getRed(color)) / 255.0f,
-                static_cast<float>(getGreen(color)) / 255.0f,
-                static_cast<float>(getBlue(color)) / 255.0f,
-                static_cast<float>(getAlpha(color)) / 255.0f,
+                static_cast<float>(color.r) / 255.0f,
+                static_cast<float>(color.g) / 255.0f,
+                static_cast<float>(color.b) / 255.0f,
+                static_cast<float>(color.a) / 255.0f,
             };
         }
 

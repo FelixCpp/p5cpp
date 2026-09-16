@@ -31,8 +31,8 @@ struct Block
         if (angle > 0.0f and angle < 90.0f) {
             angle += 4.0f;
 
-            if (color > rgba(70)) {
-                color -= rgba(10, 0);
+            if (color.r > 70) {
+                color = rgba(color.r - 10);
             }
         } else {
             angle = 0.0f;
