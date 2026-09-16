@@ -106,11 +106,16 @@ namespace p5
         void textLeading(float pixels);
         void noTextLeading();
         void textLetterSpacing(float pixels);
+        void textLigatures(bool enabled);
         void text(std::string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
+        void text(std::u32string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
 
         float textWidth(std::string_view str);
+        float textWidth(std::u32string_view str);
         rect2f textBounds(std::string_view str, const TextBoundsOptions& options = {});
+        rect2f textBounds(std::u32string_view str, const TextBoundsOptions& options = {});
         std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
+        std::vector<TextPoint> textToPoints(std::u32string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     private:
         Shader resolveActiveShader(const Shader& fallback);

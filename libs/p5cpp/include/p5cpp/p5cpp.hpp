@@ -874,7 +874,7 @@ namespace p5
     struct FontImpl
     {
         virtual ~FontImpl() = default;
-        virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text) const = 0;
+        virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text, bool ligaturesEnabled) const = 0;
         virtual const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) = 0;
         virtual std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) = 0;
         virtual Texture getAtlasTexture() const = 0;
@@ -890,7 +890,7 @@ namespace p5
 
         bool isValid() const;
 
-        std::vector<ShapedGlyph> shape(std::string_view utf8Text) const;
+        std::vector<ShapedGlyph> shape(std::string_view utf8Text, bool ligaturesEnabled = true) const;
         const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) const;
         std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) const;
         Texture getAtlasTexture() const;
@@ -910,6 +910,7 @@ namespace p5
         std::optional<Font> font = std::nullopt;
         std::optional<float> size = std::nullopt;
         std::optional<float> letterSpacing = std::nullopt;
+        std::optional<bool> ligatures = std::nullopt;
     };
 
     struct TextBoundsOptions
@@ -917,6 +918,7 @@ namespace p5
         std::optional<Font> font = std::nullopt;
         std::optional<float> size = std::nullopt;
         std::optional<float> letterSpacing = std::nullopt;
+        std::optional<bool> ligatures = std::nullopt;
         std::optional<TextWrap> wrap = std::nullopt;
         std::optional<float> leading = std::nullopt;
         std::optional<TextAlignment> alignment = std::nullopt;
@@ -1042,13 +1044,19 @@ namespace p5
     void textLeading(float pixels);
     void noTextLeading();
     void textLetterSpacing(float pixels);
+    void textLigatures(bool enabled);
     void text(std::string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
+    void text(std::u32string_view str, float x, float y, float maxWidth = 0.0f, float maxHeight = 0.0f);
 
-    float textWidth(const Font& font, float size, std::string_view str, float letterSpacing = 0.0f);
+    float textWidth(const Font& font, float size, std::string_view str, float letterSpacing = 0.0f, bool ligaturesEnabled = true);
+    float textWidth(const Font& font, float size, std::u32string_view str, float letterSpacing = 0.0f, bool ligaturesEnabled = true);
     float textWidth(std::string_view str);
+    float textWidth(std::u32string_view str);
     rect2f textBounds(std::string_view str, const TextBoundsOptions& options = {});
+    rect2f textBounds(std::u32string_view str, const TextBoundsOptions& options = {});
 
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options = {});
+    std::vector<TextPoint> textToPoints(std::u32string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     template <std::invocable Func> void withGraphics(Graphics graphics, Func&& func, bool extend = true);
     template <std::invocable Func> void withState(Func&& func, bool extend = true);

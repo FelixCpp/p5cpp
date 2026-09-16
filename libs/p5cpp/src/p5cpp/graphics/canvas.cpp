@@ -948,13 +948,19 @@ namespace p5
         state.textLetterSpacing = pixels;
     }
 
+    void Canvas::textLigatures(bool enabled)
+    {
+        DrawState& state = peekState();
+        state.textLigatures = enabled;
+    }
+
     void Canvas::text(std::string_view str, float x, float y, float maxWidth, float maxHeight)
     {
         DrawState& state = peekState();
         const Font& font = state.textFont.isValid() ? state.textFont : m_defaultFont;
         const float scale = state.textSize / font.getUnitsPerEm();
 
-        const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing);
+        const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing, state.textLigatures);
         const size_t numLines = layout.lines.size();
 
         const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
@@ -1034,11 +1040,21 @@ namespace p5
         flushGlyphChunk();
     }
 
+    void Canvas::text(std::u32string_view str, float x, float y, float maxWidth, float maxHeight)
+    {
+        text(detail::utf32ToUtf8(str), x, y, maxWidth, maxHeight);
+    }
+
     float Canvas::textWidth(std::string_view str)
     {
         DrawState& state = peekState();
         const Font& font = state.textFont.isValid() ? state.textFont : m_defaultFont;
-        return p5::textWidth(font, state.textSize, str, state.textLetterSpacing);
+        return p5::textWidth(font, state.textSize, str, state.textLetterSpacing, state.textLigatures);
+    }
+
+    float Canvas::textWidth(std::u32string_view str)
+    {
+        return textWidth(detail::utf32ToUtf8(str));
     }
 
     rect2f Canvas::textBounds(std::string_view str, const TextBoundsOptions& options)
@@ -1050,9 +1066,10 @@ namespace p5
         const TextWrap wrap = options.wrap.value_or(state.textWrap);
         const TextAlignment alignment = options.alignment.value_or(state.textAlignment);
         const std::optional<float> leadingOverride = options.leading.has_value() ? options.leading : state.textLeadingOverride;
+        const bool ligaturesEnabled = options.ligatures.value_or(state.textLigatures);
 
         const float scale = size / font.getUnitsPerEm();
-        const detail::LineLayout layout = detail::layoutLines(font, size, str, wrap, options.maxWidth, letterSpacing);
+        const detail::LineLayout layout = detail::layoutLines(font, size, str, wrap, options.maxWidth, letterSpacing, ligaturesEnabled);
         const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, alignment, {0.0f, 0.0f}, leadingOverride);
 
         size_t visibleLines = layout.lines.size();
@@ -1072,15 +1089,21 @@ namespace p5
         return rect2f {blockLayout.blockOrigin.x, blockLayout.blockOrigin.y, blockLayout.blockWidth, blockHeight};
     }
 
+    rect2f Canvas::textBounds(std::u32string_view str, const TextBoundsOptions& options)
+    {
+        return textBounds(detail::utf32ToUtf8(str), options);
+    }
+
     std::vector<TextPoint> Canvas::textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options)
     {
         DrawState& state = peekState();
         const Font& font = options.font.has_value() ? *options.font : (state.textFont.isValid() ? state.textFont : m_defaultFont);
         const float effectiveSize = options.size.value_or(state.textSize);
         const float effectiveLetterSpacing = options.letterSpacing.value_or(state.textLetterSpacing);
+        const bool effectiveLigatures = options.ligatures.value_or(state.textLigatures);
         const float scale = effectiveSize / font.getUnitsPerEm();
 
-        const detail::LineLayout layout = detail::layoutLines(font, effectiveSize, str, TextWrap::none, 0.0f, effectiveLetterSpacing);
+        const detail::LineLayout layout = detail::layoutLines(font, effectiveSize, str, TextWrap::none, 0.0f, effectiveLetterSpacing, effectiveLigatures);
         const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
 
         std::vector<TextPoint> result;
@@ -1094,5 +1117,10 @@ namespace p5
         }
 
         return result;
+    }
+
+    std::vector<TextPoint> Canvas::textToPoints(std::u32string_view str, float x, float y, const TextToPointsOptions& options)
+    {
+        return textToPoints(detail::utf32ToUtf8(str), x, y, options);
     }
 } // namespace p5

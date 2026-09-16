@@ -16,38 +16,101 @@ fn effect(
 }
 )";
 
+inline static constexpr std::string_view WGSL_BLUR_SHADER_SOURCE = R"(
+fn effect(
+    color: vec4f,
+    image: texture_2d<f32>,
+    imageSampler: sampler,
+    texCoord: vec2f,
+    screenCoord: vec2f
+) -> vec4f {
+    let texel: vec2f = 1.0 / vec2f(textureDimensions(image));
+    let weights: array<f32, 3> = array<f32, 3>(1.0, 2.0, 1.0);
+
+    var sum: vec4f = vec4f(0.0);
+    for (var y: i32 = -1; y <= 1; y = y + 1) {
+        for (var x: i32 = -1; x <= 1; x = x + 1) {
+            let offset: vec2f = vec2f(f32(x), f32(y)) * texel;
+            let weight: f32 = weights[x + 1] * weights[y + 1];
+            sum = sum + textureSample(image, imageSampler, texCoord + offset) * weight;
+        }
+    }
+
+    return sum / 16.0;
+}
+)";
+
 inline static constexpr std::string_view WGSL_SOBEL_EDGE_DETECTION_SHADER_SOURCE = R"(
 struct Uniforms {
     u_Width: f32,
     u_Height: f32,
+    u_Threshold: f32,
 };
 
 @group(2) @binding(0) var<uniform> u_Uniforms: Uniforms;
 
-fn make_kernel(n: ptr<function, array<vec4f, 9>>, image: texture_2d<f32>, imageSampler: sampler, coord: vec2f, width: f32, height: f32) {
+fn make_kernel(
+    n: ptr<function, array<vec4f, 9>>,
+    image: texture_2d<f32>,
+    imageSampler: sampler,
+    coord: vec2f,
+    width: f32,
+    height: f32
+) {
     let w: f32 = 1.0 / width;
     let h: f32 = 1.0 / height;
 
-    (*n)[0] = textureSample(image, imageSampler, coord + vec2( -w, -h));
+    (*n)[0] = textureSample(image, imageSampler, coord + vec2(-w, -h));
     (*n)[1] = textureSample(image, imageSampler, coord + vec2(0.0, -h));
-    (*n)[2] = textureSample(image, imageSampler, coord + vec2(  w, -h));
-    (*n)[3] = textureSample(image, imageSampler, coord + vec2( -w, 0.0));
+    (*n)[2] = textureSample(image, imageSampler, coord + vec2(w, -h));
+    (*n)[3] = textureSample(image, imageSampler, coord + vec2(-w, 0.0));
     (*n)[4] = textureSample(image, imageSampler, coord);
-    (*n)[5] = textureSample(image, imageSampler, coord + vec2(  w, 0.0));
-    (*n)[6] = textureSample(image, imageSampler, coord + vec2( -w, h));
+    (*n)[5] = textureSample(image, imageSampler, coord + vec2(w, 0.0));
+    (*n)[6] = textureSample(image, imageSampler, coord + vec2(-w, h));
     (*n)[7] = textureSample(image, imageSampler, coord + vec2(0.0, h));
-    (*n)[8] = textureSample(image, imageSampler, coord + vec2(  w, h));
+    (*n)[8] = textureSample(image, imageSampler, coord + vec2(w, h));
 }
 
-fn effect(color: vec4f, image: texture_2d<f32>, imageSampler: sampler, texCoord: vec2f, screenCoord: vec2f) -> vec4f {
+fn effect(
+    color: vec4f,
+    image: texture_2d<f32>,
+    imageSampler: sampler,
+    texCoord: vec2f,
+    screenCoord: vec2f
+) -> vec4f {
+
     var n: array<vec4f, 9>;
-    make_kernel(&n, image, imageSampler, texCoord, u_Uniforms.u_Width, u_Uniforms.u_Height);
 
-    let sobel_edge_h: vec4f = n[2] + (2.0 * n[5]) + n[8] - (n[0] + (2.0 * n[3]) + n[6]);
-    let sobel_edge_v: vec4f = n[0] + (2.0 * n[1]) + n[2] - (n[6] + (2.0 * n[7]) + n[8]);
-    let sobel: vec4f = sqrt((sobel_edge_h * sobel_edge_h) + (sobel_edge_v * sobel_edge_v));
+    make_kernel(
+        &n,
+        image,
+        imageSampler,
+        texCoord,
+        u_Uniforms.u_Width,
+        u_Uniforms.u_Height
+    );
 
-    return vec4f(1.0 - sobel.rgb, 1.0);
+    let sobel_edge_h =
+        n[2] + 2.0 * n[5] + n[8]
+        - (n[0] + 2.0 * n[3] + n[6]);
+
+    let sobel_edge_v =
+        n[0] + 2.0 * n[1] + n[2]
+        - (n[6] + 2.0 * n[7] + n[8]);
+
+    let sobel =
+        sqrt(
+            sobel_edge_h * sobel_edge_h +
+            sobel_edge_v * sobel_edge_v
+        );
+
+    let value = sobel.r;
+
+    if (value > u_Uniforms.u_Threshold) {
+        return vec4f(1.0);
+    }
+
+    return vec4f(0.0);
 }
 )";
 
@@ -55,8 +118,11 @@ struct WorldMap : Sketch
 {
     Texture worldMapTexture = loadTexture("assets/simple_map.jpg").value();
     Shader grayscaleShader = loadShaderFromMemory(WGSL_GRAYSCALE_SHADER_SOURCE).value();
+    Shader blurShader = loadShaderFromMemory(WGSL_BLUR_SHADER_SOURCE).value();
     Shader sobelEdgeDetectionShader = loadShaderFromMemory(WGSL_SOBEL_EDGE_DETECTION_SHADER_SOURCE).value();
+
     Texture grayscaledWorldMapTexture;
+    Texture blurredWorldMapTexture;
     Texture edgeDetectedWorldMapTexture;
 
     void setup() override
@@ -83,11 +149,23 @@ struct WorldMap : Sketch
 
         {
             Graphics graphics = createGraphics(mapWidth, mapHeight).value();
+
+            pushGraphics(graphics);
+            shader(blurShader);
+            image(grayscaledWorldMapTexture, 0, 0, getWidth(), getHeight());
+            noShader();
+            popGraphics();
+            blurredWorldMapTexture = graphics.colorTexture;
+        }
+
+        {
+            Graphics graphics = createGraphics(mapWidth, mapHeight).value();
             pushGraphics(graphics);
             shader(sobelEdgeDetectionShader);
             setUniform("u_Width", static_cast<float>(mapWidth));
             setUniform("u_Height", static_cast<float>(mapHeight));
-            image(grayscaledWorldMapTexture, 0, 0, getWidth(), getHeight());
+            setUniform("u_Threshold", 0.2f);
+            image(blurredWorldMapTexture, 0, 0, getWidth(), getHeight());
             noShader();
             popGraphics();
 

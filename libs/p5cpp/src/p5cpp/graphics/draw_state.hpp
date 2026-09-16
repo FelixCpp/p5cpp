@@ -42,5 +42,6 @@ namespace p5
         TextWrap textWrap = TextWrap::none;
         std::optional<float> textLeadingOverride = std::nullopt;
         float textLetterSpacing = 0.0f;
+        bool textLigatures = true;
     };
 } // namespace p5

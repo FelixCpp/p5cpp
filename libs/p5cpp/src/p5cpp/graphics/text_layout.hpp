@@ -21,7 +21,9 @@ namespace p5
             float unitsPerEm;
         };
 
-        LineLayout layoutLines(const Font& font, float size, std::string_view str, TextWrap wrap, float maxWidth, float letterSpacing = 0.0f);
+        std::string utf32ToUtf8(std::u32string_view str);
+
+        LineLayout layoutLines(const Font& font, float size, std::string_view str, TextWrap wrap, float maxWidth, float letterSpacing = 0.0f, bool ligaturesEnabled = true);
 
         struct TextBlockLayout
         {

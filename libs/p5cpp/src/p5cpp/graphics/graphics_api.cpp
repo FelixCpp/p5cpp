@@ -96,8 +96,13 @@ namespace p5
     void textLeading(float pixels) { canvas().textLeading(pixels); }
     void noTextLeading() { canvas().noTextLeading(); }
     void textLetterSpacing(float pixels) { canvas().textLetterSpacing(pixels); }
+    void textLigatures(bool enabled) { canvas().textLigatures(enabled); }
     void text(std::string_view str, float x, float y, float maxWidth, float maxHeight) { canvas().text(str, x, y, maxWidth, maxHeight); }
+    void text(std::u32string_view str, float x, float y, float maxWidth, float maxHeight) { canvas().text(str, x, y, maxWidth, maxHeight); }
     float textWidth(std::string_view str) { return canvas().textWidth(str); }
+    float textWidth(std::u32string_view str) { return canvas().textWidth(str); }
     rect2f textBounds(std::string_view str, const TextBoundsOptions& options) { return canvas().textBounds(str, options); }
+    rect2f textBounds(std::u32string_view str, const TextBoundsOptions& options) { return canvas().textBounds(str, options); }
     std::vector<TextPoint> textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options) { return canvas().textToPoints(str, x, y, options); }
+    std::vector<TextPoint> textToPoints(std::u32string_view str, float x, float y, const TextToPointsOptions& options) { return canvas().textToPoints(str, x, y, options); }
 } // namespace p5

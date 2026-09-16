@@ -40,6 +40,34 @@ namespace p5
 
         constexpr int kAtlasPaddingTexels = 1;
 
+        void appendUtf8(std::string& out, char32_t codepoint)
+        {
+            const uint32_t cp = static_cast<uint32_t>(codepoint);
+            if (cp <= 0x7F) {
+                out.push_back(static_cast<char>(cp));
+            } else if (cp <= 0x7FF) {
+                out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+                out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            } else if (cp <= 0xFFFF) {
+                out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+                out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            } else {
+                out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+                out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            }
+        }
+
+        size_t utf8PrevCharBoundary(std::string_view s, size_t offset)
+        {
+            while (offset > 0 and (static_cast<unsigned char>(s[offset]) & 0xC0) == 0x80) {
+                --offset;
+            }
+            return offset;
+        }
+
         std::vector<uint8_t> packCoverageBitmap(const uint8_t* buffer, int width, int height, int pitch)
         {
             std::vector<uint8_t> result(static_cast<size_t>(width) * static_cast<size_t>(height));
@@ -223,12 +251,22 @@ namespace p5
             FT_Done_Face(m_rasterFace);
         }
 
-        std::vector<ShapedGlyph> shape(std::string_view utf8Text) const override
+        std::vector<ShapedGlyph> shape(std::string_view utf8Text, bool ligaturesEnabled) const override
         {
             hb_buffer_t* buffer = hb_buffer_create();
             hb_buffer_add_utf8(buffer, utf8Text.data(), static_cast<int>(utf8Text.size()), 0, -1);
             hb_buffer_guess_segment_properties(buffer);
-            hb_shape(m_hbFont, buffer, nullptr, 0);
+
+            if (ligaturesEnabled) {
+                hb_shape(m_hbFont, buffer, nullptr, 0);
+            } else {
+                const hb_feature_t noLigatureFeatures[] = {
+                    {HB_TAG('l', 'i', 'g', 'a'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
+                    {HB_TAG('c', 'l', 'i', 'g'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
+                    {HB_TAG('d', 'l', 'i', 'g'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
+                };
+                hb_shape(m_hbFont, buffer, noLigatureFeatures, std::size(noLigatureFeatures));
+            }
 
             unsigned int glyphCount = 0;
             const hb_glyph_info_t* infos = hb_buffer_get_glyph_infos(buffer, &glyphCount);
@@ -504,7 +542,7 @@ namespace p5
 
     bool Font::isValid() const { return impl != nullptr; }
 
-    std::vector<ShapedGlyph> Font::shape(std::string_view utf8Text) const { return impl->shape(utf8Text); }
+    std::vector<ShapedGlyph> Font::shape(std::string_view utf8Text, bool ligaturesEnabled) const { return impl->shape(utf8Text, ligaturesEnabled); }
     const GlyphMetrics& Font::getGlyphMetrics(uint32_t glyphIndex) const { return impl->getGlyphMetrics(glyphIndex); }
     std::vector<std::vector<float2>> Font::getGlyphContours(uint32_t glyphIndex) const { return impl->getGlyphContours(glyphIndex); }
     Texture Font::getAtlasTexture() const { return impl->getAtlasTexture(); }
@@ -518,6 +556,16 @@ namespace p5
 {
     namespace detail
     {
+        std::string utf32ToUtf8(std::u32string_view str)
+        {
+            std::string result;
+            result.reserve(str.size());
+            for (const char32_t codepoint : str) {
+                appendUtf8(result, codepoint);
+            }
+            return result;
+        }
+
         namespace
         {
             float shapedWidth(const std::vector<ShapedGlyph>& glyphs, float letterSpacingDesignUnits)
@@ -527,9 +575,9 @@ namespace p5
                 return width;
             }
 
-            void appendWordWrappedLines(const Font& font, std::string_view segment, float maxWidthDesignUnits, float letterSpacingDesignUnits, std::vector<ShapedLine>& outLines)
+            void appendWordWrappedLines(const Font& font, std::string_view segment, float maxWidthDesignUnits, float letterSpacingDesignUnits, bool ligaturesEnabled, std::vector<ShapedLine>& outLines)
             {
-                const std::vector<ShapedGlyph> spaceGlyphs = font.shape(" ");
+                const std::vector<ShapedGlyph> spaceGlyphs = font.shape(" ", ligaturesEnabled);
                 const float spaceWidth = shapedWidth(spaceGlyphs, letterSpacingDesignUnits);
 
                 std::vector<ShapedGlyph> currentGlyphs;
@@ -544,7 +592,7 @@ namespace p5
                     if (wordStart == pos) break;
 
                     const std::string_view word = segment.substr(wordStart, pos - wordStart);
-                    const std::vector<ShapedGlyph> wordGlyphs = font.shape(word);
+                    const std::vector<ShapedGlyph> wordGlyphs = font.shape(word, ligaturesEnabled);
                     const float wordWidth = shapedWidth(wordGlyphs, letterSpacingDesignUnits);
 
                     const float candidateWidth = lineHasWord ? currentWidth + spaceWidth + wordWidth : wordWidth;
@@ -567,7 +615,7 @@ namespace p5
                 outLines.push_back({std::move(currentGlyphs), currentWidth});
             }
 
-            void appendCharacterWrappedLines(const Font& font, std::string_view segment, float maxWidthDesignUnits, float letterSpacingDesignUnits, std::vector<ShapedLine>& outLines)
+            void appendCharacterWrappedLines(const Font& font, std::string_view segment, float maxWidthDesignUnits, float letterSpacingDesignUnits, bool ligaturesEnabled, std::vector<ShapedLine>& outLines)
             {
                 constexpr size_t kInitialWindowBytes = 64;
 
@@ -584,8 +632,17 @@ namespace p5
 
                     for (;;) {
                         windowCoversRemainder = windowBytes >= remaining.size();
-                        window = windowCoversRemainder ? remaining : remaining.substr(0, windowBytes);
-                        glyphs = font.shape(window);
+                        if (not windowCoversRemainder) {
+                            const size_t boundedWindowBytes = utf8PrevCharBoundary(remaining, windowBytes);
+                            if (boundedWindowBytes == 0) {
+                                windowBytes *= 2;
+                                continue;
+                            }
+                            window = remaining.substr(0, boundedWindowBytes);
+                        } else {
+                            window = remaining;
+                        }
+                        glyphs = font.shape(window, ligaturesEnabled);
 
                         if (glyphs.empty()) {
                             outLines.push_back({{}, 0.0f});
@@ -640,7 +697,7 @@ namespace p5
             }
         } // namespace
 
-        LineLayout layoutLines(const Font& font, float size, std::string_view str, TextWrap wrap, float maxWidth, float letterSpacing)
+        LineLayout layoutLines(const Font& font, float size, std::string_view str, TextWrap wrap, float maxWidth, float letterSpacing, bool ligaturesEnabled)
         {
             LineLayout layout;
             layout.unitsPerEm = font.getUnitsPerEm();
@@ -654,13 +711,13 @@ namespace p5
                 const std::string_view segment = str.substr(start, newline == std::string_view::npos ? std::string_view::npos : newline - start);
 
                 if (wrap == TextWrap::none or maxWidth <= 0.0f) {
-                    std::vector<ShapedGlyph> glyphs = font.shape(segment);
+                    std::vector<ShapedGlyph> glyphs = font.shape(segment, ligaturesEnabled);
                     const float width = shapedWidth(glyphs, letterSpacingDesignUnits);
                     layout.lines.push_back({std::move(glyphs), width});
                 } else if (wrap == TextWrap::word) {
-                    appendWordWrappedLines(font, segment, maxWidthDesignUnits, letterSpacingDesignUnits, layout.lines);
+                    appendWordWrappedLines(font, segment, maxWidthDesignUnits, letterSpacingDesignUnits, ligaturesEnabled, layout.lines);
                 } else {
-                    appendCharacterWrappedLines(font, segment, maxWidthDesignUnits, letterSpacingDesignUnits, layout.lines);
+                    appendCharacterWrappedLines(font, segment, maxWidthDesignUnits, letterSpacingDesignUnits, ligaturesEnabled, layout.lines);
                 }
 
                 if (newline == std::string_view::npos) break;
@@ -753,15 +810,20 @@ namespace p5
         }
     } // namespace detail
 
-    float textWidth(const Font& font, float size, std::string_view str, float letterSpacing)
+    float textWidth(const Font& font, float size, std::string_view str, float letterSpacing, bool ligaturesEnabled)
     {
         const float scale = size / font.getUnitsPerEm();
-        const std::vector<ShapedGlyph> glyphs = font.shape(str);
+        const std::vector<ShapedGlyph> glyphs = font.shape(str, ligaturesEnabled);
         float width = 0.0f;
         for (const ShapedGlyph& g : glyphs) {
             width += g.xAdvance;
         }
         return width * scale + static_cast<float>(glyphs.size()) * letterSpacing;
+    }
+
+    float textWidth(const Font& font, float size, std::u32string_view str, float letterSpacing, bool ligaturesEnabled)
+    {
+        return textWidth(font, size, detail::utf32ToUtf8(str), letterSpacing, ligaturesEnabled);
     }
 
 } // namespace p5
