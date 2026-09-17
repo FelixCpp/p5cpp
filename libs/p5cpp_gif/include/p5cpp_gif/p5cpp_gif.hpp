@@ -37,6 +37,13 @@ namespace p5::gif
         float framesPerSecond = 30.0f;
     };
 
+    struct RecordingShortcutOptions
+    {
+        std::filesystem::path saveFilepath;
+        Key toggleRecordingKey;
+        GifRecordingOptions recordingOptions;
+    };
+
     struct GifRecordingResource;
     struct GifRecording
     {
@@ -50,7 +57,7 @@ namespace p5::gif
     };
 
     std::optional<GifRecording> recordGif(const std::filesystem::path& path, const GifStopCondition& condition, const GifRecordingOptions& options = {});
-    std::unique_ptr<Plugin> createGifRecorderPlugin();
+    std::unique_ptr<Plugin> createGifRecorderPlugin(std::optional<RecordingShortcutOptions> shortcutOptions = std::nullopt);
 
     struct GifRecordingStatus
     {

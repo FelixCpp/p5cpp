@@ -5,11 +5,6 @@
 
 namespace p5::gif
 {
-    inline static thread_local std::unique_ptr<GifRecorder> recorder;
-} // namespace p5::gif
-
-namespace p5::gif
-{
     bool GifRecording::isValid() const
     {
         return resource != nullptr;
@@ -34,12 +29,9 @@ namespace p5::gif
 
     std::optional<GifRecording> recordGif(const std::filesystem::path& path, const GifStopCondition& condition, const GifRecordingOptions& options)
     {
-        if (recorder == nullptr) {
-            error("GIFRecorder is not initialized. Please add the GIFRecorderPlugin to your sketch.");
-            return std::nullopt;
-        }
+        GifRecorder& recorder = requireDependency<GifRecorder>();
 
-        std::shared_ptr<GifRecordingResource> resource = recorder->insertRecording(path, condition, options);
+        std::shared_ptr<GifRecordingResource> resource = recorder.insertRecording(path, condition, options);
         if (resource == nullptr) {
             return std::nullopt;
         }
@@ -49,24 +41,42 @@ namespace p5::gif
 
     void setGifRecordingOverlayCallback(GifRecordingOverlayCallback callback)
     {
-        if (recorder == nullptr) {
-            error("GIFRecorder is not initialized. Please add the GIFRecorderPlugin to your sketch.");
-            return;
-        }
-
-        recorder->setOverlayCallback(std::move(callback));
+        GifRecorder& recorder = requireDependency<GifRecorder>();
+        recorder.setOverlayCallback(std::move(callback));
     }
 } // namespace p5::gif
 
 namespace p5::gif
 {
-    class GIFRecorderPlugin : public Plugin
+    class GifRecorderPlugin : public Plugin
     {
     public:
+        explicit GifRecorderPlugin(std::optional<RecordingShortcutOptions> shortcutOptions)
+            : m_recording {std::nullopt},
+              m_options {std::move(shortcutOptions)},
+              m_recorder {nullptr}
+        {
+        }
+
         void setup(const Next& next) override
         {
-            recorder = std::make_unique<GifRecorder>();
-            provideDependency(recorder.get());
+            m_recorder = std::make_unique<GifRecorder>();
+            provideDependency(m_recorder.get());
+
+            next();
+        }
+
+        void event(const Next& next, const WindowEvent& event) override
+        {
+            if (m_options.has_value()) {
+                event.on(
+                    [this](const WindowEvent::KeyPress& keyEvent) {
+                        if (keyEvent.key == m_options->toggleRecordingKey) {
+                            toggleRecording(m_options.value());
+                        }
+                    }
+                );
+            }
 
             next();
         }
@@ -75,8 +85,8 @@ namespace p5::gif
         {
             next();
 
-            recorder->updateRecordings();
-            recorder->drawRecordingOverlay();
+            m_recorder->updateRecordings();
+            m_recorder->drawRecordingOverlay();
         }
 
         void destroy(const Next& next) override
@@ -84,16 +94,37 @@ namespace p5::gif
             next();
 
             removeDependency<GifRecorder>();
-            recorder.reset();
+            m_recorder.reset();
         }
+
+    private:
+        void toggleRecording(const RecordingShortcutOptions& options)
+        {
+            if (m_recording.has_value()) {
+                m_recording->cancel();
+                m_recording.reset();
+            } else {
+                m_recording = recordGif(
+                    options.saveFilepath,
+                    recordUntil([](float) {
+                        return false; // Record forever
+                    }),
+                    options.recordingOptions
+                );
+            }
+        }
+
+        std::optional<GifRecording> m_recording;
+        std::optional<RecordingShortcutOptions> m_options;
+        std::unique_ptr<GifRecorder> m_recorder;
     };
 } // namespace p5::gif
 
 namespace p5::gif
 {
-    std::unique_ptr<Plugin> createGifRecorderPlugin()
+    std::unique_ptr<Plugin> createGifRecorderPlugin(std::optional<RecordingShortcutOptions> shortcutOptions)
     {
-        return std::make_unique<GIFRecorderPlugin>();
+        return std::make_unique<GifRecorderPlugin>(std::move(shortcutOptions));
     }
 } // namespace p5::gif
 

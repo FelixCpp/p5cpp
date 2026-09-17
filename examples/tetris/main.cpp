@@ -336,7 +336,13 @@ Shape getShape(ShapeType type, Rotation rotation)
 }
 
 inline static constexpr std::array<ShapeType, 7> allShapeTypes = {
-    ShapeType::o, ShapeType::i, ShapeType::t, ShapeType::l, ShapeType::j, ShapeType::s, ShapeType::z,
+    ShapeType::o,
+    ShapeType::i,
+    ShapeType::t,
+    ShapeType::l,
+    ShapeType::j,
+    ShapeType::s,
+    ShapeType::z,
 };
 
 ShapeType draw_from_bag(std::vector<ShapeType>& bag)
@@ -423,8 +429,6 @@ struct Tetris : Sketch
     int score = 0;
     int linesCleared = 0;
     int level = 1;
-
-    std::optional<GifRecording> recording;
 
     void setup() override
     {
@@ -623,8 +627,12 @@ struct Tetris : Sketch
 
     void updateInput(float deltaTime)
     {
-        updateHorizontalRepeat(leftHeld, isKeyDown(Key::Left), deltaTime, [this] { tryMove(-1, 0); });
-        updateHorizontalRepeat(rightHeld, isKeyDown(Key::Right), deltaTime, [this] { tryMove(1, 0); });
+        updateHorizontalRepeat(leftHeld, isKeyDown(Key::Left), deltaTime, [this] {
+            tryMove(-1, 0);
+        });
+        updateHorizontalRepeat(rightHeld, isKeyDown(Key::Right), deltaTime, [this] {
+            tryMove(1, 0);
+        });
 
         if (isKeyPressed(Key::Up) or isKeyPressed(Key::X)) {
             tryRotate(true);
@@ -660,13 +668,16 @@ struct Tetris : Sketch
         const float deltaTime = static_cast<float>(getDeltaTime());
         textFont(uiFont);
 
-        if (isKeyPressed(Key::G)) {
-            if (recording.has_value() and recording->isActive()) {
-                recording->cancel();
-            } else {
-                recording = recordGif("tetris.gif", recordUntil([](float) { return false; }), {.framesPerSecond = 20.0f});
-            }
-        }
+        // if (isKeyPressed(Key::G)) {
+        //     if (recording.has_value() and recording->isActive()) {
+        //         recording->cancel();
+        //     } else {
+        //         recording = recordGif("tetris.gif", recordUntil([](float) {
+        //                                   return false;
+        //                               }),
+        //                               {.framesPerSecond = 20.0f});
+        //     }
+        // }
 
         if (state != GameState::gameOver and isKeyPressed(Key::P)) {
             state = (state == GameState::paused) ? GameState::playing : GameState::paused;
@@ -943,7 +954,19 @@ SketchSpec p5::createSpec()
     return SketchSpec {
         .plugins = [] {
             std::vector<std::unique_ptr<Plugin>> plugins;
-            plugins.push_back(gif::createGifRecorderPlugin());
+
+            plugins.push_back(
+                gif::createGifRecorderPlugin(
+                    RecordingShortcutOptions {
+                        .saveFilepath = "tetris.gif",
+                        .toggleRecordingKey = Key::G,
+                        .recordingOptions = {
+                            .framesPerSecond = 20.0f,
+                        },
+                    }
+                )
+            );
+
             return plugins;
         },
         .sketch = [] {

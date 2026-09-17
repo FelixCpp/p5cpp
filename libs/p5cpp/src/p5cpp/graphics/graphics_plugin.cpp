@@ -50,7 +50,9 @@ namespace p5
             m_gpuDevice->reconfigure(resize->width, resize->height);
         }
 
+        m_canvas->pushGraphics(m_defaultGraphics, true);
         next();
+        m_canvas->popGraphics();
     }
 
     void GraphicsPlugin::draw(const Next& next)
