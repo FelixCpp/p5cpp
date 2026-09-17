@@ -690,13 +690,6 @@ struct Tetris : Sketch
         renderBoard();
         renderSidePanel();
 
-        strokeDashPattern({30.0f, 100.0f});
-        noFill();
-        strokeWeight(20.0f);
-        stroke(rgba(255));
-        strokeCap(StrokeCap::square);
-        rect(100.0f, 100.0f, 300.0f, 300.0f, BorderRadius::all(15.0f));
-
         if (state == GameState::paused) {
             renderOverlay("PAUSED", "Press P to resume");
         } else if (state == GameState::gameOver) {
