@@ -14,6 +14,10 @@ add_library(
   ./src/p5cpp/input/input_plugin.cpp
   ./src/p5cpp/input/input_api.cpp
   ./src/p5cpp/graphics/gpu_device.cpp
+  ./src/p5cpp/graphics/pipeline_cache.cpp
+  ./src/p5cpp/graphics/sampler_cache.cpp
+  ./src/p5cpp/graphics/texture_bind_group_cache.cpp
+  ./src/p5cpp/graphics/extra_uniforms_ring.cpp
   ./src/p5cpp/graphics/renderer.cpp
   ./src/p5cpp/graphics/tessellators.cpp
   ./src/p5cpp/graphics/graphics.cpp
@@ -23,8 +27,15 @@ add_library(
   ./src/p5cpp/graphics/matrix_stack.cpp
   ./src/p5cpp/graphics/pixels.cpp
   ./src/p5cpp/graphics/shader.cpp
-  ./src/p5cpp/graphics/wgsl_uniform_layout.cpp
+  ./src/p5cpp/graphics/wgsl_reflection.cpp
+  ./src/p5cpp/graphics/gpu_command.cpp
+  ./src/p5cpp/graphics/gpu_readback.cpp
+  ./src/p5cpp/graphics/storage_buffer.cpp
+  ./src/p5cpp/graphics/compute_shader.cpp
   ./src/p5cpp/graphics/shape_builder.cpp
+  ./src/p5cpp/graphics/primitive_geometry.cpp
+  ./src/p5cpp/graphics/geometry_submitter.cpp
+  ./src/p5cpp/graphics/text_renderer.cpp
   ./src/p5cpp/graphics/canvas.cpp
   ./src/p5cpp/graphics/graphics_api.cpp
   ./src/p5cpp/graphics/graphics_plugin.cpp

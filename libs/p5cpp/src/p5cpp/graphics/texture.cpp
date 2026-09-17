@@ -1,6 +1,8 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/texture_impl.hpp>
 #include <p5cpp/graphics/gpu_device.hpp>
+#include <p5cpp/graphics/gpu_command.hpp>
+#include <p5cpp/graphics/gpu_readback.hpp>
 
 #include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
@@ -39,21 +41,6 @@ namespace p5
             return (unaligned + kCopyBytesPerRowAlignment - 1) / kCopyBytesPerRowAlignment * kCopyBytesPerRowAlignment;
         }
 
-        void beginBufferMapRead(WGPUBuffer buffer, uint64_t size, bool* complete)
-        {
-            WGPUBufferMapCallbackInfo callbackInfo {};
-            callbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
-            callbackInfo.callback = [](WGPUMapAsyncStatus status, WGPUStringView message, void* userdata1, void*) {
-                if (status != WGPUMapAsyncStatus_Success) {
-                    error("GPU buffer map failed: {}", std::string_view(message.data, message.length));
-                }
-                *static_cast<bool*>(userdata1) = true;
-            };
-            callbackInfo.userdata1 = complete;
-
-            wgpuBufferMapAsync(buffer, WGPUMapMode_Read, 0, size, callbackInfo);
-        }
-
         std::optional<std::vector<uint8_t>> queryPixelData(const Texture& texture)
         {
             GpuDevice& gpuDevice = requireDependency<GpuDevice>();
@@ -62,54 +49,38 @@ namespace p5
             const uint32_t bytesPerRow = alignedBytesPerRow(texture.size.x, 4);
             const uint64_t bufferSize = static_cast<uint64_t>(bytesPerRow) * texture.size.y;
 
-            WGPUBufferDescriptor bufferDesc {};
-            bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
-            bufferDesc.size = bufferSize;
-            WGPUBuffer stagingBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+            WGPUBuffer stagingBuffer = GpuStagingReadback::createStagingBuffer(device, bufferSize);
             if (stagingBuffer == nullptr) {
                 error("Texture readback failed to allocate a staging buffer");
                 return std::nullopt;
             }
 
-            WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
+            {
+                GpuCommandScope commands(device);
 
-            WGPUTexelCopyTextureInfo src {};
-            src.texture = texture.impl->texture;
-            src.origin = WGPUOrigin3D {0, 0, 0};
-            src.aspect = WGPUTextureAspect_All;
+                WGPUTexelCopyTextureInfo src {};
+                src.texture = texture.impl->texture;
+                src.origin = WGPUOrigin3D {0, 0, 0};
+                src.aspect = WGPUTextureAspect_All;
 
-            WGPUTexelCopyBufferInfo dst {};
-            dst.buffer = stagingBuffer;
-            dst.layout.bytesPerRow = bytesPerRow;
-            dst.layout.rowsPerImage = texture.size.y;
+                WGPUTexelCopyBufferInfo dst {};
+                dst.buffer = stagingBuffer;
+                dst.layout.bytesPerRow = bytesPerRow;
+                dst.layout.rowsPerImage = texture.size.y;
 
-            const WGPUExtent3D copySize {texture.size.x, texture.size.y, 1};
-            wgpuCommandEncoderCopyTextureToBuffer(encoder, &src, &dst, &copySize);
-
-            WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, nullptr);
-            wgpuQueueSubmit(gpuDevice.getQueue(), 1, &commandBuffer);
-            wgpuCommandBufferRelease(commandBuffer);
-            wgpuCommandEncoderRelease(encoder);
-
-            bool complete = false;
-            beginBufferMapRead(stagingBuffer, bufferSize, &complete);
-            while (not complete) {
-                wgpuDevicePoll(device, /* wait */ true, nullptr);
+                const WGPUExtent3D copySize {texture.size.x, texture.size.y, 1};
+                wgpuCommandEncoderCopyTextureToBuffer(commands.encoder(), &src, &dst, &copySize);
+                commands.submit(gpuDevice.getQueue());
             }
 
-            std::optional<std::vector<uint8_t>> result;
-            if (const void* mapped = wgpuBufferGetConstMappedRange(stagingBuffer, 0, bufferSize)) {
-                std::vector<uint8_t> pixelData(static_cast<size_t>(texture.size.x) * texture.size.y * 4);
-                const uint8_t* mappedBytes = static_cast<const uint8_t*>(mapped);
-                for (uint32_t row = 0; row < texture.size.y; ++row) {
-                    std::memcpy(pixelData.data() + static_cast<size_t>(row) * texture.size.x * 4, mappedBytes + static_cast<size_t>(row) * bytesPerRow, static_cast<size_t>(texture.size.x) * 4);
-                }
-                result = std::move(pixelData);
-            } else {
-                error("Texture readback failed to map its staging buffer");
-            }
+            const GpuReadbackLayout layout {
+                .mappedByteSize = bufferSize,
+                .rowStrideBytes = bytesPerRow,
+                .rowSizeBytes = texture.size.x * 4,
+                .rowCount = texture.size.y,
+            };
+            std::optional<std::vector<uint8_t>> result = GpuStagingReadback::mapAndCopyBlocking(device, stagingBuffer, layout);
 
-            wgpuBufferUnmap(stagingBuffer);
             wgpuBufferDestroy(stagingBuffer);
             wgpuBufferRelease(stagingBuffer);
 
@@ -414,31 +385,28 @@ namespace p5
         }
 
         GpuDevice& gpuDevice = requireDependency<GpuDevice>();
-        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(gpuDevice.getDevice(), nullptr);
+        {
+            GpuCommandScope commands(gpuDevice.getDevice());
 
-        WGPUTexelCopyTextureInfo src {};
-        src.texture = texture.impl->texture;
-        src.origin = WGPUOrigin3D {0, 0, 0};
-        src.aspect = WGPUTextureAspect_All;
+            WGPUTexelCopyTextureInfo src {};
+            src.texture = texture.impl->texture;
+            src.origin = WGPUOrigin3D {0, 0, 0};
+            src.aspect = WGPUTextureAspect_All;
 
-        WGPUTexelCopyBufferInfo dst {};
-        dst.buffer = buffer;
-        dst.layout.bytesPerRow = alignedBytesPerRow(reader.width, 4);
-        dst.layout.rowsPerImage = reader.height;
+            WGPUTexelCopyBufferInfo dst {};
+            dst.buffer = buffer;
+            dst.layout.bytesPerRow = alignedBytesPerRow(reader.width, 4);
+            dst.layout.rowsPerImage = reader.height;
 
-        const WGPUExtent3D copySize {reader.width, reader.height, 1};
-        wgpuCommandEncoderCopyTextureToBuffer(encoder, &src, &dst, &copySize);
+            const WGPUExtent3D copySize {reader.width, reader.height, 1};
+            wgpuCommandEncoderCopyTextureToBuffer(commands.encoder(), &src, &dst, &copySize);
+            commands.submit(gpuDevice.getQueue());
+        }
 
-        WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, nullptr);
-        wgpuQueueSubmit(gpuDevice.getQueue(), 1, &commandBuffer);
-        wgpuCommandBufferRelease(commandBuffer);
-        wgpuCommandEncoderRelease(encoder);
-
-        slot.mapComplete = false;
         slot.mapRequested = true;
         slot.pending = true;
         const uint64_t bufferSize = static_cast<uint64_t>(alignedBytesPerRow(reader.width, 4)) * reader.height;
-        beginBufferMapRead(buffer, bufferSize, &slot.mapComplete);
+        GpuStagingReadback::beginMapAsync(buffer, bufferSize, slot.mapComplete);
 
         reader.writeIndex = (reader.writeIndex + 1) % reader.ring.size();
         return not droppedUndrained;
@@ -467,21 +435,17 @@ namespace p5
         const uint32_t bytesPerRow = alignedBytesPerRow(reader.width, 4);
         const uint64_t bufferSize = static_cast<uint64_t>(bytesPerRow) * reader.height;
 
-        const void* mapped = wgpuBufferGetConstMappedRange(buffer, 0, bufferSize);
-        if (mapped == nullptr) {
-            wgpuBufferUnmap(buffer);
-            error("pollPixelReadback() failed to read its mapped buffer");
+        const GpuReadbackLayout layout {
+            .mappedByteSize = bufferSize,
+            .rowStrideBytes = bytesPerRow,
+            .rowSizeBytes = reader.width * 4,
+            .rowCount = reader.height,
+        };
+        std::optional<std::vector<uint8_t>> bytes = GpuStagingReadback::finishMappedRead(buffer, layout);
+        if (not bytes.has_value()) {
             return std::nullopt;
         }
 
-        std::vector<uint8_t> bytes(static_cast<size_t>(reader.width) * reader.height * 4);
-        const uint8_t* mappedBytes = static_cast<const uint8_t*>(mapped);
-        for (uint32_t row = 0; row < reader.height; ++row) {
-            std::memcpy(bytes.data() + static_cast<size_t>(row) * reader.width * 4, mappedBytes + static_cast<size_t>(row) * bytesPerRow, static_cast<size_t>(reader.width) * 4);
-        }
-
-        wgpuBufferUnmap(buffer);
-
-        return Pixels {.width = reader.width, .height = reader.height, .data = std::move(bytes)};
+        return Pixels {.width = reader.width, .height = reader.height, .data = std::move(bytes).value()};
     }
 } // namespace p5

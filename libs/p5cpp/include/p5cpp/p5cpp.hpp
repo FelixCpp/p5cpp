@@ -764,6 +764,79 @@ namespace p5
 
 namespace p5
 {
+    struct StorageBufferImpl;
+    struct StorageBuffer
+    {
+        std::shared_ptr<StorageBufferImpl> impl;
+        uint64_t byteSize = 0;
+
+        bool operator==(const StorageBuffer&) const = default;
+        bool isValid() const;
+
+        void updateData(std::span<const uint8_t> data, uint64_t offset = 0);
+        std::vector<uint8_t> readData() const;
+    };
+
+    std::optional<StorageBuffer> createStorageBuffer(uint64_t byteSize, std::span<const uint8_t> initialData = {});
+
+    // Async, non-blocking counterpart to StorageBuffer::readData(), mirroring PixelReader's
+    // ring-buffered design: request a readback once per frame, then poll for completed ones a
+    // frame or two later instead of stalling on the GPU synchronously.
+    struct StorageBufferReaderSlot
+    {
+        void* buffer = nullptr;    // WGPUBuffer; kept opaque so this header doesn't need a graphics-backend include
+        bool mapRequested = false; // wgpuBufferMapAsync() has been issued for this slot's in-flight readback
+        bool mapComplete = false;  // the map callback has fired; wgpuBufferGetConstMappedRange() is safe to call
+        bool pending = false;      // a readback was requested and hasn't been drained by pollStorageBufferReadback() yet
+    };
+
+    struct StorageBufferReader
+    {
+        uint64_t byteSize = 0;
+        std::vector<StorageBufferReaderSlot> ring;
+        size_t writeIndex = 0;
+        size_t readIndex = 0;
+
+        StorageBufferReader() = default;
+        StorageBufferReader(const StorageBufferReader&) = delete;
+        StorageBufferReader& operator=(const StorageBufferReader&) = delete;
+        ~StorageBufferReader();
+    };
+
+    std::unique_ptr<StorageBufferReader> createStorageBufferReader(uint64_t byteSize, uint32_t ringSize = 3);
+    bool requestStorageBufferReadback(StorageBufferReader& reader, const StorageBuffer& buffer);
+    std::optional<std::vector<uint8_t>> pollStorageBufferReadback(StorageBufferReader& reader);
+
+    // Compiles a WGSL compute shader. Its entry point must be a function named "main" marked
+    // @compute @workgroup_size(...). Storage buffers it reads or writes must be declared at
+    // @group(0), e.g.:
+    //
+    //   @group(0) @binding(0) var<storage, read_write> particles: array<f32>;
+    //
+    //   @compute @workgroup_size(64)
+    //   fn main(@builtin(global_invocation_id) id: vec3u) { ... }
+    //
+    // Binding names (e.g. "particles" above) are matched by name against the bindings passed to
+    // dispatchCompute().
+    struct ComputeShaderImpl;
+    struct ComputeShader
+    {
+        std::shared_ptr<ComputeShaderImpl> impl;
+
+        bool operator==(const ComputeShader&) const = default;
+        bool isValid() const;
+    };
+
+    std::optional<ComputeShader> loadComputeShaderFromMemory(std::string_view source);
+    std::optional<ComputeShader> loadComputeShaderFromFile(const std::filesystem::path& filepath);
+
+    using ComputeBinding = std::pair<std::string_view, StorageBuffer>;
+
+    void dispatchCompute(const ComputeShader& shader, std::initializer_list<ComputeBinding> bindings, uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1);
+} // namespace p5
+
+namespace p5
+{
     struct GraphicsImpl;
     struct Graphics
     {
@@ -779,7 +852,6 @@ namespace p5
     };
 
     std::optional<Graphics> createGraphics(uint32_t width, uint32_t height, uint32_t samples = 0);
-    void blitGraphicsToScreen(const Graphics& graphics, uint32_t screenWidth, uint32_t screenHeight);
     Graphics peekGraphics();
 } // namespace p5
 
@@ -881,18 +953,7 @@ namespace p5
         uint32_t contourIndex = 0;
     };
 
-    struct FontImpl
-    {
-        virtual ~FontImpl() = default;
-        virtual std::vector<ShapedGlyph> shape(std::string_view utf8Text, bool ligaturesEnabled) const = 0;
-        virtual const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) = 0;
-        virtual std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) = 0;
-        virtual Texture getAtlasTexture() const = 0;
-        virtual float getUnitsPerEm() const = 0;
-        virtual float getAscent() const = 0;
-        virtual float getDescent() const = 0;
-        virtual float getLineGap() const = 0;
-    };
+    struct FontImpl;
 
     struct Font
     {

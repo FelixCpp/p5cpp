@@ -5,10 +5,18 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace p5
 {
+    // Small, linear-scan association list for a shader's "extra uniforms". Uniform counts per
+    // draw state are always small (well under 10 in practice), so this avoids paying an
+    // unordered_map's allocation cost on every push()/pushState() regardless of whether uniforms
+    // are even in use.
+    using ShaderUniformList = std::vector<std::pair<std::string, UniformValue>>;
+
     struct DrawState
     {
         bool isFillEnabled = true;
@@ -34,7 +42,7 @@ namespace p5
 
         Texture texture;
         Shader shader;
-        std::unordered_map<std::string, UniformValue> shaderUniforms;
+        ShaderUniformList shaderUniforms;
 
         Font textFont;
         float textSize = 12.0f;
@@ -43,5 +51,16 @@ namespace p5
         std::optional<float> textLeadingOverride = std::nullopt;
         float textLetterSpacing = 0.0f;
         bool textLigatures = true;
+
+        void setUniform(std::string_view name, UniformValue value)
+        {
+            for (auto& [existingName, existingValue] : shaderUniforms) {
+                if (existingName == name) {
+                    existingValue = std::move(value);
+                    return;
+                }
+            }
+            shaderUniforms.emplace_back(std::string(name), std::move(value));
+        }
     };
 } // namespace p5

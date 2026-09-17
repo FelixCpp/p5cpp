@@ -2,6 +2,7 @@
 
 #include <p5cpp/p5cpp.hpp>
 
+#include <array>
 #include <vector>
 
 namespace p5
@@ -31,6 +32,8 @@ namespace p5
         void curveVertex(float x, float y, float tightness, color_t fillColor, color_t strokeColor);
 
     private:
+        bool requireBuilding(const char* callerName) const;
+
         bool m_isBuilding;
         ShapeMode m_mode;
 
@@ -39,6 +42,9 @@ namespace p5
         std::vector<color_t> m_fillColors;
         std::vector<color_t> m_strokeColors;
 
-        std::vector<float2> m_curvePoints;
+        // Catmull-Rom only ever needs the last 4 curveVertex() points, so this is a fixed-size
+        // sliding window rather than a vector that grows for the whole shape's lifetime.
+        std::array<float2, 4> m_curvePoints {};
+        size_t m_curvePointCount = 0;
     };
 } // namespace p5

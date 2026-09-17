@@ -1,8 +1,8 @@
 #include <p5cpp/graphics/tessellators.hpp>
 #include <p5cpp/graphics/canvas.hpp>
-#include <p5cpp/graphics/text_layout.hpp>
 #include <p5cpp/graphics/dejavu_sans.hpp>
 #include <p5cpp/graphics/default_shaders.hpp>
+#include <p5cpp/graphics/primitive_geometry.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -41,117 +41,21 @@ namespace p5
 
         inline static constexpr size_t MAX_VERTICES = 100'000;
         inline static constexpr size_t MAX_INDICES = 150'000;
-        inline static constexpr size_t TEXT_MESH_CHUNK_GLYPHS = 512;
-
-        float4 toFloat4(color_t color)
-        {
-            return {
-                static_cast<float>(color.r) / 255.0f,
-                static_cast<float>(color.g) / 255.0f,
-                static_cast<float>(color.b) / 255.0f,
-                static_cast<float>(color.a) / 255.0f,
-            };
-        }
-
-        int ellipseSegmentCount(float radiusX, float radiusY)
-        {
-            const float maxRadius = std::max(std::abs(radiusX), std::abs(radiusY));
-            const int segments = static_cast<int>(std::ceil(std::numbers::pi_v<float> * std::sqrt(2.0f * maxRadius)));
-            return std::clamp(segments, 16, 256);
-        }
-
-        void buildEllipsePoints(float centerX, float centerY, float radiusX, float radiusY, std::vector<float2>& positions, std::vector<float2>& texCoords)
-        {
-            const int segments = ellipseSegmentCount(radiusX, radiusY);
-            positions.resize(segments);
-            texCoords.resize(segments);
-
-            for (int i = 0; i < segments; ++i) {
-                const float angle = (2.0f * std::numbers::pi_v<float> * static_cast<float>(i)) / static_cast<float>(segments);
-                const float c = std::cos(angle);
-                const float s = std::sin(angle);
-                positions[i] = {centerX + c * radiusX, centerY + s * radiusY};
-                texCoords[i] = {0.5f + 0.5f * c, 0.5f + 0.5f * s};
-            }
-        }
-
-        int arcSegmentCount(float radiusX, float radiusY, float angleSpan)
-        {
-            constexpr float twoPi = 2.0f * std::numbers::pi_v<float>;
-            const float fraction = std::clamp(std::abs(angleSpan) / twoPi, 0.0f, 1.0f);
-            const int segments = static_cast<int>(std::ceil(static_cast<float>(ellipseSegmentCount(radiusX, radiusY)) * fraction));
-            return std::clamp(segments, 2, 256);
-        }
-
-        void buildArcPoints(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, std::vector<float2>& positions, std::vector<float2>& texCoords)
-        {
-            const int segments = arcSegmentCount(radiusX, radiusY, stopAngle - startAngle);
-            positions.resize(segments + 1);
-            texCoords.resize(segments + 1);
-
-            for (int i = 0; i <= segments; ++i) {
-                const float angle = std::lerp(startAngle, stopAngle, static_cast<float>(i) / static_cast<float>(segments));
-                const float c = std::cos(angle);
-                const float s = std::sin(angle);
-                positions[i] = {centerX + c * radiusX, centerY + s * radiusY};
-                texCoords[i] = {0.5f + 0.5f * c, 0.5f + 0.5f * s};
-            }
-        }
-
-        void buildRoundedRectPoints(float left, float top, float width, float height, const BorderRadius& borderRadius, color_t fillColor, color_t strokeColor, const matrix4x4& transform, ShapeBuilder& builder)
-        {
-            const float right = left + width;
-            const float bottom = top + height;
-            const float halfWidth = width * 0.5f;
-            const float halfHeight = height * 0.5f;
-
-            const auto clampCorner = [&](const CornerRadius& corner) -> float2 {
-                return {std::clamp(corner.radiusX, 0.0f, halfWidth), std::clamp(corner.radiusY, 0.0f, halfHeight)};
-            };
-
-            const float2 topLeftRadius = clampCorner(borderRadius.topLeft);
-            const float2 topRightRadius = clampCorner(borderRadius.topRight);
-            const float2 bottomRightRadius = clampCorner(borderRadius.bottomRight);
-            const float2 bottomLeftRadius = clampCorner(borderRadius.bottomLeft);
-
-            const auto addCorner = [&](float cornerX, float cornerY, float centerX, float centerY, float radiusX, float radiusY, float startAngle, float endAngle) {
-                const auto addVertex = [&](float x, float y) {
-                    const float2 transformed = transformPoint(transform, {x, y});
-                    builder.vertex(transformed.x, transformed.y, (x - left) / width, (y - top) / height, fillColor, strokeColor);
-                };
-
-                if (radiusX <= 0.0f or radiusY <= 0.0f) {
-                    addVertex(cornerX, cornerY);
-                    return;
-                }
-
-                const int segments = std::max(ellipseSegmentCount(radiusX, radiusY) / 4, 2);
-                for (int i = 0; i <= segments; ++i) {
-                    const float t = std::lerp(startAngle, endAngle, static_cast<float>(i) / static_cast<float>(segments));
-                    addVertex(centerX + std::cos(t) * radiusX, centerY + std::sin(t) * radiusY);
-                }
-            };
-
-            constexpr float pi = std::numbers::pi_v<float>;
-
-            addCorner(left, top, left + topLeftRadius.x, top + topLeftRadius.y, topLeftRadius.x, topLeftRadius.y, pi, 1.5f * pi);
-            addCorner(right, top, right - topRightRadius.x, top + topRightRadius.y, topRightRadius.x, topRightRadius.y, 1.5f * pi, 2.0f * pi);
-            addCorner(right, bottom, right - bottomRightRadius.x, bottom - bottomRightRadius.y, bottomRightRadius.x, bottomRightRadius.y, 0.0f, 0.5f * pi);
-            addCorner(left, bottom, left + bottomLeftRadius.x, bottom - bottomLeftRadius.y, bottomLeftRadius.x, bottomLeftRadius.y, 0.5f * pi, pi);
-        }
     } // namespace detail
 } // namespace p5
 
 namespace p5
 {
-    Canvas::Canvas()
+    Canvas::Canvas(GpuDevice& gpuDevice)
         : m_stateStack(),
           m_matrixStack(),
-          m_renderer(Renderer::create(detail::MAX_VERTICES, detail::MAX_INDICES)),
+          m_renderer(Renderer::create(gpuDevice, detail::MAX_VERTICES, detail::MAX_INDICES)),
           m_defaultFillShader(loadShaderFromMemory(detail::defaultVertexShaderSource, detail::defaultFragmentShaderSource).value()),
           m_defaultTextShader(loadShaderFromMemory(detail::defaultVertexShaderSource, detail::defaultTextFragmentShaderSource).value()),
           m_defaultTexture(loadTexture(1, 1, std::array<uint8_t, 4> {255, 255, 255, 255}).value()),
-          m_defaultFont(loadFont(std::span<const uint8_t> {DejaVuSans_ttf, DejaVuSans_ttf_len}).value())
+          m_defaultFont(loadFont(std::span<const uint8_t> {DejaVuSans_ttf, DejaVuSans_ttf_len}).value()),
+          m_geometrySubmitter(*m_renderer, m_defaultTexture, m_defaultFillShader, m_defaultTextShader),
+          m_textRenderer(m_geometrySubmitter, m_matrixStack, m_defaultFont)
     {
     }
 
@@ -394,117 +298,32 @@ namespace p5
 
     void Canvas::setUniform(std::string_view name, float value)
     {
-        peekState().shaderUniforms[std::string(name)] = value;
+        peekState().setUniform(name, value);
     }
 
     void Canvas::setUniform(std::string_view name, const float2& value)
     {
-        peekState().shaderUniforms[std::string(name)] = value;
+        peekState().setUniform(name, value);
     }
 
     void Canvas::setUniform(std::string_view name, const float3& value)
     {
-        peekState().shaderUniforms[std::string(name)] = value;
+        peekState().setUniform(name, value);
     }
 
     void Canvas::setUniform(std::string_view name, const float4& value)
     {
-        peekState().shaderUniforms[std::string(name)] = value;
+        peekState().setUniform(name, value);
     }
 
     void Canvas::setUniform(std::string_view name, const matrix4x4& value)
     {
-        peekState().shaderUniforms[std::string(name)] = value;
-    }
-
-    Shader Canvas::resolveActiveShader(const Shader& fallback)
-    {
-        DrawState& state = peekState();
-        if (state.shader.isValid()) {
-            return state.shader;
-        }
-
-        return fallback;
-    }
-
-    Texture Canvas::resolveActiveTexture(const Texture& texture)
-    {
-        if (texture.isValid()) {
-            return texture;
-        }
-
-        return m_defaultTexture;
+        peekState().setUniform(name, value);
     }
 
     float2 Canvas::applyTransform(const float2& point) const
     {
         return p5::transformPoint(m_matrixStack.peek(), point);
-    }
-
-    void Canvas::submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const Texture& texture)
-    {
-        const float4 col = detail::toFloat4(color);
-        const float4 colors[4] = {col, col, col, col};
-
-        Renderer::Writer writer = m_renderer->write();
-        tesselate_quad(writer, positions, texCoords, colors);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(texture), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
-    }
-
-    void Canvas::submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state)
-    {
-        std::vector<float2> texCoords(positions.size());
-        float pathLength = 0.0f;
-        for (size_t i = 0; i < positions.size(); ++i) {
-            if (i > 0)
-                pathLength += distance(positions[i - 1], positions[i]);
-            texCoords[i] = {pathLength, 0.0f};
-        }
-
-        const std::vector<color_t> colors(positions.size(), color);
-        submitStroke(positions, texCoords, colors, closed, state, /*synthesizeCrossTrackV=*/true);
-    }
-
-    void Canvas::submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state, bool synthesizeCrossTrackV)
-    {
-        std::vector<float4> convertedColors(colors.size());
-        std::ranges::transform(colors, convertedColors.begin(), detail::toFloat4);
-
-        Renderer::Writer writer = m_renderer->write();
-        tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed, synthesizeCrossTrackV);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
-    }
-
-    void Canvas::submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state)
-    {
-        std::vector<float4> convertedColors(colors.size());
-        std::ranges::transform(colors, convertedColors.begin(), detail::toFloat4);
-
-        Renderer::Writer writer = m_renderer->write();
-        switch (mode) {
-            case ShapeMode::triangles: tesselate_triangles(writer, positions, texCoords, convertedColors); break;
-            case ShapeMode::triangleStrip: tesselate_triangle_strip(writer, positions, texCoords, convertedColors); break;
-            case ShapeMode::triangleFan: tesselate_triangle_fan(writer, positions, texCoords, convertedColors); break;
-            case ShapeMode::quads: tesselate_quads(writer, positions, texCoords, convertedColors); break;
-            case ShapeMode::quadStrip: tesselate_quad_strip(writer, positions, texCoords, convertedColors); break;
-            case ShapeMode::points:
-            case ShapeMode::lines:
-            case ShapeMode::path: return;
-            case ShapeMode::polygon:
-            default: tesselate_polygon(writer, positions, texCoords, convertedColors); break;
-        }
-
-        m_renderer->finish(writer, state.blendMode, state.clipRect, state.textureFilter, state.textureWrap, resolveActiveTexture(state.texture), resolveActiveShader(m_defaultFillShader), state.shaderUniforms);
-    }
-
-    void Canvas::submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const Texture& atlasTexture, const DrawState& state)
-    {
-        std::vector<float4> convertedColors(colors.size());
-        std::ranges::transform(colors, convertedColors.begin(), detail::toFloat4);
-
-        Renderer::Writer writer = m_renderer->write();
-        tesselate_quads(writer, positions, texCoords, convertedColors);
-        m_renderer->finish(writer, state.blendMode, state.clipRect, TextureFilter::linear, TextureWrap::clampToEdge, atlasTexture, resolveActiveShader(m_defaultTextShader), state.shaderUniforms);
     }
 
     void Canvas::background(color_t color)
@@ -524,7 +343,7 @@ namespace p5
             {0.0f, 1.0f},
         };
 
-        submitQuad(positions, texCoords, color, peekState());
+        m_geometrySubmitter.submitQuad(positions, texCoords, color, peekState());
     }
 
     void Canvas::rect(float x, float y, float width, float height)
@@ -610,7 +429,7 @@ namespace p5
             }
 
             const std::vector<color_t> fillColors(fillPositions.size(), state.fillColor);
-            submitFillMesh(ShapeMode::triangleFan, fillPositions, fillTexCoords, fillColors, state);
+            m_geometrySubmitter.submitFillMesh(ShapeMode::triangleFan, fillPositions, fillTexCoords, fillColors, state);
         }
 
         if (state.isStrokeEnabled) {
@@ -623,7 +442,7 @@ namespace p5
                 strokePositions.push_back(applyTransform(p));
             }
 
-            submitStroke(strokePositions, closeStroke, state.strokeColor, state);
+            m_geometrySubmitter.submitStroke(strokePositions, closeStroke, state.strokeColor, state);
         }
     }
 
@@ -634,7 +453,7 @@ namespace p5
             return;
 
         const float2 positions[2] = {applyTransform({x1, y1}), applyTransform({x2, y2})};
-        submitStroke(positions, false, state.strokeColor, state);
+        m_geometrySubmitter.submitStroke(positions, false, state.strokeColor, state);
     }
 
     void Canvas::triangle(float x1, float y1, float x2, float y2, float x3, float y3)
@@ -680,7 +499,7 @@ namespace p5
             std::vector<float2> texCoords;
             detail::buildEllipsePoints(position.x, position.y, radius, radius, positions, texCoords);
             const std::vector<color_t> colors(positions.size(), color);
-            submitFillMesh(ShapeMode::triangleFan, positions, texCoords, colors, state);
+            m_geometrySubmitter.submitFillMesh(ShapeMode::triangleFan, positions, texCoords, colors, state);
         } else {
             const float2 positions[4] = {
                 {position.x - radius, position.y - radius},
@@ -696,7 +515,7 @@ namespace p5
                 {0.0f, 1.0f},
             };
 
-            submitQuad(positions, texCoords, color, state);
+            m_geometrySubmitter.submitQuad(positions, texCoords, color, state);
         }
     }
 
@@ -769,7 +588,7 @@ namespace p5
 
         const DrawState& state = peekState();
         if (state.isFillEnabled) {
-            submitFillMesh(shape.mode, shape.positions, shape.texCoords, shape.fillColors, state);
+            m_geometrySubmitter.submitFillMesh(shape.mode, shape.positions, shape.texCoords, shape.fillColors, state);
         }
 
         if (state.isStrokeEnabled) {
@@ -784,13 +603,13 @@ namespace p5
                         const float2 positions[2] = {shape.positions[i], shape.positions[i + 1]};
                         const float2 texCoords[2] = {shape.texCoords[i], shape.texCoords[i + 1]};
                         const color_t colors[2] = {shape.strokeColors[i], shape.strokeColors[i + 1]};
-                        submitStroke(positions, texCoords, colors, false, state);
+                        m_geometrySubmitter.submitStroke(positions, texCoords, colors, false, state);
                     }
                     break;
 
                 case ShapeMode::path:
                 default:
-                    submitStroke(shape.positions, shape.texCoords, shape.strokeColors, close, state);
+                    m_geometrySubmitter.submitStroke(shape.positions, shape.texCoords, shape.strokeColors, close, state);
                     break;
             }
         }
@@ -898,7 +717,7 @@ namespace p5
             {u1, v2},
         };
 
-        submitQuad(positions, texCoords, tintColor, state, texture);
+        m_geometrySubmitter.submitQuad(positions, texCoords, tintColor, state, texture);
     }
 
     void Canvas::textFont(Font font)
@@ -956,171 +775,41 @@ namespace p5
 
     void Canvas::text(std::string_view str, float x, float y, float maxWidth, float maxHeight)
     {
-        DrawState& state = peekState();
-        const Font& font = state.textFont.isValid() ? state.textFont : m_defaultFont;
-        const float scale = state.textSize / font.getUnitsPerEm();
-
-        const detail::LineLayout layout = detail::layoutLines(font, state.textSize, str, state.textWrap, maxWidth, state.textLetterSpacing, state.textLigatures);
-        const size_t numLines = layout.lines.size();
-
-        const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
-        const float leading = blockLayout.leading;
-        const float blockTop = blockLayout.blockTop;
-        const float2 blockOrigin = blockLayout.blockOrigin;
-        const float blockWidth = blockLayout.blockWidth;
-
-        size_t visibleLines = numLines;
-        if (maxHeight > 0.0f) {
-            visibleLines = 0;
-            for (size_t i = 0; i < numLines; ++i) {
-                const float baselineOffset = blockTop + static_cast<float>(i) * leading;
-                if (baselineOffset > maxHeight and visibleLines > 0) {
-                    break;
-                }
-                ++visibleLines;
-            }
-        }
-
-        std::vector<float2> positions;
-        std::vector<float2> texCoords;
-        std::vector<color_t> colors;
-        size_t pendingGlyphs = 0;
-
-        const auto flushGlyphChunk = [&]() {
-            if (not positions.empty()) {
-                submitTextMesh(positions, texCoords, colors, font.getAtlasTexture(), state);
-                positions.clear();
-                texCoords.clear();
-                colors.clear();
-                pendingGlyphs = 0;
-            }
-        };
-
-        for (size_t lineIndex = 0; lineIndex < visibleLines; ++lineIndex) {
-            const detail::ShapedLine& line = layout.lines[lineIndex];
-            const float lineWidthPixels = line.width * scale;
-            float penX = blockOrigin.x + detail::lineHorizontalOffset(blockWidth, lineWidthPixels, state.textAlignment);
-            const float penYBaseline = blockOrigin.y + blockTop + static_cast<float>(lineIndex) * leading;
-            float penY = penYBaseline;
-
-            for (const ShapedGlyph& g : line.glyphs) {
-                const GlyphMetrics& metrics = font.getGlyphMetrics(g.glyphIndex);
-                if (metrics.hasOutline) {
-                    const float2 glyphOrigin {penX + g.xOffset * scale, penY - g.yOffset * scale};
-                    const float2 quadTopLeft {glyphOrigin.x + metrics.bounds.left * scale, glyphOrigin.y - metrics.bounds.top * scale};
-                    const float2 quadSize {metrics.bounds.width * scale, metrics.bounds.height * scale};
-
-                    const float2 corners[4] = {
-                        applyTransform({quadTopLeft.x, quadTopLeft.y}),
-                        applyTransform({quadTopLeft.x + quadSize.x, quadTopLeft.y}),
-                        applyTransform({quadTopLeft.x + quadSize.x, quadTopLeft.y + quadSize.y}),
-                        applyTransform({quadTopLeft.x, quadTopLeft.y + quadSize.y}),
-                    };
-                    const float2 uv[4] = {
-                        {metrics.uvRect.left, metrics.uvRect.top},
-                        {metrics.uvRect.left + metrics.uvRect.width, metrics.uvRect.top},
-                        {metrics.uvRect.left + metrics.uvRect.width, metrics.uvRect.top + metrics.uvRect.height},
-                        {metrics.uvRect.left, metrics.uvRect.top + metrics.uvRect.height},
-                    };
-
-                    positions.insert(positions.end(), std::begin(corners), std::end(corners));
-                    texCoords.insert(texCoords.end(), std::begin(uv), std::end(uv));
-                    colors.insert(colors.end(), 4, state.fillColor);
-
-                    if (++pendingGlyphs >= detail::TEXT_MESH_CHUNK_GLYPHS) {
-                        flushGlyphChunk();
-                    }
-                }
-
-                penX += g.xAdvance * scale + state.textLetterSpacing;
-                penY -= g.yAdvance * scale;
-            }
-        }
-
-        flushGlyphChunk();
+        m_textRenderer.text(peekState(), str, x, y, maxWidth, maxHeight);
     }
 
     void Canvas::text(std::u32string_view str, float x, float y, float maxWidth, float maxHeight)
     {
-        text(detail::utf32ToUtf8(str), x, y, maxWidth, maxHeight);
+        m_textRenderer.text(peekState(), str, x, y, maxWidth, maxHeight);
     }
 
     float Canvas::textWidth(std::string_view str)
     {
-        DrawState& state = peekState();
-        const Font& font = state.textFont.isValid() ? state.textFont : m_defaultFont;
-        return p5::textWidth(font, state.textSize, str, state.textLetterSpacing, state.textLigatures);
+        return m_textRenderer.textWidth(peekState(), str);
     }
 
     float Canvas::textWidth(std::u32string_view str)
     {
-        return textWidth(detail::utf32ToUtf8(str));
+        return m_textRenderer.textWidth(peekState(), str);
     }
 
     rect2f Canvas::textBounds(std::string_view str, const TextBoundsOptions& options)
     {
-        DrawState& state = peekState();
-        const Font& font = options.font.value_or(state.textFont.isValid() ? state.textFont : m_defaultFont);
-        const float size = options.size.value_or(state.textSize);
-        const float letterSpacing = options.letterSpacing.value_or(state.textLetterSpacing);
-        const TextWrap wrap = options.wrap.value_or(state.textWrap);
-        const TextAlignment alignment = options.alignment.value_or(state.textAlignment);
-        const std::optional<float> leadingOverride = options.leading.has_value() ? options.leading : state.textLeadingOverride;
-        const bool ligaturesEnabled = options.ligatures.value_or(state.textLigatures);
-
-        const float scale = size / font.getUnitsPerEm();
-        const detail::LineLayout layout = detail::layoutLines(font, size, str, wrap, options.maxWidth, letterSpacing, ligaturesEnabled);
-        const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, alignment, {0.0f, 0.0f}, leadingOverride);
-
-        size_t visibleLines = layout.lines.size();
-        if (options.maxHeight > 0.0f) {
-            visibleLines = 0;
-            for (size_t i = 0; i < layout.lines.size(); ++i) {
-                const float baselineOffset = blockLayout.blockTop + static_cast<float>(i) * blockLayout.leading;
-                if (baselineOffset > options.maxHeight and visibleLines > 0) {
-                    break;
-                }
-                ++visibleLines;
-            }
-        }
-
-        const float blockHeight = blockLayout.blockTop + static_cast<float>(visibleLines > 0 ? visibleLines - 1 : 0) * blockLayout.leading + font.getDescent() * scale;
-
-        return rect2f {blockLayout.blockOrigin.x, blockLayout.blockOrigin.y, blockLayout.blockWidth, blockHeight};
+        return m_textRenderer.textBounds(peekState(), str, options);
     }
 
     rect2f Canvas::textBounds(std::u32string_view str, const TextBoundsOptions& options)
     {
-        return textBounds(detail::utf32ToUtf8(str), options);
+        return m_textRenderer.textBounds(peekState(), str, options);
     }
 
     std::vector<TextPoint> Canvas::textToPoints(std::string_view str, float x, float y, const TextToPointsOptions& options)
     {
-        DrawState& state = peekState();
-        const Font& font = options.font.has_value() ? *options.font : (state.textFont.isValid() ? state.textFont : m_defaultFont);
-        const float effectiveSize = options.size.value_or(state.textSize);
-        const float effectiveLetterSpacing = options.letterSpacing.value_or(state.textLetterSpacing);
-        const bool effectiveLigatures = options.ligatures.value_or(state.textLigatures);
-        const float scale = effectiveSize / font.getUnitsPerEm();
-
-        const detail::LineLayout layout = detail::layoutLines(font, effectiveSize, str, TextWrap::none, 0.0f, effectiveLetterSpacing, effectiveLigatures);
-        const detail::TextBlockLayout blockLayout = detail::computeTextBlockLayout(font, layout, scale, state.textAlignment, {x, y}, state.textLeadingOverride);
-
-        std::vector<TextPoint> result;
-        uint32_t nextContourIndex = 0;
-        for (size_t lineIndex = 0; lineIndex < layout.lines.size(); ++lineIndex) {
-            const detail::ShapedLine& line = layout.lines[lineIndex];
-            const float lineWidthPixels = line.width * scale;
-            const float penX = blockLayout.blockOrigin.x + detail::lineHorizontalOffset(blockLayout.blockWidth, lineWidthPixels, state.textAlignment);
-            const float penY = blockLayout.blockOrigin.y + blockLayout.blockTop + static_cast<float>(lineIndex) * blockLayout.leading;
-            detail::appendLineToPoints(font, line, scale, penX, penY, effectiveLetterSpacing, options, result, nextContourIndex);
-        }
-
-        return result;
+        return m_textRenderer.textToPoints(peekState(), str, x, y, options);
     }
 
     std::vector<TextPoint> Canvas::textToPoints(std::u32string_view str, float x, float y, const TextToPointsOptions& options)
     {
-        return textToPoints(detail::utf32ToUtf8(str), x, y, options);
+        return m_textRenderer.textToPoints(peekState(), str, x, y, options);
     }
 } // namespace p5

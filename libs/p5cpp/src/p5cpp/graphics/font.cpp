@@ -1,5 +1,7 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/text_layout.hpp>
+#include <p5cpp/graphics/font_impl.hpp>
+#include <p5cpp/graphics/curve_tessellation.hpp>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -32,9 +34,12 @@ namespace p5
             return library;
         }
 
-        std::mutex& freeTypeMutex()
+        // Recursive because getGlyphMetrics()/getGlyphContours() lock it around their FreeType
+        // calls but can themselves be invoked while the constructor's ASCII-prewarm loop (or a
+        // caller further up the stack) already holds it.
+        std::recursive_mutex& freeTypeMutex()
         {
-            static std::mutex mutex;
+            static std::recursive_mutex mutex;
             return mutex;
         }
 
@@ -83,7 +88,7 @@ namespace p5
             if (not std::isfinite(controlPolygonLength) or not std::isfinite(unitsPerEm) or unitsPerEm <= 0.0f) {
                 return 8;
             }
-            return std::clamp(static_cast<int>(std::ceil(controlPolygonLength / (unitsPerEm * 0.006f))), 8, 64);
+            return segmentCountForArcLength(controlPolygonLength, unitsPerEm * 0.006f, 8, 64);
         }
 
         float2 toFloat2(const FT_Vector& v)
@@ -224,255 +229,240 @@ namespace p5
         }
     } // namespace
 
-    class FreeTypeHarfBuzzFont : public FontImpl
+    FontImpl::FontImpl(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
+        : m_rasterFace(rasterFace), m_hbFace(hbFace), m_hbFont(hbFont),
+          m_atlasTexture(loadTexture(atlasWidth, atlasHeight, {}, TexturePixelFormat::r8).value()),
+          m_atlasEmPixels(atlasEmPixels)
     {
-    public:
-        FreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
-            : m_rasterFace(rasterFace), m_hbFace(hbFace), m_hbFont(hbFont),
-              m_atlasTexture(loadTexture(atlasWidth, atlasHeight, {}, TexturePixelFormat::r8).value()),
-              m_atlasEmPixels(atlasEmPixels)
-        {
-            for (uint32_t codepoint = 0x20; codepoint <= 0x7E; ++codepoint) {
-                const uint32_t glyphIndex = FT_Get_Char_Index(m_rasterFace, codepoint);
-                if (glyphIndex != 0) {
-                    getGlyphMetrics(glyphIndex);
-                }
+        std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
+        for (uint32_t codepoint = 0x20; codepoint <= 0x7E; ++codepoint) {
+            const uint32_t glyphIndex = FT_Get_Char_Index(m_rasterFace, codepoint);
+            if (glyphIndex != 0) {
+                getGlyphMetrics(glyphIndex);
             }
         }
+    }
 
-        FreeTypeHarfBuzzFont(const FreeTypeHarfBuzzFont&) = delete;
-        FreeTypeHarfBuzzFont& operator=(const FreeTypeHarfBuzzFont&) = delete;
+    FontImpl::~FontImpl()
+    {
+        hb_font_destroy(m_hbFont);
+        std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
+        FT_Done_Face(m_hbFace);
+        FT_Done_Face(m_rasterFace);
+    }
 
-        ~FreeTypeHarfBuzzFont() override
-        {
-            hb_font_destroy(m_hbFont);
-            std::lock_guard<std::mutex> lock(freeTypeMutex());
-            FT_Done_Face(m_hbFace);
-            FT_Done_Face(m_rasterFace);
-        }
+    std::vector<ShapedGlyph> FontImpl::shape(std::string_view utf8Text, bool ligaturesEnabled) const
+    {
+        hb_buffer_t* buffer = hb_buffer_create();
+        hb_buffer_add_utf8(buffer, utf8Text.data(), static_cast<int>(utf8Text.size()), 0, -1);
+        hb_buffer_guess_segment_properties(buffer);
 
-        std::vector<ShapedGlyph> shape(std::string_view utf8Text, bool ligaturesEnabled) const override
-        {
-            hb_buffer_t* buffer = hb_buffer_create();
-            hb_buffer_add_utf8(buffer, utf8Text.data(), static_cast<int>(utf8Text.size()), 0, -1);
-            hb_buffer_guess_segment_properties(buffer);
-
-            if (ligaturesEnabled) {
-                hb_shape(m_hbFont, buffer, nullptr, 0);
-            } else {
-                const hb_feature_t noLigatureFeatures[] = {
-                    {HB_TAG('l', 'i', 'g', 'a'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
-                    {HB_TAG('c', 'l', 'i', 'g'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
-                    {HB_TAG('d', 'l', 'i', 'g'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
-                };
-                hb_shape(m_hbFont, buffer, noLigatureFeatures, std::size(noLigatureFeatures));
-            }
-
-            unsigned int glyphCount = 0;
-            const hb_glyph_info_t* infos = hb_buffer_get_glyph_infos(buffer, &glyphCount);
-            const hb_glyph_position_t* positions = hb_buffer_get_glyph_positions(buffer, &glyphCount);
-
-            std::vector<ShapedGlyph> result(glyphCount);
-            for (unsigned int i = 0; i < glyphCount; ++i) {
-                result[i] = ShapedGlyph {
-                    .glyphIndex = infos[i].codepoint,
-                    .cluster = infos[i].cluster,
-                    .xAdvance = static_cast<float>(positions[i].x_advance),
-                    .yAdvance = static_cast<float>(positions[i].y_advance),
-                    .xOffset = static_cast<float>(positions[i].x_offset),
-                    .yOffset = static_cast<float>(positions[i].y_offset),
-                };
-            }
-
-            hb_buffer_destroy(buffer);
-            return result;
-        }
-
-        const GlyphMetrics& getGlyphMetrics(uint32_t glyphIndex) override
-        {
-            if (const auto it = m_glyphCache.find(glyphIndex); it != m_glyphCache.end()) {
-                return it->second;
-            }
-            return rasterizeGlyph(glyphIndex);
-        }
-
-        std::vector<std::vector<float2>> getGlyphContours(uint32_t glyphIndex) override
-        {
-            if (const auto it = m_outlineCache.find(glyphIndex); it != m_outlineCache.end()) {
-                return it->second;
-            }
-            return decomposeGlyphOutline(glyphIndex);
-        }
-
-        Texture getAtlasTexture() const override
-        {
-            return m_atlasTexture;
-        }
-
-        float getUnitsPerEm() const override
-        {
-            const FT_UShort unitsPerEm = m_rasterFace->units_per_EM;
-            return unitsPerEm != 0 ? static_cast<float>(unitsPerEm) : 1000.0f;
-        }
-        float getAscent() const override { return static_cast<float>(m_rasterFace->ascender); }
-        float getDescent() const override { return static_cast<float>(-m_rasterFace->descender); }
-
-        float getLineGap() const override
-        {
-            const float lineHeight = static_cast<float>(m_rasterFace->height);
-            return std::max(0.0f, lineHeight - (getAscent() + getDescent()));
-        }
-
-    private:
-        const GlyphMetrics& rasterizeGlyph(uint32_t glyphIndex)
-        {
-            if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) {
-                error("Font: FT_Load_Glyph() (metrics pass) failed for glyph index {}", glyphIndex);
-                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = {}, .hasOutline = false});
-                return it->second;
-            }
-            const FT_Glyph_Metrics& unscaledMetrics = m_rasterFace->glyph->metrics;
-            const rect2f designBounds {
-                static_cast<float>(unscaledMetrics.horiBearingX),
-                static_cast<float>(unscaledMetrics.horiBearingY),
-                static_cast<float>(unscaledMetrics.width),
-                static_cast<float>(unscaledMetrics.height),
+        if (ligaturesEnabled) {
+            hb_shape(m_hbFont, buffer, nullptr, 0);
+        } else {
+            const hb_feature_t noLigatureFeatures[] = {
+                {HB_TAG('l', 'i', 'g', 'a'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
+                {HB_TAG('c', 'l', 'i', 'g'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
+                {HB_TAG('d', 'l', 'i', 'g'), 0, HB_FEATURE_GLOBAL_START, HB_FEATURE_GLOBAL_END},
             };
+            hb_shape(m_hbFont, buffer, noLigatureFeatures, std::size(noLigatureFeatures));
+        }
 
-            if (designBounds.width <= 0.0f or designBounds.height <= 0.0f) {
-                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
-                return it->second;
-            }
+        unsigned int glyphCount = 0;
+        const hb_glyph_info_t* infos = hb_buffer_get_glyph_infos(buffer, &glyphCount);
+        const hb_glyph_position_t* positions = hb_buffer_get_glyph_positions(buffer, &glyphCount);
 
-            FT_Set_Pixel_Sizes(m_rasterFace, 0, m_atlasEmPixels);
-            if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_RENDER | FT_LOAD_NO_HINTING) != 0) {
-                error("Font: FT_Load_Glyph() (render pass) failed for glyph index {}", glyphIndex);
-                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
-                return it->second;
-            }
-            const FT_Bitmap& bitmap = m_rasterFace->glyph->bitmap;
+        std::vector<ShapedGlyph> result(glyphCount);
+        for (unsigned int i = 0; i < glyphCount; ++i) {
+            result[i] = ShapedGlyph {
+                .glyphIndex = infos[i].codepoint,
+                .cluster = infos[i].cluster,
+                .xAdvance = static_cast<float>(positions[i].x_advance),
+                .yAdvance = static_cast<float>(positions[i].y_advance),
+                .xOffset = static_cast<float>(positions[i].x_offset),
+                .yOffset = static_cast<float>(positions[i].y_offset),
+            };
+        }
 
-            if (bitmap.width == 0 or bitmap.rows == 0) {
-                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
-                return it->second;
-            }
+        hb_buffer_destroy(buffer);
+        return result;
+    }
 
-            const int cellWidth = static_cast<int>(bitmap.width);
-            const int cellHeight = static_cast<int>(bitmap.rows);
-            const std::vector<uint8_t> cellCoverage = packCoverageBitmap(bitmap.buffer, cellWidth, cellHeight, bitmap.pitch);
+    const GlyphMetrics& FontImpl::getGlyphMetrics(uint32_t glyphIndex)
+    {
+        if (const auto it = m_glyphCache.find(glyphIndex); it != m_glyphCache.end()) {
+            return it->second;
+        }
+        return rasterizeGlyph(glyphIndex);
+    }
 
-            const std::optional<rect2f> uvRect = packIntoAtlas(cellCoverage, cellWidth, cellHeight);
-            if (not uvRect.has_value()) {
-                const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
-                return it->second;
-            }
+    std::vector<std::vector<float2>> FontImpl::getGlyphContours(uint32_t glyphIndex)
+    {
+        if (const auto it = m_outlineCache.find(glyphIndex); it != m_outlineCache.end()) {
+            return it->second;
+        }
+        return decomposeGlyphOutline(glyphIndex);
+    }
 
-            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = *uvRect, .bounds = designBounds, .hasOutline = true});
+    Texture FontImpl::getAtlasTexture() const
+    {
+        return m_atlasTexture;
+    }
+
+    float FontImpl::getUnitsPerEm() const
+    {
+        const FT_UShort unitsPerEm = m_rasterFace->units_per_EM;
+        return unitsPerEm != 0 ? static_cast<float>(unitsPerEm) : 1000.0f;
+    }
+    float FontImpl::getAscent() const { return static_cast<float>(m_rasterFace->ascender); }
+    float FontImpl::getDescent() const { return static_cast<float>(-m_rasterFace->descender); }
+
+    float FontImpl::getLineGap() const
+    {
+        const float lineHeight = static_cast<float>(m_rasterFace->height);
+        return std::max(0.0f, lineHeight - (getAscent() + getDescent()));
+    }
+
+    const GlyphMetrics& FontImpl::rasterizeGlyph(uint32_t glyphIndex)
+    {
+        std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
+
+        if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) {
+            error("Font: FT_Load_Glyph() (metrics pass) failed for glyph index {}", glyphIndex);
+            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = {}, .hasOutline = false});
+            return it->second;
+        }
+        const FT_Glyph_Metrics& unscaledMetrics = m_rasterFace->glyph->metrics;
+        const rect2f designBounds {
+            static_cast<float>(unscaledMetrics.horiBearingX),
+            static_cast<float>(unscaledMetrics.horiBearingY),
+            static_cast<float>(unscaledMetrics.width),
+            static_cast<float>(unscaledMetrics.height),
+        };
+
+        if (designBounds.width <= 0.0f or designBounds.height <= 0.0f) {
+            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
             return it->second;
         }
 
-        std::optional<rect2f> packIntoAtlas(const std::vector<uint8_t>& cellCoverage, int cellWidth, int cellHeight)
-        {
-            const uint32_t atlasWidth = m_atlasTexture.size.x;
-            const uint32_t atlasHeight = m_atlasTexture.size.y;
-
-            const uint32_t paddedWidth = static_cast<uint32_t>(cellWidth) + 2 * kAtlasPaddingTexels;
-            const uint32_t paddedHeight = static_cast<uint32_t>(cellHeight) + 2 * kAtlasPaddingTexels;
-
-            if (paddedWidth > atlasWidth or paddedHeight > atlasHeight) {
-                error("Font: glyph cell ({}x{} padded) does not fit in the glyph atlas ({}x{}); construct the Font with a larger atlasWidth/atlasHeight or a smaller atlasEmPixels", paddedWidth, paddedHeight, atlasWidth, atlasHeight);
-                return std::nullopt;
-            }
-
-            if (m_shelfX + paddedWidth > atlasWidth) {
-                m_shelfX = 0;
-                m_shelfY += m_shelfHeight;
-                m_shelfHeight = 0;
-            }
-            if (m_shelfY + paddedHeight > atlasHeight) {
-                error("Font: glyph atlas ({}x{}) is full; construct the Font with a larger atlasWidth/atlasHeight", atlasWidth, atlasHeight);
-                return std::nullopt;
-            }
-
-            std::vector<uint8_t> padded(static_cast<size_t>(paddedWidth) * static_cast<size_t>(paddedHeight), 0);
-            for (int y = 0; y < cellHeight; ++y) {
-                for (int x = 0; x < cellWidth; ++x) {
-                    const size_t dstIndex = static_cast<size_t>(y + kAtlasPaddingTexels) * paddedWidth + static_cast<size_t>(x + kAtlasPaddingTexels);
-                    padded[dstIndex] = cellCoverage[static_cast<size_t>(y) * static_cast<size_t>(cellWidth) + static_cast<size_t>(x)];
-                }
-            }
-
-            m_atlasTexture.updateSubImage(m_shelfX, m_shelfY, paddedWidth, paddedHeight, padded);
-
-            const rect2f uvRect {
-                static_cast<float>(m_shelfX + kAtlasPaddingTexels) / static_cast<float>(atlasWidth),
-                static_cast<float>(m_shelfY + kAtlasPaddingTexels) / static_cast<float>(atlasHeight),
-                static_cast<float>(cellWidth) / static_cast<float>(atlasWidth),
-                static_cast<float>(cellHeight) / static_cast<float>(atlasHeight),
-            };
-
-            m_shelfX += paddedWidth;
-            m_shelfHeight = std::max(m_shelfHeight, paddedHeight);
-
-            return uvRect;
+        FT_Set_Pixel_Sizes(m_rasterFace, 0, m_atlasEmPixels);
+        if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_RENDER | FT_LOAD_NO_HINTING) != 0) {
+            error("Font: FT_Load_Glyph() (render pass) failed for glyph index {}", glyphIndex);
+            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
+            return it->second;
         }
+        const FT_Bitmap& bitmap = m_rasterFace->glyph->bitmap;
 
-        std::vector<std::vector<float2>> decomposeGlyphOutline(uint32_t glyphIndex)
-        {
-            if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) {
-                error("Font: FT_Load_Glyph() (outline pass) failed for glyph index {}", glyphIndex);
-                const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
-                return it->second;
-            }
-
-            const FT_GlyphSlot slot = m_rasterFace->glyph;
-            if (slot->format != FT_GLYPH_FORMAT_OUTLINE or slot->outline.n_contours == 0) {
-                const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
-                return it->second;
-            }
-
-            OutlineDecomposeContext context {.contours = {}, .current = {}, .unitsPerEm = getUnitsPerEm()};
-            const FT_Outline_Funcs funcs {
-                .move_to = outlineMoveTo,
-                .line_to = outlineLineTo,
-                .conic_to = outlineConicTo,
-                .cubic_to = outlineCubicTo,
-                .shift = 0,
-                .delta = 0,
-            };
-
-            if (FT_Outline_Decompose(&slot->outline, &funcs, &context) != 0) {
-                error("Font: FT_Outline_Decompose() failed for glyph index {}", glyphIndex);
-                const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
-                return it->second;
-            }
-
-            const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::move(context.contours));
+        if (bitmap.width == 0 or bitmap.rows == 0) {
+            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
             return it->second;
         }
 
-        FT_Face m_rasterFace;
-        FT_Face m_hbFace;
-        hb_font_t* m_hbFont;
-        Texture m_atlasTexture;
-        uint32_t m_atlasEmPixels;
-        std::unordered_map<uint32_t, GlyphMetrics> m_glyphCache;
-        std::unordered_map<uint32_t, std::vector<std::vector<float2>>> m_outlineCache;
+        const int cellWidth = static_cast<int>(bitmap.width);
+        const int cellHeight = static_cast<int>(bitmap.rows);
+        const std::vector<uint8_t> cellCoverage = packCoverageBitmap(bitmap.buffer, cellWidth, cellHeight, bitmap.pitch);
 
-        uint32_t m_shelfX = 0;
-        uint32_t m_shelfY = 0;
-        uint32_t m_shelfHeight = 0;
-    };
+        const std::optional<rect2f> uvRect = packIntoAtlas(cellCoverage, cellWidth, cellHeight);
+        if (not uvRect.has_value()) {
+            const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = {}, .bounds = designBounds, .hasOutline = false});
+            return it->second;
+        }
+
+        const auto [it, inserted] = m_glyphCache.emplace(glyphIndex, GlyphMetrics {.uvRect = *uvRect, .bounds = designBounds, .hasOutline = true});
+        return it->second;
+    }
+
+    std::optional<rect2f> FontImpl::packIntoAtlas(const std::vector<uint8_t>& cellCoverage, int cellWidth, int cellHeight)
+    {
+        const uint32_t atlasWidth = m_atlasTexture.size.x;
+        const uint32_t atlasHeight = m_atlasTexture.size.y;
+
+        const uint32_t paddedWidth = static_cast<uint32_t>(cellWidth) + 2 * kAtlasPaddingTexels;
+        const uint32_t paddedHeight = static_cast<uint32_t>(cellHeight) + 2 * kAtlasPaddingTexels;
+
+        if (paddedWidth > atlasWidth or paddedHeight > atlasHeight) {
+            error("Font: glyph cell ({}x{} padded) does not fit in the glyph atlas ({}x{}); construct the Font with a larger atlasWidth/atlasHeight or a smaller atlasEmPixels", paddedWidth, paddedHeight, atlasWidth, atlasHeight);
+            return std::nullopt;
+        }
+
+        if (m_shelfX + paddedWidth > atlasWidth) {
+            m_shelfX = 0;
+            m_shelfY += m_shelfHeight;
+            m_shelfHeight = 0;
+        }
+        if (m_shelfY + paddedHeight > atlasHeight) {
+            error("Font: glyph atlas ({}x{}) is full; construct the Font with a larger atlasWidth/atlasHeight", atlasWidth, atlasHeight);
+            return std::nullopt;
+        }
+
+        std::vector<uint8_t> padded(static_cast<size_t>(paddedWidth) * static_cast<size_t>(paddedHeight), 0);
+        for (int y = 0; y < cellHeight; ++y) {
+            for (int x = 0; x < cellWidth; ++x) {
+                const size_t dstIndex = static_cast<size_t>(y + kAtlasPaddingTexels) * paddedWidth + static_cast<size_t>(x + kAtlasPaddingTexels);
+                padded[dstIndex] = cellCoverage[static_cast<size_t>(y) * static_cast<size_t>(cellWidth) + static_cast<size_t>(x)];
+            }
+        }
+
+        m_atlasTexture.updateSubImage(m_shelfX, m_shelfY, paddedWidth, paddedHeight, padded);
+
+        const rect2f uvRect {
+            static_cast<float>(m_shelfX + kAtlasPaddingTexels) / static_cast<float>(atlasWidth),
+            static_cast<float>(m_shelfY + kAtlasPaddingTexels) / static_cast<float>(atlasHeight),
+            static_cast<float>(cellWidth) / static_cast<float>(atlasWidth),
+            static_cast<float>(cellHeight) / static_cast<float>(atlasHeight),
+        };
+
+        m_shelfX += paddedWidth;
+        m_shelfHeight = std::max(m_shelfHeight, paddedHeight);
+
+        return uvRect;
+    }
+
+    std::vector<std::vector<float2>> FontImpl::decomposeGlyphOutline(uint32_t glyphIndex)
+    {
+        std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
+
+        if (FT_Load_Glyph(m_rasterFace, glyphIndex, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) {
+            error("Font: FT_Load_Glyph() (outline pass) failed for glyph index {}", glyphIndex);
+            const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
+            return it->second;
+        }
+
+        const FT_GlyphSlot slot = m_rasterFace->glyph;
+        if (slot->format != FT_GLYPH_FORMAT_OUTLINE or slot->outline.n_contours == 0) {
+            const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
+            return it->second;
+        }
+
+        OutlineDecomposeContext context {.contours = {}, .current = {}, .unitsPerEm = getUnitsPerEm()};
+        const FT_Outline_Funcs funcs {
+            .move_to = outlineMoveTo,
+            .line_to = outlineLineTo,
+            .conic_to = outlineConicTo,
+            .cubic_to = outlineCubicTo,
+            .shift = 0,
+            .delta = 0,
+        };
+
+        if (FT_Outline_Decompose(&slot->outline, &funcs, &context) != 0) {
+            error("Font: FT_Outline_Decompose() failed for glyph index {}", glyphIndex);
+            const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::vector<std::vector<float2>> {});
+            return it->second;
+        }
+
+        const auto [it, inserted] = m_outlineCache.emplace(glyphIndex, std::move(context.contours));
+        return it->second;
+    }
 
     namespace
     {
         std::optional<Font> makeFreeTypeHarfBuzzFont(FT_Face rasterFace, FT_Face hbFace, hb_font_t* hbFont, uint32_t atlasWidth, uint32_t atlasHeight, uint32_t atlasEmPixels)
         {
             try {
-                return Font {.impl = std::make_shared<FreeTypeHarfBuzzFont>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels)};
+                return Font {.impl = std::make_shared<FontImpl>(rasterFace, hbFace, hbFont, atlasWidth, atlasHeight, atlasEmPixels)};
             } catch (...) {
                 hb_font_destroy(hbFont);
-                std::lock_guard<std::mutex> lock(freeTypeMutex());
+                std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
                 FT_Done_Face(hbFace);
                 FT_Done_Face(rasterFace);
                 throw;
@@ -485,7 +475,7 @@ namespace p5
         FT_Face rasterFace = nullptr;
         FT_Face hbFace = nullptr;
         {
-            std::lock_guard<std::mutex> lock(freeTypeMutex());
+            std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
             if (FT_New_Memory_Face(freeTypeLibrary(), data.data(), static_cast<FT_Long>(data.size()), 0, &rasterFace) != 0) {
                 return std::nullopt;
             }
@@ -498,7 +488,7 @@ namespace p5
 
         hb_font_t* hbFont = hb_ft_font_create(hbFace, nullptr);
         if (hbFont == nullptr) {
-            std::lock_guard<std::mutex> lock(freeTypeMutex());
+            std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
             FT_Done_Face(hbFace);
             FT_Done_Face(rasterFace);
             return std::nullopt;
@@ -516,7 +506,7 @@ namespace p5
         FT_Face rasterFace = nullptr;
         FT_Face hbFace = nullptr;
         {
-            std::lock_guard<std::mutex> lock(freeTypeMutex());
+            std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
             if (FT_New_Face(freeTypeLibrary(), filepathStr.c_str(), 0, &rasterFace) != 0) {
                 return std::nullopt;
             }
@@ -529,7 +519,7 @@ namespace p5
 
         hb_font_t* hbFont = hb_ft_font_create(hbFace, nullptr);
         if (hbFont == nullptr) {
-            std::lock_guard<std::mutex> lock(freeTypeMutex());
+            std::lock_guard<std::recursive_mutex> lock(freeTypeMutex());
             FT_Done_Face(hbFace);
             FT_Done_Face(rasterFace);
             return std::nullopt;

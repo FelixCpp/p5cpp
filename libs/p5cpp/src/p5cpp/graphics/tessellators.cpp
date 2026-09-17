@@ -11,14 +11,14 @@ namespace p5
 {
     namespace
     {
-        void addTriangle(VertexSink& sink, uint32_t a, uint32_t b, uint32_t c)
+        void addTriangle(Renderer::Writer& sink, uint32_t a, uint32_t b, uint32_t c)
         {
             sink.addIndex(a);
             sink.addIndex(b);
             sink.addIndex(c);
         }
 
-        void addVertices(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+        void addVertices(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
         {
             for (size_t i = 0; i < positions.size(); ++i)
                 sink.addVertex(positions[i], texCoords[i], colors[i]);
@@ -99,13 +99,13 @@ namespace p5
         }
     } // namespace
 
-    void tesselate_triangle(VertexSink& sink, const std::span<const float2, 3>& positions, const std::span<const float2, 3>& texCoords, const std::span<const float4, 3>& colors)
+    void tesselate_triangle(Renderer::Writer& sink, const std::span<const float2, 3>& positions, const std::span<const float2, 3>& texCoords, const std::span<const float4, 3>& colors)
     {
         addVertices(sink, positions, texCoords, colors);
         addTriangle(sink, 0, 1, 2);
     }
 
-    void tesselate_triangles(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    void tesselate_triangles(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
         if (count % 3 != 0) {
@@ -119,7 +119,7 @@ namespace p5
             addTriangle(sink, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1), static_cast<uint32_t>(i + 2));
     }
 
-    void tesselate_triangle_strip(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    void tesselate_triangle_strip(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
         if (count < 3)
@@ -135,7 +135,7 @@ namespace p5
         }
     }
 
-    void tesselate_triangle_fan(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    void tesselate_triangle_fan(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
         if (count < 3)
@@ -147,14 +147,14 @@ namespace p5
             addTriangle(sink, 0, static_cast<uint32_t>(i), static_cast<uint32_t>(i + 1));
     }
 
-    void tesselate_quad(VertexSink& sink, const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, const std::span<const float4, 4>& colors)
+    void tesselate_quad(Renderer::Writer& sink, const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, const std::span<const float4, 4>& colors)
     {
         addVertices(sink, positions, texCoords, colors);
         addTriangle(sink, 0, 1, 2);
         addTriangle(sink, 0, 2, 3);
     }
 
-    void tesselate_quads(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    void tesselate_quads(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
         if (count % 4 != 0) {
@@ -170,7 +170,7 @@ namespace p5
         }
     }
 
-    void tesselate_quad_strip(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    void tesselate_quad_strip(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         const size_t count = positions.size();
         if (count % 2 != 0) {
@@ -188,7 +188,7 @@ namespace p5
         }
     }
 
-    void tesselate_polygon(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
+    void tesselate_polygon(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors)
     {
         if (positions.size() < 3)
             return;
@@ -298,13 +298,13 @@ namespace p5
             return {-a.y, a.x};
         }
 
-        uint32_t emitVertex(VertexSink& sink, uint32_t& vertexCount, const float2& position, const PathPoint& attrib)
+        uint32_t emitVertex(Renderer::Writer& sink, uint32_t& vertexCount, const float2& position, const PathPoint& attrib)
         {
             sink.addVertex(position, attrib.texCoord, attrib.color);
             return vertexCount++;
         }
 
-        void emitArcFan(VertexSink& sink, uint32_t& vertexCount, const PathPoint& center, uint32_t centerIndex, const float2& startPoint, float startAngle, float sweepAngle, float radius, float angleStep)
+        void emitArcFan(Renderer::Writer& sink, uint32_t& vertexCount, const PathPoint& center, uint32_t centerIndex, const float2& startPoint, float startAngle, float sweepAngle, float radius, float angleStep)
         {
             const int segments = std::max(1, static_cast<int>(std::ceil(std::abs(sweepAngle) / angleStep)));
 
@@ -323,7 +323,7 @@ namespace p5
         }
     } // namespace
 
-    void tesselate_path(VertexSink& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed, bool synthesizeCrossTrackV)
+    void tesselate_path(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed, bool synthesizeCrossTrackV)
     {
         if (strokeWeight <= 0.0f)
             return;

@@ -1,7 +1,7 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/default_shaders.hpp>
 #include <p5cpp/graphics/shader_impl.hpp>
-#include <p5cpp/graphics/wgsl_uniform_layout.hpp>
+#include <p5cpp/graphics/wgsl_reflection.hpp>
 #include <p5cpp/graphics/gpu_device.hpp>
 
 #include <webgpu/webgpu.h>

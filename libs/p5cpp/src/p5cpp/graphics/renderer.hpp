@@ -1,19 +1,20 @@
 #pragma once
 
 #include <p5cpp/p5cpp.hpp>
-#include <p5cpp/graphics/vertex_sink.hpp>
+#include <p5cpp/graphics/draw_state.hpp>
+#include <p5cpp/graphics/pipeline_cache.hpp>
+#include <p5cpp/graphics/texture_bind_group_cache.hpp>
+#include <p5cpp/graphics/gpu_mesh_buffer.hpp>
+#include <p5cpp/graphics/extra_uniforms_ring.hpp>
 
 #include <webgpu/webgpu.h>
 
-#include <map>
 #include <optional>
-#include <string>
-#include <unordered_map>
-#include <utility>
 
 namespace p5
 {
     struct Graphics;
+    class GpuDevice;
 
     struct RendererBatch
     {
@@ -23,7 +24,7 @@ namespace p5
         TextureWrap textureWrap;
         Shader shader;
         Texture texture;
-        std::unordered_map<std::string, UniformValue> uniforms;
+        ShaderUniformList uniforms;
         size_t indexOffset;
         size_t indexCount;
     };
@@ -31,11 +32,11 @@ namespace p5
     class Renderer
     {
     public:
-        class Writer : public VertexSink
+        class Writer
         {
         public:
-            void addVertex(const float2& position, const float2& texCoord, const float4& color) override;
-            void addIndex(uint32_t index) override;
+            void addVertex(const float2& position, const float2& texCoord, const float4& color);
+            void addIndex(uint32_t index);
 
         private:
             friend class Renderer;
@@ -46,7 +47,7 @@ namespace p5
             size_t m_indexOffset;
         };
 
-        static std::unique_ptr<Renderer> create(size_t initialMaxVertices, size_t initialMaxIndices);
+        static std::unique_ptr<Renderer> create(GpuDevice& gpuDevice, size_t initialMaxVertices, size_t initialMaxIndices);
         ~Renderer();
 
         void begin(Graphics graphics);
@@ -54,53 +55,21 @@ namespace p5
         void flush();
 
         Writer write();
-        void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader, const std::unordered_map<std::string, UniformValue>& uniforms);
+        void finish(const Writer& writer, const BlendMode& blendMode, const std::optional<rect2f>& clipRect, TextureFilter textureFilter, TextureWrap textureWrap, const Texture& texture, const Shader& shader, const ShaderUniformList& uniforms);
 
     private:
-        struct PipelineKey
-        {
-            ShaderImpl* shader;
-            BlendMode blendMode;
-            uint32_t sampleCount;
-            WGPUTextureFormat colorFormat;
-
-            bool operator<(const PipelineKey& other) const;
-        };
-        struct PipelineEntry
-        {
-            Shader shader;
-            WGPURenderPipeline pipeline;
-        };
-
-        struct TextureBindGroupKey
-        {
-            TextureImpl* texture;
-            TextureFilter filter;
-            TextureWrap wrap;
-
-            bool operator<(const TextureBindGroupKey& other) const;
-        };
-        struct TextureBindGroupEntry
-        {
-            Texture texture;
-            WGPUBindGroup bindGroup;
-        };
-
-        explicit Renderer(WGPUBuffer vertexBuffer, WGPUBuffer indexBuffer, size_t maxVertexCount, size_t maxIndexCount);
+        explicit Renderer(GpuDevice& gpuDevice, size_t maxVertexCount, size_t maxIndexCount);
 
         void appendVertex(const Vertex& vertex);
         void appendIndex(uint32_t index);
         void flushIfNearCapacity();
 
-        WGPURenderPipeline getOrCreatePipeline(const Shader& shader, const BlendMode& blendMode, uint32_t sampleCount, WGPUTextureFormat colorFormat);
-        WGPUBindGroup getOrCreateTextureBindGroup(const Texture& texture, TextureFilter filter, TextureWrap wrap);
-        WGPUSampler getOrCreateSampler(TextureFilter filter, TextureWrap wrap);
+        GpuDevice& m_gpuDevice;
 
-        uint32_t writeExtraUniforms(const RendererBatch& batch);
-
-        WGPUBuffer m_vertexBuffer;
-        WGPUBuffer m_indexBuffer;
-
+        // Bind-group layouts and the pipeline layout built from them must outlive every pipeline
+        // and bind group created against them, so they stay here rather than moving into the
+        // cache classes -- declared before those caches so C++'s reverse-declaration-order
+        // destruction tears the caches down first.
         WGPUBindGroupLayout m_projectionLayout;
         WGPUBindGroupLayout m_textureLayout;
         WGPUBindGroupLayout m_extraUniformsLayout;
@@ -109,20 +78,12 @@ namespace p5
         WGPUBuffer m_projectionBuffer;
         WGPUBindGroup m_projectionBindGroup;
 
-        WGPUBuffer m_extraUniformsBuffer;
-        WGPUBindGroup m_extraUniformsBindGroup;
-        size_t m_extraUniformsBufferCapacity;
-        size_t m_extraUniformsWriteCursor;
+        PipelineCache m_pipelineCache;
+        TextureBindGroupCache m_textureBindGroupCache;
+        ExtraUniformsRing m_extraUniformsRing;
 
-        std::map<PipelineKey, PipelineEntry> m_pipelines;
-        std::map<TextureBindGroupKey, TextureBindGroupEntry> m_textureBindGroups;
-        std::map<std::pair<TextureFilter, TextureWrap>, WGPUSampler> m_samplers;
-
-        std::vector<Vertex> m_vertices;
-        std::vector<uint32_t> m_indices;
-        size_t m_uploadedVertexCapacity;
-        size_t m_uploadedIndexCapacity;
-
+        GpuMeshBuffer<Vertex> m_vertexMeshBuffer;
+        GpuMeshBuffer<uint32_t> m_indexMeshBuffer;
         size_t m_currentVertexOffset;
         size_t m_currentIndexOffset;
 

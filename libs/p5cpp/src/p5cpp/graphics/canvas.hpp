@@ -6,13 +6,17 @@
 #include <p5cpp/graphics/graphics_stack.hpp>
 #include <p5cpp/graphics/renderer.hpp>
 #include <p5cpp/graphics/shape_builder.hpp>
+#include <p5cpp/graphics/geometry_submitter.hpp>
+#include <p5cpp/graphics/text_renderer.hpp>
 
 namespace p5
 {
+    class GpuDevice;
+
     class Canvas
     {
     public:
-        Canvas();
+        explicit Canvas(GpuDevice& gpuDevice);
 
         void push(bool extend);
         void pop();
@@ -118,17 +122,10 @@ namespace p5
         std::vector<TextPoint> textToPoints(std::u32string_view str, float x, float y, const TextToPointsOptions& options = {});
 
     private:
-        Shader resolveActiveShader(const Shader& fallback);
-        Texture resolveActiveTexture(const Texture& texture = {});
         float2 applyTransform(const float2& point) const;
 
-        void submitQuad(const std::span<const float2, 4>& positions, const std::span<const float2, 4>& texCoords, color_t color, const DrawState& state, const Texture& texture = {});
-        void submitStroke(const std::span<const float2>& positions, bool closed, color_t color, const DrawState& state);
-        void submitStroke(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, bool closed, const DrawState& state, bool synthesizeCrossTrackV = false);
-        void submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state);
         void submitPoint(const float2& position, color_t color, const DrawState& state);
         void submitBuiltShape(const BuiltShape& shape, bool close);
-        void submitTextMesh(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const Texture& atlasTexture, const DrawState& state);
 
         DrawStateStack m_stateStack;
         MatrixStack m_matrixStack;
@@ -138,6 +135,8 @@ namespace p5
         Shader m_defaultTextShader;
         Texture m_defaultTexture;
         Font m_defaultFont;
+        GeometrySubmitter m_geometrySubmitter;
+        TextRenderer m_textRenderer;
         ShapeBuilder m_shape;
     };
 } // namespace p5

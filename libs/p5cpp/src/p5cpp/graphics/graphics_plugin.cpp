@@ -5,6 +5,7 @@ namespace p5
 {
     GraphicsPlugin::GraphicsPlugin()
         : m_gpuDevice(nullptr),
+          m_blitPass(nullptr),
           m_canvas(nullptr),
           m_defaultGraphics(),
           m_size(0, 0),
@@ -23,7 +24,8 @@ namespace p5
 
         provideDependency(m_gpuDevice.get());
 
-        m_canvas = std::make_unique<Canvas>();
+        m_blitPass = std::make_unique<BlitPass>(*m_gpuDevice);
+        m_canvas = std::make_unique<Canvas>(*m_gpuDevice);
         provideDependency(m_canvas.get());
         provideDependency(this);
 
@@ -31,40 +33,28 @@ namespace p5
 
         recreateDefaultGraphics();
 
-        m_canvas->pushGraphics(m_defaultGraphics, true);
-        next();
-        m_canvas->popGraphics();
+        withDefaultGraphics(next);
     }
 
     void GraphicsPlugin::event(const Next& next, const WindowEvent& event)
     {
         if (const auto* resize = event.as_if<WindowEvent::WindowResize>()) {
-            const auto isWindowMinimized = resize->width == 0 or resize->height == 0;
-            if (not isWindowMinimized) {
-                m_size = uint2 {.x = resize->width, .y = resize->height};
-                recreateDefaultGraphics();
-            }
+            handleWindowResize(resize->width, resize->height);
         }
 
         if (const auto* resize = event.as_if<WindowEvent::FramebufferResize>()) {
-            m_gpuDevice->reconfigure(resize->width, resize->height);
+            handleFramebufferResize(resize->width, resize->height);
         }
 
-        m_canvas->pushGraphics(m_defaultGraphics, true);
-        next();
-        m_canvas->popGraphics();
+        withDefaultGraphics(next);
     }
 
     void GraphicsPlugin::draw(const Next& next)
     {
-        m_canvas->pushGraphics(m_defaultGraphics, true);
-        next();
-        m_canvas->popGraphics();
+        withDefaultGraphics(next);
 
-        Window& window = requireDependency<Window>();
-        const uint2& size = window.getPhysicalSize();
         if (m_defaultGraphics.isValid()) {
-            blitGraphicsToScreen(m_defaultGraphics, size.x, size.y);
+            m_blitPass->blit(m_defaultGraphics);
         }
     }
 
@@ -79,6 +69,7 @@ namespace p5
         m_defaultGraphics = Graphics {};
 
         m_canvas.reset();
+        m_blitPass.reset();
         m_gpuDevice.reset();
     }
 
@@ -91,6 +82,29 @@ namespace p5
     void GraphicsPlugin::noSmooth()
     {
         smooth(0);
+    }
+
+    void GraphicsPlugin::withDefaultGraphics(const Next& next)
+    {
+        m_canvas->pushGraphics(m_defaultGraphics, true);
+        next();
+        m_canvas->popGraphics();
+    }
+
+    void GraphicsPlugin::handleWindowResize(uint32_t width, uint32_t height)
+    {
+        const bool isWindowMinimized = width == 0 or height == 0;
+        if (isWindowMinimized) {
+            return;
+        }
+
+        m_size = uint2 {.x = width, .y = height};
+        recreateDefaultGraphics();
+    }
+
+    void GraphicsPlugin::handleFramebufferResize(uint32_t width, uint32_t height)
+    {
+        m_gpuDevice->reconfigure(width, height);
     }
 
     void GraphicsPlugin::recreateDefaultGraphics()

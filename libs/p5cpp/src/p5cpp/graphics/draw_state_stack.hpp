@@ -1,7 +1,8 @@
 #pragma once
 
 #include <p5cpp/graphics/draw_state.hpp>
-#include <p5cpp/graphics/growable_stack.hpp>
+
+#include <vector>
 
 namespace p5
 {
@@ -15,7 +16,9 @@ namespace p5
         DrawState& peek();
         const DrawState& peek() const;
 
+        size_t size() const { return m_stack.size(); }
+
     private:
-        GrowableStack<DrawState> m_stack;
+        std::vector<DrawState> m_stack;
     };
 } // namespace p5

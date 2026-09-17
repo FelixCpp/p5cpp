@@ -1,7 +1,7 @@
 #include <p5cpp/graphics/shape_builder.hpp>
+#include <p5cpp/graphics/curve_tessellation.hpp>
 
 #include <cmath>
-#include <algorithm>
 
 namespace p5
 {
@@ -9,7 +9,7 @@ namespace p5
     {
         if (not std::isfinite(controlPolygonLength))
             return 8;
-        return std::clamp(static_cast<int>(std::ceil(controlPolygonLength / 3.0f)), 8, 128);
+        return segmentCountForArcLength(controlPolygonLength, 3.0f, 8, 128);
     }
 } // namespace p5
 
@@ -19,6 +19,15 @@ namespace p5
         : m_isBuilding(false),
           m_mode(ShapeMode::points)
     {
+    }
+
+    bool ShapeBuilder::requireBuilding(const char* callerName) const
+    {
+        if (not m_isBuilding) {
+            error("ShapeBuilder::{}() called while not building a shape", callerName);
+            return false;
+        }
+        return true;
     }
 
     void ShapeBuilder::beginShape(ShapeMode mode)
@@ -34,14 +43,12 @@ namespace p5
         m_texCoords.clear();
         m_fillColors.clear();
         m_strokeColors.clear();
-        m_curvePoints.clear();
+        m_curvePointCount = 0;
     }
 
     BuiltShape ShapeBuilder::endShape()
     {
-        if (not m_isBuilding) {
-            error("ShapeBuilder::endShape() called while not building a shape");
-
+        if (not requireBuilding("endShape")) {
             return BuiltShape {
                 .mode = {},
                 .vertexCount = 0,
@@ -71,8 +78,7 @@ namespace p5
 
     void ShapeBuilder::vertex(float x, float y, float u, float v, color_t fillColor, color_t strokeColor)
     {
-        if (not m_isBuilding) {
-            error("ShapeBuilder::vertex() called while not building a shape");
+        if (not requireBuilding("vertex")) {
             return;
         }
 
@@ -84,8 +90,7 @@ namespace p5
 
     void ShapeBuilder::bezierVertex(float controlX1, float controlY1, float controlX2, float controlY2, float endX, float endY)
     {
-        if (not m_isBuilding) {
-            error("ShapeBuilder::bezierVertex() called while not building a shape");
+        if (not requireBuilding("bezierVertex")) {
             return;
         }
 
@@ -111,8 +116,7 @@ namespace p5
 
     void ShapeBuilder::quadraticVertex(float controlX, float controlY, float endX, float endY)
     {
-        if (not m_isBuilding) {
-            error("ShapeBuilder::quadraticVertex() called while not building a shape");
+        if (not requireBuilding("quadraticVertex")) {
             return;
         }
 
@@ -137,21 +141,26 @@ namespace p5
 
     void ShapeBuilder::curveVertex(float x, float y, float tightness, color_t fillColor, color_t strokeColor)
     {
-        if (not m_isBuilding) {
-            error("ShapeBuilder::curveVertex() called while not building a shape");
+        if (not requireBuilding("curveVertex")) {
             return;
         }
 
-        m_curvePoints.push_back({x, y});
-        if (m_curvePoints.size() < 4) {
+        // Sliding 4-point window: drop the oldest point, append the new one at the end. After at
+        // least 4 calls this shape, m_curvePoints holds exactly the last 4 pushed points in order.
+        m_curvePoints[0] = m_curvePoints[1];
+        m_curvePoints[1] = m_curvePoints[2];
+        m_curvePoints[2] = m_curvePoints[3];
+        m_curvePoints[3] = {x, y};
+        ++m_curvePointCount;
+
+        if (m_curvePointCount < 4) {
             return;
         }
 
-        const size_t n = m_curvePoints.size();
-        const float2 p0 = m_curvePoints[n - 4];
-        const float2 p1 = m_curvePoints[n - 3];
-        const float2 p2 = m_curvePoints[n - 2];
-        const float2 p3 = m_curvePoints[n - 1];
+        const float2& p0 = m_curvePoints[0];
+        const float2& p1 = m_curvePoints[1];
+        const float2& p2 = m_curvePoints[2];
+        const float2& p3 = m_curvePoints[3];
 
         const float tangentScale = (1.0f - tightness) / 6.0f;
         const float2 controlPoint1 = p1 + (p2 - p0) * tangentScale;

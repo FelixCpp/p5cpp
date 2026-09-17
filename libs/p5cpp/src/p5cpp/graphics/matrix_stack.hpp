@@ -1,7 +1,8 @@
 #pragma once
 
 #include <p5cpp/p5cpp.hpp>
-#include <p5cpp/graphics/growable_stack.hpp>
+
+#include <vector>
 
 namespace p5
 {
@@ -18,7 +19,9 @@ namespace p5
 
         const matrix4x4& peek() const;
 
+        size_t size() const { return m_stack.size(); }
+
     private:
-        GrowableStack<matrix4x4> m_stack;
+        std::vector<matrix4x4> m_stack;
     };
 } // namespace p5
