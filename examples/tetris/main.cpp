@@ -668,17 +668,6 @@ struct Tetris : Sketch
         const float deltaTime = static_cast<float>(getDeltaTime());
         textFont(uiFont);
 
-        // if (isKeyPressed(Key::G)) {
-        //     if (recording.has_value() and recording->isActive()) {
-        //         recording->cancel();
-        //     } else {
-        //         recording = recordGif("tetris.gif", recordUntil([](float) {
-        //                                   return false;
-        //                               }),
-        //                               {.framesPerSecond = 20.0f});
-        //     }
-        // }
-
         if (state != GameState::gameOver and isKeyPressed(Key::P)) {
             state = (state == GameState::paused) ? GameState::playing : GameState::paused;
         }
@@ -696,9 +685,17 @@ struct Tetris : Sketch
         }
 
         background(rgba(16, 16, 24));
+
         renderBoardPanel();
         renderBoard();
         renderSidePanel();
+
+        strokeDashPattern({30.0f, 100.0f});
+        noFill();
+        strokeWeight(20.0f);
+        stroke(rgba(255));
+        strokeCap(StrokeCap::square);
+        rect(100.0f, 100.0f, 300.0f, 300.0f, BorderRadius::all(15.0f));
 
         if (state == GameState::paused) {
             renderOverlay("PAUSED", "Press P to resume");

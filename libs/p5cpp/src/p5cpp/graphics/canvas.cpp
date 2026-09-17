@@ -247,6 +247,18 @@ namespace p5
         state.strokeRoundJoinThreshold = threshold;
     }
 
+    void Canvas::strokeDashPattern(std::initializer_list<float> pattern)
+    {
+        DrawState& state = peekState();
+        state.strokeDashPattern.assign(pattern.begin(), pattern.end());
+    }
+
+    void Canvas::strokeDashOffset(float offset)
+    {
+        DrawState& state = peekState();
+        state.strokeDashOffset = offset;
+    }
+
     void Canvas::curveTightness(float tightness)
     {
         DrawState& state = peekState();

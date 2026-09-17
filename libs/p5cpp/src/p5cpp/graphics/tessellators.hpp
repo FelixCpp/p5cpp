@@ -22,4 +22,13 @@ namespace p5
 namespace p5
 {
     void tesselate_path(Renderer::Writer& sink, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, float strokeWeight, StrokeCap strokeCap, StrokeJoin strokeJoin, float miterLimit, float roundJoinThreshold, bool closed = false, bool synthesizeCrossTrackV = false);
-}
+
+    struct DashSegment
+    {
+        std::vector<float2> positions;
+        std::vector<float2> texCoords;
+        std::vector<float4> colors;
+    };
+
+    std::vector<DashSegment> split_dashed_path(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, bool closed, const std::span<const float>& dashPattern, float dashOffset);
+} // namespace p5

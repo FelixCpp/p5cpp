@@ -54,6 +54,8 @@ namespace p5
         void strokeJoin(StrokeJoin join);
         void strokeMiterLimit(float limit);
         void strokeRoundJoinThreshold(float threshold);
+        void strokeDashPattern(std::initializer_list<float> pattern);
+        void strokeDashOffset(float offset);
         void curveTightness(float tightness);
 
         void tint(color_t color);

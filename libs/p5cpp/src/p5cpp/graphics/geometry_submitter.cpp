@@ -78,9 +78,21 @@ namespace p5
         std::vector<float4> convertedColors(colors.size());
         std::ranges::transform(colors, convertedColors.begin(), toFloat4);
 
-        Renderer::Writer writer = m_renderer.write();
-        tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed, synthesizeCrossTrackV);
-        submitMesh(writer, state, resolveActiveTexture(), resolveActiveShader(state, m_defaultFillShader), state.textureFilter, state.textureWrap);
+        const Texture texture = resolveActiveTexture();
+        const Shader shader = resolveActiveShader(state, m_defaultFillShader);
+
+        if (state.strokeDashPattern.empty()) {
+            Renderer::Writer writer = m_renderer.write();
+            tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed, synthesizeCrossTrackV);
+            submitMesh(writer, state, texture, shader, state.textureFilter, state.textureWrap);
+            return;
+        }
+
+        for (const DashSegment& segment : split_dashed_path(positions, texCoords, convertedColors, closed, state.strokeDashPattern, state.strokeDashOffset)) {
+            Renderer::Writer writer = m_renderer.write();
+            tesselate_path(writer, segment.positions, segment.texCoords, segment.colors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, /*closed=*/false, synthesizeCrossTrackV);
+            submitMesh(writer, state, texture, shader, state.textureFilter, state.textureWrap);
+        }
     }
 
     void GeometrySubmitter::submitFillMesh(ShapeMode mode, const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const color_t>& colors, const DrawState& state)

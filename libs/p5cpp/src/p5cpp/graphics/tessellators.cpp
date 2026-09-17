@@ -519,4 +519,104 @@ namespace p5
             emitCap(pts.back(), directions.back(), strokeCap.end, false);
         }
     }
+
+    namespace
+    {
+        PathPoint lerpPathPoint(const PathPoint& a, const PathPoint& b, float t)
+        {
+            return {
+                {a.position.x + (b.position.x - a.position.x) * t, a.position.y + (b.position.y - a.position.y) * t},
+                {a.texCoord.x + (b.texCoord.x - a.texCoord.x) * t, a.texCoord.y + (b.texCoord.y - a.texCoord.y) * t},
+                {a.color.x + (b.color.x - a.color.x) * t, a.color.y + (b.color.y - a.color.y) * t, a.color.z + (b.color.z - a.color.z) * t, a.color.w + (b.color.w - a.color.w) * t},
+            };
+        }
+    } // namespace
+
+    std::vector<DashSegment> split_dashed_path(const std::span<const float2>& positions, const std::span<const float2>& texCoords, const std::span<const float4>& colors, bool closed, const std::span<const float>& dashPattern, float dashOffset)
+    {
+        std::vector<DashSegment> result;
+        if (dashPattern.empty())
+            return result;
+
+        std::vector<PathPoint> pts;
+        pts.reserve(positions.size() + 1);
+        for (size_t i = 0; i < positions.size(); ++i) {
+            if (not pts.empty() && length2(subtract(positions[i], pts.back().position)) < 1e-9f)
+                continue;
+            pts.push_back({positions[i], texCoords[i], colors[i]});
+        }
+        if (closed and pts.size() > 1)
+            pts.push_back(pts.front());
+
+        const size_t pointCount = pts.size();
+        if (pointCount < 2)
+            return result;
+
+        std::vector<float> dist(pointCount, 0.0f);
+        for (size_t i = 1; i < pointCount; ++i)
+            dist[i] = dist[i - 1] + length2(subtract(pts[i].position, pts[i - 1].position));
+
+        const float totalLength = dist.back();
+        if (totalLength <= 1e-6f)
+            return result;
+
+        float cycleLength = 0.0f;
+        for (const float length : dashPattern)
+            cycleLength += std::max(length, 0.0f);
+        if (cycleLength <= 1e-6f)
+            return result;
+
+        const auto pointAtDistance = [&](float d) -> PathPoint {
+            d = std::clamp(d, 0.0f, totalLength);
+            size_t i = 1;
+            while (i < pointCount - 1 and dist[i] < d)
+                ++i;
+            const float segLen = dist[i] - dist[i - 1];
+            const float t = segLen > 1e-9f ? (d - dist[i - 1]) / segLen : 0.0f;
+            return lerpPathPoint(pts[i - 1], pts[i], t);
+        };
+
+        float phase = std::fmod(-dashOffset, cycleLength);
+        if (phase < 0.0f)
+            phase += cycleLength;
+
+        constexpr int maxIterations = 100'000;
+        float cursor = -phase;
+        int patternIndex = 0;
+
+        for (int iteration = 0; cursor < totalLength and iteration < maxIterations; ++iteration) {
+            const float segLen = std::max(dashPattern[static_cast<size_t>(patternIndex) % dashPattern.size()], 0.0f);
+            const bool isDash = (patternIndex % 2) == 0;
+            const float segStart = cursor;
+            const float segEnd = cursor + segLen;
+
+            if (isDash and segLen > 1e-6f) {
+                const float overlapStart = std::max(segStart, 0.0f);
+                const float overlapEnd = std::min(segEnd, totalLength);
+                if (overlapEnd - overlapStart > 1e-6f) {
+                    DashSegment segment;
+
+                    const auto append = [&](const PathPoint& p) {
+                        segment.positions.push_back(p.position);
+                        segment.texCoords.push_back(p.texCoord);
+                        segment.colors.push_back(p.color);
+                    };
+
+                    append(pointAtDistance(overlapStart));
+                    for (size_t i = 0; i < pointCount; ++i) {
+                        if (dist[i] > overlapStart + 1e-6f and dist[i] < overlapEnd - 1e-6f)
+                            append(pts[i]);
+                    }
+                    append(pointAtDistance(overlapEnd));
+
+                    result.push_back(std::move(segment));
+                }
+            }
+
+            cursor = segEnd + (segLen <= 1e-6f ? 1e-3f : 0.0f);
+            ++patternIndex;
+        }
+
+        return result;
+    }
 } // namespace p5

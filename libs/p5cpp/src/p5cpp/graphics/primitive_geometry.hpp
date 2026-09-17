@@ -7,8 +7,6 @@
 
 namespace p5::detail
 {
-    // Pure, stateless point-generation for the primitive shapes (ellipse/arc/rounded-rect) that
-    // Canvas builds tessellation input from. No dependency on Canvas or any other drawing state.
     int ellipseSegmentCount(float radiusX, float radiusY);
     void buildEllipsePoints(float centerX, float centerY, float radiusX, float radiusY, std::vector<float2>& positions, std::vector<float2>& texCoords);
 

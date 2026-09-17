@@ -2,7 +2,6 @@
 
 #include <p5cpp/p5cpp.hpp>
 
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -11,10 +10,6 @@
 
 namespace p5
 {
-    // Small, linear-scan association list for a shader's "extra uniforms". Uniform counts per
-    // draw state are always small (well under 10 in practice), so this avoids paying an
-    // unordered_map's allocation cost on every push()/pushState() regardless of whether uniforms
-    // are even in use.
     using ShaderUniformList = std::vector<std::pair<std::string, UniformValue>>;
 
     struct DrawState
@@ -33,6 +28,8 @@ namespace p5
         StrokeJoin strokeJoin = StrokeJoin::miter;
         float strokeMiterLimit = 10.0f;
         float strokeRoundJoinThreshold = radians(10.0f);
+        std::vector<float> strokeDashPattern;
+        float strokeDashOffset = 0.0f;
         float curveTightness = 0.0f;
 
         BlendMode blendMode = BlendMode::alpha;

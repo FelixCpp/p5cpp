@@ -48,6 +48,8 @@ namespace p5
     void strokeJoin(StrokeJoin join) { canvas().strokeJoin(join); }
     void strokeMiterLimit(float limit) { canvas().strokeMiterLimit(limit); }
     void strokeRoundJoinThreshold(float threshold) { canvas().strokeRoundJoinThreshold(threshold); }
+    void strokeDashPattern(std::initializer_list<float> pattern) { canvas().strokeDashPattern(pattern); }
+    void strokeDashOffset(float offset) { canvas().strokeDashOffset(offset); }
     void curveTightness(float tightness) { canvas().curveTightness(tightness); }
     void blendMode(const BlendMode& blendMode) { canvas().blendMode(blendMode); }
     void clip(float x, float y, float width, float height) { canvas().clip(x, y, width, height); }
