@@ -8,7 +8,7 @@ namespace p5
     {
         Input& input()
         {
-            return getKernel().getContext().require<Input>();
+            return requireDependency<Input>();
         }
     } // namespace
 

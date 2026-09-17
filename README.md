@@ -2,15 +2,35 @@
 
 A [p5.js](https://p5js.org/)/[Processing](https://processing.org/)-flavored creative coding framework for modern C++. It gives you the same immediate-mode drawing API, the same `setup()`/`draw()` sketch lifecycle, and the same "just start drawing" feel — backed by a real WebGPU renderer (via [wgpu-native](https://github.com/gfx-rs/wgpu-native)) and [GLFW](https://www.glfw.org/) windowing, written for C++23.
 
-<p align="center">
-  <img src="docs/screenshots/wanderer.gif" width="55%" alt="wanderer example — light-cycle trails filling a grid of boards">
-</p>
-<p align="center"><sub><code>examples/wanderer</code> — eight boards of colored wanderers carving out trails</sub></p>
+<table>
+<tr>
+<td width="240"><img src="docs/screenshots/wanderer.gif" width="220" alt="wanderer example — light-cycle trails filling a grid of boards"></td>
+<td>
 
-<p align="center">
-  <img src="docs/screenshots/matrix.gif" width="55%" alt="matrix example — falling character rain in the style of The Matrix">
-</p>
-<p align="center"><sub><code>examples/matrix</code> — falling character rain with tweened fade-in/fade-out trails</sub></p>
+**`examples/wanderer`**<br>
+Eight boards of colored wanderers carving out trails.
+
+</td>
+</tr>
+<tr>
+<td width="240"><img src="docs/screenshots/matrix.gif" width="220" alt="matrix example — falling character rain in the style of The Matrix"></td>
+<td>
+
+**`examples/matrix`**<br>
+Falling character rain with tweened fade-in/fade-out trails.
+
+</td>
+</tr>
+<tr>
+<td width="240"><img src="docs/screenshots/tetris.gif" width="220" alt="tetris example — a full game of Tetris with ghost piece, next-piece preview and stats panel"></td>
+<td>
+
+**`examples/tetris`**<br>
+A complete Tetris clone: DAS/ARR movement, ghost piece, line-clear tween.
+
+</td>
+</tr>
+</table>
 
 <p align="center">
   <img src="docs/screenshots/disco_grid.png" width="24%" alt="disco_grid example">
@@ -132,7 +152,7 @@ move.advance(getDeltaTime());
 
 ## Examples
 
-`examples/` has +20 complete sketches exercising most of the API — generative art, text/typography, image/pixel manipulation, GUI, audio-reactive visuals, GIF export, webcam, and the 2D camera. Each is its own CMake target under `build/examples/<name>/<name>` once built. A few worth a look: `wanderer`, `matrix`, `disco_grid` and `jelly_tentacles` (generative), `ripple_effect` (WGSL shaders), `rotating_typography` and `text_to_points` (text), `world_map`, `pixel_sorting` and `shuffled_glass` (pixel/image effects).
+`examples/` has +20 complete sketches exercising most of the API — generative art, text/typography, image/pixel manipulation, GUI, audio-reactive visuals, GIF export, webcam, and the 2D camera. Each is its own CMake target under `build/examples/<name>/<name>` once built. A few worth a look: `tetris` (a full game), `wanderer`, `matrix`, `disco_grid` and `jelly_tentacles` (generative), `ripple_effect` (WGSL shaders), `rotating_typography` and `text_to_points` (text), `world_map`, `pixel_sorting` and `shuffled_glass` (pixel/image effects).
 
 ## Project layout
 

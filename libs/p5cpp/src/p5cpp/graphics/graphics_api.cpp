@@ -1,7 +1,6 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/canvas.hpp>
 #include <p5cpp/graphics/graphics_plugin.hpp>
-#include <p5cpp/application/kernel.hpp>
 
 namespace p5
 {
@@ -9,12 +8,12 @@ namespace p5
     {
         Canvas& canvas()
         {
-            return getKernel().getContext().require<Canvas>();
+            return requireDependency<Canvas>();
         }
 
         GraphicsPlugin& graphicsPlugin()
         {
-            return getKernel().getContext().require<GraphicsPlugin>();
+            return requireDependency<GraphicsPlugin>();
         }
     } // namespace
 

@@ -416,6 +416,7 @@ namespace p5
     void quit();
     void quit(int exitCode);
     void setExitCode(int exitCode);
+    void restart();
 } // namespace p5
 
 namespace p5

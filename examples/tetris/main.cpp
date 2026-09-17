@@ -1,8 +1,10 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp_animation/p5cpp_animation.hpp>
+#include <p5cpp_gif/p5cpp_gif.hpp>
 
 using namespace p5;
 using namespace p5::animation;
+using namespace p5::gif;
 
 enum class ShapeType
 {
@@ -422,6 +424,8 @@ struct Tetris : Sketch
     int linesCleared = 0;
     int level = 1;
 
+    std::optional<GifRecording> recording;
+
     void setup() override
     {
         setWindowSize(windowWidth, windowHeight);
@@ -655,6 +659,14 @@ struct Tetris : Sketch
     {
         const float deltaTime = static_cast<float>(getDeltaTime());
         textFont(uiFont);
+
+        if (isKeyPressed(Key::G)) {
+            if (recording.has_value() and recording->isActive()) {
+                recording->cancel();
+            } else {
+                recording = recordGif("tetris.gif", recordUntil([](float) { return false; }), {.framesPerSecond = 20.0f});
+            }
+        }
 
         if (state != GameState::gameOver and isKeyPressed(Key::P)) {
             state = (state == GameState::paused) ? GameState::playing : GameState::paused;
@@ -929,6 +941,11 @@ struct Tetris : Sketch
 SketchSpec p5::createSpec()
 {
     return SketchSpec {
+        .plugins = [] {
+            std::vector<std::unique_ptr<Plugin>> plugins;
+            plugins.push_back(gif::createGifRecorderPlugin());
+            return plugins;
+        },
         .sketch = [] {
             return std::make_unique<Tetris>();
         }

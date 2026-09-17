@@ -8,7 +8,7 @@ namespace p5
     {
         Window& window()
         {
-            return getKernel().getContext().require<Window>();
+            return requireDependency<Window>();
         }
     } // namespace
 
