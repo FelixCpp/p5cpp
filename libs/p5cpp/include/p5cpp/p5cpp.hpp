@@ -458,6 +458,8 @@ namespace p5
     void setWindowTitle(std::string_view title);
     void setWindowResizable(bool resizable);
     void setWindowVisible(bool visible);
+    void setWindowDecorated(bool decorated);
+    void setWindowFloating(bool floating);
 
     void maximizeWindow();
     bool isWindowMaximized();
@@ -475,6 +477,8 @@ namespace p5
     std::string_view getWindowTitle();
     bool isWindowResizable();
     bool isWindowVisible();
+    bool isWindowDecorated();
+    bool isWindowFloating();
 } // namespace p5
 
 namespace p5
@@ -667,6 +671,23 @@ namespace p5
 
 namespace p5
 {
+    enum class UniformType
+    {
+        f32,
+        vec2f,
+        vec3f,
+        vec4f,
+        mat4x4f,
+    };
+
+    // Names and types one extra uniform struct field, in WGSL declaration order, so the library
+    // can compute its byte offset without parsing the shader's WGSL source.
+    struct UniformDecl
+    {
+        std::string_view name;
+        UniformType type;
+    };
+
     struct ShaderImpl;
     struct Shader
     {
@@ -676,7 +697,7 @@ namespace p5
         bool isValid() const;
     };
 
-    std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource);
+    std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource, std::initializer_list<UniformDecl> extraUniforms = {});
 
     // Compiles a shader from just a fragment "effect" function, LÖVE2D-pixel-shader style — the library
     // supplies the vertex stage (position/UV/color pass-through) and the fragment stage's boilerplate,
@@ -687,18 +708,21 @@ namespace p5
     // called once per fragment (use textureSample(image, imageSampler, texCoord) to sample image);
     // its return value becomes the fragment's output color. Extra uniforms the effect needs can be set
     // after activating the shader via shader(), using the free setUniform() functions below, but must be
-    // declared in effectSource as fields of a single struct bound at @group(2) @binding(0), e.g.:
+    // declared both in effectSource, as fields of a single struct bound at @group(2) @binding(0), and
+    // here in extraUniforms, in the same order, e.g.:
     //
     //   struct Uniforms { u_Time: f32 };
     //   @group(2) @binding(0) var<uniform> u_Extra: Uniforms;
     //
+    //   loadShaderFromMemory(effectSource, {{"u_Time", UniformType::f32}});
+    //
     // referenced inside effect() as u_Extra.u_Time. For full control over the vertex stage too, use the
     // two-argument loadShaderFromMemory(vertexShaderSource, fragmentShaderSource) overload instead.
-    std::optional<Shader> loadShaderFromMemory(std::string_view effectSource);
+    std::optional<Shader> loadShaderFromMemory(std::string_view effectSource, std::initializer_list<UniformDecl> extraUniforms = {});
 
     // Same effect-shader shortcut as the single-argument loadShaderFromMemory(), but reading
     // effectSource from a file instead of a string already in memory.
-    std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath);
+    std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath, std::initializer_list<UniformDecl> extraUniforms = {});
 
     void setUniform(std::string_view name, float value);
     void setUniform(std::string_view name, const float2& value);
@@ -807,14 +831,32 @@ namespace p5
     bool requestStorageBufferReadback(StorageBufferReader& reader, const StorageBuffer& buffer);
     std::optional<std::vector<uint8_t>> pollStorageBufferReadback(StorageBufferReader& reader);
 
+    enum class ComputeBufferAccess
+    {
+        readOnly,
+        readWrite,
+    };
+
+    // Names, binding index, and access mode of one storage buffer the compute shader's WGSL
+    // declares at @group(0), in order, so the library can build its bind group layout without
+    // parsing the shader's WGSL source.
+    struct ComputeBufferDecl
+    {
+        std::string_view name;
+        uint32_t binding;
+        ComputeBufferAccess access;
+    };
+
     // Compiles a WGSL compute shader. Its entry point must be a function named "main" marked
     // @compute @workgroup_size(...). Storage buffers it reads or writes must be declared at
-    // @group(0), e.g.:
+    // @group(0), with a matching entry in buffers, e.g.:
     //
     //   @group(0) @binding(0) var<storage, read_write> particles: array<f32>;
     //
     //   @compute @workgroup_size(64)
     //   fn main(@builtin(global_invocation_id) id: vec3u) { ... }
+    //
+    //   loadComputeShaderFromMemory(source, {{"particles", 0, ComputeBufferAccess::readWrite}});
     //
     // Binding names (e.g. "particles" above) are matched by name against the bindings passed to
     // dispatchCompute().
@@ -827,8 +869,8 @@ namespace p5
         bool isValid() const;
     };
 
-    std::optional<ComputeShader> loadComputeShaderFromMemory(std::string_view source);
-    std::optional<ComputeShader> loadComputeShaderFromFile(const std::filesystem::path& filepath);
+    std::optional<ComputeShader> loadComputeShaderFromMemory(std::string_view source, std::initializer_list<ComputeBufferDecl> buffers = {});
+    std::optional<ComputeShader> loadComputeShaderFromFile(const std::filesystem::path& filepath, std::initializer_list<ComputeBufferDecl> buffers = {});
 
     using ComputeBinding = std::pair<std::string_view, StorageBuffer>;
 

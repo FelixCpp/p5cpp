@@ -17,6 +17,8 @@ namespace p5
     void setWindowTitle(std::string_view title) { window().setTitle(title); }
     void setWindowResizable(bool resizable) { window().setResizable(resizable); }
     void setWindowVisible(bool visible) { window().setVisible(visible); }
+    void setWindowDecorated(bool decorated) { window().setDecorated(decorated); }
+    void setWindowFloating(bool floating) { window().setFloating(floating); }
     void maximizeWindow() { window().maximize(); }
     bool isWindowMaximized() { return window().isMaximized(); }
     void minimizeWindow() { window().minimize(); }
@@ -31,4 +33,6 @@ namespace p5
     std::string_view getWindowTitle() { return window().getTitle(); }
     bool isWindowResizable() { return window().isResizable(); }
     bool isWindowVisible() { return window().isVisible(); }
+    bool isWindowDecorated() { return window().isDecorated(); }
+    bool isWindowFloating() { return window().isFloating(); }
 } // namespace p5

@@ -119,7 +119,11 @@ struct WorldMap : Sketch
     Texture worldMapTexture = loadTexture("assets/simple_map.jpg").value();
     Shader grayscaleShader = loadShaderFromMemory(WGSL_GRAYSCALE_SHADER_SOURCE).value();
     Shader blurShader = loadShaderFromMemory(WGSL_BLUR_SHADER_SOURCE).value();
-    Shader sobelEdgeDetectionShader = loadShaderFromMemory(WGSL_SOBEL_EDGE_DETECTION_SHADER_SOURCE).value();
+    Shader sobelEdgeDetectionShader = loadShaderFromMemory(WGSL_SOBEL_EDGE_DETECTION_SHADER_SOURCE, {
+        {"u_Width", UniformType::f32},
+        {"u_Height", UniformType::f32},
+        {"u_Threshold", UniformType::f32},
+    }).value();
 
     Texture grayscaledWorldMapTexture;
     Texture blurredWorldMapTexture;

@@ -32,7 +32,10 @@ std::optional<Shader> createGaussianBlurShader()
         }
     )";
 
-    return loadShaderFromMemory(blurShaderCode);
+    return loadShaderFromMemory(blurShaderCode, {
+        {"u_BlurRadius", UniformType::f32},
+        {"u_Resolution", UniformType::vec2f},
+    });
 }
 
 struct ShuffledGlass : Sketch

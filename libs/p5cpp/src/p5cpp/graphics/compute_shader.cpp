@@ -1,6 +1,5 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/compute_shader_impl.hpp>
-#include <p5cpp/graphics/wgsl_reflection.hpp>
 #include <p5cpp/graphics/wgsl_conventions.hpp>
 #include <p5cpp/graphics/storage_buffer_impl.hpp>
 #include <p5cpp/graphics/gpu_device.hpp>
@@ -40,7 +39,7 @@ namespace p5
         return impl != nullptr;
     }
 
-    std::optional<ComputeShader> loadComputeShaderFromMemory(std::string_view source)
+    std::optional<ComputeShader> loadComputeShaderFromMemory(std::string_view source, std::initializer_list<ComputeBufferDecl> buffers)
     {
         GpuDevice& gpuDevice = requireDependency<GpuDevice>();
         WGPUDevice device = gpuDevice.getDevice();
@@ -58,15 +57,17 @@ namespace p5
             return std::nullopt;
         }
 
-        std::unordered_map<std::string, ComputeBindingSlot> bindingSlots = parseComputeBindingLayout(source);
-
+        std::unordered_map<std::string, ComputeBindingSlot> bindingSlots;
         std::vector<WGPUBindGroupLayoutEntry> entries;
-        entries.reserve(bindingSlots.size());
-        for (const auto& [name, slot] : bindingSlots) {
+        bindingSlots.reserve(buffers.size());
+        entries.reserve(buffers.size());
+        for (const ComputeBufferDecl& decl : buffers) {
+            bindingSlots[std::string(decl.name)] = ComputeBindingSlot {.binding = decl.binding, .readOnly = decl.access == ComputeBufferAccess::readOnly};
+
             WGPUBindGroupLayoutEntry entry {};
-            entry.binding = slot.binding;
+            entry.binding = decl.binding;
             entry.visibility = WGPUShaderStage_Compute;
-            entry.buffer.type = slot.readOnly ? WGPUBufferBindingType_ReadOnlyStorage : WGPUBufferBindingType_Storage;
+            entry.buffer.type = decl.access == ComputeBufferAccess::readOnly ? WGPUBufferBindingType_ReadOnlyStorage : WGPUBufferBindingType_Storage;
             entries.push_back(entry);
         }
 
@@ -103,7 +104,7 @@ namespace p5
         return ComputeShader {.impl = std::move(impl)};
     }
 
-    std::optional<ComputeShader> loadComputeShaderFromFile(const std::filesystem::path& filepath)
+    std::optional<ComputeShader> loadComputeShaderFromFile(const std::filesystem::path& filepath, std::initializer_list<ComputeBufferDecl> buffers)
     {
         std::ifstream file(filepath, std::ios::binary);
         if (not file) {
@@ -113,7 +114,7 @@ namespace p5
 
         std::ostringstream contents;
         contents << file.rdbuf();
-        return loadComputeShaderFromMemory(contents.str());
+        return loadComputeShaderFromMemory(contents.str(), buffers);
     }
 
     void dispatchCompute(const ComputeShader& shader, std::initializer_list<ComputeBinding> bindings, uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ)

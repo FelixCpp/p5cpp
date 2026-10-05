@@ -11,12 +11,20 @@
 
 namespace p5
 {
+    struct WindowOptions
+    {
+        bool resizable = true;
+        bool decorated = true;
+        bool floating = false;
+        bool transparent = false;
+    };
+
     class Window
     {
     public:
         using EventCallback = std::function<void(const WindowEvent&)>;
 
-        static std::unique_ptr<Window> create(uint32_t width, uint32_t height, std::string_view title, const EventCallback& eventCallback);
+        static std::unique_ptr<Window> create(uint32_t width, uint32_t height, std::string_view title, const WindowOptions& options, const EventCallback& eventCallback);
         ~Window();
 
         void setSize(uint32_t width, uint32_t height);
@@ -24,6 +32,8 @@ namespace p5
         void setTitle(std::string_view title);
         void setResizable(bool resizable);
         void setVisible(bool visible);
+        void setDecorated(bool decorated);
+        void setFloating(bool floating);
 
         void centerWindow();
 
@@ -45,6 +55,8 @@ namespace p5
         std::string_view getTitle() const;
         bool isResizable() const;
         bool isVisible() const;
+        bool isDecorated() const;
+        bool isFloating() const;
 
         GLFWwindow* getHandle() const;
 

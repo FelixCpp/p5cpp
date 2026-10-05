@@ -160,7 +160,7 @@ namespace p5
 
 namespace p5
 {
-    std::unique_ptr<Window> Window::create(uint32_t width, uint32_t height, std::string_view title, const EventCallback& eventCallback)
+    std::unique_ptr<Window> Window::create(uint32_t width, uint32_t height, std::string_view title, const WindowOptions& options, const EventCallback& eventCallback)
     {
         glfwSetErrorCallback([](int error, const char* description) {
             std::cerr << "GLFW Error (" << error << "): " << description << std::endl;
@@ -189,7 +189,10 @@ namespace p5
             glfwWindowHint(GLFW_POSITION_Y, windowTop);
         }
 
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+        glfwWindowHint(GLFW_RESIZABLE, options.resizable ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_DECORATED, options.decorated ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_FLOATING, options.floating ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, options.transparent ? GLFW_TRUE : GLFW_FALSE);
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
@@ -432,6 +435,16 @@ namespace p5
         glfwSetWindowAttrib(m_window, GLFW_RESIZABLE, resizable ? GLFW_TRUE : GLFW_FALSE);
     }
 
+    void Window::setDecorated(bool decorated)
+    {
+        glfwSetWindowAttrib(m_window, GLFW_DECORATED, decorated ? GLFW_TRUE : GLFW_FALSE);
+    }
+
+    void Window::setFloating(bool floating)
+    {
+        glfwSetWindowAttrib(m_window, GLFW_FLOATING, floating ? GLFW_TRUE : GLFW_FALSE);
+    }
+
     void Window::setVisible(bool visible)
     {
         if (visible) {
@@ -552,6 +565,16 @@ namespace p5
     bool Window::isResizable() const
     {
         return glfwGetWindowAttrib(m_window, GLFW_RESIZABLE) == GLFW_TRUE;
+    }
+
+    bool Window::isDecorated() const
+    {
+        return glfwGetWindowAttrib(m_window, GLFW_DECORATED) == GLFW_TRUE;
+    }
+
+    bool Window::isFloating() const
+    {
+        return glfwGetWindowAttrib(m_window, GLFW_FLOATING) == GLFW_TRUE;
     }
 
     bool Window::isVisible() const

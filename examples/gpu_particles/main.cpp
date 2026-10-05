@@ -80,7 +80,10 @@ struct ComputeParticlesSketch : Sketch
 
                 particles[id.x] = particle;
             }
-        )");
+        )", {
+            {"particles", 0, ComputeBufferAccess::readWrite},
+            {"params", 1, ComputeBufferAccess::readOnly},
+        });
     }
 
     void draw() override

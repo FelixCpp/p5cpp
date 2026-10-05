@@ -41,7 +41,11 @@ struct RippleEffect : public Sketch
     {
         setWindowSize(800, 600);
         mountainsTexture = loadTexture("assets/Mountains.jpeg").value();
-        rippleShader = loadShaderFromMemory(RIPPLE_SHADER_SOURCE).value();
+        rippleShader = loadShaderFromMemory(RIPPLE_SHADER_SOURCE, {
+            {"u_Center", UniformType::vec2f},
+            {"u_Time", UniformType::f32},
+            {"u_Aspect", UniformType::f32},
+        }).value();
     }
 
     void draw() override

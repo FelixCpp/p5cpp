@@ -1,7 +1,6 @@
 #include <p5cpp/p5cpp.hpp>
 #include <p5cpp/graphics/default_shaders.hpp>
 #include <p5cpp/graphics/shader_impl.hpp>
-#include <p5cpp/graphics/wgsl_reflection.hpp>
 #include <p5cpp/graphics/gpu_device.hpp>
 
 #include <webgpu/webgpu.h>
@@ -10,11 +9,48 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace p5
 {
     namespace
     {
+        struct UniformTypeLayout
+        {
+            uint32_t align;
+            uint32_t size;
+        };
+
+        UniformTypeLayout layoutOf(UniformType type)
+        {
+            switch (type) {
+                case UniformType::f32: return {4, 4};
+                case UniformType::vec2f: return {8, 8};
+                case UniformType::vec3f: return {16, 12};
+                case UniformType::vec4f: return {16, 16};
+                case UniformType::mat4x4f: return {16, 64};
+            }
+            return {4, 4};
+        }
+
+        uint32_t alignUp(uint32_t value, uint32_t alignment)
+        {
+            return (value + alignment - 1) / alignment * alignment;
+        }
+
+        std::pair<std::unordered_map<std::string, ShaderUniformSlot>, uint32_t> computeUniformLayout(std::initializer_list<UniformDecl> decls)
+        {
+            std::unordered_map<std::string, ShaderUniformSlot> slots;
+            uint32_t byteSize = 0;
+            for (const UniformDecl& decl : decls) {
+                const UniformTypeLayout layout = layoutOf(decl.type);
+                const uint32_t offset = alignUp(byteSize, layout.align);
+                slots[std::string(decl.name)] = ShaderUniformSlot {.byteOffset = offset, .byteSize = layout.size};
+                byteSize = offset + layout.size;
+            }
+            return {slots, byteSize};
+        }
+
         WGPUShaderModule createShaderModule(WGPUDevice device, std::string_view source, const char* label)
         {
             WGPUShaderSourceWGSL wgslSource {};
@@ -64,7 +100,7 @@ namespace p5
         return impl != nullptr;
     }
 
-    std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource)
+    std::optional<Shader> loadShaderFromMemory(std::string_view vertexShaderSource, std::string_view fragmentShaderSource, std::initializer_list<UniformDecl> extraUniforms)
     {
         GpuDevice& gpuDevice = requireDependency<GpuDevice>();
         WGPUDevice device = gpuDevice.getDevice();
@@ -83,12 +119,12 @@ namespace p5
         auto impl = std::make_shared<ShaderImpl>();
         impl->vertexModule = vertexModule;
         impl->fragmentModule = fragmentModule;
-        std::tie(impl->extraUniformSlots, impl->extraUniformsByteSize) = parseExtraUniformLayout(fragmentShaderSource);
+        std::tie(impl->extraUniformSlots, impl->extraUniformsByteSize) = computeUniformLayout(extraUniforms);
 
         return Shader {.impl = std::move(impl)};
     }
 
-    std::optional<Shader> loadShaderFromMemory(std::string_view effectSource)
+    std::optional<Shader> loadShaderFromMemory(std::string_view effectSource, std::initializer_list<UniformDecl> extraUniforms)
     {
         std::string fragmentSource;
         fragmentSource.reserve(effectFragmentHeaderSource.size() + effectSource.size() + effectFragmentFooterSource.size());
@@ -96,10 +132,10 @@ namespace p5
         fragmentSource += effectSource;
         fragmentSource += effectFragmentFooterSource;
 
-        return loadShaderFromMemory(detail::defaultVertexShaderSource, fragmentSource);
+        return loadShaderFromMemory(detail::defaultVertexShaderSource, fragmentSource, extraUniforms);
     }
 
-    std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath)
+    std::optional<Shader> loadShaderFromFile(const std::filesystem::path& effectFilepath, std::initializer_list<UniformDecl> extraUniforms)
     {
         std::ifstream file(effectFilepath, std::ios::binary);
         if (not file) {
@@ -109,6 +145,6 @@ namespace p5
 
         std::ostringstream contents;
         contents << file.rdbuf();
-        return loadShaderFromMemory(contents.str());
+        return loadShaderFromMemory(contents.str(), extraUniforms);
     }
 } // namespace p5

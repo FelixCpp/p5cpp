@@ -27,7 +27,6 @@ add_library(
   ./src/p5cpp/graphics/matrix_stack.cpp
   ./src/p5cpp/graphics/pixels.cpp
   ./src/p5cpp/graphics/shader.cpp
-  ./src/p5cpp/graphics/wgsl_reflection.cpp
   ./src/p5cpp/graphics/gpu_command.cpp
   ./src/p5cpp/graphics/gpu_readback.cpp
   ./src/p5cpp/graphics/storage_buffer.cpp
