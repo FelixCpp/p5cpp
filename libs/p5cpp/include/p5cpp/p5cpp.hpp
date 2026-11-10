@@ -59,6 +59,16 @@ namespace p5
     template <typename T> constexpr value2<T> operator/(T a, const value2<T>& b);
     template <typename T> constexpr value2<T> operator-(const value2<T>& v);
 
+    template <typename T> constexpr value2<T>& operator+=(value2<T>& a, const value2<T>& b);
+    template <typename T> constexpr value2<T>& operator-=(value2<T>& a, const value2<T>& b);
+    template <typename T> constexpr value2<T>& operator/=(value2<T>& a, const value2<T>& b);
+    template <typename T> constexpr value2<T>& operator*=(value2<T>& a, const value2<T>& b);
+
+    template <typename T> constexpr value2<T>& operator+=(value2<T>& a, T b);
+    template <typename T> constexpr value2<T>& operator-=(value2<T>& a, T b);
+    template <typename T> constexpr value2<T>& operator/=(value2<T>& a, T b);
+    template <typename T> constexpr value2<T>& operator*=(value2<T>& a, T b);
+
     typedef value2<float> float2;
     typedef value2<int32_t> int2;
     typedef value2<uint32_t> uint2;
@@ -1220,7 +1230,9 @@ namespace p5
         if (len == T {}) {
             return v; // zero vector has no direction; leave it as zero rather than producing NaN
         }
-        return {v.x * newLength / len, v.y * newLength / len};
+
+        const T factor = newLength / len;
+        return {v.x * factor, v.y * factor};
     }
 
     template <typename T> inline constexpr value2<T> lerp(const value2<T>& a, const value2<T>& b, float t) { return {std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t)}; }
@@ -1242,6 +1254,14 @@ namespace p5
     template <typename T> inline constexpr value2<T> operator*(T a, const value2<T>& b) { return {a * b.x, a * b.y}; }
     template <typename T> inline constexpr value2<T> operator/(T a, const value2<T>& b) { return {a / b.x, a / b.y}; }
     template <typename T> inline constexpr value2<T> operator-(const value2<T>& v) { return {-v.x, -v.y}; }
+    template <typename T> inline constexpr value2<T>& operator+=(value2<T>& a, const value2<T>& b) { return a = a + b; }
+    template <typename T> inline constexpr value2<T>& operator-=(value2<T>& a, const value2<T>& b) { return a = a - b; }
+    template <typename T> inline constexpr value2<T>& operator/=(value2<T>& a, const value2<T>& b) { return a = a / b; }
+    template <typename T> inline constexpr value2<T>& operator*=(value2<T>& a, const value2<T>& b) { return a = a * b; }
+    template <typename T> constexpr value2<T>& operator+=(value2<T>& a, T b) { return a = a + b; }
+    template <typename T> constexpr value2<T>& operator-=(value2<T>& a, T b) { return a = a - b; }
+    template <typename T> constexpr value2<T>& operator/=(value2<T>& a, T b) { return a = a / b; }
+    template <typename T> constexpr value2<T>& operator*=(value2<T>& a, T b) { return a = a * b; }
 } // namespace p5
 
 namespace p5
