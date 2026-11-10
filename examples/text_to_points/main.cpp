@@ -2,9 +2,6 @@
 
 using namespace p5;
 
-// Demonstrates textToPoints(): sample points (with tangent angle) along a text string's glyph
-// outlines. Move the mouse horizontally to change sampleFactor (point density) and vertically to
-// change simplifyThreshold (how aggressively near-straight runs get pruned).
 struct TextToPoints : Sketch
 {
     Font font = loadFont("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf").value();
@@ -23,8 +20,17 @@ struct TextToPoints : Sketch
 
         textFont(font);
         textAlign(TextAlignment::center);
-        // size (220px here) is passed via options.size rather than a prior textSize() call.
-        const std::vector<TextPoint> points = textToPoints("p5cpp", getWidth() * 0.5f, getHeight() * 0.5f, {.sampleFactor = sampleFactor, .simplifyThreshold = simplifyThreshold, .size = 220.0f});
+
+        const std::vector<TextPoint> points = textToPoints(
+            "p5cpp",
+            getWidth() * 0.5f,
+            getHeight() * 0.5f,
+            TextToPointsOptions {
+                .sampleFactor = sampleFactor,
+                .simplifyThreshold = simplifyThreshold,
+                .size = 220.0f,
+            }
+        );
 
         noStroke();
         for (const TextPoint& point : points) {
@@ -48,6 +54,7 @@ struct TextToPoints : Sketch
 SketchSpec p5::createSpec()
 {
     return {
+        .plugins = {},
         .sketch = [] {
             return std::make_unique<TextToPoints>();
         }
