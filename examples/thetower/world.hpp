@@ -12,13 +12,20 @@
 #include "tower_weapon.hpp"
 #include "wave_spawner.hpp"
 
+// the world is laid out in a fixed logical square, the sketch scales it to fit the window
+inline constexpr float worldSize = 600.0f;
+
 struct World
 {
     Tower tower;
     TowerWeapon weapon;
     TowerStats baseStats;
+    UpgradeLevels startLevels;
     UpgradeLevels upgrades;
     int gold;
+
+    int coins;
+    float coinFraction;
 
     WaveConfig waveConfig;
     WaveSpawner waves;
@@ -30,9 +37,10 @@ struct World
     std::vector<FloatingText> floatingTexts;
 
     GameEvents events;
+    bool gameOver;
 };
 
-World world_create();
+World world_create(const UpgradeLevels& startLevels);
 TowerStats world_tower_stats(const World& world);
 void world_update(World& world, float deltaTime);
 void world_show(const World& world, const p5::Font& font);

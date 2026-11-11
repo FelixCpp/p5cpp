@@ -10,9 +10,16 @@ struct TowerStats
     float bulletSpeed;
     Meters range;
 
+    float maxHealth;
+    float healthRegen; // per second
+
     int goldPerWave;
     int goldPerKill; // added on top of every enemy's own reward
     float gameSpeed;
+
+    int coinsPerWave;
+    float coinsPerKill; // fractions add up over the round
 };
 
+TowerStats tower_stats_base();
 TowerStats tower_stats_compute(const TowerStats& base, const UpgradeLevels& levels);

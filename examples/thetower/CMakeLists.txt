@@ -13,13 +13,16 @@ add_executable(
   hud.cpp
   main.cpp
   melee_enemy.cpp
+  menu.cpp
   meters.cpp
   meters.hpp
   particle_burst.cpp
+  profile.cpp
   spawn_table.cpp
   tower.cpp
   tower_stats.cpp
   tower_weapon.cpp
+  ui.cpp
   upgrade_levels.cpp
   upgrades.cpp
   wave_spawner.cpp

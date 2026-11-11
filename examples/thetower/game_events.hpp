@@ -24,6 +24,12 @@ struct DeathEvent
     int goldReward;
 };
 
+struct TowerHitEvent
+{
+    p5::float2 position;
+    float damage;
+};
+
 struct WaveCompletedEvent
 {
     int wave;
@@ -34,6 +40,7 @@ struct GameEvents
     std::vector<DamageEvent> damage;
     std::vector<DeathEvent> deaths;
     std::vector<WaveCompletedEvent> wavesCompleted;
+    std::vector<TowerHitEvent> towerHits;
 };
 
 void game_events_clear(GameEvents& events);

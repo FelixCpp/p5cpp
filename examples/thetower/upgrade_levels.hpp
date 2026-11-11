@@ -8,9 +8,13 @@ enum class UpgradeId
     damage,
     attackSpeed,
     range,
+    maxHealth,
+    healthRegen,
     goldPerWave,
     goldPerKill,
     gameSpeed,
+    coinsPerWave,
+    coinsPerKill,
     count,
 };
 

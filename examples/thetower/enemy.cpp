@@ -28,11 +28,11 @@ void enemies_remove_dead(std::vector<Enemy>& enemies)
     });
 }
 
-void enemy_update(Enemy& enemy, const Tower& tower, const float deltaTime)
+void enemy_update(Enemy& enemy, const Tower& tower, GameEvents& events, const float deltaTime)
 {
     std::visit(
         overloaded {
-            [&](MeleeBehavior& behavior) { melee_enemy_update(enemy.core, behavior, tower, deltaTime); },
+            [&](MeleeBehavior& behavior) { melee_enemy_update(enemy.core, behavior, tower, events, deltaTime); },
         },
         enemy.behavior
     );

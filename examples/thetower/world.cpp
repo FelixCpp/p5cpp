@@ -8,9 +8,10 @@ using namespace p5;
 namespace
 {
     constexpr color_t goldColor = rgba(230, 200, 90);
+    constexpr color_t coinColor = rgba(180, 140, 240);
 }
 
-World world_create()
+World world_create(const UpgradeLevels& startLevels)
 {
     const float2 center = {300.0f, 300.0f};
 
@@ -58,28 +59,16 @@ World world_create()
     WaveSpawner waves = wave_spawner_create(waveConfig);
 
     return World {
-        .tower = Tower {
-            .position = center,
-            .radius = 50.0f,
-        },
+        .tower = tower_create(center, 50.0f),
         .weapon = TowerWeapon {
             .cooldown = 0.0f,
         },
-        .baseStats = TowerStats {
-            .damage = 10.0f,
-            .fireInterval = 0.2f,
-            .bulletSpeed = 400.0f,
-            .range = Meters {
-                .value = 150.0f,
-            },
-            .goldPerWave = 5,
-            .goldPerKill = 0,
-            .gameSpeed = 1.0f,
-        },
-        .upgrades = UpgradeLevels {
-            .levels = {},
-        },
+        .baseStats = tower_stats_base(),
+        .startLevels = startLevels,
+        .upgrades = startLevels,
         .gold = 0,
+        .coins = 0,
+        .coinFraction = 0.0f,
         .waveConfig = std::move(waveConfig),
         .waves = std::move(waves),
         .nextEnemyId = 0,
@@ -88,6 +77,7 @@ World world_create()
         .deathEffects = {},
         .floatingTexts = {},
         .events = {},
+        .gameOver = false,
     };
 }
 
@@ -98,6 +88,10 @@ TowerStats world_tower_stats(const World& world)
 
 void world_update(World& world, const float realDeltaTime)
 {
+    if (world.gameOver) {
+        return;
+    }
+
     const TowerStats stats = world_tower_stats(world);
     const float deltaTime = realDeltaTime * stats.gameSpeed;
 
@@ -105,7 +99,18 @@ void world_update(World& world, const float realDeltaTime)
     wave_spawner_update(world.waves, world.waveConfig, world.enemies, world.nextEnemyId, world.events, deltaTime);
 
     for (Enemy& enemy : world.enemies) {
-        enemy_update(enemy, world.tower, deltaTime);
+        enemy_update(enemy, world.tower, world.events, deltaTime);
+    }
+
+    for (const TowerHitEvent& hit : world.events.towerHits) {
+        tower_damage(world.tower, hit.damage);
+    }
+    tower_regenerate(world.tower, stats.healthRegen * deltaTime);
+    tower_update(world.tower, deltaTime);
+
+    if (tower_is_destroyed(world.tower, stats.maxHealth)) {
+        world.gameOver = true;
+        return;
     }
 
     bullets_update(world.bullets, world.enemies, world.events, deltaTime);
@@ -114,11 +119,23 @@ void world_update(World& world, const float realDeltaTime)
         const int reward = death.goldReward + stats.goldPerKill;
         world.gold += reward;
         world.floatingTexts.push_back(floating_text_create(std::format("+{}", reward), death.position, goldColor, std::min(16.0f + 2.0f * reward, 30.0f), 60.0f, 0.9f));
+
+        // coins per kill are fractional, a coin pops once enough fractions have added up
+        world.coinFraction += stats.coinsPerKill;
+        if (world.coinFraction >= 1.0f) {
+            const int earned = static_cast<int>(world.coinFraction);
+            world.coinFraction -= static_cast<float>(earned);
+            world.coins += earned;
+            world.floatingTexts.push_back(floating_text_create(std::format("+{} C", earned), death.position + float2 {0.0f, 18.0f}, coinColor, 18.0f, 50.0f, 1.1f));
+        }
     }
     for (const WaveCompletedEvent& wave : world.events.wavesCompleted) {
         world.gold += stats.goldPerWave;
         world.floatingTexts.push_back(floating_text_create(std::format("Welle {} geschafft", wave.wave), world.tower.position + float2 {0.0f, -90.0f}, rgba(230), 28.0f, 20.0f, 2.0f));
         world.floatingTexts.push_back(floating_text_create(std::format("+{} G", stats.goldPerWave), world.tower.position + float2 {0.0f, -60.0f}, goldColor, 20.0f, 20.0f, 2.0f));
+
+        world.coins += stats.coinsPerWave;
+        world.floatingTexts.push_back(floating_text_create(std::format("+{} C", stats.coinsPerWave), world.tower.position + float2 {0.0f, -36.0f}, coinColor, 18.0f, 20.0f, 2.0f));
     }
 
     death_effects_spawn(world.deathEffects, world.events);
@@ -138,4 +155,31 @@ void world_show(const World& world, const p5::Font& font)
         bullet_show(bullet);
     }
     floating_texts_show(world.floatingTexts, font);
+
+    if (world.gameOver) {
+        with([&] {
+            textFont(font);
+            textAlign(TextAlignment::center);
+            noStroke();
+
+            fill(rgba(31, 200));
+            rect(-worldSize, -worldSize, worldSize * 3.0f, worldSize * 3.0f);
+
+            fill(rgba(230, 80, 80));
+            textSize(40.0f);
+            text("Turm zerstört", world.tower.position.x, world.tower.position.y - 30.0f);
+
+            fill(rgba(230));
+            textSize(18.0f);
+            text(std::format("Welle {} erreicht", world.waves.wave), world.tower.position.x, world.tower.position.y + 10.0f);
+
+            fill(coinColor);
+            textSize(18.0f);
+            text(std::format("+{} Coins", world.coins), world.tower.position.x, world.tower.position.y + 38.0f);
+
+            fill(rgba(130));
+            textSize(14.0f);
+            text("Klicken für Hauptmenü", world.tower.position.x, world.tower.position.y + 70.0f);
+        });
+    }
 }
