@@ -4,8 +4,6 @@ using namespace p5;
 
 void tower_show(const Tower& tower, const Meters& range)
 {
-    static constexpr float towerRadius = 50.0f;
-
     with([&tower, &range] {
         stroke(rgba(60, 180, 220));
         strokeWeight(3.0f);
@@ -14,8 +12,8 @@ void tower_show(const Tower& tower, const Meters& range)
         beginShape(ShapeMode::path);
         for (size_t i = 0; i < 6; ++i) {
             const float t = i / 6.0f * TAU;
-            const float x = tower.position.x + std::cos(t) * towerRadius;
-            const float y = tower.position.y + std::sin(t) * towerRadius;
+            const float x = tower.position.x + std::cos(t) * tower.radius;
+            const float y = tower.position.y + std::sin(t) * tower.radius;
 
             vertex(x, y);
         }

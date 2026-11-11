@@ -7,6 +7,7 @@
 struct Tower
 {
     p5::float2 position;
+    float radius;
 };
 
 void tower_show(const Tower& tower, const Meters& range);
