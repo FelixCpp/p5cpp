@@ -1,6 +1,7 @@
 #pragma once
 
 #include "meters.hpp"
+#include "upgrade_levels.hpp"
 
 struct TowerStats
 {
@@ -8,13 +9,10 @@ struct TowerStats
     float fireInterval;
     float bulletSpeed;
     Meters range;
-};
 
-struct UpgradeLevels
-{
-    int damage;
-    int fireRate;
-    int range;
+    int goldPerWave;
+    int goldPerKill; // added on top of every enemy's own reward
+    float gameSpeed;
 };
 
 TowerStats tower_stats_compute(const TowerStats& base, const UpgradeLevels& levels);

@@ -14,6 +14,7 @@ struct Bullet
     Hit hit;
 
     p5::float2 origin;
+    p5::float2 impact; // predicted meeting point with the target
     p5::float2 position;
 
     float flightTime;

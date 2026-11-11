@@ -8,16 +8,21 @@ add_executable(
   enemy_health.cpp
   enemy_movement.cpp
   enemy_size.cpp
-  enemy_spawner.cpp
+  floating_text.cpp
   game_events.cpp
+  hud.cpp
   main.cpp
   melee_enemy.cpp
   meters.cpp
   meters.hpp
   particle_burst.cpp
+  spawn_table.cpp
   tower.cpp
   tower_stats.cpp
   tower_weapon.cpp
+  upgrade_levels.cpp
+  upgrades.cpp
+  wave_spawner.cpp
   world.cpp
 )
 

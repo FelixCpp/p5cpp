@@ -16,7 +16,11 @@ void bullets_update(std::vector<Bullet>& bullets, std::vector<Enemy>& enemies, G
             return true;
         }
 
-        bullet.position = lerp(bullet.origin, target->core.movement.position, bullet.elapsed / bullet.flightTime);
+        // fly straight at constant speed towards the predicted impact and only bend onto the real
+        // position towards the end, so small deviations of the target never show up as speed changes
+        const float progress = bullet.elapsed / bullet.flightTime;
+        const float2 aim = lerp(bullet.impact, target->core.movement.position, progress * progress);
+        bullet.position = lerp(bullet.origin, aim, progress);
         return false;
     });
 }

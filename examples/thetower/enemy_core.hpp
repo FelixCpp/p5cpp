@@ -21,6 +21,8 @@ struct EnemyCore
 
     // distance to the tower's edge at which the enemy can attack it
     float attackReach;
+
+    int goldReward;
 };
 
 void enemy_core_seek(EnemyCore& core, const p5::float2& target);

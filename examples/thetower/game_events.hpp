@@ -21,12 +21,19 @@ struct DeathEvent
     p5::float2 position;
     float size;
     DeathAnimation animation;
+    int goldReward;
+};
+
+struct WaveCompletedEvent
+{
+    int wave;
 };
 
 struct GameEvents
 {
     std::vector<DamageEvent> damage;
     std::vector<DeathEvent> deaths;
+    std::vector<WaveCompletedEvent> wavesCompleted;
 };
 
 void game_events_clear(GameEvents& events);

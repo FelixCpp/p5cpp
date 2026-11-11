@@ -42,6 +42,7 @@ void enemy_core_apply_hit(EnemyCore& core, const Hit& hit, GameEvents& events)
             .position = core.movement.position,
             .size = core.size.size.value(),
             .animation = core.deathAnimation,
+            .goldReward = core.goldReward,
         });
     }
 }
