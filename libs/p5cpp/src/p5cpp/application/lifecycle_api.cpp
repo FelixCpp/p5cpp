@@ -38,6 +38,26 @@ namespace p5
         requireDependency<Lifecycle>().redraw();
     }
 
+    void setFrameRate(double framesPerSecond)
+    {
+        requireDependency<Lifecycle>().setFrameRate(framesPerSecond);
+    }
+
+    void noFrameRateLimit()
+    {
+        requireDependency<Lifecycle>().setFrameRate(0.0);
+    }
+
+    double getFrameRate()
+    {
+        return requireDependency<Lifecycle>().frameRate();
+    }
+
+    double getMeasuredFrameRate()
+    {
+        return requireDependency<Lifecycle>().measuredFrameRate();
+    }
+
     void quit()
     {
         requireDependency<Lifecycle>().close();

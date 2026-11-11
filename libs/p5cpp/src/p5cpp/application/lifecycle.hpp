@@ -18,6 +18,7 @@ namespace p5
         void loop();
         void noLoop();
         void redraw();
+        void setFrameRate(double framesPerSecond);
 
         bool shouldClose() const;
         bool shouldRestart() const;
@@ -27,6 +28,11 @@ namespace p5
         double globalTime() const;
         bool isLooping() const;
         bool shouldDrawThisFrame() const;
+        double frameRate() const;
+        double measuredFrameRate() const;
+
+    private:
+        void waitForFrameDeadline();
 
     private:
         bool m_shouldClose;
@@ -41,5 +47,10 @@ namespace p5
         std::chrono::steady_clock::time_point m_lastFrameTime;
         double m_deltaTime;
         double m_globalTime;
+
+        double m_targetFrameRate;
+        double m_measuredFrameRate;
+        bool m_hasFrameDeadline;
+        std::chrono::steady_clock::time_point m_frameDeadline;
     };
 } // namespace p5

@@ -413,6 +413,11 @@ namespace p5
     bool isLooping();
     void redraw();
 
+    void setFrameRate(double framesPerSecond);
+    void noFrameRateLimit();
+    double getFrameRate();
+    double getMeasuredFrameRate();
+
     void quit();
     void quit(int exitCode);
     void setExitCode(int exitCode);

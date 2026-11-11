@@ -11,7 +11,7 @@ namespace p5
 
     void WindowPlugin::setup(const Next& next)
     {
-        m_window = Window::create(800, 600, "p5cpp", WindowOptions {.transparent = true}, [](const WindowEvent& event) {
+        m_window = Window::create(800, 600, "p5cpp", WindowOptions {}, [](const WindowEvent& event) {
             Kernel& kernel = getKernel();
             kernel.process(event);
         });
