@@ -1,0 +1,32 @@
+add_executable(
+  thetower
+  bullet.cpp
+  death_effect.cpp
+  enemy.cpp
+  enemy_core.cpp
+  enemy_damage_feedback.cpp
+  enemy_health.cpp
+  enemy_movement.cpp
+  enemy_size.cpp
+  floating_text.cpp
+  game_events.cpp
+  hud.cpp
+  main.cpp
+  melee_enemy.cpp
+  menu.cpp
+  meters.cpp
+  meters.hpp
+  particle_burst.cpp
+  profile.cpp
+  spawn_table.cpp
+  tower.cpp
+  tower_stats.cpp
+  tower_weapon.cpp
+  ui.cpp
+  upgrade_levels.cpp
+  upgrades.cpp
+  wave_spawner.cpp
+  world.cpp
+)
+
+target_link_libraries(thetower PRIVATE p5cpp p5cpp_camera p5cpp_animation)
