@@ -16,43 +16,33 @@ struct WaveConfig
     int budgetBase;
     int budgetGrowthPerWave;
 
-    float spawnIntervalBase;
-    float spawnIntervalDecayPerWave;
-    float spawnIntervalMin;
-
-    float breakDuration;
+    // every wave lasts exactly this long, its enemies are spread evenly over it
+    float waveDuration;
     int bossWaveInterval;
 
     std::vector<SpawnEntry> enemies;
     std::vector<SpawnEntry> bosses;
 };
 
-enum class WavePhase
-{
-    spawning, // enemies of this wave are still being spawned
-    clearing, // everything is spawned, waiting until the last enemy is dead
-    pause,    // short break before the next wave starts
-};
-
 struct WaveSpawner
 {
     int wave;
-    WavePhase phase;
-    int plannedCount;
+    float elapsed;
 
     std::vector<EnemyFactory> queue;
+    size_t spawned;
     float spawnInterval;
-    float elapsed;
+    float spawnTimer;
 };
 
 struct WaveProgress
 {
-    WavePhase phase;
-    int defeated;
+    float timeRemaining;
+    float duration;
+    int spawned;
     int total;
-    float pauseRemaining;
 };
 
 WaveSpawner wave_spawner_create(const WaveConfig& config);
-WaveProgress wave_spawner_progress(const WaveSpawner& spawner, const WaveConfig& config, size_t aliveEnemies);
+WaveProgress wave_spawner_progress(const WaveSpawner& spawner, const WaveConfig& config);
 void wave_spawner_update(WaveSpawner& spawner, const WaveConfig& config, std::vector<Enemy>& enemies, EnemyId& nextEnemyId, GameEvents& events, float deltaTime);

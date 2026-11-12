@@ -18,12 +18,6 @@ namespace
         return config.budgetBase + config.budgetGrowthPerWave * (wave - 1);
     }
 
-    float wave_spawn_interval(const WaveConfig& config, const int wave)
-    {
-        const float interval = config.spawnIntervalBase * std::pow(config.spawnIntervalDecayPerWave, static_cast<float>(wave - 1));
-        return std::max(interval, config.spawnIntervalMin);
-    }
-
     std::vector<EnemyFactory> wave_plan(const WaveConfig& config, const int wave)
     {
         std::vector<EnemyFactory> queue;
@@ -47,14 +41,16 @@ namespace
         return queue;
     }
 
-    void wave_start(WaveSpawner& spawner, const WaveConfig& config, const int wave)
+    void wave_start(WaveSpawner& spawner, const WaveConfig& config, const int wave, const float elapsed)
     {
         spawner.wave = wave;
-        spawner.phase = WavePhase::spawning;
+        spawner.elapsed = elapsed;
         spawner.queue = wave_plan(config, wave);
-        spawner.plannedCount = static_cast<int>(spawner.queue.size());
-        spawner.spawnInterval = wave_spawn_interval(config, wave);
-        spawner.elapsed = spawner.spawnInterval;
+        spawner.spawned = 0;
+        spawner.spawnInterval = spawner.queue.empty() ? config.waveDuration : config.waveDuration / static_cast<float>(spawner.queue.size());
+
+        // the first enemy of a wave spawns right away
+        spawner.spawnTimer = spawner.spawnInterval + elapsed;
     }
 
     float2 spawn_position(const WaveConfig& config)
@@ -67,58 +63,37 @@ namespace
 WaveSpawner wave_spawner_create(const WaveConfig& config)
 {
     WaveSpawner spawner = {};
-    wave_start(spawner, config, 1);
+    wave_start(spawner, config, 1, 0.0f);
     return spawner;
 }
 
-WaveProgress wave_spawner_progress(const WaveSpawner& spawner, const WaveConfig& config, const size_t aliveEnemies)
+WaveProgress wave_spawner_progress(const WaveSpawner& spawner, const WaveConfig& config)
 {
-    const int outstanding = static_cast<int>(spawner.queue.size() + aliveEnemies);
-
     return WaveProgress {
-        .phase = spawner.phase,
-        .defeated = std::clamp(spawner.plannedCount - outstanding, 0, spawner.plannedCount),
-        .total = spawner.plannedCount,
-        .pauseRemaining = spawner.phase == WavePhase::pause ? std::max(config.breakDuration - spawner.elapsed, 0.0f) : 0.0f,
+        .timeRemaining = std::max(config.waveDuration - spawner.elapsed, 0.0f),
+        .duration = config.waveDuration,
+        .spawned = static_cast<int>(spawner.spawned),
+        .total = static_cast<int>(spawner.queue.size()),
     };
 }
 
 void wave_spawner_update(WaveSpawner& spawner, const WaveConfig& config, std::vector<Enemy>& enemies, EnemyId& nextEnemyId, GameEvents& events, const float deltaTime)
 {
-    switch (spawner.phase) {
-        case WavePhase::spawning: {
-            spawner.elapsed += deltaTime;
+    spawner.elapsed += deltaTime;
+    spawner.spawnTimer += deltaTime;
 
-            // the queue is spawned front to back, an index keeps the boss at the end
-            size_t spawned = 0;
-            while (spawned < spawner.queue.size() && spawner.elapsed >= spawner.spawnInterval) {
-                spawner.elapsed -= spawner.spawnInterval;
-                enemies.push_back(spawner.queue[spawned](nextEnemyId++, spawn_position(config)));
-                ++spawned;
-            }
-            spawner.queue.erase(spawner.queue.begin(), spawner.queue.begin() + static_cast<std::ptrdiff_t>(spawned));
+    while (spawner.spawned < spawner.queue.size() && spawner.spawnTimer >= spawner.spawnInterval) {
+        spawner.spawnTimer -= spawner.spawnInterval;
+        enemies.push_back(spawner.queue[spawner.spawned++](nextEnemyId++, spawn_position(config)));
+    }
 
-            if (spawner.queue.empty()) {
-                spawner.phase = WavePhase::clearing;
-            }
-            break;
+    // the timer decides when a wave ends, enemies still alive simply overlap with the next one
+    while (spawner.elapsed >= config.waveDuration) {
+        while (spawner.spawned < spawner.queue.size()) {
+            enemies.push_back(spawner.queue[spawner.spawned++](nextEnemyId++, spawn_position(config)));
         }
 
-        case WavePhase::clearing: {
-            if (enemies.empty()) {
-                events.wavesCompleted.push_back(WaveCompletedEvent {.wave = spawner.wave});
-                spawner.phase = WavePhase::pause;
-                spawner.elapsed = 0.0f;
-            }
-            break;
-        }
-
-        case WavePhase::pause: {
-            spawner.elapsed += deltaTime;
-            if (spawner.elapsed >= config.breakDuration) {
-                wave_start(spawner, config, spawner.wave + 1);
-            }
-            break;
-        }
+        events.wavesCompleted.push_back(WaveCompletedEvent {.wave = spawner.wave});
+        wave_start(spawner, config, spawner.wave + 1, spawner.elapsed - config.waveDuration);
     }
 }

@@ -20,10 +20,7 @@ World world_create(const UpgradeLevels& startLevels)
         .spawnDistance = 280.0f,
         .budgetBase = 8,
         .budgetGrowthPerWave = 3,
-        .spawnIntervalBase = 1.5f,
-        .spawnIntervalDecayPerWave = 0.95f,
-        .spawnIntervalMin = 0.3f,
-        .breakDuration = 3.0f,
+        .waveDuration = 20.0f,
         .bossWaveInterval = 10,
         .enemies = {
             SpawnEntry {

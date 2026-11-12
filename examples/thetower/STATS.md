@@ -24,7 +24,7 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Hinrichtung | Idee (C) | 10 % | Gegner, deren Leben unter X % ihres Maximums fällt, sterben sofort. Macht Tanks und Bosse am Ende schneller. |
 | Flächenschaden | Idee (C) | 50 % Schaden, 3 m Radius | Ein Treffer verursacht zusätzlich einen Teil des Schadens an allen Gegnern im Radius um das Ziel. |
 | Verlangsamung | Idee (C) | 40 %, 2 s | Getroffene Gegner werden für kurze Zeit verlangsamt. Kein Stapeln – neue Treffer frischen nur die Dauer auf. |
-| Distanzbonus | Idee (C) | +50 % | Mehr Schaden gegen weit entfernte Gegner (linear bis zur Reichweitengrenze). Belohnt Reichweiten-Builds. |
+| Schaden pro Meter | Idee (C, angepasst von F) | – | Zusätzlicher Schaden pro Meter Abstand zwischen Turm und Ziel, gemessen beim Abschuss. Belohnt Reichweiten-Builds und Gegner früh abzufangen. |
 | Orbits | Idee (F, früher besprochen) | 4 Orbits | Kugeln, die um den Turm kreisen und jeden Gegner beschädigen, den sie berühren. Eigene Stats: Anzahl, Radius, Drehgeschwindigkeit, Schaden. |
 
 ## Abwehr
@@ -51,12 +51,13 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Coins pro Welle | ✓ | – | Coins am Ende jeder Welle. |
 | Coins pro Gegner | ✓ | – | Coin-Bruchteile pro Kill. |
 | Spieltempo | ✓ | Lv 4 | Beschleunigt das Spiel. |
-| Automatisches Upgrade | Idee (F, früher besprochen) | 20 % | Am Ende jeder Welle besteht eine Chance, dass ein zufälliges Runden-Upgrade gratis um ein Level steigt. |
+| Auto-Upgrade Angriff | Idee (F) | 20 % | Am Ende jeder Welle besteht eine Chance, dass ein zufälliges Angriffs-Upgrade gratis um ein Level steigt. |
+| Auto-Upgrade Abwehr | Idee (F) | 20 % | Wie oben, für ein zufälliges Abwehr-Upgrade. |
+| Auto-Upgrade Utility | Idee (F) | 20 % | Wie oben, für ein zufälliges Utility-Upgrade. |
 | Zinsen | Idee (C) | 10 %, gedeckelt | Am Wellenende gibt es X % des aktuellen Golds als Bonus (mit Obergrenze pro Welle). Macht Sparen zu einer echten Entscheidung. |
 | Rabatt | Idee (C) | 30 % | Alle Gold-Upgrades in der Runde werden günstiger. |
 | Startgold | Idee (C) | – | Gold, mit dem jede Runde beginnt. Nur als Coin-Upgrade sinnvoll. |
 | Kopfgeld | Idee (C) | ×3 | Mehr Gold und Coins für Tanks und Bosse. |
-| Kürzere Pause | Idee (C) | –50 % | Verkürzt die Pause zwischen den Wellen. Schnellerer Fortschritt, weniger Zeit zum Reagieren. |
 
 ---
 
@@ -93,6 +94,19 @@ echte Position ein – bei starkem Rückstoß wird das sichtbar. Ggf. Rückstoß
 **Meter.** `Meters::toPixels()` rechnet aktuell 1:1, die Turmreichweite liegt bei 150 „Metern“.
 Für Angaben wie „8 m Sprungweite“ brauchen wir eine echte Umrechnung (z. B. 1 m = 20 px,
 dann wäre die Reichweite 7,5 m). Das sollte vor dem ersten Meter-basierten Stat festgelegt werden.
+
+**Schaden pro Meter** wird beim Abschuss berechnet (Abstand Turm → Ziel) und landet fertig in `Hit.damage` –
+so stimmt die Vormerkung. Braucht ebenfalls die Meter-Umrechnung.
+
+**Auto-Upgrades** würfeln beim `WaveCompletedEvent` je Kategorie einmal. Ausgemaxte Upgrades werden bei der
+Auswahl übersprungen; sind alle einer Kategorie ausgemaxt, passiert nichts. Ein Popup zeigt, was gratis gestiegen ist.
+
+## Wellen
+
+Wellen laufen auf einem **festen Timer** statt darauf zu warten, dass alle Gegner tot sind. Die Gegner einer
+Welle werden gleichmäßig über ihre Dauer verteilt gespawnt; läuft der Timer ab, beginnt sofort die nächste
+Welle – auch wenn noch Gegner leben. Wer zu langsam tötet, bekommt also überlappende Wellen. Gold und Coins
+„pro Welle“ gibt es beim Ablauf des Timers.
 
 ## Vorgeschlagene Reihenfolge
 

@@ -121,31 +121,15 @@ namespace
 
     void show_wave_progress(const Hud& hud, const World& world)
     {
-        const WaveProgress progress = wave_spawner_progress(world.waves, world.waveConfig, world.enemies.size());
+        const WaveProgress progress = wave_spawner_progress(world.waves, world.waveConfig);
 
         const float left = hud.position.x + padding;
         const float width = hud.size.x - padding * 2.0f;
         const float labelY = hud.position.y + padding + 32.0f;
 
-        std::string label;
-        float fraction = 0.0f;
-        color_t barColor = accentColor;
-
-        switch (progress.phase) {
-            case WavePhase::spawning:
-            case WavePhase::clearing: {
-                const int remaining = progress.total - progress.defeated;
-                label = std::format("{} / {} besiegt · {} übrig", progress.defeated, progress.total, remaining);
-                fraction = progress.total > 0 ? static_cast<float>(progress.defeated) / static_cast<float>(progress.total) : 1.0f;
-                break;
-            }
-            case WavePhase::pause: {
-                label = std::format("Nächste Welle in {:.1f}s", progress.pauseRemaining);
-                fraction = 1.0f - progress.pauseRemaining / world.waveConfig.breakDuration;
-                barColor = goldColor;
-                break;
-            }
-        }
+        const std::string label = std::format("Nächste Welle in {:.0f}s · {} Gegner aktiv", std::ceil(progress.timeRemaining), world.enemies.size());
+        const float fraction = 1.0f - progress.timeRemaining / progress.duration;
+        const color_t barColor = accentColor;
 
         textSize(12.0f);
         textAlign(TextAlignment::topLeft);
