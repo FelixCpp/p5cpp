@@ -83,14 +83,14 @@ namespace p5
 
         if (state.strokeDashPattern.empty()) {
             Renderer::Writer writer = m_renderer.write();
-            tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, closed, synthesizeCrossTrackV);
+            tesselate_path(writer, positions, texCoords, convertedColors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, asRadians(state.strokeRoundJoinThreshold), closed, synthesizeCrossTrackV);
             submitMesh(writer, state, texture, shader, state.textureFilter, state.textureWrap);
             return;
         }
 
         for (const DashSegment& segment : split_dashed_path(positions, texCoords, convertedColors, closed, state.strokeDashPattern, state.strokeDashOffset)) {
             Renderer::Writer writer = m_renderer.write();
-            tesselate_path(writer, segment.positions, segment.texCoords, segment.colors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, state.strokeRoundJoinThreshold, /*closed=*/false, synthesizeCrossTrackV);
+            tesselate_path(writer, segment.positions, segment.texCoords, segment.colors, state.strokeWeight, state.strokeCap, state.strokeJoin, state.strokeMiterLimit, asRadians(state.strokeRoundJoinThreshold), /*closed=*/false, synthesizeCrossTrackV);
             submitMesh(writer, state, texture, shader, state.textureFilter, state.textureWrap);
         }
     }

@@ -1,7 +1,6 @@
 #include "menu.hpp"
 
 #include <algorithm>
-#include <array>
 #include <format>
 #include <vector>
 
@@ -17,14 +16,12 @@ namespace
     constexpr float maxColumnWidth = 520.0f;
     constexpr float startButtonHeight = 52.0f;
 
-    constexpr std::array categories = {UpgradeCategory::attack, UpgradeCategory::defense, UpgradeCategory::utility};
-
     struct Layout
     {
-        Rect column;
-        Rect startButton;
-        std::array<Rect, categories.size()> tabs;
-        Rect list;
+        rect2f column;
+        rect2f startButton;
+        std::vector<UpgradeTab> tabs;
+        rect2f list;
     };
 
     // a centered column that never gets wider than maxColumnWidth
@@ -36,47 +33,27 @@ namespace
         const float x = (width - columnWidth) * 0.5f;
 
         Layout result = {};
-        result.column = Rect {x, padding, columnWidth, height - padding * 2.0f};
-        result.startButton = Rect {x, padding + 70.0f, columnWidth, startButtonHeight};
+        result.column = rect2f {x, padding, columnWidth, height - padding * 2.0f};
+        result.startButton = rect2f {x, padding + 70.0f, columnWidth, startButtonHeight};
 
-        const float tabsY = result.startButton.y + startButtonHeight + 24.0f;
-        const float tabWidth = (columnWidth - gap * static_cast<float>(categories.size() - 1)) / static_cast<float>(categories.size());
-        for (size_t i = 0; i < categories.size(); ++i) {
-            result.tabs[i] = Rect {x + static_cast<float>(i) * (tabWidth + gap), tabsY, tabWidth, tabHeight};
-        }
+        const float tabsY = result.startButton.top + startButtonHeight + 24.0f;
+        result.tabs = upgrade_tabs_layout(rect2f {x, tabsY, columnWidth, tabHeight});
 
         const float listY = tabsY + tabHeight + gap * 2.0f;
-        result.list = Rect {x, listY, columnWidth, std::max(height - padding - listY, 0.0f)};
+        result.list = rect2f {x, listY, columnWidth, std::max(height - padding - listY, 0.0f)};
         return result;
     }
 
-    UpgradeListLayout layout_upgrades(const Menu& menu, const Rect& list)
+    UpgradeListLayout layout_upgrades(const Menu& menu, const rect2f& list)
     {
         return upgrade_list_layout(menu.activeCategory, list, menu.scroll.offset);
     }
 
-    UpgradeLine describe_line(const UpgradeDefinition& definition, const Profile& profile, const TowerStats& stats)
+    UpgradeLine describe_line(const UpgradeDefinition& definition, const Profile& profile)
     {
-        const int level = upgrade_level(profile.startLevels, definition.id);
-        const bool maxed = upgrade_is_maxed(definition, level);
-        const int price = upgrade_cost(definition.coinCost, level);
-
-        UpgradeLevels nextLevels = profile.startLevels;
-        ++nextLevels.levels[static_cast<size_t>(definition.id)];
-        const TowerStats nextStats = tower_stats_compute(tower_stats_base(), nextLevels);
-
-        return UpgradeLine {
-            .name = definition.name,
-            .levelLabel = std::format("Start-Lv {}", level),
-            .value = definition.describe(stats),
-            .nextValue = maxed ? std::string() : definition.describe(nextStats),
-            .level = level,
-            .maxLevel = definition.maxLevel,
-            .price = maxed ? std::string("MAX") : std::format("{} C", price),
-            .priceColor = coinColor,
-            .affordable = !maxed && profile.coins >= price,
-            .maxed = maxed,
-        };
+        const int price = upgrade_coin_price(definition, profile.startLevels);
+        const UpgradeCurrency coins = {.symbol = "C", .color = coinColor, .balance = profile.coins};
+        return upgrade_line_describe(definition, tower_stats_base(), profile.startLevels, "Start-Lv", price, coins);
     }
 }
 
@@ -98,12 +75,10 @@ MenuAction menu_update(Menu& menu, Profile& profile)
         return MenuAction::startRound;
     }
 
-    for (size_t i = 0; i < categories.size(); ++i) {
-        if (clicked(l.tabs[i])) {
-            menu.activeCategory = categories[i];
-            menu.scroll = {};
-            return MenuAction::none;
-        }
+    if (const std::optional<UpgradeCategory> category = upgrade_tabs_clicked(l.tabs)) {
+        menu.activeCategory = *category;
+        menu.scroll = {};
+        return MenuAction::none;
     }
 
     const UpgradeDefinition* definition = upgrade_list_clicked(layout_upgrades(menu, l.list), l.list);
@@ -117,7 +92,6 @@ MenuAction menu_update(Menu& menu, Profile& profile)
 void menu_show(const Menu& menu, const Profile& profile)
 {
     const Layout l = layout();
-    const TowerStats stats = tower_stats_compute(tower_stats_base(), profile.startLevels);
 
     with([&] {
         textFont(menu.font);
@@ -126,12 +100,12 @@ void menu_show(const Menu& menu, const Profile& profile)
         textSize(26.0f);
         textAlign(TextAlignment::topLeft);
         fill(textColor);
-        text("Dauerhafte Upgrades", l.column.x, l.column.y);
+        text("Dauerhafte Upgrades", l.column.left, l.column.top);
 
         textSize(22.0f);
         textAlign(TextAlignment::topRight);
         fill(coinColor);
-        text(std::format("{} C", profile.coins), l.column.x + l.column.w, l.column.y + 2.0f);
+        text(std::format("{} C", profile.coins), l.column.left + l.column.width, l.column.top + 2.0f);
 
         std::string summary = std::format("Beste Welle: {}", profile.bestWave);
         if (profile.lastWave > 0) {
@@ -140,16 +114,13 @@ void menu_show(const Menu& menu, const Profile& profile)
         textSize(14.0f);
         textAlign(TextAlignment::topLeft);
         fill(secondaryTextColor);
-        text(summary, l.column.x, l.column.y + 38.0f);
+        text(summary, l.column.left, l.column.top + 38.0f);
 
         button(l.startButton, "Runde starten", accentColor);
 
-        for (size_t i = 0; i < categories.size(); ++i) {
-            tab(l.tabs[i], upgrade_category_name(categories[i]), categories[i] == menu.activeCategory);
-        }
-
+        upgrade_tabs_show(l.tabs, menu.activeCategory);
         upgrade_list_show(layout_upgrades(menu, l.list), l.list, menu.scroll, [&](const UpgradeDefinition& definition) {
-            return describe_line(definition, profile, stats);
+            return describe_line(definition, profile);
         });
     });
 }

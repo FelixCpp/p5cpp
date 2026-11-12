@@ -103,8 +103,18 @@ Auswahl übersprungen; sind alle einer Kategorie ausgemaxt, passiert nichts. Ein
 ## Ultimative Waffen
 
 Idee (F): Große Spezialwaffen, die man im Spiel freischaltet und die dann eigenständig, mit eigenem Cooldown,
-auslösen. Jede hat eigene Upgrades (Schaden, Dauer, Cooldown, Größe …). Offen: wie man sie freischaltet
-(Coins im Menü, ab Welle X, Boss-Drop?) und ob mehrere gleichzeitig aktiv sein dürfen.
+auslösen. Jede hat eigene Upgrades (Schaden, Dauer, Cooldown, Größe …).
+
+**Boss-Währung.** Bosse droppen neben Gold und Coins eine eigene, seltene Währung. Mit ihr werden
+Ultimative Waffen im Menü freigeschaltet (und ggf. aufgerüstet). Bleibt dauerhaft wie die Coins.
+
+**Slots.** Mehrere Ultimative Waffen dürfen gleichzeitig aktiv sein, anfangs bis zu drei. Die Anzahl der
+Slots steigt mit dem Fortschritt (z. B. als weiterer Kauf mit Boss-Währung). Freigeschaltet können mehr Waffen
+sein als Slots – vor der Runde wählt man aus, welche mitkommen.
+
+Offen: Wie viel Boss-Währung ein Boss droppt (fest, oder steigend mit der Welle?) und wie genau die Slots
+steigen. Hinweis: `bossWaveInterval` und die HUD-Anzeige existieren schon, `bosses` ist in `world.cpp`
+aber noch leer – es braucht also zuerst einen Boss-Gegner.
 
 | Waffe | Herkunft | Beschreibung |
 |---|---|---|
@@ -137,3 +147,5 @@ Welle – auch wenn noch Gegner leben. Wer zu langsam tötet, bekommt also über
 5. ~~Schnellfeuer~~ ✓
 6. Rückstoß, Hinrichtung, Verlangsamung
 7. Orbits – eigenes System mit echter Kollisionsabfrage (überstrichener Winkel)
+8. Boss-Gegner und Boss-Währung (Drop, Speichern, Anzeige im Menü)
+9. Ultimative Waffen – Slots, Auswahl vor der Runde, dann die Waffen einzeln (Todeslaser teilt Code mit den Orbits)

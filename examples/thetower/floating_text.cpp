@@ -1,7 +1,6 @@
 #include "floating_text.hpp"
 
 #include <algorithm>
-#include <cmath>
 
 using namespace p5;
 using namespace p5::animation;
@@ -29,13 +28,11 @@ FloatingText floating_text_create(std::string text, const p5::float2& position, 
 
 void floating_texts_update(std::vector<FloatingText>& texts, const float deltaTime)
 {
-    const float damping = std::exp(-riseDrag * deltaTime);
-
     for (FloatingText& text : texts) {
         text.age += deltaTime;
         text.pop.advance(deltaTime);
         text.position.y -= text.riseSpeed * deltaTime;
-        text.riseSpeed *= damping;
+        text.riseSpeed = damp(text.riseSpeed, 0.0f, riseDrag, deltaTime);
     }
 
     std::erase_if(texts, [](const FloatingText& text) {
@@ -55,7 +52,7 @@ void floating_texts_show(const std::vector<FloatingText>& texts, const p5::Font&
             const float alpha = t < fadeStart ? 1.0f : 1.0f - curves::easeInQuad((t - fadeStart) / (1.0f - fadeStart));
 
             textSize(text.size * std::max(text.pop.value(), 0.01f));
-            fill(rgba(text.color.r, text.color.g, text.color.b, static_cast<int32_t>(text.color.a * alpha)));
+            fill(withOpacity(text.color, alpha));
             p5::text(text.text, text.position.x, text.position.y);
         }
     });

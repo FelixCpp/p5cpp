@@ -1,5 +1,7 @@
 #include "tower_stats.hpp"
 
+#include "upgrades.hpp"
+
 TowerStats tower_stats_base()
 {
     return TowerStats {
@@ -36,34 +38,9 @@ TowerStats tower_stats_base()
 
 TowerStats tower_stats_compute(const TowerStats& base, const UpgradeLevels& levels)
 {
-    return TowerStats {
-        .damage = base.damage + 5.0f * upgrade_level(levels, UpgradeId::damage),
-        .fireInterval = base.fireInterval / (1.0f + 0.15f * upgrade_level(levels, UpgradeId::attackSpeed)),
-        .bulletSpeed = base.bulletSpeed,
-        .range = Meters {
-            .value = base.range.value + 1.5f * upgrade_level(levels, UpgradeId::range),
-        },
-        .critChance = base.critChance + 0.05f * upgrade_level(levels, UpgradeId::critChance),
-        .critMultiplier = base.critMultiplier + 0.35f * upgrade_level(levels, UpgradeId::critMultiplier),
-        .multishotChance = base.multishotChance + 0.05f * upgrade_level(levels, UpgradeId::multishotChance),
-        .multishotTargets = base.multishotTargets + upgrade_level(levels, UpgradeId::multishotTargets),
-        .bounceChance = base.bounceChance + 0.03f * upgrade_level(levels, UpgradeId::bounceChance),
-        .bounceCount = base.bounceCount + upgrade_level(levels, UpgradeId::bounceCount),
-        .bounceRange = Meters {
-            .value = base.bounceRange.value + 0.5f * upgrade_level(levels, UpgradeId::bounceRange),
-        },
-        .rapidFireChance = base.rapidFireChance + 0.02f * upgrade_level(levels, UpgradeId::rapidFireChance),
-        .rapidFireDuration = base.rapidFireDuration + 0.25f * upgrade_level(levels, UpgradeId::rapidFireDuration),
-        .rapidFireFactor = base.rapidFireFactor,
-        .maxHealth = base.maxHealth + 20.0f * upgrade_level(levels, UpgradeId::maxHealth),
-        .healthRegen = base.healthRegen + 0.5f * upgrade_level(levels, UpgradeId::healthRegen),
-        .percentDefense = base.percentDefense + 0.05f * upgrade_level(levels, UpgradeId::percentDefense),
-        .absoluteDefense = base.absoluteDefense + 0.5f * upgrade_level(levels, UpgradeId::absoluteDefense),
-        .thorns = base.thorns + 0.05f * upgrade_level(levels, UpgradeId::thorns),
-        .goldPerWave = base.goldPerWave + 3 * upgrade_level(levels, UpgradeId::goldPerWave),
-        .goldPerKill = base.goldPerKill + upgrade_level(levels, UpgradeId::goldPerKill),
-        .gameSpeed = base.gameSpeed + 0.25f * upgrade_level(levels, UpgradeId::gameSpeed),
-        .coinsPerWave = base.coinsPerWave + upgrade_level(levels, UpgradeId::coinsPerWave),
-        .coinsPerKill = base.coinsPerKill + 0.05f * upgrade_level(levels, UpgradeId::coinsPerKill),
-    };
+    TowerStats stats = base;
+    for (const UpgradeDefinition& definition : upgrade_definitions()) {
+        definition.apply(stats, upgrade_level(levels, definition.id));
+    }
+    return stats;
 }

@@ -186,9 +186,9 @@ namespace p5
         applyMatrix(scalingMatrix(x, y));
     }
 
-    void Canvas::rotate(float radians)
+    void Canvas::rotate(angle_t angle)
     {
-        applyMatrix(rotationMatrix(radians));
+        applyMatrix(rotationMatrix(angle));
     }
 
     void Canvas::fill(color_t color)
@@ -241,7 +241,7 @@ namespace p5
         state.strokeMiterLimit = limit;
     }
 
-    void Canvas::strokeRoundJoinThreshold(float threshold)
+    void Canvas::strokeRoundJoinThreshold(angle_t threshold)
     {
         DrawState& state = peekState();
         state.strokeRoundJoinThreshold = threshold;
@@ -409,8 +409,11 @@ namespace p5
         ellipse(x, y, radius, radius);
     }
 
-    void Canvas::arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode)
+    void Canvas::arc(float centerX, float centerY, float radiusX, float radiusY, angle_t start, angle_t stop, ArcMode mode)
     {
+        const float startAngle = asRadians(start);
+        float stopAngle = asRadians(stop);
+
         constexpr float twoPi = 2.0f * std::numbers::pi_v<float>;
         if (stopAngle < startAngle) {
             stopAngle += twoPi * std::ceil((startAngle - stopAngle) / twoPi);

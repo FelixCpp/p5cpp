@@ -16,7 +16,7 @@ struct TextToPoints : Sketch
         background(rgba(10, 12, 20));
 
         const float sampleFactor = map(constrain(static_cast<float>(getMouseX()), 0.0f, getWidth()), 0.0f, getWidth(), 0.02f, 0.5f);
-        const float simplifyThreshold = map(constrain(static_cast<float>(getMouseY()), 0.0f, getHeight()), 0.0f, getHeight(), 0.0f, radians(30.0f));
+        const angle_t simplifyThreshold = degrees(map(constrain(static_cast<float>(getMouseY()), 0.0f, getHeight()), 0.0f, getHeight(), 0.0f, 30.0f));
 
         textFont(font);
         textAlign(TextAlignment::center);
@@ -37,17 +37,18 @@ struct TextToPoints : Sketch
             fill(rgba(255, 210, 90));
             circle(point.position.x, point.position.y, 4.0f);
 
-            // A short tangent tick shows what `angle` (radians) describes at each sampled point.
+            // A short tangent tick shows what `angle` describes at each sampled point.
+            const float2 tip = point.position + fromAngle(point.angle, 10.0f);
             stroke(rgba(255, 210, 90, 90));
             strokeWeight(1.0f);
-            line(point.position.x, point.position.y, point.position.x + std::cos(point.angle) * 10.0f, point.position.y + std::sin(point.angle) * 10.0f);
+            line(point.position.x, point.position.y, tip.x, tip.y);
         }
 
         noStroke();
         fill(rgba(255));
         textAlign(TextAlignment::topLeft);
         textSize(16.0f);
-        p5::text(std::format("points: {}   sampleFactor: {:.3f}   simplifyThreshold: {:.2f} rad", points.size(), sampleFactor, simplifyThreshold), 12.0f, 12.0f);
+        p5::text(std::format("points: {}   sampleFactor: {:.3f}   simplifyThreshold: {:.2f} rad", points.size(), sampleFactor, asRadians(simplifyThreshold)), 12.0f, 12.0f);
     }
 };
 

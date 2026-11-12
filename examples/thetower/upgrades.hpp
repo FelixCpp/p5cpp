@@ -32,6 +32,8 @@ struct UpgradeDefinition
     UpgradeCost coinCost; // in the menu, grows with the start level
     int maxLevel;         // 0 = unlimited, counts start level and round levels together
 
+    // raises the stat by what the given number of levels add on top of the base value
+    void (*apply)(TowerStats& stats, int level);
     // formats the stat this upgrade improves, so the HUD can show "current -> next"
     std::string (*describe)(const TowerStats& stats);
 };
@@ -48,4 +50,5 @@ bool upgrade_buy_with_gold(const UpgradeDefinition& definition, UpgradeLevels& l
 int upgrade_gold_price(const UpgradeDefinition& definition, const UpgradeLevels& levels, const UpgradeLevels& startLevels);
 
 // menu purchase: raises the level every round starts with
+int upgrade_coin_price(const UpgradeDefinition& definition, const UpgradeLevels& startLevels);
 bool upgrade_buy_with_coins(const UpgradeDefinition& definition, UpgradeLevels& startLevels, int& coins);

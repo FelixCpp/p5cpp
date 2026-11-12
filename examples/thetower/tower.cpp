@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "palette.hpp"
+
 using namespace p5;
 using namespace p5::animation;
 
@@ -44,23 +46,17 @@ void tower_update(Tower& tower, const float deltaTime)
 void tower_show(const Tower& tower, const Meters& range)
 {
     with([&tower, &range] {
-        static constexpr color_t color = rgba(60, 180, 220);
-        static constexpr color_t hitColor = rgba(230, 80, 80);
-
         const float flash = tower.hitFlash.value();
 
-        fill(rgba(hitColor.r, hitColor.g, hitColor.b, static_cast<int32_t>(160.0f * flash)));
-        stroke(lerpColor(color, hitColor, flash));
+        fill(withOpacity(dangerColor, 0.63f * flash));
+        stroke(lerpColor(accentColor, dangerColor, flash));
         strokeWeight(3.0f);
 
         strokeJoin(StrokeJoin::round);
         beginShape(ShapeMode::path);
         for (size_t i = 0; i < 6; ++i) {
-            const float t = i / 6.0f * TAU;
-            const float x = tower.position.x + std::cos(t) * tower.radius;
-            const float y = tower.position.y + std::sin(t) * tower.radius;
-
-            vertex(x, y);
+            const float2 corner = tower.position + fromAngle(degrees(60.0f * i), tower.radius);
+            vertex(corner.x, corner.y);
         }
         endShape(true);
 

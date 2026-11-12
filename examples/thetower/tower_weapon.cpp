@@ -130,7 +130,7 @@ void tower_weapon_show(const TowerWeapon& weapon, const TowerStats& stats, const
         const float fade = std::min(weapon.rapidFireLeft / std::min(stats.rapidFireDuration, 0.5f), 1.0f);
 
         noFill();
-        stroke(rgba(255, 170, 60, static_cast<int32_t>(200.0f * fade)));
+        stroke(withOpacity(rgba(255, 170, 60), 0.78f * fade));
         strokeWeight(4.0f);
         circle(tower.position.x, tower.position.y, tower.radius * 1.35f);
     });

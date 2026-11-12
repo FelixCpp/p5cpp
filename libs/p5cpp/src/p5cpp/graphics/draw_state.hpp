@@ -27,7 +27,7 @@ namespace p5
         StrokeCap strokeCap = StrokeCap::round;
         StrokeJoin strokeJoin = StrokeJoin::miter;
         float strokeMiterLimit = 10.0f;
-        float strokeRoundJoinThreshold = radians(10.0f);
+        angle_t strokeRoundJoinThreshold = degrees(10.0f);
         std::vector<float> strokeDashPattern;
         float strokeDashOffset = 0.0f;
         float curveTightness = 0.0f;

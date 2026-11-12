@@ -68,7 +68,7 @@ struct VPainting : Sketch
                 const float cellCenterY = static_cast<float>(screenPixelY + static_cast<int>(cellSize) / 2);
 
                 const float noiseValue = noiseValues.at(y * columns + x);
-                const float rotationAngle = map(noiseValue, 0.0f, 1.0f, 0.0f, TAU);
+                const angle_t rotationAngle = radians(map(noiseValue, 0.0f, 1.0f, 0.0f, TAU));
 
                 drawV(cellCenterX, cellCenterY, rotationAngle, monaLisaPixelColor);
             }
@@ -102,7 +102,7 @@ struct VPainting : Sketch
         image(painting, windowCenterX - paintingWidth * 0.5f, windowCenterY - paintingHeight * 0.5f, paintingWidth, paintingHeight);
     }
 
-    void drawV(const float cellCenterX, const float cellCenterY, const float rotation, const color_t color)
+    void drawV(const float cellCenterX, const float cellCenterY, const angle_t rotation, const color_t color)
     {
         withMatrix([this, cellCenterX, cellCenterY, rotation, color] {
             translate(cellCenterX, cellCenterY);

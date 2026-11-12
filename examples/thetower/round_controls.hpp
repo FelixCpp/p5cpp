@@ -18,11 +18,11 @@ enum class RoundAction
 
 struct RoundControlsLayout
 {
-    ui::Rect panel;
-    ui::Rect pause;
-    ui::Rect slower;
-    ui::Rect speed;
-    ui::Rect faster;
+    p5::rect2f panel;
+    p5::rect2f pause;
+    p5::rect2f slower;
+    p5::rect2f speed;
+    p5::rect2f faster;
 };
 
 RoundControlsLayout round_controls_layout(const p5::float2& topLeft);
@@ -31,9 +31,9 @@ void round_controls_show(const RoundControlsLayout& layout, float speed, float m
 
 struct PauseMenuLayout
 {
-    ui::Rect panel;
-    ui::Rect resume;
-    ui::Rect quit;
+    p5::rect2f panel;
+    p5::rect2f resume;
+    p5::rect2f quit;
 };
 
 PauseMenuLayout pause_menu_layout(float width, float height);

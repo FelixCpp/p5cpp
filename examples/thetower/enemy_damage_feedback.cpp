@@ -22,5 +22,5 @@ void enemy_damage_feedback_update(EnemyDamageFeedback& feedback, const float del
 
 color_t enemy_damage_feedback_fill(const EnemyDamageFeedback& feedback, const color_t base)
 {
-    return rgba(base.r, base.g, base.b, static_cast<int32_t>(base.a * feedback.flash.value()));
+    return withOpacity(base, feedback.flash.value());
 }

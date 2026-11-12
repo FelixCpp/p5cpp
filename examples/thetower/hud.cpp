@@ -1,7 +1,6 @@
 #include "hud.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <format>
 #include <vector>
@@ -25,14 +24,6 @@ namespace
     constexpr float enemyBarHeight = 6.0f;
     constexpr float enemyStripHeight = enemyStripPadding + enemyTitleHeight + enemyChipHeight + 6.0f + enemyBarHeight + enemyStripPadding;
 
-    constexpr std::array categories = {UpgradeCategory::attack, UpgradeCategory::defense, UpgradeCategory::utility};
-
-    struct TabLayout
-    {
-        UpgradeCategory category;
-        Rect rect;
-    };
-
     bool shows_boss_hint(const World& world)
     {
         return !world.waveConfig.bosses.empty() && world.waveConfig.bossWaveInterval > 0;
@@ -44,27 +35,16 @@ namespace
         return hud.position.y + hud.size.y - enemyStripHeight;
     }
 
-    Rect upgrades_view(const Hud& hud)
+    rect2f upgrades_view(const Hud& hud)
     {
         const float top = hud.position.y + padding + headerHeight + tabHeight + gap * 2.0f;
         const float bottom = enemies_top(hud) - gap;
-        return Rect {hud.position.x + padding, top, hud.size.x - padding * 2.0f, std::max(bottom - top, 0.0f)};
+        return rect2f {hud.position.x + padding, top, hud.size.x - padding * 2.0f, std::max(bottom - top, 0.0f)};
     }
 
-    std::vector<TabLayout> layout_tabs(const Hud& hud)
+    std::vector<UpgradeTab> layout_tabs(const Hud& hud)
     {
-        const float innerWidth = hud.size.x - padding * 2.0f;
-        const float tabWidth = (innerWidth - gap * static_cast<float>(categories.size() - 1)) / static_cast<float>(categories.size());
-        const float y = hud.position.y + padding + headerHeight;
-
-        std::vector<TabLayout> tabs;
-        for (size_t i = 0; i < categories.size(); ++i) {
-            tabs.push_back(TabLayout {
-                .category = categories[i],
-                .rect = Rect {hud.position.x + padding + static_cast<float>(i) * (tabWidth + gap), y, tabWidth, tabHeight},
-            });
-        }
-        return tabs;
+        return upgrade_tabs_layout(rect2f {hud.position.x + padding, hud.position.y + padding + headerHeight, hud.size.x - padding * 2.0f, tabHeight});
     }
 
     UpgradeListLayout layout_upgrades(const Hud& hud)
@@ -113,7 +93,7 @@ namespace
         fill(secondaryTextColor);
         text(label, left, labelY);
 
-        bar(Rect {left, labelY + 20.0f, width, progressHeight}, fraction, barColor);
+        bar(rect2f {left, labelY + 20.0f, width, progressHeight}, fraction, barColor);
     }
 
     void show_health(const Hud& hud, const World& world, const TowerStats& stats)
@@ -131,38 +111,21 @@ namespace
         const std::string regen = stats.healthRegen > 0.0f ? std::format(" · +{:.1f}/s", stats.healthRegen) : std::string();
         text(std::format("Leben {:.0f} / {:.0f}{}", std::ceil(health), stats.maxHealth, regen), left, labelY);
 
-        bar(Rect {left, labelY + 20.0f, width, progressHeight}, fraction, lerpColor(dangerColor, healthColor, fraction));
+        bar(rect2f {left, labelY + 20.0f, width, progressHeight}, fraction, lerpColor(dangerColor, healthColor, fraction));
     }
 
-    UpgradeLine describe_line(const UpgradeDefinition& definition, const World& world, const TowerStats& stats)
+    UpgradeLine describe_line(const UpgradeDefinition& definition, const World& world)
     {
-        const int level = upgrade_level(world.upgrades, definition.id);
-        const bool maxed = upgrade_is_maxed(definition, level);
         const int price = upgrade_gold_price(definition, world.upgrades, world.startLevels);
-
-        UpgradeLevels nextLevels = world.upgrades;
-        ++nextLevels.levels[static_cast<size_t>(definition.id)];
-        const TowerStats nextStats = tower_stats_compute(world.baseStats, nextLevels);
-
-        return UpgradeLine {
-            .name = definition.name,
-            .levelLabel = std::format("Lv {}", level),
-            .value = definition.describe(stats),
-            .nextValue = maxed ? std::string() : definition.describe(nextStats),
-            .level = level,
-            .maxLevel = definition.maxLevel,
-            .price = maxed ? std::string("MAX") : std::format("{} G", price),
-            .priceColor = goldColor,
-            .affordable = !maxed && world.gold >= price,
-            .maxed = maxed,
-        };
+        const UpgradeCurrency gold = {.symbol = "G", .color = goldColor, .balance = world.gold};
+        return upgrade_line_describe(definition, world.baseStats, world.upgrades, "Lv", price, gold);
     }
 
-    Rect enemy_chip(const Hud& hud, const size_t index, const size_t count)
+    rect2f enemy_chip(const Hud& hud, const size_t index, const size_t count)
     {
         const float width = (hud.size.x - padding * 2.0f) / static_cast<float>(count);
         const float y = enemies_top(hud) + enemyStripPadding + enemyTitleHeight;
-        return Rect {hud.position.x + padding + static_cast<float>(index) * width, y, width, enemyChipHeight};
+        return rect2f {hud.position.x + padding + static_cast<float>(index) * width, y, width, enemyChipHeight};
     }
 
     void show_enemies(const Hud& hud, const World& world)
@@ -199,37 +162,37 @@ namespace
             const SpawnEntry& entry = entries[i];
             const EnemyArchetype& archetype = *entry.archetype;
             const bool unlocked = wave >= entry.weight.unlockWave;
-            const Rect chip = enemy_chip(hud, i, entries.size());
-            const float centerY = chip.y + chip.h * 0.5f;
+            const rect2f chip = enemy_chip(hud, i, entries.size());
+            const float centerY = chip.top + chip.height * 0.5f;
 
             constexpr float iconSize = 12.0f;
             noFill();
             stroke(unlocked ? archetype.color : mutedTextColor);
             strokeWeight(2.0f);
-            rect(chip.x + 1.0f, centerY - iconSize * 0.5f, iconSize, iconSize);
+            rect(chip.left + 1.0f, centerY - iconSize * 0.5f, iconSize, iconSize);
             noStroke();
 
             textAlign(TextAlignment::centerLeft);
             if (unlocked) {
                 textSize(15.0f);
                 fill(textColor);
-                text(std::format("{:.0f} %", spawn_table_chance(entries, entry, wave) * 100.0f), chip.x + iconSize + 8.0f, centerY);
+                text(std::format("{:.0f} %", spawn_table_chance(entries, entry, wave) * 100.0f), chip.left + iconSize + 8.0f, centerY);
             } else {
                 textSize(13.0f);
                 fill(mutedTextColor);
-                text(std::format("ab W{}", entry.weight.unlockWave), chip.x + iconSize + 8.0f, centerY);
+                text(std::format("ab W{}", entry.weight.unlockWave), chip.left + iconSize + 8.0f, centerY);
             }
         }
 
         // the mix of the current wave as one stacked bar
-        const Rect barRect = {left, top + enemyStripPadding + enemyTitleHeight + enemyChipHeight + 6.0f, width, enemyBarHeight};
+        const rect2f barRect = {left, top + enemyStripPadding + enemyTitleHeight + enemyChipHeight + 6.0f, width, enemyBarHeight};
         bar(barRect, 0.0f, buttonColor);
-        float x = barRect.x;
+        float x = barRect.left;
         for (const SpawnEntry& entry : entries) {
-            const float segment = barRect.w * spawn_table_chance(entries, entry, wave);
+            const float segment = barRect.width * spawn_table_chance(entries, entry, wave);
             if (segment > 0.0f) {
                 fill(entry.archetype->color);
-                rect(x, barRect.y, segment, barRect.h);
+                rect(x, barRect.top, segment, barRect.height);
                 x += segment;
             }
         }
@@ -287,21 +250,19 @@ void hud_update(Hud& hud, World& world, const float deltaTime)
     hud.lastGold = world.gold;
     hud.goldPunch.advance(deltaTime);
 
-    // exponential approach, then snap so the last fraction does not crawl
-    hud.displayedGold += (static_cast<float>(world.gold) - hud.displayedGold) * (1.0f - std::exp(-12.0f * deltaTime));
+    // approach the real value, then snap so the last fraction does not crawl
+    hud.displayedGold = damp(hud.displayedGold, static_cast<float>(world.gold), 12.0f, deltaTime);
     if (std::abs(static_cast<float>(world.gold) - hud.displayedGold) < 0.5f) {
         hud.displayedGold = static_cast<float>(world.gold);
     }
 
-    const Rect view = upgrades_view(hud);
+    const rect2f view = upgrades_view(hud);
     scroll_list_update(hud.upgradeScroll, view, layout_upgrades(hud).contentHeight);
 
-    for (const TabLayout& tab : layout_tabs(hud)) {
-        if (clicked(tab.rect)) {
-            hud.activeCategory = tab.category;
-            hud.upgradeScroll = {};
-            return;
-        }
+    if (const std::optional<UpgradeCategory> category = upgrade_tabs_clicked(layout_tabs(hud))) {
+        hud.activeCategory = *category;
+        hud.upgradeScroll = {};
+        return;
     }
 
     if (const UpgradeDefinition* definition = upgrade_list_clicked(layout_upgrades(hud), view)) {
@@ -323,12 +284,9 @@ void hud_show(const Hud& hud, const World& world)
         show_wave_progress(hud, world);
         show_health(hud, world, stats);
 
-        for (const TabLayout& tab : layout_tabs(hud)) {
-            ui::tab(tab.rect, upgrade_category_name(tab.category), tab.category == hud.activeCategory);
-        }
-
+        upgrade_tabs_show(layout_tabs(hud), hud.activeCategory);
         upgrade_list_show(layout_upgrades(hud), upgrades_view(hud), hud.upgradeScroll, [&](const UpgradeDefinition& definition) {
-            return describe_line(definition, world, stats);
+            return describe_line(definition, world);
         });
 
         show_enemies(hud, world);

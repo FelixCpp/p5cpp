@@ -49,11 +49,10 @@ struct DiscoGrid : Sketch
                     const float offsetX = x * cellSize - cellSize * cols / 2 + cellSize * 0.5f;
                     const float offsetY = y * cellSize - cellSize * rows / 2 + cellSize * 0.5f;
 
-                    float px = r * ((float)i / (num - 1)) * cos(radians(angle + t * i));
-                    float py = r * ((float)i / (num - 1)) * sin(radians(angle + t * i));
+                    const float2 p = fromAngle(degrees(angle + t * i), r * ((float)i / (num - 1)));
                     ellipse(
-                        offsetX + px + (x - float(cols / 2.0f)) * i * 0.7f,
-                        offsetY + py + (y - float(rows / 2.0f)) * i * 0.7f,
+                        offsetX + p.x + (x - float(cols / 2.0f)) * i * 0.7f,
+                        offsetY + p.y + (y - float(rows / 2.0f)) * i * 0.7f,
                         (cSize + i) * 0.5f,
                         (cSize + i) * 0.5f
                     );

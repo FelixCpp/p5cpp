@@ -197,14 +197,14 @@ namespace p5
 
                 result.push_back({
                     edgeStart + (edgeEnd - edgeStart) * t,
-                    std::atan2(edgeEnd.y - edgeStart.y, edgeEnd.x - edgeStart.x),
+                    heading(edgeEnd - edgeStart),
                 });
             }
 
             return result;
         }
 
-        void simplifyContourPoints(std::vector<TextPoint>& points, float simplifyThresholdRadians)
+        void simplifyContourPoints(std::vector<TextPoint>& points, angle_t simplifyThreshold)
         {
             for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(points.size()) - 1; points.size() > 3 and i >= 0; --i) {
                 const size_t count = points.size();
@@ -222,7 +222,7 @@ namespace p5
                 }
 
                 const float cosAngle = std::clamp(dot(ab, bc) / (magA * magB), -1.0f, 1.0f);
-                if (std::acos(cosAngle) < simplifyThresholdRadians) {
+                if (radians(std::acos(cosAngle)) < simplifyThreshold) {
                     points.erase(points.begin() + static_cast<std::ptrdiff_t>(idx));
                 }
             }
@@ -784,7 +784,7 @@ namespace p5
                     }
 
                     std::vector<TextPoint> contourPoints = resampleContour(worldContour, options.sampleFactor);
-                    if (options.simplifyThreshold > 0.0f) {
+                    if (options.simplifyThreshold > angle_t {}) {
                         simplifyContourPoints(contourPoints, options.simplifyThreshold);
                     }
                     for (TextPoint& p : contourPoints) {

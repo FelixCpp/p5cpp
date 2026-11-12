@@ -50,14 +50,14 @@ struct Type
         noStroke();
         fill(rgba(255, alpha));
         withMatrix([&] {
-            rotate(radians(angle * dir));
+            rotate(degrees(angle * dir));
 
             for (size_t i = 0; i < sentence.length(); ++i) {
                 const char character = sentence.at(i);
 
                 withMatrix([&] {
                     const float letterAngle = 360.0f / static_cast<float>(sentence.length()) * static_cast<float>(i);
-                    rotate(radians(letterAngle));
+                    rotate(degrees(letterAngle));
                     text(std::format("{}", character), x, y);
                 });
             }

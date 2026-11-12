@@ -1,7 +1,6 @@
 #include "wave_spawner.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 
 using namespace p5;
@@ -55,8 +54,7 @@ namespace
 
     float2 spawn_position(const WaveConfig& config)
     {
-        const float angle = random(TAU);
-        return config.center + float2 {std::cos(angle), std::sin(angle)} * config.spawnDistance;
+        return config.center + random2D(config.spawnDistance);
     }
 }
 
