@@ -24,8 +24,9 @@ struct UpgradeDefinition
 {
     UpgradeId id;
     UpgradeCategory category;
-    std::string_view key; // stable name for the save file
-    std::string_view name;
+    std::string_view key;   // stable name for the save file
+    std::string_view group; // upgrades of one mechanic share a card, they must be listed next to each other
+    std::string_view name;  // short, the group title gives the context
 
     UpgradeCost goldCost; // during a round, grows with the levels bought in that round
     UpgradeCost coinCost; // in the menu, grows with the start level

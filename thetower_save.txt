@@ -16,7 +16,7 @@ percentDefense 0
 absoluteDefense 0
 thorns 0
 goldPerWave 0
-goldPerKill 2
+goldPerKill 10000
 coinsPerWave 1
 coinsPerKill 0
 gameSpeed 0

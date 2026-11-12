@@ -11,7 +11,8 @@ using namespace p5;
 
 namespace
 {
-    constexpr float hudWidth = 280.0f;
+    constexpr float hudWidth = 320.0f;
+    constexpr float windowHeight = 720.0f; // taller than the world, so the hud has room for its upgrades
     constexpr const char* savePath = "thetower_save.txt";
 
     enum class Screen
@@ -35,7 +36,7 @@ struct TheTower : Sketch
 
     void setup() override
     {
-        setWindowSize(static_cast<uint32_t>(worldSize + hudWidth), static_cast<uint32_t>(worldSize));
+        setWindowSize(static_cast<uint32_t>(worldSize + hudWidth), static_cast<uint32_t>(windowHeight));
         setWindowResizable(true);
     }
 

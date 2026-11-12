@@ -1,9 +1,12 @@
 #include "hud.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <format>
 #include <vector>
+
+#include "upgrade_list.hpp"
 
 using namespace p5;
 using namespace p5::animation;
@@ -16,10 +19,11 @@ namespace
     constexpr float headerHeight = 112.0f;
     constexpr float progressHeight = 6.0f;
 
-    constexpr float enemyRowHeight = 40.0f;
-    constexpr float enemyRowGap = 4.0f;
+    constexpr float enemyStripPadding = 12.0f;
     constexpr float enemyTitleHeight = 22.0f;
-    constexpr float bossLineHeight = 18.0f;
+    constexpr float enemyChipHeight = 22.0f;
+    constexpr float enemyBarHeight = 6.0f;
+    constexpr float enemyStripHeight = enemyStripPadding + enemyTitleHeight + enemyChipHeight + 6.0f + enemyBarHeight + enemyStripPadding;
 
     constexpr std::array categories = {UpgradeCategory::attack, UpgradeCategory::defense, UpgradeCategory::utility};
 
@@ -29,29 +33,21 @@ namespace
         Rect rect;
     };
 
-    struct RowLayout
-    {
-        const UpgradeDefinition* definition;
-        Rect rect;
-    };
-
     bool shows_boss_hint(const World& world)
     {
         return !world.waveConfig.bosses.empty() && world.waveConfig.bossWaveInterval > 0;
     }
 
-    // the enemy overview is docked to the bottom of the panel, the upgrades scroll in the space above it
-    float enemies_top(const Hud& hud, const World& world)
+    // the enemy strip is docked to the bottom of the panel, the upgrades scroll in the space above it
+    float enemies_top(const Hud& hud)
     {
-        const float rows = static_cast<float>(world.waveConfig.enemies.size());
-        const float height = padding + enemyTitleHeight + rows * (enemyRowHeight + enemyRowGap) + (shows_boss_hint(world) ? bossLineHeight : 0.0f) + padding * 0.5f;
-        return hud.position.y + hud.size.y - height;
+        return hud.position.y + hud.size.y - enemyStripHeight;
     }
 
-    Rect upgrades_view(const Hud& hud, const World& world)
+    Rect upgrades_view(const Hud& hud)
     {
         const float top = hud.position.y + padding + headerHeight + tabHeight + gap * 2.0f;
-        const float bottom = enemies_top(hud, world) - gap;
+        const float bottom = enemies_top(hud) - gap;
         return Rect {hud.position.x + padding, top, hud.size.x - padding * 2.0f, std::max(bottom - top, 0.0f)};
     }
 
@@ -71,28 +67,9 @@ namespace
         return tabs;
     }
 
-    std::vector<RowLayout> layout_rows(const Hud& hud, const Rect& view)
+    UpgradeListLayout layout_upgrades(const Hud& hud)
     {
-        float y = view.y - hud.upgradeScroll.offset;
-
-        std::vector<RowLayout> rows;
-        for (const UpgradeDefinition& definition : upgrade_definitions()) {
-            if (definition.category != hud.activeCategory) {
-                continue;
-            }
-
-            rows.push_back(RowLayout {
-                .definition = &definition,
-                .rect = Rect {view.x, y, view.w, rowHeight},
-            });
-            y += rowHeight + rowGap;
-        }
-        return rows;
-    }
-
-    float rows_height(const std::vector<RowLayout>& rows)
-    {
-        return rows.empty() ? 0.0f : static_cast<float>(rows.size()) * (rowHeight + rowGap) - rowGap;
+        return upgrade_list_layout(hud.activeCategory, upgrades_view(hud), hud.upgradeScroll.offset);
     }
 
     void show_header(const Hud& hud, const World& world)
@@ -131,9 +108,9 @@ namespace
         const float fraction = 1.0f - progress.timeRemaining / progress.duration;
         const color_t barColor = accentColor;
 
-        textSize(12.0f);
+        textSize(13.0f);
         textAlign(TextAlignment::topLeft);
-        fill(mutedTextColor);
+        fill(secondaryTextColor);
         text(label, left, labelY);
 
         bar(Rect {left, labelY + 20.0f, width, progressHeight}, fraction, barColor);
@@ -148,18 +125,17 @@ namespace
         const float health = tower_health(world.tower, stats.maxHealth);
         const float fraction = stats.maxHealth > 0.0f ? health / stats.maxHealth : 0.0f;
 
-        textSize(12.0f);
+        textSize(13.0f);
         textAlign(TextAlignment::topLeft);
-        fill(mutedTextColor);
+        fill(secondaryTextColor);
         const std::string regen = stats.healthRegen > 0.0f ? std::format(" · +{:.1f}/s", stats.healthRegen) : std::string();
         text(std::format("Leben {:.0f} / {:.0f}{}", std::ceil(health), stats.maxHealth, regen), left, labelY);
 
         bar(Rect {left, labelY + 20.0f, width, progressHeight}, fraction, lerpColor(dangerColor, healthColor, fraction));
     }
 
-    void show_row(const RowLayout& row, const World& world, const TowerStats& stats)
+    UpgradeLine describe_line(const UpgradeDefinition& definition, const World& world, const TowerStats& stats)
     {
-        const UpgradeDefinition& definition = *row.definition;
         const int level = upgrade_level(world.upgrades, definition.id);
         const bool maxed = upgrade_is_maxed(definition, level);
         const int price = upgrade_gold_price(definition, world.upgrades, world.startLevels);
@@ -168,20 +144,25 @@ namespace
         ++nextLevels.levels[static_cast<size_t>(definition.id)];
         const TowerStats nextStats = tower_stats_compute(world.baseStats, nextLevels);
 
-        const std::string levelLabel = definition.maxLevel > 0 ? std::format("Lv {} / {}", level, definition.maxLevel) : std::format("Lv {}", level);
-
-        upgrade_row(row.rect, UpgradeRow {
+        return UpgradeLine {
             .name = definition.name,
-            .detail = maxed
-                ? std::format("{} · {}", levelLabel, definition.describe(stats))
-                : std::format("{} · {} → {}", levelLabel, definition.describe(stats), definition.describe(nextStats)),
+            .levelLabel = std::format("Lv {}", level),
+            .value = definition.describe(stats),
+            .nextValue = maxed ? std::string() : definition.describe(nextStats),
             .level = level,
             .maxLevel = definition.maxLevel,
             .price = maxed ? std::string("MAX") : std::format("{} G", price),
             .priceColor = goldColor,
             .affordable = !maxed && world.gold >= price,
             .maxed = maxed,
-        });
+        };
+    }
+
+    Rect enemy_chip(const Hud& hud, const size_t index, const size_t count)
+    {
+        const float width = (hud.size.x - padding * 2.0f) / static_cast<float>(count);
+        const float y = enemies_top(hud) + enemyStripPadding + enemyTitleHeight;
+        return Rect {hud.position.x + padding + static_cast<float>(index) * width, y, width, enemyChipHeight};
     }
 
     void show_enemies(const Hud& hud, const World& world)
@@ -190,65 +171,88 @@ namespace
         const std::vector<SpawnEntry>& entries = world.waveConfig.enemies;
 
         const float left = hud.position.x + padding;
-        const float width = hud.size.x - padding * 2.0f;
-        const float top = enemies_top(hud, world);
+        const float right = hud.position.x + hud.size.x - padding;
+        const float width = right - left;
+        const float top = enemies_top(hud);
 
         noStroke();
         fill(buttonColor);
         rect(hud.position.x, top, hud.size.x, 1.0f);
 
-        float y = top + padding;
-
-        textSize(12.0f);
+        const float titleY = top + enemyStripPadding;
+        textSize(13.0f);
         textAlign(TextAlignment::topLeft);
-        fill(mutedTextColor);
-        text(std::format("Gegner · Welle {}", wave), left, y);
-        y += enemyTitleHeight;
-
-        for (const SpawnEntry& entry : entries) {
-            const EnemyArchetype& archetype = *entry.archetype;
-            const bool unlocked = wave >= entry.weight.unlockWave;
-            const float chance = spawn_table_chance(entries, entry, wave);
-
-            constexpr float iconSize = 10.0f;
-            noFill();
-            stroke(unlocked ? archetype.color : mutedTextColor);
-            strokeWeight(2.0f);
-            rect(left, y + 3.0f, iconSize, iconSize);
-            noStroke();
-
-            textSize(13.0f);
-            textAlign(TextAlignment::topLeft);
-            fill(unlocked ? textColor : mutedTextColor);
-            text(archetype.name, left + iconSize + 8.0f, y);
-
-            textSize(11.0f);
-            fill(mutedTextColor);
-            text(std::format("{:.0f} Leben · {:.0f} Schaden", archetype.health, archetype.damage), left + iconSize + 8.0f, y + 17.0f);
-
-            textAlign(TextAlignment::topRight);
-            if (unlocked) {
-                textSize(13.0f);
-                fill(textColor);
-                text(std::format("{:.0f} %", chance * 100.0f), left + width, y);
-            } else {
-                fill(mutedTextColor);
-                text(std::format("ab Welle {}", entry.weight.unlockWave), left + width, y + 1.0f);
-            }
-
-            bar(Rect {left, y + enemyRowHeight - 6.0f, width, 3.0f}, chance, archetype.color);
-
-            y += enemyRowHeight + enemyRowGap;
-        }
+        fill(secondaryTextColor);
+        text(std::format("Gegner · Welle {}", wave), left, titleY);
 
         if (shows_boss_hint(world)) {
             const int interval = world.waveConfig.bossWaveInterval;
             const int nextBossWave = (wave + interval - 1) / interval * interval;
 
-            textSize(12.0f);
-            textAlign(TextAlignment::topLeft);
+            textAlign(TextAlignment::topRight);
             fill(nextBossWave == wave ? goldColor : mutedTextColor);
-            text(nextBossWave == wave ? std::string("Boss-Welle!") : std::format("Nächste Boss-Welle: {}", nextBossWave), left, y);
+            text(nextBossWave == wave ? std::string("Boss-Welle!") : std::format("Boss: Welle {}", nextBossWave), right, titleY);
+        }
+
+        // one chip per enemy type: icon and spawn chance
+        for (size_t i = 0; i < entries.size(); ++i) {
+            const SpawnEntry& entry = entries[i];
+            const EnemyArchetype& archetype = *entry.archetype;
+            const bool unlocked = wave >= entry.weight.unlockWave;
+            const Rect chip = enemy_chip(hud, i, entries.size());
+            const float centerY = chip.y + chip.h * 0.5f;
+
+            constexpr float iconSize = 12.0f;
+            noFill();
+            stroke(unlocked ? archetype.color : mutedTextColor);
+            strokeWeight(2.0f);
+            rect(chip.x + 1.0f, centerY - iconSize * 0.5f, iconSize, iconSize);
+            noStroke();
+
+            textAlign(TextAlignment::centerLeft);
+            if (unlocked) {
+                textSize(15.0f);
+                fill(textColor);
+                text(std::format("{:.0f} %", spawn_table_chance(entries, entry, wave) * 100.0f), chip.x + iconSize + 8.0f, centerY);
+            } else {
+                textSize(13.0f);
+                fill(mutedTextColor);
+                text(std::format("ab W{}", entry.weight.unlockWave), chip.x + iconSize + 8.0f, centerY);
+            }
+        }
+
+        // the mix of the current wave as one stacked bar
+        const Rect barRect = {left, top + enemyStripPadding + enemyTitleHeight + enemyChipHeight + 6.0f, width, enemyBarHeight};
+        bar(barRect, 0.0f, buttonColor);
+        float x = barRect.x;
+        for (const SpawnEntry& entry : entries) {
+            const float segment = barRect.w * spawn_table_chance(entries, entry, wave);
+            if (segment > 0.0f) {
+                fill(entry.archetype->color);
+                rect(x, barRect.y, segment, barRect.h);
+                x += segment;
+            }
+        }
+
+        // details of the hovered type float above the strip
+        for (size_t i = 0; i < entries.size(); ++i) {
+            if (!contains(enemy_chip(hud, i, entries.size()), mouse())) {
+                continue;
+            }
+
+            const EnemyArchetype& archetype = *entries[i].archetype;
+            const std::string details = std::format("{} · {:.0f} Leben · {:.0f} Schaden", archetype.name, archetype.health, archetype.damage);
+
+            textSize(13.0f);
+            const float tipWidth = textWidth(details) + 20.0f;
+            const float tipX = std::clamp(mouse().x - tipWidth * 0.5f, left, right - tipWidth);
+            const float tipY = top - 34.0f;
+
+            fill(buttonHoverColor);
+            rect(tipX, tipY, tipWidth, 28.0f, BorderRadius::all(6.0f));
+            textAlign(TextAlignment::center);
+            fill(textColor);
+            text(details, tipX + tipWidth * 0.5f, tipY + 14.0f);
         }
     }
 }
@@ -289,8 +293,8 @@ void hud_update(Hud& hud, World& world, const float deltaTime)
         hud.displayedGold = static_cast<float>(world.gold);
     }
 
-    const Rect view = upgrades_view(hud, world);
-    scroll_list_update(hud.upgradeScroll, view, rows_height(layout_rows(hud, view)));
+    const Rect view = upgrades_view(hud);
+    scroll_list_update(hud.upgradeScroll, view, layout_upgrades(hud).contentHeight);
 
     for (const TabLayout& tab : layout_tabs(hud)) {
         if (clicked(tab.rect)) {
@@ -300,15 +304,8 @@ void hud_update(Hud& hud, World& world, const float deltaTime)
         }
     }
 
-    // rows scrolled out of the view must not be clickable
-    if (!clicked(view)) {
-        return;
-    }
-    for (const RowLayout& row : layout_rows(hud, view)) {
-        if (clicked(row.rect)) {
-            upgrade_buy_with_gold(*row.definition, world.upgrades, world.startLevels, world.gold);
-            return;
-        }
+    if (const UpgradeDefinition* definition = upgrade_list_clicked(layout_upgrades(hud), view)) {
+        upgrade_buy_with_gold(*definition, world.upgrades, world.startLevels, world.gold);
     }
 }
 
@@ -330,15 +327,9 @@ void hud_show(const Hud& hud, const World& world)
             ui::tab(tab.rect, upgrade_category_name(tab.category), tab.category == hud.activeCategory);
         }
 
-        const Rect view = upgrades_view(hud, world);
-        const std::vector<RowLayout> rows = layout_rows(hud, view);
-
-        withClip(view.x - 2.0f, view.y, view.w + 4.0f, view.h, [&] {
-            for (const RowLayout& row : rows) {
-                show_row(row, world, stats);
-            }
+        upgrade_list_show(layout_upgrades(hud), upgrades_view(hud), hud.upgradeScroll, [&](const UpgradeDefinition& definition) {
+            return describe_line(definition, world, stats);
         });
-        scroll_list_show_bar(hud.upgradeScroll, view, rows_height(rows));
 
         show_enemies(hud, world);
     });

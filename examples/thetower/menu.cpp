@@ -5,6 +5,8 @@
 #include <format>
 #include <vector>
 
+#include "upgrade_list.hpp"
+
 using namespace p5;
 using namespace ui;
 
@@ -23,12 +25,6 @@ namespace
         Rect startButton;
         std::array<Rect, categories.size()> tabs;
         Rect list;
-    };
-
-    struct RowLayout
-    {
-        const UpgradeDefinition* definition;
-        Rect rect;
     };
 
     // a centered column that never gets wider than maxColumnWidth
@@ -54,33 +50,13 @@ namespace
         return result;
     }
 
-    std::vector<RowLayout> layout_rows(const Menu& menu, const Rect& list)
+    UpgradeListLayout layout_upgrades(const Menu& menu, const Rect& list)
     {
-        float y = list.y - menu.scroll.offset;
-
-        std::vector<RowLayout> rows;
-        for (const UpgradeDefinition& definition : upgrade_definitions()) {
-            if (definition.category != menu.activeCategory) {
-                continue;
-            }
-
-            rows.push_back(RowLayout {
-                .definition = &definition,
-                .rect = Rect {list.x, y, list.w, rowHeight},
-            });
-            y += rowHeight + rowGap;
-        }
-        return rows;
+        return upgrade_list_layout(menu.activeCategory, list, menu.scroll.offset);
     }
 
-    float rows_height(const std::vector<RowLayout>& rows)
+    UpgradeLine describe_line(const UpgradeDefinition& definition, const Profile& profile, const TowerStats& stats)
     {
-        return rows.empty() ? 0.0f : static_cast<float>(rows.size()) * (rowHeight + rowGap) - rowGap;
-    }
-
-    void show_row(const RowLayout& row, const Profile& profile, const TowerStats& stats)
-    {
-        const UpgradeDefinition& definition = *row.definition;
         const int level = upgrade_level(profile.startLevels, definition.id);
         const bool maxed = upgrade_is_maxed(definition, level);
         const int price = upgrade_cost(definition.coinCost, level);
@@ -89,20 +65,18 @@ namespace
         ++nextLevels.levels[static_cast<size_t>(definition.id)];
         const TowerStats nextStats = tower_stats_compute(tower_stats_base(), nextLevels);
 
-        const std::string levelLabel = definition.maxLevel > 0 ? std::format("Start-Lv {} / {}", level, definition.maxLevel) : std::format("Start-Lv {}", level);
-
-        upgrade_row(row.rect, UpgradeRow {
+        return UpgradeLine {
             .name = definition.name,
-            .detail = maxed
-                ? std::format("{} · {}", levelLabel, definition.describe(stats))
-                : std::format("{} · {} → {}", levelLabel, definition.describe(stats), definition.describe(nextStats)),
+            .levelLabel = std::format("Start-Lv {}", level),
+            .value = definition.describe(stats),
+            .nextValue = maxed ? std::string() : definition.describe(nextStats),
             .level = level,
             .maxLevel = definition.maxLevel,
             .price = maxed ? std::string("MAX") : std::format("{} C", price),
             .priceColor = coinColor,
             .affordable = !maxed && profile.coins >= price,
             .maxed = maxed,
-        });
+        };
     }
 }
 
@@ -118,7 +92,7 @@ Menu menu_create(const p5::Font& font)
 MenuAction menu_update(Menu& menu, Profile& profile)
 {
     const Layout l = layout();
-    scroll_list_update(menu.scroll, l.list, rows_height(layout_rows(menu, l.list)));
+    scroll_list_update(menu.scroll, l.list, layout_upgrades(menu, l.list).contentHeight);
 
     if (clicked(l.startButton)) {
         return MenuAction::startRound;
@@ -132,14 +106,9 @@ MenuAction menu_update(Menu& menu, Profile& profile)
         }
     }
 
-    // rows scrolled out of the list must not be clickable
-    if (!clicked(l.list)) {
-        return MenuAction::none;
-    }
-    for (const RowLayout& row : layout_rows(menu, l.list)) {
-        if (clicked(row.rect) && upgrade_buy_with_coins(*row.definition, profile.startLevels, profile.coins)) {
-            return MenuAction::purchased;
-        }
+    const UpgradeDefinition* definition = upgrade_list_clicked(layout_upgrades(menu, l.list), l.list);
+    if (definition != nullptr && upgrade_buy_with_coins(*definition, profile.startLevels, profile.coins)) {
+        return MenuAction::purchased;
     }
 
     return MenuAction::none;
@@ -168,9 +137,9 @@ void menu_show(const Menu& menu, const Profile& profile)
         if (profile.lastWave > 0) {
             summary += std::format(" · Letzte Runde: Welle {}, +{} C", profile.lastWave, profile.lastCoins);
         }
-        textSize(13.0f);
+        textSize(14.0f);
         textAlign(TextAlignment::topLeft);
-        fill(mutedTextColor);
+        fill(secondaryTextColor);
         text(summary, l.column.x, l.column.y + 38.0f);
 
         button(l.startButton, "Runde starten", accentColor);
@@ -179,12 +148,8 @@ void menu_show(const Menu& menu, const Profile& profile)
             tab(l.tabs[i], upgrade_category_name(categories[i]), categories[i] == menu.activeCategory);
         }
 
-        const std::vector<RowLayout> rows = layout_rows(menu, l.list);
-        withClip(l.list.x - 2.0f, l.list.y, l.list.w + 4.0f, l.list.h, [&] {
-            for (const RowLayout& row : rows) {
-                show_row(row, profile, stats);
-            }
+        upgrade_list_show(layout_upgrades(menu, l.list), l.list, menu.scroll, [&](const UpgradeDefinition& definition) {
+            return describe_line(definition, profile, stats);
         });
-        scroll_list_show_bar(menu.scroll, l.list, rows_height(rows));
     });
 }

@@ -24,6 +24,7 @@ add_executable(
   tower_weapon.cpp
   ui.cpp
   upgrade_levels.cpp
+  upgrade_list.cpp
   upgrades.cpp
   wave_spawner.cpp
   world.cpp
