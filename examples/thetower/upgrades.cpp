@@ -11,101 +11,353 @@ namespace
             .id = UpgradeId::damage,
             .category = UpgradeCategory::attack,
             .key = "damage",
+            .group = "Basis",
             .name = "Schaden",
             .goldCost = {.base = 10, .growth = 1.25f},
             .coinCost = {.base = 5, .growth = 1.3f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{:.0f}", stats.damage); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.damage += 5.0f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f}", stats.damage);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::attackSpeed,
             .category = UpgradeCategory::attack,
             .key = "attackSpeed",
+            .group = "Basis",
             .name = "Angriffstempo",
             .goldCost = {.base = 15, .growth = 1.3f},
             .coinCost = {.base = 8, .growth = 1.35f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{:.1f}/s", 1.0f / stats.fireInterval); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.fireInterval /= 1.0f + 0.15f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.1f}/s", 1.0f / stats.fireInterval);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::range,
             .category = UpgradeCategory::attack,
             .key = "range",
+            .group = "Basis",
             .name = "Reichweite",
             .goldCost = {.base = 20, .growth = 1.35f},
             .coinCost = {.base = 10, .growth = 1.5f},
             .maxLevel = 8,
-            .describe = [](const TowerStats& stats) { return std::format("{:.0f}", stats.range.value); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.range.value += 1.5f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.1f} m", stats.range.value);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::critChance,
+            .category = UpgradeCategory::attack,
+            .key = "critChance",
+            .group = "Kritischer Treffer",
+            .name = "Chance",
+            .goldCost = {.base = 25, .growth = 1.4f},
+            .coinCost = {.base = 12, .growth = 1.5f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.critChance += 0.05f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.critChance * 100.0f);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::critMultiplier,
+            .category = UpgradeCategory::attack,
+            .key = "critMultiplier",
+            .group = "Kritischer Treffer",
+            .name = "Schaden",
+            .goldCost = {.base = 30, .growth = 1.45f},
+            .coinCost = {.base = 15, .growth = 1.55f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.critMultiplier += 0.35f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("x{:.2f}", stats.critMultiplier);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::multishotChance,
+            .category = UpgradeCategory::attack,
+            .key = "multishotChance",
+            .group = "Mehrfachschuss",
+            .name = "Chance",
+            .goldCost = {.base = 30, .growth = 1.45f},
+            .coinCost = {.base = 15, .growth = 1.55f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.multishotChance += 0.05f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.multishotChance * 100.0f);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::multishotTargets,
+            .category = UpgradeCategory::attack,
+            .key = "multishotTargets",
+            .group = "Mehrfachschuss",
+            .name = "Ziele",
+            .goldCost = {.base = 50, .growth = 1.8f},
+            .coinCost = {.base = 25, .growth = 1.8f},
+            .maxLevel = 6,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.multishotTargets += level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{}", stats.multishotTargets);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::bounceChance,
+            .category = UpgradeCategory::attack,
+            .key = "bounceChance",
+            .group = "Abprallschuss",
+            .name = "Chance",
+            .goldCost = {.base = 30, .growth = 1.45f},
+            .coinCost = {.base = 15, .growth = 1.55f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.bounceChance += 0.03f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.bounceChance * 100.0f);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::bounceCount,
+            .category = UpgradeCategory::attack,
+            .key = "bounceCount",
+            .group = "Abprallschuss",
+            .name = "Sprünge",
+            .goldCost = {.base = 50, .growth = 1.8f},
+            .coinCost = {.base = 25, .growth = 1.8f},
+            .maxLevel = 4,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.bounceCount += level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{}", stats.bounceCount);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::bounceRange,
+            .category = UpgradeCategory::attack,
+            .key = "bounceRange",
+            .group = "Abprallschuss",
+            .name = "Sprungweite",
+            .goldCost = {.base = 25, .growth = 1.4f},
+            .coinCost = {.base = 12, .growth = 1.5f},
+            .maxLevel = 8,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.bounceRange.value += 0.5f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.1f} m", stats.bounceRange.value);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::rapidFireChance,
+            .category = UpgradeCategory::attack,
+            .key = "rapidFireChance",
+            .group = "Schnellfeuer",
+            .name = "Chance",
+            .goldCost = {.base = 30, .growth = 1.45f},
+            .coinCost = {.base = 15, .growth = 1.55f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.rapidFireChance += 0.02f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.rapidFireChance * 100.0f);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::rapidFireDuration,
+            .category = UpgradeCategory::attack,
+            .key = "rapidFireDuration",
+            .group = "Schnellfeuer",
+            .name = "Dauer",
+            .goldCost = {.base = 25, .growth = 1.4f},
+            .coinCost = {.base = 12, .growth = 1.5f},
+            .maxLevel = 8,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.rapidFireDuration += 0.25f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.2f} s", stats.rapidFireDuration);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::maxHealth,
             .category = UpgradeCategory::defense,
             .key = "maxHealth",
+            .group = "Leben",
             .name = "Max. Leben",
             .goldCost = {.base = 15, .growth = 1.3f},
             .coinCost = {.base = 5, .growth = 1.3f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{:.0f}", stats.maxHealth); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.maxHealth += 20.0f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f}", stats.maxHealth);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::healthRegen,
             .category = UpgradeCategory::defense,
             .key = "healthRegen",
+            .group = "Leben",
             .name = "Regeneration",
             .goldCost = {.base = 20, .growth = 1.35f},
             .coinCost = {.base = 8, .growth = 1.35f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{:.1f}/s", stats.healthRegen); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.healthRegen += 0.5f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.1f}/s", stats.healthRegen);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::percentDefense,
+            .category = UpgradeCategory::defense,
+            .key = "percentDefense",
+            .group = "Verteidigung",
+            .name = "Prozentual",
+            .goldCost = {.base = 25, .growth = 1.4f},
+            .coinCost = {.base = 12, .growth = 1.5f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.percentDefense += 0.05f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.percentDefense * 100.0f);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::absoluteDefense,
+            .category = UpgradeCategory::defense,
+            .key = "absoluteDefense",
+            .group = "Verteidigung",
+            .name = "Absolut",
+            .goldCost = {.base = 20, .growth = 1.4f},
+            .coinCost = {.base = 10, .growth = 1.45f},
+            .maxLevel = 20,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.absoluteDefense += 0.5f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("-{:.1f}", stats.absoluteDefense);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::thorns,
+            .category = UpgradeCategory::defense,
+            .key = "thorns",
+            .group = "Dornen",
+            .name = "Rückschaden",
+            .goldCost = {.base = 20, .growth = 1.35f},
+            .coinCost = {.base = 10, .growth = 1.45f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.thorns += 0.05f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.thorns * 100.0f);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::goldPerWave,
             .category = UpgradeCategory::utility,
             .key = "goldPerWave",
-            .name = "Gold pro Welle",
+            .group = "Gold",
+            .name = "Pro Welle",
             .goldCost = {.base = 25, .growth = 1.4f},
             .coinCost = {.base = 10, .growth = 1.4f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{}", stats.goldPerWave); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.goldPerWave += 3 * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{}", stats.goldPerWave);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::goldPerKill,
             .category = UpgradeCategory::utility,
             .key = "goldPerKill",
-            .name = "Gold pro Gegner",
+            .group = "Gold",
+            .name = "Pro Gegner",
             .goldCost = {.base = 40, .growth = 1.6f},
             .coinCost = {.base = 15, .growth = 1.5f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("+{}", stats.goldPerKill); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.goldPerKill += level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("+{}", stats.goldPerKill);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::coinsPerWave,
             .category = UpgradeCategory::utility,
             .key = "coinsPerWave",
-            .name = "Coins pro Welle",
+            .group = "Coins",
+            .name = "Pro Welle",
             .goldCost = {.base = 60, .growth = 1.6f},
             .coinCost = {.base = 12, .growth = 1.5f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{}", stats.coinsPerWave); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.coinsPerWave += level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{}", stats.coinsPerWave);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::coinsPerKill,
             .category = UpgradeCategory::utility,
             .key = "coinsPerKill",
-            .name = "Coins pro Gegner",
+            .group = "Coins",
+            .name = "Pro Gegner",
             .goldCost = {.base = 80, .growth = 1.7f},
             .coinCost = {.base = 15, .growth = 1.5f},
             .maxLevel = 0,
-            .describe = [](const TowerStats& stats) { return std::format("{:.2f}", stats.coinsPerKill); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.coinsPerKill += 0.05f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.2f}", stats.coinsPerKill);
+            },
         },
         UpgradeDefinition {
             .id = UpgradeId::gameSpeed,
             .category = UpgradeCategory::utility,
             .key = "gameSpeed",
-            .name = "Spieltempo",
+            .group = "Spiel",
+            .name = "Max. Spieltempo",
             .goldCost = {.base = 30, .growth = 1.5f},
             .coinCost = {.base = 20, .growth = 1.8f},
             .maxLevel = 4,
-            .describe = [](const TowerStats& stats) { return std::format("{:.2f}x", stats.gameSpeed); },
+            .apply = [](TowerStats& stats, const int level) {
+                stats.gameSpeed += 0.25f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.2f}x", stats.gameSpeed);
+            },
         },
     };
 
@@ -113,7 +365,7 @@ namespace
     {
         return levels.levels[static_cast<size_t>(id)];
     }
-}
+} // namespace
 
 std::span<const UpgradeDefinition> upgrade_definitions()
 {
@@ -170,10 +422,15 @@ bool upgrade_buy_with_gold(const UpgradeDefinition& definition, UpgradeLevels& l
     return true;
 }
 
+int upgrade_coin_price(const UpgradeDefinition& definition, const UpgradeLevels& startLevels)
+{
+    return upgrade_cost(definition.coinCost, upgrade_level(startLevels, definition.id));
+}
+
 bool upgrade_buy_with_coins(const UpgradeDefinition& definition, UpgradeLevels& startLevels, int& coins)
 {
+    const int price = upgrade_coin_price(definition, startLevels);
     int& level = level_of(startLevels, definition.id);
-    const int price = upgrade_cost(definition.coinCost, level);
 
     if (upgrade_is_maxed(definition, level) || coins < price) {
         return false;

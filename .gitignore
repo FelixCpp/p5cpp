@@ -12,3 +12,6 @@ _deps
 CMakeUserPresets.json
 
 build/
+
+# local save game of the thetower example
+thetower_save.txt

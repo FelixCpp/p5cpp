@@ -38,7 +38,7 @@ namespace p5
     void setMatrix(const matrix4x4& matrix) { canvas().setMatrix(matrix); }
     void translate(float x, float y) { canvas().translate(x, y); }
     void scale(float x, float y) { canvas().scale(x, y); }
-    void rotate(float radians) { canvas().rotate(radians); }
+    void rotate(angle_t angle) { canvas().rotate(angle); }
     void fill(color_t color) { canvas().fill(color); }
     void noFill() { canvas().noFill(); }
     void stroke(color_t color) { canvas().stroke(color); }
@@ -47,7 +47,7 @@ namespace p5
     void strokeCap(StrokeCap cap) { canvas().strokeCap(cap); }
     void strokeJoin(StrokeJoin join) { canvas().strokeJoin(join); }
     void strokeMiterLimit(float limit) { canvas().strokeMiterLimit(limit); }
-    void strokeRoundJoinThreshold(float threshold) { canvas().strokeRoundJoinThreshold(threshold); }
+    void strokeRoundJoinThreshold(angle_t threshold) { canvas().strokeRoundJoinThreshold(threshold); }
     void strokeDashPattern(std::initializer_list<float> pattern) { canvas().strokeDashPattern(pattern); }
     void strokeDashOffset(float offset) { canvas().strokeDashOffset(offset); }
     void curveTightness(float tightness) { canvas().curveTightness(tightness); }
@@ -67,7 +67,7 @@ namespace p5
     void square(float left, float top, float size) { canvas().square(left, top, size); }
     void ellipse(float centerX, float centerY, float radiusX, float radiusY) { canvas().ellipse(centerX, centerY, radiusX, radiusY); }
     void circle(float centerX, float centerY, float radius) { canvas().circle(centerX, centerY, radius); }
-    void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode) { canvas().arc(centerX, centerY, radiusX, radiusY, startAngle, stopAngle, mode); }
+    void arc(float centerX, float centerY, float radiusX, float radiusY, angle_t startAngle, angle_t stopAngle, ArcMode mode) { canvas().arc(centerX, centerY, radiusX, radiusY, startAngle, stopAngle, mode); }
     void line(float x1, float y1, float x2, float y2) { canvas().line(x1, y1, x2, y2); }
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3) { canvas().triangle(x1, y1, x2, y2, x3, y3); }
     void point(float x, float y) { canvas().point(x, y); }

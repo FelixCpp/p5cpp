@@ -152,7 +152,7 @@ move.advance(getDeltaTime());
 
 ## Examples
 
-`examples/` has +20 complete sketches exercising most of the API — generative art, text/typography, image/pixel manipulation, GUI, audio-reactive visuals, GIF export, webcam, and the 2D camera. Each is its own CMake target under `build/examples/<name>/<name>` once built. A few worth a look: `tetris` (a full game), `wanderer`, `matrix`, `disco_grid` and `jelly_tentacles` (generative), `ripple_effect` (WGSL shaders), `rotating_typography` and `text_to_points` (text), `world_map`, `pixel_sorting` and `shuffled_glass` (pixel/image effects).
+`examples/` has +20 complete sketches exercising most of the API — generative art, text/typography, image/pixel manipulation, GUI, audio-reactive visuals, GIF export, webcam, and the 2D camera. Each is its own CMake target under `build/examples/<name>/<name>` once built. A few worth a look: `neon_flail` (an arena roguelite with bloom post-processing and fully synthesized audio), `tetris` (a full game), `wanderer`, `matrix`, `disco_grid` and `jelly_tentacles` (generative), `ripple_effect` (WGSL shaders), `rotating_typography` and `text_to_points` (text), `world_map`, `pixel_sorting` and `shuffled_glass` (pixel/image effects).
 
 ## Project layout
 

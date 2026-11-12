@@ -19,6 +19,7 @@ namespace p5
         void noLoop();
         void redraw();
         void setFrameRate(double framesPerSecond);
+        void quitOnEscape(bool enabled);
 
         bool shouldClose() const;
         bool shouldRestart() const;
@@ -30,6 +31,7 @@ namespace p5
         bool shouldDrawThisFrame() const;
         double frameRate() const;
         double measuredFrameRate() const;
+        bool quitsOnEscape() const;
 
     private:
         void waitForFrameDeadline();
@@ -40,6 +42,7 @@ namespace p5
         bool m_looping;
         bool m_redrawRequested;
         bool m_drawingThisFrame;
+        bool m_quitOnEscape;
         int m_exitCode;
         int m_frameCount;
 

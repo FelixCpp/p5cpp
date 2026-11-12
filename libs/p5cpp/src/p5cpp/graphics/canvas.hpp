@@ -41,7 +41,7 @@ namespace p5
         void setMatrix(const matrix4x4& matrix);
         void translate(float x, float y);
         void scale(float x, float y);
-        void rotate(float radians);
+        void rotate(angle_t angle);
 
         void fill(color_t color);
         void noFill();
@@ -53,7 +53,7 @@ namespace p5
         void strokeCap(StrokeCap cap);
         void strokeJoin(StrokeJoin join);
         void strokeMiterLimit(float limit);
-        void strokeRoundJoinThreshold(float threshold);
+        void strokeRoundJoinThreshold(angle_t threshold);
         void strokeDashPattern(std::initializer_list<float> pattern);
         void strokeDashOffset(float offset);
         void curveTightness(float tightness);
@@ -80,7 +80,7 @@ namespace p5
         void square(float left, float top, float size);
         void ellipse(float centerX, float centerY, float radiusX, float radiusY);
         void circle(float centerX, float centerY, float radius);
-        void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode = ArcMode::open);
+        void arc(float centerX, float centerY, float radiusX, float radiusY, angle_t start, angle_t stop, ArcMode mode = ArcMode::open);
         void line(float x1, float y1, float x2, float y2);
         void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
         void point(float x, float y);

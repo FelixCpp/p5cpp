@@ -155,6 +155,7 @@ void melee_enemy_update(EnemyCore& core, MeleeBehavior& behavior, const Tower& t
     behavior.attackCooldown -= deltaTime;
     while (behavior.attackCooldown <= 0.0f) {
         events.towerHits.push_back(TowerHitEvent {
+            .attacker = core.id,
             .position = movement.position,
             .damage = behavior.damage,
         });

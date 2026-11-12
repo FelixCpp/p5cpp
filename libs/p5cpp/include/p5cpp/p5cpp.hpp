@@ -17,9 +17,38 @@
 #include <utility>
 #include <array>
 #include <cmath>
+#include <compare>
 #include <filesystem>
 #include <format>
 #include <stdexcept>
+
+namespace p5
+{
+    struct angle_t
+    {
+        float radians;
+
+        inline constexpr auto operator<=>(const angle_t&) const = default;
+    };
+
+    constexpr angle_t radians(float value);
+    constexpr angle_t degrees(float value);
+    constexpr float asRadians(angle_t angle);
+    constexpr float asDegrees(angle_t angle);
+
+    constexpr angle_t operator+(angle_t a, angle_t b);
+    constexpr angle_t operator-(angle_t a, angle_t b);
+    constexpr angle_t operator-(angle_t angle);
+    constexpr angle_t operator*(angle_t angle, float factor);
+    constexpr angle_t operator*(float factor, angle_t angle);
+    constexpr angle_t operator/(angle_t angle, float divisor);
+    constexpr float operator/(angle_t a, angle_t b);
+
+    constexpr angle_t& operator+=(angle_t& a, angle_t b);
+    constexpr angle_t& operator-=(angle_t& a, angle_t b);
+    constexpr angle_t& operator*=(angle_t& angle, float factor);
+    constexpr angle_t& operator/=(angle_t& angle, float divisor);
+} // namespace p5
 
 namespace p5
 {
@@ -35,7 +64,7 @@ namespace p5
     template <typename T> constexpr T dot(const value2<T>& a, const value2<T>& b);
     template <typename T> T length(const value2<T>& v);
     template <typename T> value2<T> normalized(const value2<T>& v);
-    template <typename T> value2<T> rotated(const value2<T>& v, float radians);
+    template <typename T> value2<T> rotated(const value2<T>& v, angle_t angle);
     template <typename T> value2<T> limited(const value2<T>& v, T maxLength);
     template <typename T> value2<T> fixedLength(const value2<T>& v, T length);
     template <typename T> constexpr value2<T> lerp(const value2<T>& a, const value2<T>& b, float t);
@@ -72,6 +101,10 @@ namespace p5
     typedef value2<float> float2;
     typedef value2<int32_t> int2;
     typedef value2<uint32_t> uint2;
+
+    // angle 0 points along the positive x axis, positive angles turn clockwise because y points down
+    float2 fromAngle(angle_t angle, float length = 1.0f);
+    angle_t heading(const float2& v);
 } // namespace p5
 
 namespace p5
@@ -86,9 +119,9 @@ namespace p5
     constexpr matrix4x4 identityMatrix();
     constexpr matrix4x4 translationMatrix(float x, float y);
     constexpr matrix4x4 scalingMatrix(float x, float y);
-    matrix4x4 rotationMatrix(float radians);
+    matrix4x4 rotationMatrix(angle_t angle);
     constexpr matrix4x4 orthographicProjectionMatrix(float left, float top, float right, float bottom, float near, float far);
-    constexpr matrix4x4 perspectiveProjectionMatrix(float fovY, float aspect, float near, float far);
+    constexpr matrix4x4 perspectiveProjectionMatrix(angle_t fovY, float aspect, float near, float far);
     matrix4x4 lookAtMatrix(float eyeX, float eyeY, float eyeZ, float centerX, float centerY, float centerZ, float upX, float upY, float upZ);
     constexpr matrix4x4 operator*(const matrix4x4& a, const matrix4x4& b);
     constexpr float2 transformPoint(const matrix4x4& matrix, const float2& point);
@@ -105,6 +138,8 @@ namespace p5
     };
 
     template <typename T> constexpr value2<T> center(const rect2<T>& rectangle);
+    // the left and top edges belong to the rectangle, the right and bottom edges do not
+    template <typename T> constexpr bool contains(const rect2<T>& rectangle, const value2<T>& point);
 
     typedef rect2<float> rect2f;
     typedef rect2<int32_t> rect2i;
@@ -168,10 +203,10 @@ namespace p5
 
 namespace p5
 {
-    constexpr float degrees(float radians);
-    constexpr float radians(float degrees);
-
     constexpr float lerp(float a, float b, float t);
+    // moves current towards target, frame rate independent: after 1 / smoothing seconds about 63 % of the distance is covered
+    float damp(float current, float target, float smoothing, float deltaTime);
+    template <typename T> value2<T> damp(const value2<T>& current, const value2<T>& target, float smoothing, float deltaTime);
     constexpr float map(float value, float start1, float stop1, float start2, float stop2);
     constexpr float constrain(float value, float low, float high);
 
@@ -179,6 +214,8 @@ namespace p5
     float random();
     float random(float max);
     float random(float min, float max);
+    // a vector with the given length pointing in a random direction
+    float2 random2D(float length = 1.0f);
 
     void noiseSeed(int32_t seed);
     void noiseDetail(int32_t octaves, float falloff = 0.5f);
@@ -432,6 +469,8 @@ namespace p5
     void quit(int exitCode);
     void setExitCode(int exitCode);
     void restart();
+    // escape quits the sketch by default, turn it off to use the key yourself
+    void setQuitOnEscape(bool enabled);
 } // namespace p5
 
 namespace p5
@@ -1006,7 +1045,7 @@ namespace p5
     struct TextPoint
     {
         float2 position;
-        float angle;
+        angle_t angle;
         uint32_t contourIndex = 0;
     };
 
@@ -1034,7 +1073,7 @@ namespace p5
     struct TextToPointsOptions
     {
         float sampleFactor = 0.1f;
-        float simplifyThreshold = 0.0f;
+        angle_t simplifyThreshold = {};
         std::optional<Font> font = std::nullopt;
         std::optional<float> size = std::nullopt;
         std::optional<float> letterSpacing = std::nullopt;
@@ -1109,7 +1148,7 @@ namespace p5
     void applyMatrix(const matrix4x4& matrix);
     void translate(float x, float y);
     void scale(float x, float y);
-    void rotate(float radians);
+    void rotate(angle_t angle);
 
     void fill(color_t color);
     void noFill();
@@ -1119,7 +1158,7 @@ namespace p5
     void strokeCap(StrokeCap cap);
     void strokeJoin(StrokeJoin join);
     void strokeMiterLimit(float limit);
-    void strokeRoundJoinThreshold(float threshold);
+    void strokeRoundJoinThreshold(angle_t threshold);
     void strokeDashPattern(std::initializer_list<float> pattern);
     void strokeDashOffset(float offset);
     void curveTightness(float tightness);
@@ -1138,7 +1177,7 @@ namespace p5
     void square(float left, float top, float size);
     void ellipse(float centerX, float centerY, float radiusX, float radiusY);
     void circle(float centerX, float centerY, float radius);
-    void arc(float centerX, float centerY, float radiusX, float radiusY, float startAngle, float stopAngle, ArcMode mode = ArcMode::open);
+    void arc(float centerX, float centerY, float radiusX, float radiusY, angle_t startAngle, angle_t stopAngle, ArcMode mode = ArcMode::open);
     void line(float x1, float y1, float x2, float y2);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3);
     void point(float x, float y);
@@ -1212,10 +1251,10 @@ namespace p5
         return {v.x / len, v.y / len};
     }
 
-    template <typename T> inline value2<T> rotated(const value2<T>& v, float radians)
+    template <typename T> inline value2<T> rotated(const value2<T>& v, angle_t angle)
     {
-        const float cosTheta = std::cos(radians);
-        const float sinTheta = std::sin(radians);
+        const float cosTheta = std::cos(asRadians(angle));
+        const float sinTheta = std::sin(asRadians(angle));
         return {static_cast<T>(v.x * cosTheta - v.y * sinTheta), static_cast<T>(v.x * sinTheta + v.y * cosTheta)};
     }
 
@@ -1313,10 +1352,10 @@ namespace p5
         // clang-format on
     }
 
-    inline matrix4x4 rotationMatrix(float radians)
+    inline matrix4x4 rotationMatrix(angle_t angle)
     {
-        const float cosTheta = std::cos(radians);
-        const float sinTheta = std::sin(radians);
+        const float cosTheta = std::cos(asRadians(angle));
+        const float sinTheta = std::sin(asRadians(angle));
 
         // clang-format off
         return matrix4x4 {
@@ -1344,9 +1383,9 @@ namespace p5
         // clang-format on
     }
 
-    inline constexpr matrix4x4 perspectiveProjectionMatrix(float fovY, float aspect, float near, float far)
+    inline constexpr matrix4x4 perspectiveProjectionMatrix(angle_t fovY, float aspect, float near, float far)
     {
-        const float f = 1.0f / std::tan(fovY / 2.0f);
+        const float f = 1.0f / std::tan(asRadians(fovY) / 2.0f);
 
         // clang-format off
         return matrix4x4 {
@@ -1426,6 +1465,10 @@ namespace p5
 namespace p5
 {
     template <typename T> inline constexpr value2<T> center(const rect2<T>& rectangle) { return {rectangle.left + rectangle.width / 2, rectangle.top + rectangle.height / 2}; }
+    template <typename T> inline constexpr bool contains(const rect2<T>& rectangle, const value2<T>& point)
+    {
+        return point.x >= rectangle.left && point.x < rectangle.left + rectangle.width && point.y >= rectangle.top && point.y < rectangle.top + rectangle.height;
+    }
 } // namespace p5
 
 namespace p5
@@ -1465,9 +1508,31 @@ namespace p5
 namespace p5
 {
     // clang-format off
-    constexpr float degrees(float radians) { return radians * (180.0f / PI); }
-    constexpr float radians(float degrees) { return degrees * (PI / 180.0f); }
+    constexpr angle_t radians(float value) { return {value}; }
+    constexpr angle_t degrees(float value) { return {value * (PI / 180.0f)}; }
+    constexpr float asRadians(angle_t angle) { return angle.radians; }
+    constexpr float asDegrees(angle_t angle) { return angle.radians * (180.0f / PI); }
+
+    constexpr angle_t operator+(angle_t a, angle_t b) { return {a.radians + b.radians}; }
+    constexpr angle_t operator-(angle_t a, angle_t b) { return {a.radians - b.radians}; }
+    constexpr angle_t operator-(angle_t angle) { return {-angle.radians}; }
+    constexpr angle_t operator*(angle_t angle, float factor) { return {angle.radians * factor}; }
+    constexpr angle_t operator*(float factor, angle_t angle) { return {factor * angle.radians}; }
+    constexpr angle_t operator/(angle_t angle, float divisor) { return {angle.radians / divisor}; }
+    constexpr float operator/(angle_t a, angle_t b) { return a.radians / b.radians; }
+
+    constexpr angle_t& operator+=(angle_t& a, angle_t b) { a.radians += b.radians; return a; }
+    constexpr angle_t& operator-=(angle_t& a, angle_t b) { a.radians -= b.radians; return a; }
+    constexpr angle_t& operator*=(angle_t& angle, float factor) { angle.radians *= factor; return angle; }
+    constexpr angle_t& operator/=(angle_t& angle, float divisor) { angle.radians /= divisor; return angle; }
+
     constexpr float lerp(float a, float b, float t) { return std::lerp(a, b, t); }
+    inline float damp(float current, float target, float smoothing, float deltaTime) { return lerp(current, target, 1.0f - std::exp(-smoothing * deltaTime)); }
+    template <typename T> inline value2<T> damp(const value2<T>& current, const value2<T>& target, float smoothing, float deltaTime) { return lerp(current, target, 1.0f - std::exp(-smoothing * deltaTime)); }
+
+    inline float2 fromAngle(angle_t angle, float length) { return {std::cos(asRadians(angle)) * length, std::sin(asRadians(angle)) * length}; }
+    inline angle_t heading(const float2& v) { return radians(std::atan2(v.y, v.x)); }
+    inline float2 random2D(float length) { return fromAngle(radians(random(TAU)), length); }
     constexpr float map(float value, float start1, float stop1, float start2, float stop2) { return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1)); }
     constexpr float constrain(float value, float low, float high) { return (value < low) ? low : (value > high) ? high : value; }
     // clang-format on

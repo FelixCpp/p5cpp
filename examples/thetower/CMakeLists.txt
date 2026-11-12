@@ -18,12 +18,14 @@ add_executable(
   meters.hpp
   particle_burst.cpp
   profile.cpp
+  round_controls.cpp
   spawn_table.cpp
   tower.cpp
   tower_stats.cpp
   tower_weapon.cpp
   ui.cpp
   upgrade_levels.cpp
+  upgrade_list.cpp
   upgrades.cpp
   wave_spawner.cpp
   world.cpp

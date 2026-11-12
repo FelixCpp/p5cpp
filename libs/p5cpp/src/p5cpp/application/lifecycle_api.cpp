@@ -77,4 +77,9 @@ namespace p5
     {
         requireDependency<Lifecycle>().restart();
     }
+
+    void setQuitOnEscape(bool enabled)
+    {
+        requireDependency<Lifecycle>().quitOnEscape(enabled);
+    }
 } // namespace p5

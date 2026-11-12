@@ -30,13 +30,12 @@ ParticleBurst particle_burst_create(const ParticleDeathAnimation& animation, con
     burst.particles.reserve(count);
 
     for (int i = 0; i < count; ++i) {
-        const float angle = random(TAU);
         const float speed = random(40.0f, 160.0f);
         const float2 spread = float2 {random(-0.5f, 0.5f), random(-0.5f, 0.5f)} * enemySize;
 
         burst.particles.push_back(Particle {
             .position = position + spread,
-            .velocity = float2 {std::cos(angle), std::sin(angle)} * speed,
+            .velocity = random2D(speed),
             .size = random(2.0f, 5.0f),
             .lifetime = random(0.4f, 0.8f),
             .age = 0.0f,
@@ -48,11 +47,9 @@ ParticleBurst particle_burst_create(const ParticleDeathAnimation& animation, con
 
 void particle_burst_update(ParticleBurst& burst, const float deltaTime)
 {
-    const float damping = std::exp(-drag * deltaTime);
-
     for (Particle& particle : burst.particles) {
         particle.age += deltaTime;
-        particle.velocity *= damping;
+        particle.velocity = damp(particle.velocity, float2 {}, drag, deltaTime);
         particle.position += particle.velocity * deltaTime;
     }
 
@@ -72,7 +69,7 @@ void particle_burst_show(const ParticleBurst& burst)
         for (const Particle& particle : burst.particles) {
             const float alpha = 1.0f - curves::easeInQuad(particle.age / particle.lifetime);
 
-            stroke(rgba(burst.color.r, burst.color.g, burst.color.b, static_cast<int32_t>(burst.color.a * alpha)));
+            stroke(withOpacity(burst.color, alpha));
             strokeWeight(particle.size);
             point(particle.position.x, particle.position.y);
         }

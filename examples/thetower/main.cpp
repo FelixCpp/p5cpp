@@ -7,11 +7,13 @@ using namespace p5;
 #include "hud.hpp"
 #include "menu.hpp"
 #include "profile.hpp"
+#include "round_controls.hpp"
 #include "world.hpp"
 
 namespace
 {
-    constexpr float hudWidth = 280.0f;
+    constexpr float hudWidth = 320.0f;
+    constexpr float windowHeight = 720.0f; // taller than the world, so the hud has room for its upgrades
     constexpr const char* savePath = "thetower_save.txt";
 
     enum class Screen
@@ -32,11 +34,14 @@ struct TheTower : Sketch
     World world = world_create(profile.startLevels);
     Hud hud = hud_create(font);
     bool roundSettled = false;
+    bool paused = false;
 
     void setup() override
     {
-        setWindowSize(static_cast<uint32_t>(worldSize + hudWidth), static_cast<uint32_t>(worldSize));
+        setWindowSize(static_cast<uint32_t>(worldSize + hudWidth), static_cast<uint32_t>(windowHeight));
         setWindowResizable(true);
+        // escape pauses the round, it only quits from the menu
+        setQuitOnEscape(false);
     }
 
     void draw() override
@@ -51,6 +56,11 @@ struct TheTower : Sketch
 
     void drawMenu()
     {
+        if (isKeyPressed(Key::Escape)) {
+            quit();
+            return;
+        }
+
         switch (menu_update(menu, profile)) {
             case MenuAction::none: break;
             case MenuAction::purchased: profile_save(profile, savePath); break;
@@ -58,6 +68,7 @@ struct TheTower : Sketch
                 world = world_create(profile.startLevels);
                 hud_reset(hud);
                 roundSettled = false;
+                paused = false;
                 screen = Screen::round;
                 return;
             }
@@ -66,7 +77,7 @@ struct TheTower : Sketch
         menu_show(menu, profile);
     }
 
-    // the coins of a round are banked exactly once, as soon as the tower falls
+    // the coins of a round are banked exactly once, when the tower falls or the round is quit
     void settleRound()
     {
         profile.coins += world.coins;
@@ -89,18 +100,39 @@ struct TheTower : Sketch
         hud.position = float2 {playWidth, 0.0f};
         hud.size = float2 {std::min(hudWidth, width), height};
 
+        const RoundControlsLayout controls = round_controls_layout(float2 {12.0f, 12.0f});
+        const PauseMenuLayout pauseMenu = pause_menu_layout(width, height);
+
         if (world.gameOver) {
             if (!roundSettled) {
                 settleRound();
-            } else if (isMouseButtonPressed(MouseButton::left)) {
-                screen = Screen::menu;
-                menu.scroll = {};
+            } else if (isMouseButtonPressed(MouseButton::left) || isKeyPressed(Key::Escape)) {
+                openMenu();
                 return;
+            }
+        } else if (paused) {
+            switch (pause_menu_update(pauseMenu)) {
+                case RoundAction::resume: paused = false; break;
+                case RoundAction::quitRound: {
+                    settleRound();
+                    openMenu();
+                    return;
+                }
+                default: break;
+            }
+        } else {
+            switch (round_controls_update(controls)) {
+                case RoundAction::pause: paused = true; break;
+                case RoundAction::slower: world_change_speed(world, -1); break;
+                case RoundAction::faster: world_change_speed(world, 1); break;
+                default: break;
             }
         }
 
-        world_update(world, deltaTime);
-        hud_update(hud, world, deltaTime);
+        if (!paused) {
+            world_update(world, deltaTime);
+            hud_update(hud, world, deltaTime);
+        }
 
         // fit the logical world square into the playfield and keep it centered
         const float scaleFactor = std::min(playWidth, height) / worldSize;
@@ -116,6 +148,20 @@ struct TheTower : Sketch
         });
 
         hud_show(hud, world);
+
+        if (!world.gameOver) {
+            round_controls_show(controls, world_speed(world), worldMinSpeed, world_tower_stats(world).gameSpeed);
+        }
+        if (paused) {
+            pause_menu_show(pauseMenu, width, height);
+        }
+    }
+
+    void openMenu()
+    {
+        paused = false;
+        screen = Screen::menu;
+        menu.scroll = {};
     }
 };
 

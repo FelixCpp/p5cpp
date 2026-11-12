@@ -15,16 +15,16 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Schaden | ✓ | – | Schaden pro Kugel. |
 | Angriffstempo | ✓ | – | Schüsse pro Sekunde. |
 | Reichweite | ✓ | Lv 8 | Radius, in dem der Turm Ziele auswählt. |
-| Abprallschuss | Idee (F) | 30 % Chance, 8 m Sprungweite, 5 Sprünge | Beim Treffer besteht eine Chance, dass ein Blitz vom getroffenen Gegner zum nächsten Gegner in Sprungweite springt, von dort weiter bis zur maximalen Sprunganzahl. |
-| Schnellfeuer | Idee (F) | 20 % Chance, 3 s Dauer | Jeder Schuss hat eine Chance, einen „Bullet-Burst“ auszulösen: Für die Dauer feuert der Turm stark erhöht (z. B. ×4 Angriffstempo). |
-| Mehrfachschuss | Idee (F) | 50 % Chance, 8 Ziele | Ein Schuss hat eine Chance, gleichzeitig mehrere Kugeln abzufeuern – jede auf einen **anderen** Gegner, nie zwei auf denselben. |
-| Kritischer Treffer | Idee (C) | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
-| Krit-Multiplikator | Idee (C) | ×5 | Schadensfaktor kritischer Treffer (Start ×1,5). Getrennt von der Chance, damit beides einzeln skaliert. |
+| Abprallschuss | ✓ | 30 % Chance, 8 m Sprungweite, 5 Sprünge | Beim Treffer besteht eine Chance, dass ein Blitz vom getroffenen Gegner zum nächsten Gegner in Sprungweite springt, von dort weiter bis zur maximalen Sprunganzahl. |
+| Schnellfeuer | ✓ | 20 % Chance, 3 s Dauer | Jeder Schuss hat eine Chance, einen „Bullet-Burst“ auszulösen: Für die Dauer feuert der Turm mit ×4 Angriffstempo. Schüsse während eines Bursts lösen keinen neuen aus. |
+| Mehrfachschuss | ✓ | 50 % Chance, 8 Ziele | Ein Schuss hat eine Chance, gleichzeitig mehrere Kugeln abzufeuern – jede auf einen **anderen** Gegner, nie zwei auf denselben. |
+| Kritischer Treffer | ✓ | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
+| Krit-Multiplikator | ✓ | ×5 | Schadensfaktor kritischer Treffer (Start ×1,5). Getrennt von der Chance, damit beides einzeln skaliert. |
 | Rückstoß | Idee (C) | – | Getroffene Gegner werden ein Stück vom Turm weggestoßen. Schwere Gegner (Tank) werden weniger weit gestoßen. |
 | Hinrichtung | Idee (C) | 10 % | Gegner, deren Leben unter X % ihres Maximums fällt, sterben sofort. Macht Tanks und Bosse am Ende schneller. |
 | Flächenschaden | Idee (C) | 50 % Schaden, 3 m Radius | Ein Treffer verursacht zusätzlich einen Teil des Schadens an allen Gegnern im Radius um das Ziel. |
 | Verlangsamung | Idee (C) | 40 %, 2 s | Getroffene Gegner werden für kurze Zeit verlangsamt. Kein Stapeln – neue Treffer frischen nur die Dauer auf. |
-| Distanzbonus | Idee (C) | +50 % | Mehr Schaden gegen weit entfernte Gegner (linear bis zur Reichweitengrenze). Belohnt Reichweiten-Builds. |
+| Schaden pro Meter | Idee (C, angepasst von F) | – | Zusätzlicher Schaden pro Meter Abstand zwischen Turm und Ziel, gemessen beim Abschuss. Belohnt Reichweiten-Builds und Gegner früh abzufangen. |
 | Orbits | Idee (F, früher besprochen) | 4 Orbits | Kugeln, die um den Turm kreisen und jeden Gegner beschädigen, den sie berühren. Eigene Stats: Anzahl, Radius, Drehgeschwindigkeit, Schaden. |
 
 ## Abwehr
@@ -33,9 +33,9 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 |---|---|---|---|
 | Max. Leben | ✓ | – | Lebenspunkte des Turms. |
 | Regeneration | ✓ | – | Leben pro Sekunde. |
-| Absolute Verteidigung | Idee (F) | – | Fester Wert, der von jedem Gegnertreffer abgezogen wird. |
-| Prozentuale Verteidigung | Idee (F) | 50 % | Prozentuale Minderung jedes Gegnertreffers. |
-| Dornenschaden | Idee (F) | 50 % | Ein Gegner, der den Turm angreift, erleidet selbst X % des Schadens, den er verursacht. |
+| Absolute Verteidigung | ✓ | 10 | Fester Wert, der von jedem Gegnertreffer abgezogen wird. |
+| Prozentuale Verteidigung | ✓ | 50 % | Prozentuale Minderung jedes Gegnertreffers. |
+| Dornenschaden | ✓ | 50 % | Ein Gegner, der den Turm angreift, erleidet selbst X % des Schadens, den er verursacht. |
 | Lebensraub | Idee (C) | 5 % | Der Turm heilt sich um einen Teil des Schadens, den seine Kugeln verursachen. |
 | Schild | Idee (C) | – | Zusätzliche Schicht über dem Leben, die zuerst Schaden nimmt und sich nach X Sekunden ohne Treffer vollständig wieder auflädt. |
 | Abwehrchance | Idee (C) | 25 % | Chance, einen Gegnertreffer komplett zu ignorieren. |
@@ -51,12 +51,13 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Coins pro Welle | ✓ | – | Coins am Ende jeder Welle. |
 | Coins pro Gegner | ✓ | – | Coin-Bruchteile pro Kill. |
 | Spieltempo | ✓ | Lv 4 | Beschleunigt das Spiel. |
-| Automatisches Upgrade | Idee (F, früher besprochen) | 20 % | Am Ende jeder Welle besteht eine Chance, dass ein zufälliges Runden-Upgrade gratis um ein Level steigt. |
+| Auto-Upgrade Angriff | Idee (F) | 20 % | Am Ende jeder Welle besteht eine Chance, dass ein zufälliges Angriffs-Upgrade gratis um ein Level steigt. |
+| Auto-Upgrade Abwehr | Idee (F) | 20 % | Wie oben, für ein zufälliges Abwehr-Upgrade. |
+| Auto-Upgrade Utility | Idee (F) | 20 % | Wie oben, für ein zufälliges Utility-Upgrade. |
 | Zinsen | Idee (C) | 10 %, gedeckelt | Am Wellenende gibt es X % des aktuellen Golds als Bonus (mit Obergrenze pro Welle). Macht Sparen zu einer echten Entscheidung. |
 | Rabatt | Idee (C) | 30 % | Alle Gold-Upgrades in der Runde werden günstiger. |
 | Startgold | Idee (C) | – | Gold, mit dem jede Runde beginnt. Nur als Coin-Upgrade sinnvoll. |
 | Kopfgeld | Idee (C) | ×3 | Mehr Gold und Coins für Tanks und Bosse. |
-| Kürzere Pause | Idee (C) | –50 % | Verkürzt die Pause zwischen den Wellen. Schnellerer Fortschritt, weniger Zeit zum Reagieren. |
 
 ---
 
@@ -67,7 +68,7 @@ ausgewürfelt werden, damit der vorgemerkte Schaden (`pendingDamage`) stimmt und
 fliegen. Die Ergebnisse wandern als Felder in `Hit` (z. B. `isCrit`, `knockback`, `bouncesLeft`).
 
 **Abprallschuss** wird erst beim Aufprall ausgelöst. Das nächste Ziel wird in diesem Moment gewählt
-(nächster nicht „doomed“ Gegner in Sprungweite, nicht der gerade getroffene), sein Schaden wird erst dann
+(nächster nicht „doomed“ Gegner in Sprungweite, der von dieser Kette noch nicht getroffen wurde), sein Schaden wird erst dann
 vorgemerkt. Der Blitz ist eine eigene, sehr schnelle Kugel mit Flugzeit statt Kollision – das bestehende
 System trägt also.
 
@@ -90,9 +91,52 @@ Dornen beziehen sich auf den Schaden **vor** der Minderung, damit sich beide Sta
 echte Position ein – bei starkem Rückstoß wird das sichtbar. Ggf. Rückstoß erst beim Aufprall anwenden
 (ist ohnehin so) und Einschwenken weicher machen.
 
-**Meter.** `Meters::toPixels()` rechnet aktuell 1:1, die Turmreichweite liegt bei 150 „Metern“.
-Für Angaben wie „8 m Sprungweite“ brauchen wir eine echte Umrechnung (z. B. 1 m = 20 px,
-dann wäre die Reichweite 7,5 m). Das sollte vor dem ersten Meter-basierten Stat festgelegt werden.
+**Meter.** 1 m = 10 px (`pixelsPerMeter` in `meters.cpp`). Die Turmreichweite startet bei 15 m,
+Gegner sind 1,6–4 m groß, die Welt ist 60 m breit.
+
+**Schaden pro Meter** wird beim Abschuss berechnet (Abstand Turm → Ziel) und landet fertig in `Hit.damage` –
+so stimmt die Vormerkung. Braucht ebenfalls die Meter-Umrechnung.
+
+**Auto-Upgrades** würfeln beim `WaveCompletedEvent` je Kategorie einmal. Ausgemaxte Upgrades werden bei der
+Auswahl übersprungen; sind alle einer Kategorie ausgemaxt, passiert nichts. Ein Popup zeigt, was gratis gestiegen ist.
+
+## Ultimative Waffen
+
+Idee (F): Große Spezialwaffen, die man im Spiel freischaltet und die dann eigenständig, mit eigenem Cooldown,
+auslösen. Jede hat eigene Upgrades (Schaden, Dauer, Cooldown, Größe …).
+
+**Boss-Währung.** Bosse droppen neben Gold und Coins eine eigene, seltene Währung. Mit ihr werden
+Ultimative Waffen im Menü freigeschaltet (und ggf. aufgerüstet). Bleibt dauerhaft wie die Coins.
+
+**Slots.** Mehrere Ultimative Waffen dürfen gleichzeitig aktiv sein, anfangs bis zu drei. Die Anzahl der
+Slots steigt mit dem Fortschritt (z. B. als weiterer Kauf mit Boss-Währung). Freigeschaltet können mehr Waffen
+sein als Slots – vor der Runde wählt man aus, welche mitkommen.
+
+Offen: Wie viel Boss-Währung ein Boss droppt (fest, oder steigend mit der Welle?) und wie genau die Slots
+steigen. Hinweis: `bossWaveInterval` und die HUD-Anzeige existieren schon, `bosses` ist in `world.cpp`
+aber noch leer – es braucht also zuerst einen Boss-Gegner.
+
+| Waffe | Herkunft | Beschreibung |
+|---|---|---|
+| Giftfelder | Idee (F) | Auf dem Spielfeld entstehen Giftfelder, die Gegnern darin Schaden pro Sekunde zufügen. Upgrades: Anzahl, Radius, Schaden, Dauer. |
+| Todeslaser | Idee (F) | Ein Laser fährt für 0,5 s (aufrüstbar) einmal im Kreis um den Turm und tötet alle Gegner, die er trifft. Upgrades: Dauer/Umdrehungen, Länge, Cooldown. |
+| Asteroidenhagel | Idee (F) | Asteroiden fallen vom Himmel und schlagen mit Flächenschaden ein. Ziele zufällig oder auf Gegnergruppen. Upgrades: Anzahl, Schaden, Einschlagradius. |
+| Kettenblitz-Sturm | Idee (C) | Für einige Sekunden schlagen Blitze in zufällige Gegner ein und springen weiter – wie Abprallschuss, aber unabhängig von Treffern. |
+| Schwarzes Loch | Idee (C) | Ein Wirbel zieht Gegner in der Nähe zu einem Punkt zusammen und beschädigt sie dort. Kombiniert stark mit Flächenschaden und Asteroiden. |
+| Zeitstopp | Idee (C) | Alle Gegner frieren für kurze Zeit ein, der Turm feuert normal weiter. |
+| Sperrfeuer | Idee (C) | Der Turm feuert eine Salve auf **alle** Gegner in Reichweite gleichzeitig. |
+| Frostnova | Idee (C) | Eine Welle vom Turm aus verlangsamt alle Gegner auf dem Feld stark und beschädigt sie leicht. |
+
+**Technik.** Wie bei den anderen Schadensquellen ohne Vormerkung senken die Ultimativen Waffen nur das Leben.
+Der Todeslaser braucht dieselbe Kollisionsabfrage über den überstrichenen Winkel wie die Orbits – beide
+sollten sich den Code teilen.
+
+## Wellen
+
+Wellen laufen auf einem **festen Timer** statt darauf zu warten, dass alle Gegner tot sind. Die Gegner einer
+Welle werden gleichmäßig über ihre Dauer verteilt gespawnt; läuft der Timer ab, beginnt sofort die nächste
+Welle – auch wenn noch Gegner leben. Wer zu langsam tötet, bekommt also überlappende Wellen. Gold und Coins
+„pro Welle“ gibt es beim Ablauf des Timers.
 
 ## Vorgeschlagene Reihenfolge
 
@@ -100,6 +144,8 @@ dann wäre die Reichweite 7,5 m). Das sollte vor dem ersten Meter-basierten Stat
 2. Absolute & prozentuale Verteidigung, Dornen – kleine Änderungen an `TowerHitEvent`
 3. Mehrfachschuss
 4. Abprallschuss (vorher Meter-Umrechnung festlegen)
-5. Schnellfeuer
+5. ~~Schnellfeuer~~ ✓
 6. Rückstoß, Hinrichtung, Verlangsamung
 7. Orbits – eigenes System mit echter Kollisionsabfrage (überstrichener Winkel)
+8. Boss-Gegner und Boss-Währung (Drop, Speichern, Anzeige im Menü)
+9. Ultimative Waffen – Slots, Auswahl vor der Runde, dann die Waffen einzeln (Todeslaser teilt Code mit den Orbits)
