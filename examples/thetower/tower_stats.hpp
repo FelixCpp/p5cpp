@@ -9,6 +9,8 @@ struct TowerStats
     float fireInterval;
     float bulletSpeed;
     Meters range;
+    float critChance;     // 0..1
+    float critMultiplier; // damage factor of a critical hit
 
     float maxHealth;
     float healthRegen; // per second

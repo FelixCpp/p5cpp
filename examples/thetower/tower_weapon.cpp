@@ -61,8 +61,11 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
             return;
         }
 
+        // rolled when firing, so the reserved damage already includes the crit
+        const bool isCrit = p5::random() < stats.critChance;
         const Hit hit = {
-            .damage = stats.damage,
+            .damage = isCrit ? stats.damage * stats.critMultiplier : stats.damage,
+            .isCrit = isCrit,
         };
 
         const EnemyMovement& movement = target->core.movement;

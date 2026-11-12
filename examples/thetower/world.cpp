@@ -9,6 +9,7 @@ namespace
 {
     constexpr color_t goldColor = rgba(230, 200, 90);
     constexpr color_t coinColor = rgba(180, 140, 240);
+    constexpr color_t critColor = rgba(255, 120, 60);
 }
 
 World world_create(const UpgradeLevels& startLevels)
@@ -111,6 +112,12 @@ void world_update(World& world, const float realDeltaTime)
     }
 
     bullets_update(world.bullets, world.enemies, world.events, deltaTime);
+    for (const DamageEvent& damage : world.events.damage) {
+        // only crits get a number, a popup for every hit would drown out everything else
+        if (damage.isCrit) {
+            world.floatingTexts.push_back(floating_text_create(std::format("{:.0f}!", damage.amount), damage.position + float2 {0.0f, -14.0f}, critColor, 24.0f, 70.0f, 0.7f));
+        }
+    }
     enemies_remove_dead(world.enemies);
     for (const DeathEvent& death : world.events.deaths) {
         const int reward = death.goldReward + stats.goldPerKill;

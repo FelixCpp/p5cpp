@@ -33,6 +33,7 @@ void enemy_core_apply_hit(EnemyCore& core, const Hit& hit, GameEvents& events)
         .enemy = core.id,
         .position = core.movement.position,
         .amount = hit.damage,
+        .isCrit = hit.isCrit,
         .killed = killed,
     });
 

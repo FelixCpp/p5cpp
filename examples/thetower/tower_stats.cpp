@@ -9,6 +9,8 @@ TowerStats tower_stats_base()
         .range = Meters {
             .value = 150.0f,
         },
+        .critChance = 0.0f,
+        .critMultiplier = 1.5f,
         .maxHealth = 100.0f,
         .healthRegen = 0.0f,
         .goldPerWave = 5,
@@ -28,6 +30,8 @@ TowerStats tower_stats_compute(const TowerStats& base, const UpgradeLevels& leve
         .range = Meters {
             .value = base.range.value + 15.0f * upgrade_level(levels, UpgradeId::range),
         },
+        .critChance = base.critChance + 0.05f * upgrade_level(levels, UpgradeId::critChance),
+        .critMultiplier = base.critMultiplier + 0.35f * upgrade_level(levels, UpgradeId::critMultiplier),
         .maxHealth = base.maxHealth + 20.0f * upgrade_level(levels, UpgradeId::maxHealth),
         .healthRegen = base.healthRegen + 0.5f * upgrade_level(levels, UpgradeId::healthRegen),
         .goldPerWave = base.goldPerWave + 3 * upgrade_level(levels, UpgradeId::goldPerWave),

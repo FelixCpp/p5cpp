@@ -18,8 +18,8 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Abprallschuss | Idee (F) | 30 % Chance, 8 m Sprungweite, 5 Sprünge | Beim Treffer besteht eine Chance, dass ein Blitz vom getroffenen Gegner zum nächsten Gegner in Sprungweite springt, von dort weiter bis zur maximalen Sprunganzahl. |
 | Schnellfeuer | Idee (F) | 20 % Chance, 3 s Dauer | Jeder Schuss hat eine Chance, einen „Bullet-Burst“ auszulösen: Für die Dauer feuert der Turm stark erhöht (z. B. ×4 Angriffstempo). |
 | Mehrfachschuss | Idee (F) | 50 % Chance, 8 Ziele | Ein Schuss hat eine Chance, gleichzeitig mehrere Kugeln abzufeuern – jede auf einen **anderen** Gegner, nie zwei auf denselben. |
-| Kritischer Treffer | Idee (C) | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
-| Krit-Multiplikator | Idee (C) | ×5 | Schadensfaktor kritischer Treffer (Start ×1,5). Getrennt von der Chance, damit beides einzeln skaliert. |
+| Kritischer Treffer | ✓ | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
+| Krit-Multiplikator | ✓ | ×5 | Schadensfaktor kritischer Treffer (Start ×1,5). Getrennt von der Chance, damit beides einzeln skaliert. |
 | Rückstoß | Idee (C) | – | Getroffene Gegner werden ein Stück vom Turm weggestoßen. Schwere Gegner (Tank) werden weniger weit gestoßen. |
 | Hinrichtung | Idee (C) | 10 % | Gegner, deren Leben unter X % ihres Maximums fällt, sterben sofort. Macht Tanks und Bosse am Ende schneller. |
 | Flächenschaden | Idee (C) | 50 % Schaden, 3 m Radius | Ein Treffer verursacht zusätzlich einen Teil des Schadens an allen Gegnern im Radius um das Ziel. |

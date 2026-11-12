@@ -8,6 +8,8 @@ enum class UpgradeId
     damage,
     attackSpeed,
     range,
+    critChance,
+    critMultiplier,
     maxHealth,
     healthRegen,
     goldPerWave,

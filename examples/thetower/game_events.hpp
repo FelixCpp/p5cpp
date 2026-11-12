@@ -12,6 +12,7 @@ struct DamageEvent
     EnemyId enemy;
     p5::float2 position;
     float amount;
+    bool isCrit;
     bool killed;
 };
 
