@@ -60,6 +60,7 @@ namespace
             .damage = isCrit ? stats.damage * stats.critMultiplier : stats.damage,
             .isCrit = isCrit,
             .reserved = true,
+            .bouncesLeft = p5::random() < stats.bounceChance ? stats.bounceCount : 0,
         };
 
         const EnemyMovement& movement = target.core.movement;
@@ -74,6 +75,7 @@ namespace
             .position = tower.position,
             .flightTime = flightTime,
             .elapsed = 0.0f,
+            .kind = BulletKind::shot,
         });
     }
 }

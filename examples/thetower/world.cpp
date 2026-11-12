@@ -108,6 +108,7 @@ void world_update(World& world, const float realDeltaTime)
                     .damage = hit.damage * stats.thorns,
                     .isCrit = false,
                     .reserved = false,
+                    .bouncesLeft = 0,
                 };
                 enemy_core_apply_hit(attacker->core, thornsHit, world.events);
             }
@@ -126,7 +127,7 @@ void world_update(World& world, const float realDeltaTime)
         return;
     }
 
-    bullets_update(world.bullets, world.enemies, world.events, deltaTime);
+    bullets_update(world.bullets, world.enemies, stats, world.events, deltaTime);
     for (const DamageEvent& damage : world.events.damage) {
         // only crits get a number, a popup for every hit would drown out everything else
         if (damage.isCrit) {

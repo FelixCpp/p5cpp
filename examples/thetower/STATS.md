@@ -15,7 +15,7 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Schaden | ✓ | – | Schaden pro Kugel. |
 | Angriffstempo | ✓ | – | Schüsse pro Sekunde. |
 | Reichweite | ✓ | Lv 8 | Radius, in dem der Turm Ziele auswählt. |
-| Abprallschuss | Idee (F) | 30 % Chance, 8 m Sprungweite, 5 Sprünge | Beim Treffer besteht eine Chance, dass ein Blitz vom getroffenen Gegner zum nächsten Gegner in Sprungweite springt, von dort weiter bis zur maximalen Sprunganzahl. |
+| Abprallschuss | ✓ | 30 % Chance, 8 m Sprungweite, 5 Sprünge | Beim Treffer besteht eine Chance, dass ein Blitz vom getroffenen Gegner zum nächsten Gegner in Sprungweite springt, von dort weiter bis zur maximalen Sprunganzahl. |
 | Schnellfeuer | Idee (F) | 20 % Chance, 3 s Dauer | Jeder Schuss hat eine Chance, einen „Bullet-Burst“ auszulösen: Für die Dauer feuert der Turm stark erhöht (z. B. ×4 Angriffstempo). |
 | Mehrfachschuss | ✓ | 50 % Chance, 8 Ziele | Ein Schuss hat eine Chance, gleichzeitig mehrere Kugeln abzufeuern – jede auf einen **anderen** Gegner, nie zwei auf denselben. |
 | Kritischer Treffer | ✓ | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
@@ -91,9 +91,8 @@ Dornen beziehen sich auf den Schaden **vor** der Minderung, damit sich beide Sta
 echte Position ein – bei starkem Rückstoß wird das sichtbar. Ggf. Rückstoß erst beim Aufprall anwenden
 (ist ohnehin so) und Einschwenken weicher machen.
 
-**Meter.** `Meters::toPixels()` rechnet aktuell 1:1, die Turmreichweite liegt bei 150 „Metern“.
-Für Angaben wie „8 m Sprungweite“ brauchen wir eine echte Umrechnung (z. B. 1 m = 20 px,
-dann wäre die Reichweite 7,5 m). Das sollte vor dem ersten Meter-basierten Stat festgelegt werden.
+**Meter.** 1 m = 10 px (`pixelsPerMeter` in `meters.cpp`). Die Turmreichweite startet bei 15 m,
+Gegner sind 1,6–4 m groß, die Welt ist 60 m breit.
 
 **Schaden pro Meter** wird beim Abschuss berechnet (Abstand Turm → Ziel) und landet fertig in `Hit.damage` –
 so stimmt die Vormerkung. Braucht ebenfalls die Meter-Umrechnung.

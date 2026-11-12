@@ -13,6 +13,9 @@ struct TowerStats
     float critMultiplier; // damage factor of a critical hit
     float multishotChance; // 0..1, chance that a shot fires at several enemies at once
     int multishotTargets;  // enemies hit by such a shot, each gets one bullet
+    float bounceChance;    // 0..1, chance that a bullet jumps on as a bolt after landing
+    int bounceCount;       // jumps of such a bullet
+    Meters bounceRange;    // max distance of a single jump
 
     float maxHealth;
     float healthRegen; // per second

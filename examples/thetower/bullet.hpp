@@ -7,6 +7,13 @@
 #include "enemy.hpp"
 #include "game_events.hpp"
 #include "hit.hpp"
+#include "tower_stats.hpp"
+
+enum class BulletKind
+{
+    shot, // fired by the tower
+    bolt, // jumped on from an enemy that was hit
+};
 
 struct Bullet
 {
@@ -19,7 +26,9 @@ struct Bullet
 
     float flightTime;
     float elapsed;
+
+    BulletKind kind;
 };
 
-void bullets_update(std::vector<Bullet>& bullets, std::vector<Enemy>& enemies, GameEvents& events, float deltaTime);
+void bullets_update(std::vector<Bullet>& bullets, std::vector<Enemy>& enemies, const TowerStats& stats, GameEvents& events, float deltaTime);
 void bullet_show(const Bullet& bullet);
