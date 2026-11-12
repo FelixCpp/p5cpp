@@ -10,6 +10,8 @@ enum class UpgradeId
     range,
     critChance,
     critMultiplier,
+    multishotChance,
+    multishotTargets,
     maxHealth,
     healthRegen,
     percentDefense,

@@ -1,19 +1,22 @@
 #include "tower_weapon.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+#include <span>
 
 using namespace p5;
 
 namespace
 {
-    Enemy* find_target(std::vector<Enemy>& enemies, const Tower& tower, const float range)
+    // excluded enemies already got a bullet from the same shot, they need not be doomed yet
+    Enemy* find_target(std::vector<Enemy>& enemies, const Tower& tower, const float range, const std::span<const EnemyId> excluded)
     {
         Enemy* target = nullptr;
         float earliestArrival = std::numeric_limits<float>::infinity();
 
         for (Enemy& enemy : enemies) {
-            if (enemy_health_is_doomed(enemy.core.health)) {
+            if (enemy_health_is_doomed(enemy.core.health) || std::ranges::contains(excluded, enemy.core.id)) {
                 continue;
             }
             if (distanceSquared(tower.position, enemy.core.movement.position) > range * range) {
@@ -48,19 +51,9 @@ namespace
         const float discriminant = b * b - 4.0f * a * c;
         return (-b - std::sqrt(discriminant)) / (2.0f * a);
     }
-}
 
-void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tower& tower, std::vector<Enemy>& enemies, std::vector<Bullet>& bullets, const float deltaTime)
-{
-    weapon.cooldown -= deltaTime;
-
-    while (weapon.cooldown <= 0.0f) {
-        Enemy* target = find_target(enemies, tower, stats.range.toPixels());
-        if (target == nullptr) {
-            weapon.cooldown = 0.0f;
-            return;
-        }
-
+    void fire_at(Enemy& target, const TowerStats& stats, const Tower& tower, std::vector<Bullet>& bullets)
+    {
         // rolled when firing, so the reserved damage already includes the crit
         const bool isCrit = p5::random() < stats.critChance;
         const Hit hit = {
@@ -69,12 +62,12 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
             .reserved = true,
         };
 
-        const EnemyMovement& movement = target->core.movement;
+        const EnemyMovement& movement = target.core.movement;
         const float flightTime = intercept_time(tower.position, movement.position, movement.velocity, stats.bulletSpeed);
 
-        enemy_health_reserve(target->core.health, hit.damage);
+        enemy_health_reserve(target.core.health, hit.damage);
         bullets.push_back(Bullet {
-            .target = target->core.id,
+            .target = target.core.id,
             .hit = hit,
             .origin = tower.position,
             .impact = movement.position + movement.velocity * flightTime,
@@ -82,6 +75,36 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
             .flightTime = flightTime,
             .elapsed = 0.0f,
         });
+    }
+}
+
+void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tower& tower, std::vector<Enemy>& enemies, std::vector<Bullet>& bullets, const float deltaTime)
+{
+    weapon.cooldown -= deltaTime;
+
+    while (weapon.cooldown <= 0.0f) {
+        const float range = stats.range.toPixels();
+
+        Enemy* target = find_target(enemies, tower, range, {});
+        if (target == nullptr) {
+            weapon.cooldown = 0.0f;
+            return;
+        }
+
+        const int targetCount = p5::random() < stats.multishotChance ? stats.multishotTargets : 1;
+        std::vector<EnemyId> targeted;
+        targeted.reserve(targetCount);
+
+        // every bullet of a shot goes to a different enemy, a shot with fewer enemies in range just fires fewer bullets
+        while (target != nullptr) {
+            fire_at(*target, stats, tower, bullets);
+            targeted.push_back(target->core.id);
+
+            if (static_cast<int>(targeted.size()) >= targetCount) {
+                break;
+            }
+            target = find_target(enemies, tower, range, targeted);
+        }
 
         weapon.cooldown += stats.fireInterval;
     }
