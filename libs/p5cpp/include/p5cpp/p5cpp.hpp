@@ -427,6 +427,8 @@ namespace p5
     void quit(int exitCode);
     void setExitCode(int exitCode);
     void restart();
+    // escape quits the sketch by default, turn it off to use the key yourself
+    void setQuitOnEscape(bool enabled);
 } // namespace p5
 
 namespace p5

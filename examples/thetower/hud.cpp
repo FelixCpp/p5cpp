@@ -305,7 +305,7 @@ void hud_update(Hud& hud, World& world, const float deltaTime)
     }
 
     if (const UpgradeDefinition* definition = upgrade_list_clicked(layout_upgrades(hud), view)) {
-        upgrade_buy_with_gold(*definition, world.upgrades, world.startLevels, world.gold);
+        world_buy_upgrade(world, *definition);
     }
 }
 

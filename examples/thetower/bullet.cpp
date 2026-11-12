@@ -1,6 +1,9 @@
 #include "bullet.hpp"
 
+#include <algorithm>
+#include <array>
 #include <limits>
+#include <utility>
 
 using namespace p5;
 
@@ -8,14 +11,23 @@ namespace
 {
     constexpr float boltSpeed = 1200.0f;
 
+    constexpr color_t shotColor = rgba(60, 180, 220);
+    constexpr color_t critShotColor = rgba(255, 120, 60);
+    constexpr color_t boltColor = rgba(240, 230, 120);
+
+    color_t with_alpha(const color_t color, const float alpha)
+    {
+        return rgba(color.r, color.g, color.b, static_cast<int32_t>(255.0f * alpha));
+    }
+
     // nearest enemy around the one just hit, picked only when the bolt jumps so it sees the current state
-    Enemy* find_bounce_target(std::vector<Enemy>& enemies, const EnemyId from, const float2& position, const float range)
+    Enemy* find_bounce_target(std::vector<Enemy>& enemies, const std::vector<EnemyId>& chain, const float2& position, const float range)
     {
         Enemy* target = nullptr;
         float nearest = range * range;
 
         for (Enemy& enemy : enemies) {
-            if (enemy.core.id == from || enemy_health_is_doomed(enemy.core.health)) {
+            if (std::ranges::contains(chain, enemy.core.id) || enemy_health_is_doomed(enemy.core.health)) {
                 continue;
             }
 
@@ -32,7 +44,11 @@ namespace
     void bounce(const Bullet& bullet, const Enemy& hitEnemy, std::vector<Enemy>& enemies, const TowerStats& stats, std::vector<Bullet>& bolts)
     {
         const float2 from = hitEnemy.core.movement.position;
-        Enemy* target = find_bounce_target(enemies, hitEnemy.core.id, from, stats.bounceRange.toPixels());
+
+        std::vector<EnemyId> chain = bullet.chain;
+        chain.push_back(hitEnemy.core.id);
+
+        Enemy* target = find_bounce_target(enemies, chain, from, stats.bounceRange.toPixels());
         if (target == nullptr) {
             return;
         }
@@ -54,7 +70,73 @@ namespace
             .flightTime = flightTime,
             .elapsed = 0.0f,
             .kind = BulletKind::bolt,
+            .chain = std::move(chain),
         });
+    }
+}
+
+namespace
+{
+    void show_shot(const Bullet& bullet)
+    {
+        const bool crit = bullet.hit.isCrit;
+        const color_t color = crit ? critShotColor : shotColor;
+        const float size = crit ? 1.4f : 1.0f;
+
+        // the trail points back along the flight path and grows in during the first pixels
+        const float2 travelled = bullet.position - bullet.origin;
+        const float travelledLength = length(travelled);
+        if (travelledLength > 0.5f) {
+            constexpr int segments = 6;
+            const float2 tail = bullet.position - travelled / travelledLength * std::min(travelledLength, 22.0f * size);
+
+            for (int i = 0; i < segments; ++i) {
+                const float t0 = static_cast<float>(i) / segments;
+                const float t1 = static_cast<float>(i + 1) / segments;
+                const float2 a = lerp(tail, bullet.position, t0);
+                const float2 b = lerp(tail, bullet.position, t1);
+
+                stroke(with_alpha(color, 0.55f * t1));
+                strokeWeight((1.0f + 3.0f * t1) * size);
+                line(a.x, a.y, b.x, b.y);
+            }
+        }
+
+        stroke(with_alpha(color, 0.25f));
+        strokeWeight(14.0f * size);
+        point(bullet.position.x, bullet.position.y);
+
+        stroke(with_alpha(lerpColor(color, rgba(255), 0.6f), 1.0f));
+        strokeWeight(5.0f * size);
+        point(bullet.position.x, bullet.position.y);
+    }
+
+    // jagged line from the enemy it jumped off to its tip, re-rolled every frame so it flickers
+    void show_bolt(const Bullet& bullet)
+    {
+        const float2 delta = bullet.position - bullet.origin;
+        const float distance = length(delta);
+        if (distance < 1.0f) {
+            return;
+        }
+
+        constexpr int segments = 6;
+        const float2 normal = float2 {-delta.y, delta.x} / distance;
+
+        std::array<float2, segments + 1> points;
+        for (int i = 0; i <= segments; ++i) {
+            const float t = static_cast<float>(i) / segments;
+            const bool end = i == 0 || i == segments;
+            points[i] = lerp(bullet.origin, bullet.position, t) + normal * (end ? 0.0f : p5::random(-6.0f, 6.0f));
+        }
+
+        for (const auto& [weight, alpha] : {std::pair {7.0f, 0.25f}, std::pair {2.0f, 1.0f}}) {
+            stroke(with_alpha(boltColor, alpha));
+            strokeWeight(weight);
+            for (int i = 0; i < segments; ++i) {
+                line(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+            }
+        }
     }
 }
 
@@ -92,19 +174,14 @@ void bullets_update(std::vector<Bullet>& bullets, std::vector<Enemy>& enemies, c
 void bullet_show(const Bullet& bullet)
 {
     with([&bullet] {
+        // additive blending lets overlapping trails and glows brighten each other
+        blendMode(BlendMode::additive);
+        strokeCap(StrokeCap::round);
         noFill();
+
         switch (bullet.kind) {
-            case BulletKind::shot:
-                stroke(rgba(60, 180, 220));
-                strokeWeight(6.0f);
-                point(bullet.position.x, bullet.position.y);
-                break;
-            case BulletKind::bolt:
-                // a streak from the enemy it jumped off to its current tip
-                stroke(rgba(240, 230, 120));
-                strokeWeight(3.0f);
-                line(bullet.origin.x, bullet.origin.y, bullet.position.x, bullet.position.y);
-                break;
+            case BulletKind::shot: show_shot(bullet); break;
+            case BulletKind::bolt: show_bolt(bullet); break;
         }
     });
 }

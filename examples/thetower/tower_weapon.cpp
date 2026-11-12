@@ -76,6 +76,7 @@ namespace
             .flightTime = flightTime,
             .elapsed = 0.0f,
             .kind = BulletKind::shot,
+            .chain = {},
         });
     }
 }

@@ -221,7 +221,7 @@ namespace
             .category = UpgradeCategory::utility,
             .key = "gameSpeed",
             .group = "Spiel",
-            .name = "Spieltempo",
+            .name = "Max. Spieltempo",
             .goldCost = {.base = 30, .growth = 1.5f},
             .coinCost = {.base = 20, .growth = 1.8f},
             .maxLevel = 4,

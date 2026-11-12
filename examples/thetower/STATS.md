@@ -68,7 +68,7 @@ ausgewürfelt werden, damit der vorgemerkte Schaden (`pendingDamage`) stimmt und
 fliegen. Die Ergebnisse wandern als Felder in `Hit` (z. B. `isCrit`, `knockback`, `bouncesLeft`).
 
 **Abprallschuss** wird erst beim Aufprall ausgelöst. Das nächste Ziel wird in diesem Moment gewählt
-(nächster nicht „doomed“ Gegner in Sprungweite, nicht der gerade getroffene), sein Schaden wird erst dann
+(nächster nicht „doomed“ Gegner in Sprungweite, der von dieser Kette noch nicht getroffen wurde), sein Schaden wird erst dann
 vorgemerkt. Der Blitz ist eine eigene, sehr schnelle Kugel mit Flugzeit statt Kollision – das bestehende
 System trägt also.
 

@@ -10,6 +10,8 @@ namespace
     constexpr color_t goldColor = rgba(230, 200, 90);
     constexpr color_t coinColor = rgba(180, 140, 240);
     constexpr color_t critColor = rgba(255, 120, 60);
+
+    constexpr float speedStep = 0.25f;
 }
 
 World world_create(const UpgradeLevels& startLevels)
@@ -74,6 +76,7 @@ World world_create(const UpgradeLevels& startLevels)
         .bullets = {},
         .deathEffects = {},
         .floatingTexts = {},
+        .speed = tower_stats_compute(tower_stats_base(), startLevels).gameSpeed,
         .events = {},
         .gameOver = false,
     };
@@ -84,6 +87,31 @@ TowerStats world_tower_stats(const World& world)
     return tower_stats_compute(world.baseStats, world.upgrades);
 }
 
+float world_speed(const World& world)
+{
+    return std::clamp(world.speed, worldMinSpeed, world_tower_stats(world).gameSpeed);
+}
+
+void world_change_speed(World& world, const int steps)
+{
+    world.speed = world_speed(world) + speedStep * static_cast<float>(steps);
+    world.speed = world_speed(world);
+}
+
+bool world_buy_upgrade(World& world, const UpgradeDefinition& definition)
+{
+    const float maxSpeedBefore = world_tower_stats(world).gameSpeed;
+    if (!upgrade_buy_with_gold(definition, world.upgrades, world.startLevels, world.gold)) {
+        return false;
+    }
+
+    // whoever plays at full speed wants the newly unlocked speed right away
+    if (world_speed(world) >= maxSpeedBefore) {
+        world.speed = world_tower_stats(world).gameSpeed;
+    }
+    return true;
+}
+
 void world_update(World& world, const float realDeltaTime)
 {
     if (world.gameOver) {
@@ -91,7 +119,7 @@ void world_update(World& world, const float realDeltaTime)
     }
 
     const TowerStats stats = world_tower_stats(world);
-    const float deltaTime = realDeltaTime * stats.gameSpeed;
+    const float deltaTime = realDeltaTime * world_speed(world);
 
     game_events_clear(world.events);
     wave_spawner_update(world.waves, world.waveConfig, world.enemies, world.nextEnemyId, world.events, deltaTime);

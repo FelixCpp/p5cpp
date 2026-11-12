@@ -18,6 +18,7 @@ add_executable(
   meters.hpp
   particle_burst.cpp
   profile.cpp
+  round_controls.cpp
   spawn_table.cpp
   tower.cpp
   tower_stats.cpp

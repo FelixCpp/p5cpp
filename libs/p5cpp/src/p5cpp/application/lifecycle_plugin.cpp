@@ -22,7 +22,7 @@ namespace p5
         }
 
         if (const auto* keyPress = event.as_if<WindowEvent::KeyPress>()) {
-            if (keyPress->key == Key::Escape) {
+            if (keyPress->key == Key::Escape and m_lifecycle->quitsOnEscape()) {
                 m_lifecycle->close();
             }
 

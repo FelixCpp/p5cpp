@@ -8,6 +8,7 @@ namespace p5
           m_looping {true},
           m_redrawRequested {false},
           m_drawingThisFrame {true},
+          m_quitOnEscape {true},
           m_exitCode {0},
           m_frameCount {0},
           m_startTime {std::chrono::steady_clock::now()},
@@ -109,5 +110,15 @@ namespace p5
     bool Lifecycle::shouldDrawThisFrame() const
     {
         return m_drawingThisFrame;
+    }
+
+    void Lifecycle::quitOnEscape(bool enabled)
+    {
+        m_quitOnEscape = enabled;
+    }
+
+    bool Lifecycle::quitsOnEscape() const
+    {
+        return m_quitOnEscape;
     }
 } // namespace p5

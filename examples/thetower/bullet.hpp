@@ -28,6 +28,7 @@ struct Bullet
     float elapsed;
 
     BulletKind kind;
+    std::vector<EnemyId> chain; // enemies this bounce chain already hit, the target excluded; a chain never hits one twice
 };
 
 void bullets_update(std::vector<Bullet>& bullets, std::vector<Enemy>& enemies, const TowerStats& stats, GameEvents& events, float deltaTime);

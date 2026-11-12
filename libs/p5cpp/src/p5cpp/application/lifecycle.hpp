@@ -18,6 +18,7 @@ namespace p5
         void loop();
         void noLoop();
         void redraw();
+        void quitOnEscape(bool enabled);
 
         bool shouldClose() const;
         bool shouldRestart() const;
@@ -27,6 +28,7 @@ namespace p5
         double globalTime() const;
         bool isLooping() const;
         bool shouldDrawThisFrame() const;
+        bool quitsOnEscape() const;
 
     private:
         bool m_shouldClose;
@@ -34,6 +36,7 @@ namespace p5
         bool m_looping;
         bool m_redrawRequested;
         bool m_drawingThisFrame;
+        bool m_quitOnEscape;
         int m_exitCode;
         int m_frameCount;
 
