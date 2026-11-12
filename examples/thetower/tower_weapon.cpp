@@ -66,6 +66,7 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
         const Hit hit = {
             .damage = isCrit ? stats.damage * stats.critMultiplier : stats.damage,
             .isCrit = isCrit,
+            .reserved = true,
         };
 
         const EnemyMovement& movement = target->core.movement;

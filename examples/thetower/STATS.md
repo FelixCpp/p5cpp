@@ -33,9 +33,9 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 |---|---|---|---|
 | Max. Leben | ✓ | – | Lebenspunkte des Turms. |
 | Regeneration | ✓ | – | Leben pro Sekunde. |
-| Absolute Verteidigung | Idee (F) | – | Fester Wert, der von jedem Gegnertreffer abgezogen wird. |
-| Prozentuale Verteidigung | Idee (F) | 50 % | Prozentuale Minderung jedes Gegnertreffers. |
-| Dornenschaden | Idee (F) | 50 % | Ein Gegner, der den Turm angreift, erleidet selbst X % des Schadens, den er verursacht. |
+| Absolute Verteidigung | ✓ | 10 | Fester Wert, der von jedem Gegnertreffer abgezogen wird. |
+| Prozentuale Verteidigung | ✓ | 50 % | Prozentuale Minderung jedes Gegnertreffers. |
+| Dornenschaden | ✓ | 50 % | Ein Gegner, der den Turm angreift, erleidet selbst X % des Schadens, den er verursacht. |
 | Lebensraub | Idee (C) | 5 % | Der Turm heilt sich um einen Teil des Schadens, den seine Kugeln verursachen. |
 | Schild | Idee (C) | – | Zusätzliche Schicht über dem Leben, die zuerst Schaden nimmt und sich nach X Sekunden ohne Treffer vollständig wieder auflädt. |
 | Abwehrchance | Idee (C) | 25 % | Chance, einen Gegnertreffer komplett zu ignorieren. |

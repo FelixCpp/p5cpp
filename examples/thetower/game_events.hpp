@@ -27,6 +27,7 @@ struct DeathEvent
 
 struct TowerHitEvent
 {
+    EnemyId attacker;
     p5::float2 position;
     float damage;
 };

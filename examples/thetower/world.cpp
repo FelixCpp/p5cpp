@@ -101,7 +101,22 @@ void world_update(World& world, const float realDeltaTime)
     }
 
     for (const TowerHitEvent& hit : world.events.towerHits) {
-        tower_damage(world.tower, hit.damage);
+        // thorns use the damage before any defense, so both stats stay worth buying together
+        if (stats.thorns > 0.0f) {
+            if (Enemy* attacker = enemy_find(world.enemies, hit.attacker)) {
+                const Hit thornsHit = {
+                    .damage = hit.damage * stats.thorns,
+                    .isCrit = false,
+                    .reserved = false,
+                };
+                enemy_core_apply_hit(attacker->core, thornsHit, world.events);
+            }
+        }
+
+        const float damage = std::max(hit.damage * (1.0f - stats.percentDefense) - stats.absoluteDefense, 0.0f);
+        if (damage > 0.0f) {
+            tower_damage(world.tower, damage);
+        }
     }
     tower_regenerate(world.tower, stats.healthRegen * deltaTime);
     tower_update(world.tower, deltaTime);

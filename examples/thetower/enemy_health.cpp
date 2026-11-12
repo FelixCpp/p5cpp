@@ -20,3 +20,8 @@ void enemy_health_apply(EnemyHealth& health, const float damage)
     health.pendingDamage -= damage;
     health.current -= damage;
 }
+
+void enemy_health_apply_unreserved(EnemyHealth& health, const float damage)
+{
+    health.current -= damage;
+}

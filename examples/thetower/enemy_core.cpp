@@ -25,7 +25,11 @@ void enemy_core_apply_hit(EnemyCore& core, const Hit& hit, GameEvents& events)
         return;
     }
 
-    enemy_health_apply(core.health, hit.damage);
+    if (hit.reserved) {
+        enemy_health_apply(core.health, hit.damage);
+    } else {
+        enemy_health_apply_unreserved(core.health, hit.damage);
+    }
     enemy_damage_feedback_hit(core.damageFeedback);
 
     const bool killed = enemy_health_is_dead(core.health);
