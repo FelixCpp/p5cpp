@@ -16,7 +16,7 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Angriffstempo | ✓ | – | Schüsse pro Sekunde. |
 | Reichweite | ✓ | Lv 8 | Radius, in dem der Turm Ziele auswählt. |
 | Abprallschuss | ✓ | 30 % Chance, 8 m Sprungweite, 5 Sprünge | Beim Treffer besteht eine Chance, dass ein Blitz vom getroffenen Gegner zum nächsten Gegner in Sprungweite springt, von dort weiter bis zur maximalen Sprunganzahl. |
-| Schnellfeuer | Idee (F) | 20 % Chance, 3 s Dauer | Jeder Schuss hat eine Chance, einen „Bullet-Burst“ auszulösen: Für die Dauer feuert der Turm stark erhöht (z. B. ×4 Angriffstempo). |
+| Schnellfeuer | ✓ | 20 % Chance, 3 s Dauer | Jeder Schuss hat eine Chance, einen „Bullet-Burst“ auszulösen: Für die Dauer feuert der Turm mit ×4 Angriffstempo. Schüsse während eines Bursts lösen keinen neuen aus. |
 | Mehrfachschuss | ✓ | 50 % Chance, 8 Ziele | Ein Schuss hat eine Chance, gleichzeitig mehrere Kugeln abzufeuern – jede auf einen **anderen** Gegner, nie zwei auf denselben. |
 | Kritischer Treffer | ✓ | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
 | Krit-Multiplikator | ✓ | ×5 | Schadensfaktor kritischer Treffer (Start ×1,5). Getrennt von der Chance, damit beides einzeln skaliert. |
@@ -100,6 +100,27 @@ so stimmt die Vormerkung. Braucht ebenfalls die Meter-Umrechnung.
 **Auto-Upgrades** würfeln beim `WaveCompletedEvent` je Kategorie einmal. Ausgemaxte Upgrades werden bei der
 Auswahl übersprungen; sind alle einer Kategorie ausgemaxt, passiert nichts. Ein Popup zeigt, was gratis gestiegen ist.
 
+## Ultimative Waffen
+
+Idee (F): Große Spezialwaffen, die man im Spiel freischaltet und die dann eigenständig, mit eigenem Cooldown,
+auslösen. Jede hat eigene Upgrades (Schaden, Dauer, Cooldown, Größe …). Offen: wie man sie freischaltet
+(Coins im Menü, ab Welle X, Boss-Drop?) und ob mehrere gleichzeitig aktiv sein dürfen.
+
+| Waffe | Herkunft | Beschreibung |
+|---|---|---|
+| Giftfelder | Idee (F) | Auf dem Spielfeld entstehen Giftfelder, die Gegnern darin Schaden pro Sekunde zufügen. Upgrades: Anzahl, Radius, Schaden, Dauer. |
+| Todeslaser | Idee (F) | Ein Laser fährt für 0,5 s (aufrüstbar) einmal im Kreis um den Turm und tötet alle Gegner, die er trifft. Upgrades: Dauer/Umdrehungen, Länge, Cooldown. |
+| Asteroidenhagel | Idee (F) | Asteroiden fallen vom Himmel und schlagen mit Flächenschaden ein. Ziele zufällig oder auf Gegnergruppen. Upgrades: Anzahl, Schaden, Einschlagradius. |
+| Kettenblitz-Sturm | Idee (C) | Für einige Sekunden schlagen Blitze in zufällige Gegner ein und springen weiter – wie Abprallschuss, aber unabhängig von Treffern. |
+| Schwarzes Loch | Idee (C) | Ein Wirbel zieht Gegner in der Nähe zu einem Punkt zusammen und beschädigt sie dort. Kombiniert stark mit Flächenschaden und Asteroiden. |
+| Zeitstopp | Idee (C) | Alle Gegner frieren für kurze Zeit ein, der Turm feuert normal weiter. |
+| Sperrfeuer | Idee (C) | Der Turm feuert eine Salve auf **alle** Gegner in Reichweite gleichzeitig. |
+| Frostnova | Idee (C) | Eine Welle vom Turm aus verlangsamt alle Gegner auf dem Feld stark und beschädigt sie leicht. |
+
+**Technik.** Wie bei den anderen Schadensquellen ohne Vormerkung senken die Ultimativen Waffen nur das Leben.
+Der Todeslaser braucht dieselbe Kollisionsabfrage über den überstrichenen Winkel wie die Orbits – beide
+sollten sich den Code teilen.
+
 ## Wellen
 
 Wellen laufen auf einem **festen Timer** statt darauf zu warten, dass alle Gegner tot sind. Die Gegner einer
@@ -113,6 +134,6 @@ Welle – auch wenn noch Gegner leben. Wer zu langsam tötet, bekommt also über
 2. Absolute & prozentuale Verteidigung, Dornen – kleine Änderungen an `TowerHitEvent`
 3. Mehrfachschuss
 4. Abprallschuss (vorher Meter-Umrechnung festlegen)
-5. Schnellfeuer
+5. ~~Schnellfeuer~~ ✓
 6. Rückstoß, Hinrichtung, Verlangsamung
 7. Orbits – eigenes System mit echter Kollisionsabfrage (überstrichener Winkel)

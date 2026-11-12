@@ -18,6 +18,9 @@ TowerStats tower_stats_base()
         .bounceRange = Meters {
             .value = 4.0f,
         },
+        .rapidFireChance = 0.0f,
+        .rapidFireDuration = 1.0f,
+        .rapidFireFactor = 4.0f,
         .maxHealth = 100.0f,
         .healthRegen = 0.0f,
         .percentDefense = 0.0f,
@@ -49,6 +52,9 @@ TowerStats tower_stats_compute(const TowerStats& base, const UpgradeLevels& leve
         .bounceRange = Meters {
             .value = base.bounceRange.value + 0.5f * upgrade_level(levels, UpgradeId::bounceRange),
         },
+        .rapidFireChance = base.rapidFireChance + 0.02f * upgrade_level(levels, UpgradeId::rapidFireChance),
+        .rapidFireDuration = base.rapidFireDuration + 0.25f * upgrade_level(levels, UpgradeId::rapidFireDuration),
+        .rapidFireFactor = base.rapidFireFactor,
         .maxHealth = base.maxHealth + 20.0f * upgrade_level(levels, UpgradeId::maxHealth),
         .healthRegen = base.healthRegen + 0.5f * upgrade_level(levels, UpgradeId::healthRegen),
         .percentDefense = base.percentDefense + 0.05f * upgrade_level(levels, UpgradeId::percentDefense),

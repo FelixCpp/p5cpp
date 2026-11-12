@@ -15,6 +15,8 @@ enum class UpgradeId
     bounceChance,
     bounceCount,
     bounceRange,
+    rapidFireChance,
+    rapidFireDuration,
     maxHealth,
     healthRegen,
     percentDefense,

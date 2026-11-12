@@ -62,6 +62,7 @@ World world_create(const UpgradeLevels& startLevels)
         .tower = tower_create(center, 50.0f),
         .weapon = TowerWeapon {
             .cooldown = 0.0f,
+            .rapidFireLeft = 0.0f,
         },
         .baseStats = tower_stats_base(),
         .startLevels = startLevels,
@@ -194,7 +195,9 @@ void world_update(World& world, const float realDeltaTime)
 
 void world_show(const World& world, const p5::Font& font)
 {
-    tower_show(world.tower, world_tower_stats(world).range);
+    const TowerStats stats = world_tower_stats(world);
+    tower_show(world.tower, stats.range);
+    tower_weapon_show(world.weapon, stats, world.tower);
     for (const Enemy& enemy : world.enemies) {
         enemy_show(enemy);
     }

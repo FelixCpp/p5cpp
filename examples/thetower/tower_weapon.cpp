@@ -84,6 +84,7 @@ namespace
 void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tower& tower, std::vector<Enemy>& enemies, std::vector<Bullet>& bullets, const float deltaTime)
 {
     weapon.cooldown -= deltaTime;
+    weapon.rapidFireLeft = std::max(weapon.rapidFireLeft - deltaTime, 0.0f);
 
     while (weapon.cooldown <= 0.0f) {
         const float range = stats.range.toPixels();
@@ -109,6 +110,28 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
             target = find_target(enemies, tower, range, targeted);
         }
 
-        weapon.cooldown += stats.fireInterval;
+        // shots of a running burst cannot start a new one, otherwise a high attack speed keeps it going forever
+        if (weapon.rapidFireLeft <= 0.0f && p5::random() < stats.rapidFireChance) {
+            weapon.rapidFireLeft = stats.rapidFireDuration;
+        }
+
+        weapon.cooldown += weapon.rapidFireLeft > 0.0f ? stats.fireInterval / stats.rapidFireFactor : stats.fireInterval;
     }
+}
+
+void tower_weapon_show(const TowerWeapon& weapon, const TowerStats& stats, const Tower& tower)
+{
+    if (weapon.rapidFireLeft <= 0.0f) {
+        return;
+    }
+
+    with([&] {
+        // fades out over the last part of the burst so its end is visible
+        const float fade = std::min(weapon.rapidFireLeft / std::min(stats.rapidFireDuration, 0.5f), 1.0f);
+
+        noFill();
+        stroke(rgba(255, 170, 60, static_cast<int32_t>(200.0f * fade)));
+        strokeWeight(4.0f);
+        circle(tower.position.x, tower.position.y, tower.radius * 1.35f);
+    });
 }

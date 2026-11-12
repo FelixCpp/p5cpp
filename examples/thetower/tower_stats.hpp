@@ -16,6 +16,9 @@ struct TowerStats
     float bounceChance;    // 0..1, chance that a bullet jumps on as a bolt after landing
     int bounceCount;       // jumps of such a bullet
     Meters bounceRange;    // max distance of a single jump
+    float rapidFireChance;   // 0..1, chance that a shot starts a burst of rapid fire
+    float rapidFireDuration; // seconds a burst lasts
+    float rapidFireFactor;   // attack speed multiplier during a burst
 
     float maxHealth;
     float healthRegen; // per second
