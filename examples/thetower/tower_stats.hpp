@@ -19,6 +19,10 @@ struct TowerStats
     float rapidFireChance;   // 0..1, chance that a shot starts a burst of rapid fire
     float rapidFireDuration; // seconds a burst lasts
     float rapidFireFactor;   // attack speed multiplier during a burst
+    Meters knockback;        // distance a hit shoves an enemy of weight 1 away
+    float slowFactor;        // 0..1, speed a hit enemy loses
+    float slowDuration;      // seconds a slow lasts, refreshed by every hit
+    float executeThreshold;  // 0..1 of its max health, below it an enemy dies right away
 
     float maxHealth;
     float healthRegen; // per second

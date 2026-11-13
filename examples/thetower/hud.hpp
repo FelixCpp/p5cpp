@@ -12,7 +12,7 @@ struct Hud
     p5::float2 position;
     p5::float2 size;
 
-    p5::Font font;
+    ui::Fonts fonts;
     UpgradeCategory activeCategory;
     ui::ScrollList upgradeScroll;
 
@@ -22,7 +22,7 @@ struct Hud
     p5::animation::ValueTweenTransition<float> goldPunch;
 };
 
-Hud hud_create(const p5::Font& font);
+Hud hud_create(const ui::Fonts& fonts);
 void hud_reset(Hud& hud);
 void hud_update(Hud& hud, World& world, float deltaTime);
 void hud_show(const Hud& hud, const World& world);

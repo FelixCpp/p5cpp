@@ -200,6 +200,70 @@ namespace
             },
         },
         UpgradeDefinition {
+            .id = UpgradeId::knockback,
+            .category = UpgradeCategory::attack,
+            .key = "knockback",
+            .group = "Rückstoß",
+            .name = "Stärke",
+            .goldCost = {.base = 25, .growth = 1.4f},
+            .coinCost = {.base = 12, .growth = 1.5f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.knockback.value += 0.3f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.1f} m", stats.knockback.value);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::slowFactor,
+            .category = UpgradeCategory::attack,
+            .key = "slowFactor",
+            .group = "Verlangsamung",
+            .name = "Stärke",
+            .goldCost = {.base = 30, .growth = 1.45f},
+            .coinCost = {.base = 15, .growth = 1.55f},
+            .maxLevel = 8,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.slowFactor += 0.05f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.slowFactor * 100.0f);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::slowDuration,
+            .category = UpgradeCategory::attack,
+            .key = "slowDuration",
+            .group = "Verlangsamung",
+            .name = "Dauer",
+            .goldCost = {.base = 25, .growth = 1.4f},
+            .coinCost = {.base = 12, .growth = 1.5f},
+            .maxLevel = 8,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.slowDuration += 0.125f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.2f} s", stats.slowDuration);
+            },
+        },
+        UpgradeDefinition {
+            .id = UpgradeId::executeThreshold,
+            .category = UpgradeCategory::attack,
+            .key = "executeThreshold",
+            .group = "Hinrichtung",
+            .name = "Schwelle",
+            .goldCost = {.base = 45, .growth = 1.5f},
+            .coinCost = {.base = 20, .growth = 1.6f},
+            .maxLevel = 10,
+            .apply = [](TowerStats& stats, const int level) {
+                stats.executeThreshold += 0.01f * level;
+            },
+            .describe = [](const TowerStats& stats) {
+                return std::format("{:.0f} %", stats.executeThreshold * 100.0f);
+            },
+        },
+        UpgradeDefinition {
             .id = UpgradeId::maxHealth,
             .category = UpgradeCategory::defense,
             .key = "maxHealth",

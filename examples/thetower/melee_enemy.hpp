@@ -2,6 +2,7 @@
 
 #include "enemy_archetype.hpp"
 #include "enemy_core.hpp"
+#include "enemy_shape.hpp"
 #include "game_events.hpp"
 #include "tower.hpp"
 
@@ -10,6 +11,7 @@ struct Enemy;
 struct MeleeBehavior
 {
     p5::color_t color;
+    EnemyShape shape;
     float strokeWeight;
 
     float damage;

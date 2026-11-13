@@ -15,13 +15,13 @@ namespace
     constexpr color_t boltColor = rgba(240, 230, 120);
 
     // nearest enemy around the one just hit, picked only when the bolt jumps so it sees the current state
-    Enemy* find_bounce_target(std::vector<Enemy>& enemies, const std::vector<EnemyId>& chain, const float2& position, const float range)
+    Enemy* find_bounce_target(std::vector<Enemy>& enemies, const std::vector<EnemyId>& chain, const float2& position, const TowerStats& stats, const float range)
     {
         Enemy* target = nullptr;
         float nearest = range * range;
 
         for (Enemy& enemy : enemies) {
-            if (std::ranges::contains(chain, enemy.core.id) || enemy_health_is_doomed(enemy.core.health)) {
+            if (std::ranges::contains(chain, enemy.core.id) || enemy_health_is_doomed(enemy.core.health, stats.executeThreshold)) {
                 continue;
             }
 
@@ -42,17 +42,18 @@ namespace
         std::vector<EnemyId> chain = bullet.chain;
         chain.push_back(hitEnemy.core.id);
 
-        Enemy* target = find_bounce_target(enemies, chain, from, stats.bounceRange.toPixels());
+        Enemy* target = find_bounce_target(enemies, chain, from, stats, stats.bounceRange.toPixels());
         if (target == nullptr) {
             return;
         }
 
-        Hit hit = bullet.hit;
-        --hit.bouncesLeft;
-
         // the bolt is so fast that leading the target by its current velocity is close enough
         const EnemyMovement& movement = target->core.movement;
         const float flightTime = distance(from, movement.position) / boltSpeed;
+
+        Hit hit = bullet.hit;
+        --hit.bouncesLeft;
+        hit.direction = fixedLength(movement.position - from, 1.0f);
 
         enemy_health_reserve(target->core.health, hit.damage);
         bolts.push_back(Bullet {

@@ -1,5 +1,6 @@
 add_executable(
   thetower
+  arena.cpp
   bullet.cpp
   death_effect.cpp
   enemy.cpp
@@ -7,9 +8,11 @@ add_executable(
   enemy_damage_feedback.cpp
   enemy_health.cpp
   enemy_movement.cpp
+  enemy_shape.cpp
   enemy_size.cpp
   floating_text.cpp
   game_events.cpp
+  hit_spark.cpp
   hud.cpp
   main.cpp
   melee_enemy.cpp

@@ -20,10 +20,10 @@ Legende: **✓** = existiert bereits · **Idee (F)** = von Felix · **Idee (C)**
 | Mehrfachschuss | ✓ | 50 % Chance, 8 Ziele | Ein Schuss hat eine Chance, gleichzeitig mehrere Kugeln abzufeuern – jede auf einen **anderen** Gegner, nie zwei auf denselben. |
 | Kritischer Treffer | ✓ | 50 % Chance | Chance auf einen kritischen Treffer mit erhöhtem Schaden. Eigene Popup-Farbe/-Größe für Crits. |
 | Krit-Multiplikator | ✓ | ×5 | Schadensfaktor kritischer Treffer (Start ×1,5). Getrennt von der Chance, damit beides einzeln skaliert. |
-| Rückstoß | Idee (C) | – | Getroffene Gegner werden ein Stück vom Turm weggestoßen. Schwere Gegner (Tank) werden weniger weit gestoßen. |
-| Hinrichtung | Idee (C) | 10 % | Gegner, deren Leben unter X % ihres Maximums fällt, sterben sofort. Macht Tanks und Bosse am Ende schneller. |
+| Rückstoß | ✓ | 3 m | Getroffene Gegner werden vom Turm weggestoßen, die Strecke geteilt durch ihr Gewicht – Fast ×0,6, Easy ×1, Tank ×3. Treffer hintereinander stapeln sich nur bis zum doppelten Stoß. |
+| Verlangsamung | ✓ | 40 %, 2 s | Getroffene Gegner verlieren für die Dauer einen Teil ihres Tempos und werden dabei frostig getönt. Kein Stapeln – neue Treffer frischen nur die Dauer auf. |
+| Hinrichtung | ✓ | 10 % | Gegner, deren Leben unter X % ihres Maximums fällt, sterben sofort. Macht Tanks und Bosse am Ende schneller. |
 | Flächenschaden | Idee (C) | 50 % Schaden, 3 m Radius | Ein Treffer verursacht zusätzlich einen Teil des Schadens an allen Gegnern im Radius um das Ziel. |
-| Verlangsamung | Idee (C) | 40 %, 2 s | Getroffene Gegner werden für kurze Zeit verlangsamt. Kein Stapeln – neue Treffer frischen nur die Dauer auf. |
 | Schaden pro Meter | Idee (C, angepasst von F) | – | Zusätzlicher Schaden pro Meter Abstand zwischen Turm und Ziel, gemessen beim Abschuss. Belohnt Reichweiten-Builds und Gegner früh abzufangen. |
 | Orbits | Idee (F, früher besprochen) | 4 Orbits | Kugeln, die um den Turm kreisen und jeden Gegner beschädigen, den sie berühren. Eigene Stats: Anzahl, Radius, Drehgeschwindigkeit, Schaden. |
 
@@ -81,15 +81,19 @@ verpuffen. Das ist unvermeidbar und vom Code bereits abgefangen.
 
 **Hinrichtung und „doomed“.** Ein Gegner gilt dann schon als doomed, wenn
 `current - pendingDamage <= maxHealth * executeThreshold`. Sonst feuert der Turm unnötige Kugeln auf
-Gegner, die ohnehin hingerichtet werden.
+Gegner, die ohnehin hingerichtet werden. Hingerichtet wird nicht im Treffer, sondern einmal pro Frame
+über alle Gegner (`enemies_execute`) – so stirbt auch, wer ohne Treffer unter die Schwelle fällt oder
+schon darunter lag, als das Upgrade mitten in der Runde gekauft wurde.
 
 **Reihenfolge der Verteidigung** muss festgelegt werden. Vorschlag:
 `Schaden → Abwehrchance → prozentuale Verteidigung → absolute Verteidigung (min. 0) → Schild → Leben`.
 Dornen beziehen sich auf den Schaden **vor** der Minderung, damit sich beide Stats nicht gegenseitig entwerten.
 
-**Rückstoß** verschiebt Gegner während Kugeln unterwegs sind. Die Kugel schwenkt zum Schluss auf die
-echte Position ein – bei starkem Rückstoß wird das sichtbar. Ggf. Rückstoß erst beim Aufprall anwenden
-(ist ohnehin so) und Einschwenken weicher machen.
+**Rückstoß** setzt beim Aufprall eine Stoßgeschwindigkeit in `EnemyMovement.push`, die exponentiell
+ausläuft; über ihre Lebensdauer trägt sie den Gegner genau die gekaufte Strecke weit. Ein Nahkämpfer am
+Turm wird dadurch wirklich weggeschoben: die Kontaktlogik klebt ihn nur noch an die Turmkante, wenn er
+nach dem Stoß noch innerhalb der Kontaktdistanz liegt. Die Kugel schwenkt zum Schluss auf die echte
+Position ein – bei starkem Rückstoß wird das sichtbar.
 
 **Meter.** 1 m = 10 px (`pixelsPerMeter` in `meters.cpp`). Die Turmreichweite startet bei 15 m,
 Gegner sind 1,6–4 m groß, die Welt ist 60 m breit.
@@ -145,7 +149,7 @@ Welle – auch wenn noch Gegner leben. Wer zu langsam tötet, bekommt also über
 3. Mehrfachschuss
 4. Abprallschuss (vorher Meter-Umrechnung festlegen)
 5. ~~Schnellfeuer~~ ✓
-6. Rückstoß, Hinrichtung, Verlangsamung
+6. ~~Rückstoß, Hinrichtung, Verlangsamung~~ ✓
 7. Orbits – eigenes System mit echter Kollisionsabfrage (überstrichener Winkel)
 8. Boss-Gegner und Boss-Währung (Drop, Speichern, Anzeige im Menü)
 9. Ultimative Waffen – Slots, Auswahl vor der Runde, dann die Waffen einzeln (Todeslaser teilt Code mit den Orbits)

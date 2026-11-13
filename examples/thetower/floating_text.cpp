@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "palette.hpp"
+
 using namespace p5;
 using namespace p5::animation;
 
@@ -52,6 +54,11 @@ void floating_texts_show(const std::vector<FloatingText>& texts, const p5::Font&
             const float alpha = t < fadeStart ? 1.0f : 1.0f - curves::easeInQuad((t - fadeStart) / (1.0f - fadeStart));
 
             textSize(text.size * std::max(text.pop.value(), 0.01f));
+
+            // a dark copy underneath keeps the small text readable over bright effects
+            fill(withOpacity(shadowColor, 0.6f * alpha));
+            p5::text(text.text, text.position.x + 1.5f, text.position.y + 1.5f);
+
             fill(withOpacity(text.color, alpha));
             p5::text(text.text, text.position.x, text.position.y);
         }

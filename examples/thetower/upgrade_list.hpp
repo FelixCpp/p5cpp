@@ -19,7 +19,7 @@ struct UpgradeTab
     p5::rect2f rect;
 };
 
-std::vector<UpgradeTab> upgrade_tabs_layout(const p5::rect2f& row);
+std::vector<UpgradeTab> upgrade_tabs_layout(const p5::rect2f& area);
 std::optional<UpgradeCategory> upgrade_tabs_clicked(const std::vector<UpgradeTab>& tabs);
 void upgrade_tabs_show(const std::vector<UpgradeTab>& tabs, UpgradeCategory active);
 

@@ -9,7 +9,9 @@ namespace
 {
     constexpr float buttonSize = 32.0f;
     constexpr float speedWidth = 60.0f;
-    constexpr float inset = 4.0f;
+    constexpr float panelPadding = 4.0f;
+    constexpr float buttonGap = 4.0f;
+    constexpr float controlsWidth = buttonSize * 3.0f + speedWidth + buttonGap * 3.0f;
 
     bool pressed_any(const std::initializer_list<Key> keys)
     {
@@ -23,10 +25,14 @@ namespace
 
     void icon_button(const rect2f& rect, const bool enabled)
     {
-        noStroke();
-        fill(enabled && contains(rect, mouse()) ? buttonHoverColor : buttonColor);
-        p5::rect(rect.left, rect.top, rect.width, rect.height, BorderRadius::all(6.0f));
-        stroke(enabled ? textColor : mutedTextColor);
+        const bool hovered = enabled && contains(rect, mouse());
+
+        if (hovered) {
+            glow(rect, accentColor, 0.8f, 8.0f, 7.0f);
+        }
+        surface(rect, hovered ? buttonHoverColor : buttonColor, withOpacity(borderColor, hovered ? 0.6f : 0.25f), 8.0f);
+
+        stroke(hovered ? accentColor : (enabled ? textColor : mutedTextColor));
         strokeWeight(2.5f);
         strokeCap(StrokeCap::round);
     }
@@ -34,16 +40,16 @@ namespace
 
 RoundControlsLayout round_controls_layout(const float2& topLeft)
 {
-    const float x = topLeft.x + inset;
-    const float y = topLeft.y + inset;
-    const float gap = 4.0f;
+    const rect2f panel {topLeft.x, topLeft.y, controlsWidth + panelPadding * 2.0f, buttonSize + panelPadding * 2.0f};
+    rect2f row = inset(panel, panelPadding);
 
     RoundControlsLayout layout = {};
-    layout.pause = rect2f {x, y, buttonSize, buttonSize};
-    layout.slower = rect2f {layout.pause.left + buttonSize + gap * 3.0f, y, buttonSize, buttonSize};
-    layout.speed = rect2f {layout.slower.left + buttonSize, y, speedWidth, buttonSize};
-    layout.faster = rect2f {layout.speed.left + speedWidth, y, buttonSize, buttonSize};
-    layout.panel = rect2f {topLeft.x, topLeft.y, layout.faster.left + buttonSize + inset - topLeft.x, buttonSize + inset * 2.0f};
+    layout.panel = panel;
+    layout.pause = cutLeft(row, buttonSize);
+    cutLeft(row, buttonGap * 3.0f);
+    layout.slower = cutLeft(row, buttonSize);
+    layout.speed = cutLeft(row, speedWidth);
+    layout.faster = cutLeft(row, buttonSize);
     return layout;
 }
 
@@ -65,9 +71,7 @@ RoundAction round_controls_update(const RoundControlsLayout& layout)
 void round_controls_show(const RoundControlsLayout& layout, const float speed, const float minSpeed, const float maxSpeed)
 {
     with([&] {
-        noStroke();
-        fill(withAlpha(panelColor, 220));
-        rect(layout.panel.left, layout.panel.top, layout.panel.width, layout.panel.height, BorderRadius::all(10.0f));
+        surface(layout.panel, withAlpha(panelColor, 225), withOpacity(borderColor, 0.3f), 12.0f);
 
         // pause: two bars
         icon_button(layout.pause, true);
@@ -87,6 +91,7 @@ void round_controls_show(const RoundControlsLayout& layout, const float speed, c
         line(f.x, f.y - 6.0f, f.x, f.y + 6.0f);
 
         noStroke();
+        font_bold();
         textSize(16.0f);
         textAlign(TextAlignment::center);
         fill(speed > 1.0f + 0.001f ? accentColor : textColor);
@@ -101,14 +106,15 @@ PauseMenuLayout pause_menu_layout(const float width, const float height)
     constexpr float padding = 24.0f;
     constexpr float buttonHeight = 44.0f;
 
-    const float x = (width - panelWidth) * 0.5f;
-    const float y = (height - panelHeight) * 0.5f;
+    const rect2f panel {(width - panelWidth) * 0.5f, (height - panelHeight) * 0.5f, panelWidth, panelHeight};
 
-    return PauseMenuLayout {
-        .panel = rect2f {x, y, panelWidth, panelHeight},
-        .resume = rect2f {x + padding, y + 64.0f, panelWidth - padding * 2.0f, buttonHeight},
-        .quit = rect2f {x + padding, y + 64.0f + buttonHeight + 12.0f, panelWidth - padding * 2.0f, buttonHeight},
-    };
+    rect2f content = inset(panel, padding, 0.0f);
+    cutTop(content, 64.0f);
+    const rect2f resume = cutTop(content, buttonHeight);
+    cutTop(content, 12.0f);
+    const rect2f quit = cutTop(content, buttonHeight);
+
+    return PauseMenuLayout {.panel = panel, .resume = resume, .quit = quit};
 }
 
 RoundAction pause_menu_update(const PauseMenuLayout& layout)
@@ -126,25 +132,26 @@ void pause_menu_show(const PauseMenuLayout& layout, const float width, const flo
 {
     with([&] {
         noStroke();
-        fill(rgba(0, 0, 0, 150));
+        fill(rgba(0, 0, 0, 170));
         rect(0.0f, 0.0f, width, height);
 
-        fill(panelColor);
-        stroke(buttonHoverColor);
-        strokeWeight(1.0f);
-        rect(layout.panel.left, layout.panel.top, layout.panel.width, layout.panel.height, BorderRadius::all(14.0f));
-        noStroke();
+        glow(layout.panel, accentColor, 0.7f, 16.0f, 22.0f);
+        surface(layout.panel, panelColor, withOpacity(borderColor, 0.45f), 16.0f);
 
-        textSize(24.0f);
+        font_medium();
+        textSize(11.0f);
+        textLetterSpacing(2.0f);
         textAlign(TextAlignment::center);
-        fill(textColor);
-        text("Pause", layout.panel.left + layout.panel.width * 0.5f, layout.panel.top + 34.0f);
+        fill(mutedTextColor);
+        text("PAUSE", center(layout.panel).x, layout.panel.top + 34.0f);
+        textLetterSpacing(0.0f);
 
         button(layout.resume, "Weiter", accentColor);
         button(layout.quit, "Runde beenden", dangerColor);
 
+        font_medium();
         textSize(12.0f);
         fill(mutedTextColor);
-        text("Coins dieser Runde bleiben erhalten", layout.panel.left + layout.panel.width * 0.5f, layout.quit.top + layout.quit.height + 16.0f);
+        text("Coins dieser Runde bleiben erhalten", center(layout.panel).x, layout.quit.top + layout.quit.height + 18.0f);
     });
 }

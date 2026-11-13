@@ -25,14 +25,17 @@ namespace
 
 struct TheTower : Sketch
 {
-    Font font = loadFont("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf").value();
+    ui::Fonts fonts = {
+        .bold = loadFont("fonts/Lexend_Deca/static/LexendDeca-Bold.ttf").value(),
+        .medium = loadFont("fonts/Lexend_Deca/static/LexendDeca-Medium.ttf").value(),
+    };
     Profile profile = profile_load(savePath);
 
     Screen screen = Screen::menu;
-    Menu menu = menu_create(font);
+    Menu menu = menu_create(fonts);
 
     World world = world_create(profile.startLevels);
-    Hud hud = hud_create(font);
+    Hud hud = hud_create(fonts);
     bool roundSettled = false;
     bool paused = false;
 
@@ -46,7 +49,7 @@ struct TheTower : Sketch
 
     void draw() override
     {
-        background(rgba(31));
+        background(ui::panelColor);
 
         switch (screen) {
             case Screen::menu: drawMenu(); break;
@@ -139,11 +142,14 @@ struct TheTower : Sketch
         const float offsetX = (playWidth - worldSize * scaleFactor) * 0.5f;
         const float offsetY = (height - worldSize * scaleFactor) * 0.5f;
 
+        // what the playfield shows of the world, the floor covers all of it so no edge of the square appears
+        const rect2f view = {-offsetX / scaleFactor, -offsetY / scaleFactor, playWidth / scaleFactor, height / scaleFactor};
+
         withClip(0.0f, 0.0f, playWidth, height, [&] {
             withMatrix([&] {
                 translate(offsetX, offsetY);
                 scale(scaleFactor, scaleFactor);
-                world_show(world, font);
+                world_show(world, fonts.bold, view);
             });
         });
 

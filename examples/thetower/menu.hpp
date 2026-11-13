@@ -8,7 +8,7 @@
 
 struct Menu
 {
-    p5::Font font;
+    ui::Fonts fonts;
     UpgradeCategory activeCategory;
     ui::ScrollList scroll;
 };
@@ -20,6 +20,6 @@ enum class MenuAction
     startRound,
 };
 
-Menu menu_create(const p5::Font& font);
+Menu menu_create(const ui::Fonts& fonts);
 MenuAction menu_update(Menu& menu, Profile& profile);
 void menu_show(const Menu& menu, const Profile& profile);

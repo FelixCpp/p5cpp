@@ -141,6 +141,20 @@ namespace p5
     // the left and top edges belong to the rectangle, the right and bottom edges do not
     template <typename T> constexpr bool contains(const rect2<T>& rectangle, const value2<T>& point);
 
+    // a negative amount grows the rectangle instead
+    template <typename T> constexpr rect2<T> inset(const rect2<T>& rectangle, T amount);
+    template <typename T> constexpr rect2<T> inset(const rect2<T>& rectangle, T horizontal, T vertical);
+
+    // cuts a slice off one edge and shrinks the rectangle by it, never past the opposite edge
+    template <typename T> constexpr rect2<T> cutTop(rect2<T>& rectangle, T amount);
+    template <typename T> constexpr rect2<T> cutBottom(rect2<T>& rectangle, T amount);
+    template <typename T> constexpr rect2<T> cutLeft(rect2<T>& rectangle, T amount);
+    template <typename T> constexpr rect2<T> cutRight(rect2<T>& rectangle, T amount);
+
+    // one of count equally wide columns (or tall rows), separated by gap
+    template <typename T> constexpr rect2<T> column(const rect2<T>& rectangle, int index, int count, T gap = {});
+    template <typename T> constexpr rect2<T> row(const rect2<T>& rectangle, int index, int count, T gap = {});
+
     typedef rect2<float> rect2f;
     typedef rect2<int32_t> rect2i;
     typedef rect2<uint32_t> rect2u;
@@ -1468,6 +1482,64 @@ namespace p5
     template <typename T> inline constexpr bool contains(const rect2<T>& rectangle, const value2<T>& point)
     {
         return point.x >= rectangle.left && point.x < rectangle.left + rectangle.width && point.y >= rectangle.top && point.y < rectangle.top + rectangle.height;
+    }
+
+    template <typename T> inline constexpr rect2<T> inset(const rect2<T>& rectangle, const T amount) { return inset(rectangle, amount, amount); }
+    template <typename T> inline constexpr rect2<T> inset(const rect2<T>& rectangle, const T horizontal, const T vertical)
+    {
+        const T dx = std::min(horizontal, rectangle.width / 2);
+        const T dy = std::min(vertical, rectangle.height / 2);
+        return {rectangle.left + dx, rectangle.top + dy, rectangle.width - dx * 2, rectangle.height - dy * 2};
+    }
+
+    template <typename T> inline constexpr rect2<T> cutTop(rect2<T>& rectangle, const T amount)
+    {
+        const T cut = std::min(std::max(amount, T {}), rectangle.height);
+        const rect2<T> result {rectangle.left, rectangle.top, rectangle.width, cut};
+        rectangle.top += cut;
+        rectangle.height -= cut;
+        return result;
+    }
+
+    template <typename T> inline constexpr rect2<T> cutBottom(rect2<T>& rectangle, const T amount)
+    {
+        const T cut = std::min(std::max(amount, T {}), rectangle.height);
+        rectangle.height -= cut;
+        return {rectangle.left, rectangle.top + rectangle.height, rectangle.width, cut};
+    }
+
+    template <typename T> inline constexpr rect2<T> cutLeft(rect2<T>& rectangle, const T amount)
+    {
+        const T cut = std::min(std::max(amount, T {}), rectangle.width);
+        const rect2<T> result {rectangle.left, rectangle.top, cut, rectangle.height};
+        rectangle.left += cut;
+        rectangle.width -= cut;
+        return result;
+    }
+
+    template <typename T> inline constexpr rect2<T> cutRight(rect2<T>& rectangle, const T amount)
+    {
+        const T cut = std::min(std::max(amount, T {}), rectangle.width);
+        rectangle.width -= cut;
+        return {rectangle.left + rectangle.width, rectangle.top, cut, rectangle.height};
+    }
+
+    template <typename T> inline constexpr rect2<T> column(const rect2<T>& rectangle, const int index, const int count, const T gap)
+    {
+        if (count <= 0) {
+            return {rectangle.left, rectangle.top, T {}, rectangle.height};
+        }
+        const T width = std::max((rectangle.width - gap * static_cast<T>(count - 1)) / static_cast<T>(count), T {});
+        return {rectangle.left + static_cast<T>(index) * (width + gap), rectangle.top, width, rectangle.height};
+    }
+
+    template <typename T> inline constexpr rect2<T> row(const rect2<T>& rectangle, const int index, const int count, const T gap)
+    {
+        if (count <= 0) {
+            return {rectangle.left, rectangle.top, rectangle.width, T {}};
+        }
+        const T height = std::max((rectangle.height - gap * static_cast<T>(count - 1)) / static_cast<T>(count), T {});
+        return {rectangle.left, rectangle.top + static_cast<T>(index) * (height + gap), rectangle.width, height};
     }
 } // namespace p5
 

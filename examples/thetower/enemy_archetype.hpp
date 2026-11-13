@@ -5,6 +5,7 @@
 #include <p5cpp/p5cpp.hpp>
 
 #include "enemy_id.hpp"
+#include "enemy_shape.hpp"
 
 struct Enemy;
 
@@ -15,6 +16,7 @@ struct EnemyArchetype
 {
     std::string_view name;
     p5::color_t color;
+    EnemyShape shape;
     EnemyFactory factory;
 
     float health;

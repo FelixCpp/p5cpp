@@ -5,18 +5,21 @@
 #include <limits>
 #include <span>
 
+#include "palette.hpp"
+
 using namespace p5;
+using namespace p5::animation;
 
 namespace
 {
     // excluded enemies already got a bullet from the same shot, they need not be doomed yet
-    Enemy* find_target(std::vector<Enemy>& enemies, const Tower& tower, const float range, const std::span<const EnemyId> excluded)
+    Enemy* find_target(std::vector<Enemy>& enemies, const Tower& tower, const TowerStats& stats, const float range, const std::span<const EnemyId> excluded)
     {
         Enemy* target = nullptr;
         float earliestArrival = std::numeric_limits<float>::infinity();
 
         for (Enemy& enemy : enemies) {
-            if (enemy_health_is_doomed(enemy.core.health) || std::ranges::contains(excluded, enemy.core.id)) {
+            if (enemy_health_is_doomed(enemy.core.health, stats.executeThreshold) || std::ranges::contains(excluded, enemy.core.id)) {
                 continue;
             }
             if (distanceSquared(tower.position, enemy.core.movement.position) > range * range) {
@@ -56,22 +59,27 @@ namespace
     {
         // rolled when firing, so the reserved damage already includes the crit
         const bool isCrit = p5::random() < stats.critChance;
+        const EnemyMovement& movement = target.core.movement;
+        const float flightTime = intercept_time(tower.position, movement.position, movement.velocity, stats.bulletSpeed);
+        const float2 impact = movement.position + movement.velocity * flightTime;
+
         const Hit hit = {
             .damage = isCrit ? stats.damage * stats.critMultiplier : stats.damage,
             .isCrit = isCrit,
             .reserved = true,
             .bouncesLeft = p5::random() < stats.bounceChance ? stats.bounceCount : 0,
+            .direction = fixedLength(impact - tower.position, 1.0f),
+            .knockback = stats.knockback.toPixels(),
+            .slowFactor = stats.slowFactor,
+            .slowDuration = stats.slowDuration,
         };
-
-        const EnemyMovement& movement = target.core.movement;
-        const float flightTime = intercept_time(tower.position, movement.position, movement.velocity, stats.bulletSpeed);
 
         enemy_health_reserve(target.core.health, hit.damage);
         bullets.push_back(Bullet {
             .target = target.core.id,
             .hit = hit,
             .origin = tower.position,
-            .impact = movement.position + movement.velocity * flightTime,
+            .impact = impact,
             .position = tower.position,
             .flightTime = flightTime,
             .elapsed = 0.0f,
@@ -85,11 +93,12 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
 {
     weapon.cooldown -= deltaTime;
     weapon.rapidFireLeft = std::max(weapon.rapidFireLeft - deltaTime, 0.0f);
+    weapon.shotFlash.advance(deltaTime);
+
+    const float range = stats.range.toPixels();
 
     while (weapon.cooldown <= 0.0f) {
-        const float range = stats.range.toPixels();
-
-        Enemy* target = find_target(enemies, tower, range, {});
+        Enemy* target = find_target(enemies, tower, stats, range, {});
         if (target == nullptr) {
             weapon.cooldown = 0.0f;
             return;
@@ -107,8 +116,10 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
             if (static_cast<int>(targeted.size()) >= targetCount) {
                 break;
             }
-            target = find_target(enemies, tower, range, targeted);
+            target = find_target(enemies, tower, stats, range, targeted);
         }
+
+        weapon.shotFlash = valueTween(1.0f, 0.0f, 0.12f, curves::easeOutQuad);
 
         // shots of a running burst cannot start a new one, otherwise a high attack speed keeps it going forever
         if (weapon.rapidFireLeft <= 0.0f && p5::random() < stats.rapidFireChance) {
@@ -121,17 +132,28 @@ void tower_weapon_update(TowerWeapon& weapon, const TowerStats& stats, const Tow
 
 void tower_weapon_show(const TowerWeapon& weapon, const TowerStats& stats, const Tower& tower)
 {
-    if (weapon.rapidFireLeft <= 0.0f) {
+    // a burst shows as a core that flickers hot, it cools down over the last part of its duration
+    const float heat = std::min(weapon.rapidFireLeft / std::min(stats.rapidFireDuration, 0.4f), 1.0f);
+    const float flicker = 0.55f + 0.45f * std::sin(static_cast<float>(getGlobalTime()) * 34.0f);
+
+    // every single shot punches a flash on top of whatever the burst is already glowing
+    const float glow = std::max(weapon.shotFlash.value(), heat * flicker);
+    if (glow <= 0.01f) {
         return;
     }
 
-    with([&] {
-        // fades out over the last part of the burst so its end is visible
-        const float fade = std::min(weapon.rapidFireLeft / std::min(stats.rapidFireDuration, 0.5f), 1.0f);
+    const color_t color = lerpColor(accentColor, heatColor, heat);
 
-        noFill();
-        stroke(withOpacity(rgba(255, 170, 60), 0.78f * fade));
-        strokeWeight(4.0f);
-        circle(tower.position.x, tower.position.y, tower.radius * 1.35f);
+    with([&] {
+        blendMode(BlendMode::additive);
+        noStroke();
+
+        fill(withOpacity(color, 0.09f * glow));
+        for (int i = 3; i >= 1; --i) {
+            circle(tower.position.x, tower.position.y, tower.radius * (0.15f + 0.15f * glow) * static_cast<float>(i));
+        }
+
+        fill(withOpacity(lerpColor(color, rgba(255), 0.5f), 0.8f * glow));
+        circle(tower.position.x, tower.position.y, tower.radius * 0.1f * (0.8f + 0.7f * glow));
     });
 }

@@ -1,5 +1,6 @@
 #include "upgrade_list.hpp"
 
+#include <algorithm>
 #include <array>
 #include <format>
 
@@ -11,111 +12,133 @@ namespace
     constexpr std::array categories = {UpgradeCategory::attack, UpgradeCategory::defense, UpgradeCategory::utility};
     constexpr float tabGap = 8.0f;
 
-    constexpr float cardHeaderHeight = 32.0f;
-    constexpr float cardGap = 10.0f;
-    constexpr float lineHeight = 52.0f;
-    constexpr float linePadding = 4.0f;
+    constexpr float cardHeaderHeight = 34.0f;
+    constexpr float cardGap = 12.0f;
+    constexpr float lineHeight = 56.0f;
+    constexpr float linePadding = 5.0f;
 
-    constexpr float pipHeight = 3.0f;
+    constexpr float pipHeight = 4.0f;
     constexpr float pipGap = 3.0f;
-    constexpr float priceWidth = 68.0f;
-    constexpr float priceHeight = 30.0f;
-    constexpr color_t emptyPipColor = rgba(62);
+    constexpr float pipsWidth = 170.0f;
+    constexpr float priceWidth = 70.0f;
+    constexpr float priceHeight = 32.0f;
+    constexpr float priceGap = 10.0f;
 
-    void show_line(const rect2f& rect, const UpgradeLine& line, const bool divider)
+    // the arrow has no glyph in the font, so it is drawn
+    void show_arrow(const float x, const float y)
     {
-        const bool hovered = line.affordable && contains(rect, mouse());
-
+        stroke(withOpacity(accentColor, 0.65f));
+        strokeWeight(1.5f);
+        strokeCap(StrokeCap::round);
+        p5::line(x, y, x + 10.0f, y);
+        p5::line(x + 6.0f, y - 3.5f, x + 10.0f, y);
+        p5::line(x + 6.0f, y + 3.5f, x + 10.0f, y);
         noStroke();
-        if (hovered) {
-            fill(buttonHoverColor);
-            p5::rect(rect.left, rect.top, rect.width, rect.height, BorderRadius::all(6.0f));
-        } else if (divider) {
-            fill(panelColor);
-            p5::rect(rect.left + 8.0f, rect.top, rect.width - 16.0f, 1.0f);
-        }
+    }
 
-        const float left = rect.left + 8.0f;
-        const float right = rect.left + rect.width - 8.0f;
-        const rect2f price = {right - priceWidth, rect.top + (rect.height - priceHeight) * 0.5f, priceWidth, priceHeight};
+    // one segment per level, only for upgrades that have a limit
+    void show_pips(rect2f row, const UpgradeLine& line)
+    {
+        row.width = std::min(row.width, pipsWidth);
+        const float pipWidth = (row.width - pipGap * static_cast<float>(line.maxLevel - 1)) / static_cast<float>(line.maxLevel);
+        const color_t reached = line.maxed ? goldColor : accentColor;
 
-        textSize(15.0f);
-        textAlign(TextAlignment::topLeft);
-        fill(textColor);
-        text(line.name, left, rect.top + 8.0f);
-        const float nameWidth = textWidth(line.name);
+        for (int i = 0; i < line.maxLevel; ++i) {
+            const rect2f pip {row.left + static_cast<float>(i) * (pipWidth + pipGap), row.top, pipWidth, row.height};
 
-        textSize(12.0f);
-        fill(mutedTextColor);
-        text(line.levelLabel, left + nameWidth + 8.0f, rect.top + 10.0f);
-
-        // current value, a drawn arrow (the font has no glyph for it) and the highlighted next value
-        const float valueY = rect.top + 28.0f;
-        textSize(13.0f);
-        fill(secondaryTextColor);
-        text(line.value, left, valueY);
-        if (!line.nextValue.empty()) {
-            const float arrowX = left + textWidth(line.value) + 6.0f;
-            const float arrowY = valueY + 8.0f;
-
-            stroke(mutedTextColor);
-            strokeWeight(1.5f);
-            p5::line(arrowX, arrowY, arrowX + 10.0f, arrowY);
-            p5::line(arrowX + 6.0f, arrowY - 3.5f, arrowX + 10.0f, arrowY);
-            p5::line(arrowX + 6.0f, arrowY + 3.5f, arrowX + 10.0f, arrowY);
-            noStroke();
-
-            fill(textColor);
-            text(line.nextValue, arrowX + 16.0f, valueY);
-        }
-
-        // one segment per level, only for upgrades that have a limit
-        if (line.maxLevel > 0) {
-            const float pipsWidth = price.left - 12.0f - left;
-            const float pipWidth = (pipsWidth - pipGap * static_cast<float>(line.maxLevel - 1)) / static_cast<float>(line.maxLevel);
-            const float pipY = rect.top + rect.height - 7.0f;
-
-            for (int i = 0; i < line.maxLevel; ++i) {
-                fill(i < line.level ? (line.maxed ? goldColor : accentColor) : emptyPipColor);
-                p5::rect(left + static_cast<float>(i) * (pipWidth + pipGap), pipY, pipWidth, pipHeight, BorderRadius::all(pipHeight * 0.5f));
+            if (i < line.level) {
+                glow(pip, reached, 0.7f, pipHeight * 0.5f, 4.0f);
+                fill(reached);
+            } else {
+                fill(withOpacity(borderColor, 0.35f));
             }
+            p5::rect(pip.left, pip.top, pip.width, pip.height, BorderRadius::all(pipHeight * 0.5f));
         }
+    }
 
+    void show_price(const rect2f& price, const UpgradeLine& line, const bool hovered)
+    {
         if (line.maxed) {
-            textSize(14.0f);
-            textAlign(TextAlignment::center);
-            fill(goldColor);
-            text("MAX", price.left + price.width * 0.5f, price.top + price.height * 0.5f);
-            return;
-        }
-
-        if (line.affordable) {
-            fill(lerpColor(buttonColor, line.priceColor, hovered ? 0.35f : 0.2f));
-            stroke(line.priceColor);
-            strokeWeight(1.5f);
+            chip(price, goldColor, 0.0f);
+        } else if (line.affordable) {
+            chip(price, line.priceColor, hovered ? 1.0f : 0.35f);
         } else {
-            fill(panelColor);
-            noStroke();
+            surface(price, panelColor, withOpacity(borderColor, 0.2f), price.height * 0.35f);
         }
-        p5::rect(price.left, price.top, price.width, price.height, BorderRadius::all(8.0f));
-        noStroke();
 
+        font_bold();
         textSize(14.0f);
         textAlign(TextAlignment::center);
-        fill(line.affordable ? line.priceColor : mutedTextColor);
-        text(line.price, price.left + price.width * 0.5f, price.top + price.height * 0.5f);
+        fill(line.maxed ? goldColor : (line.affordable ? line.priceColor : mutedTextColor));
+        text(line.price, center(price).x, center(price).y);
+    }
+
+    void show_line(const rect2f& row, const UpgradeLine& line, const bool divider)
+    {
+        const bool hovered = line.affordable && contains(row, mouse());
+
+        if (hovered) {
+            glow(row, accentColor, 0.5f, 8.0f, 6.0f);
+            surface(row, buttonColor, withOpacity(accentColor, 0.35f), 8.0f);
+        }
+
+        rect2f content = inset(row, 10.0f, 0.0f);
+        if (divider && !hovered) {
+            hairline(content);
+        }
+
+        const rect2f price = inset(cutRight(content, priceWidth), 0.0f, (row.height - priceHeight) * 0.5f);
+        cutRight(content, priceGap);
+        show_price(price, line, hovered);
+
+        cutTop(content, 8.0f);
+        const rect2f nameRow = cutTop(content, 17.0f);
+        const rect2f valueRow = cutTop(content, 16.0f);
+
+        font_bold();
+        textSize(15.0f);
+        textAlign(TextAlignment::centerLeft);
+        fill(textColor);
+        text(line.name, nameRow.left, center(nameRow).y);
+        const float nameWidth = textWidth(line.name);
+
+        font_medium();
+        textSize(11.0f);
+        fill(mutedTextColor);
+        text(line.levelLabel, nameRow.left + nameWidth + 8.0f, center(nameRow).y);
+
+        // the current value, an arrow, and the value the next level would bring in the colour of the tower
+        const float valueY = center(valueRow).y;
+        textSize(13.0f);
+        fill(secondaryTextColor);
+        text(line.value, valueRow.left, valueY);
+        const float valueWidth = textWidth(line.value);
+
+        if (!line.nextValue.empty()) {
+            const float arrowX = valueRow.left + valueWidth + 7.0f;
+            show_arrow(arrowX, valueY);
+
+            font_bold();
+            fill(accentColor);
+            text(line.nextValue, arrowX + 17.0f, valueY);
+        }
+
+        if (line.maxLevel > 0) {
+            cutTop(content, 6.0f);
+            show_pips(cutTop(content, pipHeight), line);
+        }
     }
 }
 
-std::vector<UpgradeTab> upgrade_tabs_layout(const rect2f& row)
+std::vector<UpgradeTab> upgrade_tabs_layout(const rect2f& area)
 {
-    const float tabWidth = (row.width - tabGap * static_cast<float>(categories.size() - 1)) / static_cast<float>(categories.size());
+    constexpr int count = static_cast<int>(categories.size());
 
     std::vector<UpgradeTab> tabs;
-    for (size_t i = 0; i < categories.size(); ++i) {
+    for (int i = 0; i < count; ++i) {
         tabs.push_back(UpgradeTab {
-            .category = categories[i],
-            .rect = rect2f {row.left + static_cast<float>(i) * (tabWidth + tabGap), row.top, tabWidth, row.height},
+            .category = categories[static_cast<size_t>(i)],
+            .rect = column(area, i, count, tabGap),
         });
     }
     return tabs;

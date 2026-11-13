@@ -7,6 +7,7 @@
 #include "enemy.hpp"
 #include "floating_text.hpp"
 #include "game_events.hpp"
+#include "hit_spark.hpp"
 #include "tower.hpp"
 #include "tower_stats.hpp"
 #include "tower_weapon.hpp"
@@ -36,13 +37,19 @@ struct World
     std::vector<Enemy> enemies;
     std::vector<Bullet> bullets;
     std::vector<DeathEffect> deathEffects;
+    std::vector<HitSpark> hitSparks;
     std::vector<FloatingText> floatingTexts;
+
+    // strikes on the tower and dying enemies shove the whole playfield, the offset is rolled every frame
+    p5::float2 shake;
+    float shakeStrength;
 
     // chosen by the player, capped by the max speed the upgrade unlocks
     float speed;
 
     GameEvents events;
     bool gameOver;
+    float gameOverTime; // seconds since the tower fell, the overlay fades in over them
 };
 
 World world_create(const UpgradeLevels& startLevels);
@@ -51,4 +58,5 @@ float world_speed(const World& world);
 void world_change_speed(World& world, int steps);
 bool world_buy_upgrade(World& world, const UpgradeDefinition& definition);
 void world_update(World& world, float deltaTime);
-void world_show(const World& world, const p5::Font& font);
+// view is the part of the world the window shows, in world coordinates, so the floor can fill it
+void world_show(const World& world, const p5::Font& font, const p5::rect2f& view);

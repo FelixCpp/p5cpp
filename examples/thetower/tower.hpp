@@ -21,4 +21,5 @@ bool tower_is_destroyed(const Tower& tower, float maxHealth);
 void tower_damage(Tower& tower, float damage);
 void tower_regenerate(Tower& tower, float amount);
 void tower_update(Tower& tower, float deltaTime);
-void tower_show(const Tower& tower, const Meters& range);
+// the health fraction rides along as a ring around the tower, it only appears once the tower is hurt
+void tower_show(const Tower& tower, const Meters& range, float healthFraction);

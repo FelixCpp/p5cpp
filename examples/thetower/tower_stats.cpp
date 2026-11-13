@@ -23,6 +23,12 @@ TowerStats tower_stats_base()
         .rapidFireChance = 0.0f,
         .rapidFireDuration = 1.0f,
         .rapidFireFactor = 4.0f,
+        .knockback = Meters {
+            .value = 0.0f,
+        },
+        .slowFactor = 0.0f,
+        .slowDuration = 1.0f,
+        .executeThreshold = 0.0f,
         .maxHealth = 100.0f,
         .healthRegen = 0.0f,
         .percentDefense = 0.0f,

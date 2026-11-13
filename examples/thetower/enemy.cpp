@@ -28,6 +28,19 @@ void enemies_remove_dead(std::vector<Enemy>& enemies)
     });
 }
 
+void enemies_execute(std::vector<Enemy>& enemies, const float executeThreshold, GameEvents& events)
+{
+    if (executeThreshold <= 0.0f) {
+        return;
+    }
+
+    for (Enemy& enemy : enemies) {
+        if (!enemy_health_is_dead(enemy.core.health) && enemy_health_is_executed(enemy.core.health, executeThreshold)) {
+            enemy_core_kill(enemy.core, events);
+        }
+    }
+}
+
 void enemy_update(Enemy& enemy, const Tower& tower, GameEvents& events, const float deltaTime)
 {
     std::visit(
