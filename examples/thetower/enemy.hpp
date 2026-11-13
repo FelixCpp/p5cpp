@@ -6,9 +6,10 @@
 #include "enemy_core.hpp"
 #include "game_events.hpp"
 #include "melee_enemy.hpp"
+#include "ranged_enemy.hpp"
 #include "tower.hpp"
 
-using EnemyBehavior = std::variant<MeleeBehavior>;
+using EnemyBehavior = std::variant<MeleeBehavior, RangedBehavior>;
 
 struct Enemy
 {

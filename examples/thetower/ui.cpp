@@ -139,6 +139,22 @@ namespace ui
         text(label, center(rect).x, center(rect).y);
     }
 
+    void quiet_button(const rect2f& rect, const std::string_view label)
+    {
+        const bool hovered = contains(rect, mouse());
+
+        if (hovered) {
+            glow(rect, accentColor, 0.8f, 12.0f, 10.0f);
+        }
+        surface(rect, hovered ? buttonHoverColor : buttonColor, withOpacity(hovered ? accentColor : borderColor, hovered ? 0.5f : 0.3f), 12.0f);
+
+        font_bold();
+        textSize(15.0f);
+        textAlign(TextAlignment::center);
+        fill(hovered ? accentColor : secondaryTextColor);
+        text(label, center(rect).x, center(rect).y);
+    }
+
     void bar(const rect2f& rect, const float fraction, const color_t color)
     {
         const float radius = rect.height * 0.5f;

@@ -4,6 +4,7 @@
 
 using namespace p5;
 
+#include "bestiary.hpp"
 #include "hud.hpp"
 #include "menu.hpp"
 #include "profile.hpp"
@@ -39,6 +40,9 @@ struct TheTower : Sketch
     bool roundSettled = false;
     bool paused = false;
 
+    Bestiary bestiary = {};
+    bool bestiaryOpen = false;
+
     void setup() override
     {
         setWindowSize(static_cast<uint32_t>(worldSize + hudWidth), static_cast<uint32_t>(windowHeight));
@@ -59,6 +63,13 @@ struct TheTower : Sketch
 
     void drawMenu()
     {
+        // the bestiary takes the whole window and every key while it is open, escape only quits without it
+        if (bestiaryOpen) {
+            menu_show(menu, profile);
+            showBestiary(0, true);
+            return;
+        }
+
         if (isKeyPressed(Key::Escape)) {
             quit();
             return;
@@ -66,6 +77,7 @@ struct TheTower : Sketch
 
         switch (menu_update(menu, profile)) {
             case MenuAction::none: break;
+            case MenuAction::openBestiary: bestiaryOpen = true; break;
             case MenuAction::purchased: profile_save(profile, savePath); break;
             case MenuAction::startRound: {
                 world = world_create(profile.startLevels);
@@ -94,6 +106,8 @@ struct TheTower : Sketch
     void drawRound()
     {
         const float deltaTime = getDeltaTime();
+        // the click that opens the bestiary is still pressed this frame, so the overlay only takes input from the next one
+        const bool bestiaryWasOpen = bestiaryOpen;
 
         // the hud is docked to the right edge, the playfield takes whatever space is left
         const float width = getWidth();
@@ -106,7 +120,9 @@ struct TheTower : Sketch
         const RoundControlsLayout controls = round_controls_layout(float2 {12.0f, 12.0f});
         const PauseMenuLayout pauseMenu = pause_menu_layout(width, height);
 
-        if (world.gameOver) {
+        if (bestiaryOpen) {
+            // the round waits while the bestiary is read, it is an information screen like the pause menu
+        } else if (world.gameOver) {
             if (!roundSettled) {
                 settleRound();
             } else if (isMouseButtonPressed(MouseButton::left) || isKeyPressed(Key::Escape)) {
@@ -132,9 +148,11 @@ struct TheTower : Sketch
             }
         }
 
-        if (!paused) {
+        if (!paused && !bestiaryOpen) {
             world_update(world, deltaTime);
-            hud_update(hud, world, deltaTime);
+            if (hud_update(hud, world, deltaTime) == HudAction::openBestiary) {
+                bestiaryOpen = true;
+            }
         }
 
         // fit the logical world square into the playfield and keep it centered
@@ -161,11 +179,28 @@ struct TheTower : Sketch
         if (paused) {
             pause_menu_show(pauseMenu, width, height);
         }
+        if (bestiaryOpen) {
+            showBestiary(world.waves.wave, bestiaryWasOpen);
+        }
+    }
+
+    // the overlay is drawn over whichever screen opened it and takes its input until it closes
+    void showBestiary(const int wave, const bool interactive)
+    {
+        const BestiaryLayout layout = bestiary_layout(getWidth(), getHeight());
+
+        if (interactive && bestiary_update(bestiary, layout)) {
+            bestiaryOpen = false;
+            bestiary.scroll = {};
+        }
+        ui::set_fonts(fonts);
+        bestiary_show(bestiary, layout, getWidth(), getHeight(), wave);
     }
 
     void openMenu()
     {
         paused = false;
+        bestiaryOpen = false;
         screen = Screen::menu;
         menu.scroll = {};
     }

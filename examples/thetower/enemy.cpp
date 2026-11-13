@@ -46,6 +46,7 @@ void enemy_update(Enemy& enemy, const Tower& tower, GameEvents& events, const fl
     std::visit(
         overloaded {
             [&](MeleeBehavior& behavior) { melee_enemy_update(enemy.core, behavior, tower, events, deltaTime); },
+            [&](RangedBehavior& behavior) { ranged_enemy_update(enemy.core, behavior, tower, events, deltaTime); },
         },
         enemy.behavior
     );
@@ -56,6 +57,7 @@ void enemy_show(const Enemy& enemy)
     std::visit(
         overloaded {
             [&](const MeleeBehavior& behavior) { melee_enemy_show(enemy.core, behavior); },
+            [&](const RangedBehavior& behavior) { ranged_enemy_show(enemy.core, behavior); },
         },
         enemy.behavior
     );

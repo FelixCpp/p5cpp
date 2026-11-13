@@ -5,6 +5,7 @@
 #include "bullet.hpp"
 #include "death_effect.hpp"
 #include "enemy.hpp"
+#include "enemy_shot.hpp"
 #include "floating_text.hpp"
 #include "game_events.hpp"
 #include "hit_spark.hpp"
@@ -36,6 +37,7 @@ struct World
     EnemyId nextEnemyId;
     std::vector<Enemy> enemies;
     std::vector<Bullet> bullets;
+    std::vector<EnemyShot> enemyShots;
     std::vector<DeathEffect> deathEffects;
     std::vector<HitSpark> hitSparks;
     std::vector<FloatingText> floatingTexts;

@@ -10,7 +10,7 @@ float spawn_weight_at(const SpawnWeight& weight, const int wave)
     return weight.baseWeight + weight.growthPerWave * static_cast<float>(wave - weight.unlockWave);
 }
 
-float spawn_table_chance(const std::vector<SpawnEntry>& entries, const SpawnEntry& entry, const int wave)
+float spawn_table_chance(std::span<const SpawnEntry> entries, const SpawnEntry& entry, const int wave)
 {
     float total = 0.0f;
     for (const SpawnEntry& other : entries) {
@@ -20,7 +20,7 @@ float spawn_table_chance(const std::vector<SpawnEntry>& entries, const SpawnEntr
     return total > 0.0f ? spawn_weight_at(entry.weight, wave) / total : 0.0f;
 }
 
-const SpawnEntry* spawn_table_roll(const std::vector<SpawnEntry>& entries, const int wave, const int budget)
+const SpawnEntry* spawn_table_roll(std::span<const SpawnEntry> entries, const int wave, const int budget)
 {
     float total = 0.0f;
     for (const SpawnEntry& entry : entries) {

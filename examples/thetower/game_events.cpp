@@ -6,4 +6,5 @@ void game_events_clear(GameEvents& events)
     events.deaths.clear();
     events.wavesCompleted.clear();
     events.towerHits.clear();
+    events.enemyShots.clear();
 }

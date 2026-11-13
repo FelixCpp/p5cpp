@@ -4,6 +4,11 @@ struct EnemyHealth
 {
     float current;
     float maxHealth;
+
+    // soaks damage before the health does and never comes back once it is gone, zero for the types that carry none
+    float shield;
+    float maxShield;
+
     float pendingDamage;
 };
 
@@ -11,6 +16,8 @@ struct EnemyHealth
 bool enemy_health_is_doomed(const EnemyHealth& health, float executeThreshold);
 bool enemy_health_is_dead(const EnemyHealth& health);
 bool enemy_health_is_executed(const EnemyHealth& health, float executeThreshold);
+bool enemy_health_has_shield(const EnemyHealth& health);
+float enemy_health_shield_fraction(const EnemyHealth& health);
 void enemy_health_reserve(EnemyHealth& health, float damage);
 void enemy_health_apply(EnemyHealth& health, float damage);
 // damage that was never reserved, e.g. thorns

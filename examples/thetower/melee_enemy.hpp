@@ -8,6 +8,7 @@
 
 struct Enemy;
 
+// walks straight at the tower and hits it from its edge, the behaviour most types share
 struct MeleeBehavior
 {
     p5::color_t color;
@@ -19,13 +20,23 @@ struct MeleeBehavior
     float attackCooldown;
 };
 
-Enemy easy_enemy_create(EnemyId id, const p5::float2& position);
-Enemy fast_enemy_create(EnemyId id, const p5::float2& position);
+Enemy grunt_enemy_create(EnemyId id, const p5::float2& position);
+Enemy runner_enemy_create(EnemyId id, const p5::float2& position);
 Enemy tank_enemy_create(EnemyId id, const p5::float2& position);
+Enemy swarm_enemy_create(EnemyId id, const p5::float2& position);
+Enemy splitter_enemy_create(EnemyId id, const p5::float2& position);
+// what a splitter leaves behind, it never comes out of the spawn table itself
+Enemy splinter_enemy_create(EnemyId id, const p5::float2& position);
+Enemy guardian_enemy_create(EnemyId id, const p5::float2& position);
+Enemy breaker_enemy_create(EnemyId id, const p5::float2& position);
 
-extern const EnemyArchetype easyEnemy;
-extern const EnemyArchetype fastEnemy;
+extern const EnemyArchetype gruntEnemy;
+extern const EnemyArchetype runnerEnemy;
 extern const EnemyArchetype tankEnemy;
+extern const EnemyArchetype swarmEnemy;
+extern const EnemyArchetype splitterEnemy;
+extern const EnemyArchetype guardianEnemy;
+extern const EnemyArchetype breakerEnemy;
 
 void melee_enemy_update(EnemyCore& core, MeleeBehavior& behavior, const Tower& tower, GameEvents& events, float deltaTime);
 void melee_enemy_show(const EnemyCore& core, const MeleeBehavior& behavior);

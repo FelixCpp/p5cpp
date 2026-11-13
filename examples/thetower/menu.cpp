@@ -27,6 +27,7 @@ namespace
         rect2f title;
         rect2f stats;
         rect2f startButton;
+        rect2f bestiaryButton;
         std::vector<UpgradeTab> tabs;
         rect2f list;
     };
@@ -46,7 +47,10 @@ namespace
         cutTop(area, 20.0f);
         result.stats = cutTop(area, statHeight);
         cutTop(area, 20.0f);
-        result.startButton = cutTop(area, startButtonHeight);
+        rect2f actions = cutTop(area, startButtonHeight);
+        result.bestiaryButton = cutRight(actions, 130.0f);
+        cutRight(actions, gap);
+        result.startButton = actions;
         cutTop(area, 24.0f);
         result.tabs = upgrade_tabs_layout(cutTop(area, tabHeight));
         cutTop(area, gap * 2.0f);
@@ -178,6 +182,10 @@ MenuAction menu_update(Menu& menu, Profile& profile)
         return MenuAction::startRound;
     }
 
+    if (clicked(l.bestiaryButton)) {
+        return MenuAction::openBestiary;
+    }
+
     if (const std::optional<UpgradeCategory> category = upgrade_tabs_clicked(l.tabs)) {
         menu.activeCategory = *category;
         menu.scroll = {};
@@ -206,6 +214,7 @@ void menu_show(const Menu& menu, const Profile& profile)
         show_title(l.title, profile);
         show_stats(l.stats, profile);
         button(l.startButton, "Runde starten", accentColor);
+        quiet_button(l.bestiaryButton, "Gegner");
 
         upgrade_tabs_show(l.tabs, menu.activeCategory);
         upgrade_list_show(layout_upgrades(menu, l.list), l.list, menu.scroll, [&](const UpgradeDefinition& definition) {

@@ -48,6 +48,8 @@ namespace ui
 
     void tab(const p5::rect2f& rect, std::string_view label, bool active);
     void button(const p5::rect2f& rect, std::string_view label, p5::color_t color);
+    // a button that does not compete with the main action beside it
+    void quiet_button(const p5::rect2f& rect, std::string_view label);
     void bar(const p5::rect2f& rect, float fraction, p5::color_t color);
 
     // a box with a title in its top left corner

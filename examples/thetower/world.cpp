@@ -4,6 +4,7 @@
 #include <format>
 
 #include "arena.hpp"
+#include "enemy_roster.hpp"
 #include "palette.hpp"
 
 using namespace p5;
@@ -71,6 +72,22 @@ namespace
         }
     }
 
+    // a type that falls apart leaves its children behind, they come in around where it died
+    void spawn_death_children(World& world)
+    {
+        for (const DeathEvent& death : world.events.deaths) {
+            const DeathSpawn& spawn = death.spawn;
+            if (spawn.factory == nullptr) {
+                continue;
+            }
+
+            for (int i = 0; i < spawn.count; ++i) {
+                const float2 offset = fromAngle(degrees(360.0f / static_cast<float>(spawn.count) * static_cast<float>(i)), spawn.spread);
+                world.enemies.push_back(spawn.factory(world.nextEnemyId++, death.position + offset));
+            }
+        }
+    }
+
     void show_crit_numbers(World& world)
     {
         for (const DamageEvent& damage : world.events.damage) {
@@ -123,35 +140,7 @@ World world_create(const UpgradeLevels& startLevels)
         .budgetGrowthPerWave = 3,
         .waveDuration = 20.0f,
         .bossWaveInterval = 10,
-        .enemies = {
-            SpawnEntry {
-                .archetype = &easyEnemy,
-                .cost = 1,
-                .weight = SpawnWeight {
-                    .unlockWave = 1,
-                    .baseWeight = 10.0f,
-                    .growthPerWave = 0.0f,
-                },
-            },
-            SpawnEntry {
-                .archetype = &fastEnemy,
-                .cost = 1,
-                .weight = SpawnWeight {
-                    .unlockWave = 2,
-                    .baseWeight = 3.0f,
-                    .growthPerWave = 0.5f,
-                },
-            },
-            SpawnEntry {
-                .archetype = &tankEnemy,
-                .cost = 4,
-                .weight = SpawnWeight {
-                    .unlockWave = 4,
-                    .baseWeight = 1.0f,
-                    .growthPerWave = 0.4f,
-                },
-            },
-        },
+        .enemies = {enemy_roster().begin(), enemy_roster().end()},
         .bosses = {},
     };
     WaveSpawner waves = wave_spawner_create(waveConfig);
@@ -174,6 +163,7 @@ World world_create(const UpgradeLevels& startLevels)
         .nextEnemyId = 0,
         .enemies = {},
         .bullets = {},
+        .enemyShots = {},
         .deathEffects = {},
         .hitSparks = {},
         .floatingTexts = {},
@@ -234,6 +224,10 @@ void world_update(World& world, const float realDeltaTime)
         enemy_update(enemy, world.tower, world.events, deltaTime);
     }
 
+    // shots are in the air before the tower resolves what hit it this frame
+    enemy_shots_spawn(world.enemyShots, world.tower, world.events);
+    enemy_shots_update(world.enemyShots, world.events, deltaTime);
+
     resolve_tower_hits(world, stats);
     tower_regenerate(world.tower, stats.healthRegen * deltaTime);
     tower_update(world.tower, deltaTime);
@@ -250,6 +244,7 @@ void world_update(World& world, const float realDeltaTime)
     show_crit_numbers(world);
     enemies_execute(world.enemies, stats.executeThreshold, world.events);
     enemies_remove_dead(world.enemies);
+    spawn_death_children(world);
     collect_kill_rewards(world, stats);
     collect_wave_rewards(world, stats);
 
@@ -280,6 +275,7 @@ void world_show(const World& world, const p5::Font& font, const p5::rect2f& view
         for (const Bullet& bullet : world.bullets) {
             bullet_show(bullet);
         }
+        enemy_shots_show(world.enemyShots);
         floating_texts_show(world.floatingTexts, font);
     });
 

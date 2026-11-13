@@ -61,6 +61,7 @@ void enemy_core_kill(EnemyCore& core, GameEvents& events)
         .position = core.movement.position,
         .size = core.size.size.value(),
         .animation = core.deathAnimation,
+        .spawn = core.deathSpawn,
         .goldReward = core.goldReward,
     });
 }

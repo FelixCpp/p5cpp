@@ -18,6 +18,7 @@ enum class MenuAction
     none,
     purchased,
     startRound,
+    openBestiary,
 };
 
 Menu menu_create(const ui::Fonts& fonts);

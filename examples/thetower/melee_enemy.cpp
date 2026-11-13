@@ -1,10 +1,8 @@
 #include "melee_enemy.hpp"
 
-#include <algorithm>
-#include <cmath>
 
 #include "enemy.hpp"
-#include "palette.hpp"
+#include "enemy_body.hpp"
 
 using namespace p5;
 using namespace p5::animation;
@@ -14,6 +12,7 @@ namespace
     struct MeleeEnemyStats
     {
         float health;
+        float shield;
         float damage;
         float attackInterval;
         float size;
@@ -22,14 +21,16 @@ namespace
         float weight;
 
         int goldReward;
+        DeathSpawn deathSpawn;
 
         color_t color;
         EnemyShape shape;
         float strokeWeight;
     };
 
-    constexpr MeleeEnemyStats easyStats = {
+    constexpr MeleeEnemyStats gruntStats = {
         .health = 30.0f,
+        .shield = 0.0f,
         .damage = 5.0f,
         .attackInterval = 1.0f,
         .size = 25.0f,
@@ -37,13 +38,15 @@ namespace
         .maxForce = 150.0f,
         .weight = 1.0f,
         .goldReward = 1,
+        .deathSpawn = {},
         .color = rgba(220, 180, 150),
         .shape = EnemyShape::square,
         .strokeWeight = 3.0f,
     };
 
-    constexpr MeleeEnemyStats fastStats = {
+    constexpr MeleeEnemyStats runnerStats = {
         .health = 15.0f,
+        .shield = 0.0f,
         .damage = 3.0f,
         .attackInterval = 0.6f,
         .size = 16.0f,
@@ -51,6 +54,7 @@ namespace
         .maxForce = 300.0f,
         .weight = 0.6f,
         .goldReward = 1,
+        .deathSpawn = {},
         .color = rgba(230, 220, 110),
         .shape = EnemyShape::triangle,
         .strokeWeight = 2.0f,
@@ -58,6 +62,7 @@ namespace
 
     constexpr MeleeEnemyStats tankStats = {
         .health = 120.0f,
+        .shield = 0.0f,
         .damage = 20.0f,
         .attackInterval = 1.5f,
         .size = 40.0f,
@@ -65,9 +70,95 @@ namespace
         .maxForce = 80.0f,
         .weight = 3.0f,
         .goldReward = 5,
+        .deathSpawn = {},
         .color = rgba(200, 90, 90),
         .shape = EnemyShape::hexagon,
         .strokeWeight = 5.0f,
+    };
+
+    constexpr MeleeEnemyStats swarmStats = {
+        .health = 10.0f,
+        .shield = 0.0f,
+        .damage = 2.0f,
+        .attackInterval = 0.5f,
+        .size = 12.0f,
+        .maxSpeed = 190.0f,
+        .maxForce = 400.0f,
+        .weight = 0.4f,
+        .goldReward = 1,
+        .deathSpawn = {},
+        .color = rgba(150, 220, 170),
+        .shape = EnemyShape::diamond,
+        .strokeWeight = 2.0f,
+    };
+
+    // what a splitter falls apart into, it never comes out of the spawn table itself
+    constexpr MeleeEnemyStats splinterStats = {
+        .health = 18.0f,
+        .shield = 0.0f,
+        .damage = 4.0f,
+        .attackInterval = 0.8f,
+        .size = 14.0f,
+        .maxSpeed = 140.0f,
+        .maxForce = 280.0f,
+        .weight = 0.5f,
+        .goldReward = 1,
+        .deathSpawn = {},
+        .color = rgba(120, 200, 235),
+        .shape = EnemyShape::cross,
+        .strokeWeight = 2.0f,
+    };
+
+    constexpr MeleeEnemyStats splitterStats = {
+        .health = 70.0f,
+        .shield = 0.0f,
+        .damage = 8.0f,
+        .attackInterval = 1.1f,
+        .size = 30.0f,
+        .maxSpeed = 70.0f,
+        .maxForce = 140.0f,
+        .weight = 1.5f,
+        .goldReward = 3,
+        .deathSpawn = DeathSpawn {
+            .factory = splinter_enemy_create,
+            .count = 2,
+            .spread = 18.0f,
+        },
+        .color = rgba(120, 200, 235),
+        .shape = EnemyShape::cross,
+        .strokeWeight = 3.0f,
+    };
+
+    constexpr MeleeEnemyStats guardianStats = {
+        .health = 90.0f,
+        .shield = 120.0f,
+        .damage = 16.0f,
+        .attackInterval = 1.3f,
+        .size = 34.0f,
+        .maxSpeed = 60.0f,
+        .maxForce = 120.0f,
+        .weight = 2.5f,
+        .goldReward = 6,
+        .deathSpawn = {},
+        .color = rgba(110, 185, 205),
+        .shape = EnemyShape::pentagon,
+        .strokeWeight = 4.0f,
+    };
+
+    constexpr MeleeEnemyStats breakerStats = {
+        .health = 300.0f,
+        .shield = 0.0f,
+        .damage = 40.0f,
+        .attackInterval = 1.8f,
+        .size = 50.0f,
+        .maxSpeed = 30.0f,
+        .maxForce = 60.0f,
+        .weight = 5.0f,
+        .goldReward = 12,
+        .deathSpawn = {},
+        .color = rgba(190, 70, 130),
+        .shape = EnemyShape::octagon,
+        .strokeWeight = 5.5f,
     };
 
     Enemy melee_enemy_create(const MeleeEnemyStats& stats, const EnemyId id, const p5::float2& position)
@@ -78,6 +169,8 @@ namespace
                 .health = EnemyHealth {
                     .current = stats.health,
                     .maxHealth = stats.health,
+                    .shield = stats.shield,
+                    .maxShield = stats.shield,
                     .pendingDamage = 0.0f,
                 },
                 .size = EnemySize {
@@ -97,6 +190,7 @@ namespace
                 .deathAnimation = ParticleDeathAnimation {
                     .color = stats.color,
                 },
+                .deathSpawn = stats.deathSpawn,
                 .attackReach = 0.0f,
                 .weight = stats.weight,
                 .goldReward = stats.goldReward,
@@ -111,16 +205,30 @@ namespace
             },
         };
     }
+
+    // the only shapes that are not drawn upright
+    angle_t body_rotation(const EnemyShape shape, const EnemyMovement& movement)
+    {
+        switch (shape) {
+            case EnemyShape::triangle: return lengthSquared(movement.velocity) > 1.0f ? heading(movement.velocity) : degrees(0.0f);
+            case EnemyShape::diamond: return lengthSquared(movement.velocity) > 1.0f ? heading(movement.velocity) : degrees(0.0f);
+            case EnemyShape::hexagon: return radians(static_cast<float>(getGlobalTime()) * 0.5f);
+            case EnemyShape::octagon: return radians(static_cast<float>(getGlobalTime()) * 0.3f);
+            case EnemyShape::cross: return radians(static_cast<float>(getGlobalTime()) * 0.8f);
+            default: break;
+        }
+        return degrees(0.0f);
+    }
 }
 
-Enemy easy_enemy_create(const EnemyId id, const p5::float2& position)
+Enemy grunt_enemy_create(const EnemyId id, const p5::float2& position)
 {
-    return melee_enemy_create(easyStats, id, position);
+    return melee_enemy_create(gruntStats, id, position);
 }
 
-Enemy fast_enemy_create(const EnemyId id, const p5::float2& position)
+Enemy runner_enemy_create(const EnemyId id, const p5::float2& position)
 {
-    return melee_enemy_create(fastStats, id, position);
+    return melee_enemy_create(runnerStats, id, position);
 }
 
 Enemy tank_enemy_create(const EnemyId id, const p5::float2& position)
@@ -128,31 +236,113 @@ Enemy tank_enemy_create(const EnemyId id, const p5::float2& position)
     return melee_enemy_create(tankStats, id, position);
 }
 
-const EnemyArchetype easyEnemy = {
-    .name = "Easy",
-    .color = easyStats.color,
-    .shape = easyStats.shape,
-    .factory = easy_enemy_create,
-    .health = easyStats.health,
-    .damage = easyStats.damage,
+Enemy swarm_enemy_create(const EnemyId id, const p5::float2& position)
+{
+    return melee_enemy_create(swarmStats, id, position);
+}
+
+Enemy splinter_enemy_create(const EnemyId id, const p5::float2& position)
+{
+    return melee_enemy_create(splinterStats, id, position);
+}
+
+Enemy splitter_enemy_create(const EnemyId id, const p5::float2& position)
+{
+    return melee_enemy_create(splitterStats, id, position);
+}
+
+Enemy guardian_enemy_create(const EnemyId id, const p5::float2& position)
+{
+    return melee_enemy_create(guardianStats, id, position);
+}
+
+Enemy breaker_enemy_create(const EnemyId id, const p5::float2& position)
+{
+    return melee_enemy_create(breakerStats, id, position);
+}
+
+const EnemyArchetype gruntEnemy = {
+    .name = "Grunzer",
+    .trait = {},
+    .color = gruntStats.color,
+    .shape = gruntStats.shape,
+    .factory = grunt_enemy_create,
+    .health = gruntStats.health,
+    .shield = gruntStats.shield,
+    .damage = gruntStats.damage,
+    .speed = gruntStats.maxSpeed,
 };
 
-const EnemyArchetype fastEnemy = {
-    .name = "Fast",
-    .color = fastStats.color,
-    .shape = fastStats.shape,
-    .factory = fast_enemy_create,
-    .health = fastStats.health,
-    .damage = fastStats.damage,
+const EnemyArchetype runnerEnemy = {
+    .name = "Läufer",
+    .trait = "Schnell, aber dünnhäutig",
+    .color = runnerStats.color,
+    .shape = runnerStats.shape,
+    .factory = runner_enemy_create,
+    .health = runnerStats.health,
+    .shield = runnerStats.shield,
+    .damage = runnerStats.damage,
+    .speed = runnerStats.maxSpeed,
 };
 
 const EnemyArchetype tankEnemy = {
-    .name = "Tank",
+    .name = "Panzer",
+    .trait = "Langsam und kaum zu verschieben",
     .color = tankStats.color,
     .shape = tankStats.shape,
     .factory = tank_enemy_create,
     .health = tankStats.health,
+    .shield = tankStats.shield,
     .damage = tankStats.damage,
+    .speed = tankStats.maxSpeed,
+};
+
+const EnemyArchetype swarmEnemy = {
+    .name = "Schwarm",
+    .trait = "Kommt in Massen und ist sofort da",
+    .color = swarmStats.color,
+    .shape = swarmStats.shape,
+    .factory = swarm_enemy_create,
+    .health = swarmStats.health,
+    .shield = swarmStats.shield,
+    .damage = swarmStats.damage,
+    .speed = swarmStats.maxSpeed,
+};
+
+const EnemyArchetype splitterEnemy = {
+    .name = "Teiler",
+    .trait = "Zerfällt beim Tod in zwei Splitter",
+    .color = splitterStats.color,
+    .shape = splitterStats.shape,
+    .factory = splitter_enemy_create,
+    .health = splitterStats.health,
+    .shield = splitterStats.shield,
+    .damage = splitterStats.damage,
+    .speed = splitterStats.maxSpeed,
+};
+
+const EnemyArchetype guardianEnemy = {
+    .name = "Wächter",
+    .trait = "Schild schluckt Schaden, bis es bricht",
+    .color = guardianStats.color,
+    .shape = guardianStats.shape,
+    .factory = guardian_enemy_create,
+    .health = guardianStats.health,
+    .shield = guardianStats.shield,
+    .damage = guardianStats.damage,
+    .speed = guardianStats.maxSpeed,
+};
+
+const EnemyArchetype breakerEnemy = {
+    .name = "Brecher",
+    .trait = "Trifft härter als alles andere",
+    .color = breakerStats.color,
+    .shape = breakerStats.shape,
+    .factory = breaker_enemy_create,
+    .health = breakerStats.health,
+    .shield = breakerStats.shield,
+    .damage = breakerStats.damage,
+    .speed = breakerStats.maxSpeed,
 };
 
 void melee_enemy_update(EnemyCore& core, MeleeBehavior& behavior, const Tower& tower, GameEvents& events, const float deltaTime)
@@ -189,99 +379,14 @@ void melee_enemy_update(EnemyCore& core, MeleeBehavior& behavior, const Tower& t
     }
 }
 
-namespace
-{
-    angle_t body_rotation(const EnemyShape shape, const EnemyMovement& movement)
-    {
-        switch (shape) {
-            case EnemyShape::triangle: return lengthSquared(movement.velocity) > 1.0f ? heading(movement.velocity) : degrees(0.0f);
-            case EnemyShape::hexagon: return radians(static_cast<float>(getGlobalTime()) * 0.5f);
-            case EnemyShape::square: break;
-        }
-        return degrees(0.0f);
-    }
-
-    // a ring that collapses onto the enemy while it grows to its full size
-    void show_spawn_ring(const EnemyCore& core, const color_t color)
-    {
-        const float grown = core.size.size.progress();
-        if (grown >= 1.0f) {
-            return;
-        }
-
-        const auto [x, y] = core.movement.position;
-        const float left = 1.0f - grown;
-
-        noFill();
-        stroke(withOpacity(color, 0.45f * left * left));
-        strokeWeight(1.5f);
-        circle(x, y, core.size.size.value() * 0.5f + 16.0f * left);
-    }
-
-    // only a hurt enemy carries a bar, an untouched crowd stays clean
-    void show_health_bar(const EnemyCore& core, const float size)
-    {
-        const EnemyHealth& health = core.health;
-        if (health.maxHealth <= 0.0f || health.current >= health.maxHealth) {
-            return;
-        }
-
-        const float fraction = std::clamp(health.current / health.maxHealth, 0.0f, 1.0f);
-        const float width = std::max(size * 0.9f, 14.0f);
-        const float left = core.movement.position.x - width * 0.5f;
-        const float top = core.movement.position.y + size * 0.5f + 7.0f;
-
-        noStroke();
-        fill(withOpacity(shadowColor, 0.55f));
-        rect(left - 1.0f, top - 1.0f, width + 2.0f, 5.0f);
-        fill(lerpColor(dangerColor, healthColor, fraction));
-        rect(left, top, width * fraction, 3.0f);
-    }
-}
-
 void melee_enemy_show(const EnemyCore& core, const MeleeBehavior& behavior)
 {
-    const float size = core.size.size.value();
-    const auto [x, y] = core.movement.position;
-    const float flash = core.damageFeedback.flash.value();
-
-    // a slowed enemy is tinted towards frost, the stronger the slow the colder it looks
-    const color_t color = lerpColor(behavior.color, slowColor, enemy_movement_slow_factor(core.movement));
-
-    with([&] {
-        noStroke();
-        fill(withOpacity(shadowColor, 0.4f));
-        ellipse(x, y + size * 0.44f, size * 0.46f, size * 0.18f);
+    enemy_body_show(core, EnemyBodyLook {
+        .color = behavior.color,
+        .shape = behavior.shape,
+        .strokeWeight = behavior.strokeWeight,
+        .rotation = body_rotation(behavior.shape, core.movement),
+        .extraGlow = 0.0f,
+        .extraScale = 0.0f,
     });
-
-    with([&] {
-        // a few layers instead of one disc, otherwise the halo shows its edge
-        blendMode(BlendMode::additive);
-        noStroke();
-        fill(withOpacity(color, 0.035f));
-        for (int i = 4; i >= 1; --i) {
-            circle(x, y, size * 0.22f * static_cast<float>(i));
-        }
-    });
-
-    with([&] {
-        translate(x, y);
-        rotate(body_rotation(behavior.shape, core.movement));
-        // a hit punches the body a little bigger for as long as the flash lasts
-        scale(1.0f + 0.22f * flash, 1.0f + 0.22f * flash);
-
-        fill(lerpColor(rgba(20, 22, 28), color, 0.28f));
-        stroke(color);
-        strokeWeight(behavior.strokeWeight);
-        enemy_shape_draw(behavior.shape, float2 {}, size);
-
-        if (flash > 0.0f) {
-            noStroke();
-            fill(withOpacity(rgba(255), 0.7f * flash));
-            enemy_shape_draw(behavior.shape, float2 {}, size);
-        }
-    });
-
-    with([&] { show_spawn_ring(core, color); });
-    with([&] { show_health_bar(core, size); });
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "death_animation.hpp"
+#include "death_spawn.hpp"
 #include "enemy_damage_feedback.hpp"
 #include "enemy_health.hpp"
 #include "enemy_id.hpp"
@@ -18,6 +19,7 @@ struct EnemyCore
     EnemyMovement movement;
     EnemyDamageFeedback damageFeedback;
     DeathAnimation deathAnimation;
+    DeathSpawn deathSpawn;
 
     // distance to the tower's edge at which the enemy can attack it
     float attackReach;

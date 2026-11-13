@@ -1,14 +1,18 @@
 add_executable(
   thetower
   arena.cpp
+  bestiary.cpp
   bullet.cpp
   death_effect.cpp
   enemy.cpp
+  enemy_body.cpp
   enemy_core.cpp
   enemy_damage_feedback.cpp
   enemy_health.cpp
   enemy_movement.cpp
+  enemy_roster.cpp
   enemy_shape.cpp
+  enemy_shot.cpp
   enemy_size.cpp
   floating_text.cpp
   game_events.cpp
@@ -21,6 +25,7 @@ add_executable(
   meters.hpp
   particle_burst.cpp
   profile.cpp
+  ranged_enemy.cpp
   round_controls.cpp
   spawn_table.cpp
   tower.cpp

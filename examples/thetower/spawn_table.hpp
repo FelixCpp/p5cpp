@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <span>
 
 #include <p5cpp/p5cpp.hpp>
 
@@ -23,7 +23,7 @@ struct SpawnEntry
 float spawn_weight_at(const SpawnWeight& weight, int wave);
 
 // share of this entry among all entries unlocked at this wave, ignoring the budget
-float spawn_table_chance(const std::vector<SpawnEntry>& entries, const SpawnEntry& entry, int wave);
+float spawn_table_chance(std::span<const SpawnEntry> entries, const SpawnEntry& entry, int wave);
 
 // weighted roll over all entries unlocked at this wave that fit into the remaining budget
-const SpawnEntry* spawn_table_roll(const std::vector<SpawnEntry>& entries, int wave, int budget);
+const SpawnEntry* spawn_table_roll(std::span<const SpawnEntry> entries, int wave, int budget);
